@@ -3,6 +3,12 @@ name = "persia-rpc-macro"
 version = "0.1.0"
 authors = ["Xiangru Lian <admin@mail.xrlian.com>"]
 edition = "2018"
+description = "proc macros for the persia-rpc crate"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/L1AN0/persia-rpc"
+homepage = "https://github.com/L1AN0/persia-rpc"
+keywords = ["rpc"]
+categories = ["network-programming"]
 
 [lib]
 proc-macro = true
