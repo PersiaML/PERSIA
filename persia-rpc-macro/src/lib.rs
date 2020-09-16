@@ -76,6 +76,9 @@ impl RpcMethod {
         let req_type = self.req_type();
         let call_line  = if req_args.len() > 0 {
             quote::quote! {
+                 let input: #req_type = ::smol::unblock(move || ::bincode::deserialize(body.as_ref()))
+                     .await
+                     .context(::persia_rpc::SerializationFailure {})?;
                  let (#( #req_args, )*) = input;
                  let output = self.#method_ident(#( #req_args2, )* ).await;
             }
@@ -93,9 +96,6 @@ impl RpcMethod {
                             .context(::persia_rpc::TransportError {
                                 msg: "hyper read body error".to_string(),
                             })?;
-                    let input: #req_type = ::smol::unblock(move || ::bincode::deserialize(body.as_ref()))
-                        .await
-                        .context(::persia_rpc::SerializationFailure {})?;
                     #call_line
                     let output = ::smol::unblock(move || ::bincode::serialize(&output))
                         .await
