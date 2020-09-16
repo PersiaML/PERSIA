@@ -50,7 +50,12 @@ impl RpcClient {
                 server_addr: server_addr.to_string(),
             })?;
         Ok(Self {
-            client: hyper::Client::builder().http2_only(true).build_http(),
+            client: hyper::Client::builder()
+                .http2_only(true)
+                .retry_canceled_requests(true)
+                .set_host(false)
+                .http2_adaptive_window(true)
+                .build_http(),
             server_addr,
         })
     }
