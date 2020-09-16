@@ -1,0 +1,1 @@
+workspace = { members = ["persia-rpc", "persia-rpc-macro", "example-service"] ,exclude = []}

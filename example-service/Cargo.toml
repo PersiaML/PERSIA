@@ -1,0 +1,24 @@
+[package]
+name = "example-service"
+version = "0.1.0"
+authors = ["Xiangru Lian <admin@mail.xrlian.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+persia-rpc = { path = "../persia-rpc" }
+hyper = "0.13"
+futures-util = "0.3"
+
+tokio = { version = "0.2", features = ["full"] }
+openssl = "0.10.30"
+serde = { version = "1.0", features = ["derive"] }
+bytes = "0.5"
+bincode = "1.3"
+smol = "1"
+snafu = { version = "0.6", features = ["backtraces"] }
+reqwest = "0.10"
+anyhow = "1"
+tracing = "*"
+tracing-subscriber = "*"
