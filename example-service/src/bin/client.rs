@@ -12,8 +12,15 @@ async fn main() -> anyhow::Result<()> {
             rpc_client
                 .rpc_test(Input { msg: "haha".into() })
                 .await
-        )
-        .unwrap();
+        ).unwrap();
+    }
+
+    for _ in 0..10 {
+        let _result: Output = dbg!(
+            rpc_client
+                .rpc_test_2()
+                .await
+        ).unwrap();
     }
 
     Ok(())

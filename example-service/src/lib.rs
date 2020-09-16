@@ -13,6 +13,10 @@ impl Service {
         dbg!(input);
         return Output {};
     }
+
+    pub async fn rpc_test_2(&self) -> Output {
+        return Output {};
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
