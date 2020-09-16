@@ -84,7 +84,7 @@ impl RpcMethod {
             }
         } else {
             quote::quote! {
-                 let output = self.#method_ident();
+                 let output = self.#method_ident().await;
             }
         };
         quote::quote! {
