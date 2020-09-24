@@ -71,8 +71,7 @@ impl RpcClient {
             .context(ServerAddrParseFailure {
                 server_addr: endpoint_name.to_string(),
             })?;
-        let data = smol::unblock(move || bincode::serialize(&input))
-            .await
+        let data = tokio::task::block_in_place(|| bincode::serialize(&input))
             .context(SerializationFailure {})?;
 
         let req = hyper::Request::builder()
@@ -101,8 +100,7 @@ impl RpcClient {
                 .context(TransportError {
                     msg: format!("call {} recv bytes error", endpoint_name),
                 })?;
-        let resp: R = smol::unblock(move || bincode::deserialize(resp_bytes.as_ref()))
-            .await
+        let resp: R = tokio::task::block_in_place(|| bincode::deserialize(resp_bytes.as_ref()))
             .context(SerializationFailure {})?;
         Ok(resp)
     }

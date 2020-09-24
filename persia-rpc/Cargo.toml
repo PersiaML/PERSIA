@@ -1,6 +1,6 @@
 [package]
 name = "persia-rpc"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Xiangru Lian <admin@mail.xrlian.com>"]
 edition = "2018"
 description = "high performance rpc framework on http2"
@@ -23,4 +23,4 @@ reqwest = { version = "0.10", default-features = false, features = ["native-tls-
 hyper = "0.13"
 snafu = "0.6"
 url = "2.1"
-smol = "1"
+tokio = "0.2"
