@@ -54,7 +54,9 @@ impl RpcMethod {
 
     fn client_method(&self, client_field: &Ident) -> TokenStream2 {
         let ident = &self.ident;
+        let ident_timeout = quote::format_ident!("{}_timeout", ident);
         let ident_compressed = quote::format_ident!("{}_compressed", ident);
+        let ident_compressed_timeout = quote::format_ident!("{}_timeout", ident_compressed);
         let req_args: Vec<_> = self.args.iter().map(|x| &x.pat).collect();
         let original_args = self.args.clone();
         let resp_type = self.resp_type();
@@ -72,6 +74,16 @@ impl RpcMethod {
                     let req = (#( #req_args, )*);
                     self.#client_field.call_async(#web_api_compressed_string_name, req, true).await
                 }
+
+                pub async fn #ident_timeout(&self, #( #original_args, )* timeout: ::std::time::Duration) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
+                    let req = (#( #req_args, )*);
+                    self.#client_field.call_async_timeout(#web_api_string_name, req, false, timeout).await
+                }
+
+                pub async fn #ident_compressed_timeout(&self, #( #original_args, )* timeout: ::std::time::Duration) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
+                    let req = (#( #req_args, )*);
+                    self.#client_field.call_async_timeout(#web_api_compressed_string_name, req, true, timeout).await
+                }
             }
         } else {
             quote::quote! {
@@ -81,6 +93,14 @@ impl RpcMethod {
 
                 pub async fn #ident_compressed(&self) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
                     self.#client_field.call_async(#web_api_compressed_string_name, (), true).await
+                }
+
+                pub async fn #ident_timeout(&self, timeout: ::std::time::Duration) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
+                    self.#client_field.call_async_timeout(#web_api_string_name, (), false, timeout).await
+                }
+
+                pub async fn #ident_compressed_timeout(&self, timeout: ::std::time::Duration) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
+                    self.#client_field.call_async_timeout(#web_api_compressed_string_name, (), true, timeout).await
                 }
             }
         }
