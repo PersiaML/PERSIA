@@ -12,6 +12,11 @@ pub enum PersiaRpcError {
         source: bincode::Error,
         backtrace: Option<Backtrace>,
     },
+    #[snafu(display("io error"))]
+    IOFailure {
+        source: std::io::Error,
+        backtrace: Option<Backtrace>,
+    },
     #[snafu(display("server addr parse error from {}: {}", server_addr, source))]
     ServerAddrParseFailure {
         server_addr: String,
@@ -64,15 +69,29 @@ impl RpcClient {
         &self,
         endpoint_name: &str,
         input: T,
+        compress: bool,
     ) -> Result<R, PersiaRpcError> {
+        let endpoint_name = if compress {
+            endpoint_name.to_owned() + "_compressed"
+        } else {
+            endpoint_name.to_owned()
+        };
         let server_addr = self
             .server_addr
-            .join(endpoint_name)
+            .join(endpoint_name.as_str())
             .context(ServerAddrParseFailure {
                 server_addr: endpoint_name.to_string(),
             })?;
+
         let data = tokio::task::block_in_place(|| bincode::serialize(&input))
             .context(SerializationFailure {})?;
+
+        let data = if compress {
+            tokio::task::block_in_place(|| lz4::block::compress(data.as_slice(), None, true))
+                .context(IOFailure {})?
+        } else {
+            data
+        };
 
         let req = hyper::Request::builder()
             .method("POST")
@@ -100,6 +119,15 @@ impl RpcClient {
                 .context(TransportError {
                     msg: format!("call {} recv bytes error", endpoint_name),
                 })?;
+
+        let resp_bytes = if compress {
+            let mut resp_bytes = resp_bytes.to_vec();
+            tokio::task::block_in_place(|| lz4::block::decompress(resp_bytes.as_mut(), None))
+                .context(IOFailure {})?.into()
+        } else {
+            resp_bytes
+        };
+
         let resp: R = tokio::task::block_in_place(|| bincode::deserialize(resp_bytes.as_ref()))
             .context(SerializationFailure {})?;
         Ok(resp)

@@ -47,6 +47,7 @@ impl RpcMethod {
 
     fn client_method(&self, client_field: &Ident) -> TokenStream2 {
         let ident = &self.ident;
+        let ident_compressed = quote::format_ident!("{}_compressed", ident);
         let req_args: Vec<_> = self.args.iter().map(|x| &x.pat).collect();
         let original_args = self.args.clone();
         let resp_type = self.resp_type();
@@ -56,13 +57,22 @@ impl RpcMethod {
             quote::quote! {
                 pub async fn #ident(&self, #( #original_args, )*) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
                     let req = (#( #req_args, )*);
-                    self.#client_field.call_async(#web_api_string_name, req).await
+                    self.#client_field.call_async(#web_api_string_name, req, false).await
+                }
+
+                pub async fn #ident_compressed(&self, #( #original_args, )*) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
+                    let req = (#( #req_args, )*);
+                    self.#client_field.call_async(#web_api_string_name, req, true).await
                 }
             }
         } else {
             quote::quote! {
                 pub async fn #ident(&self) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
-                    self.#client_field.call_async(#web_api_string_name, ()).await
+                    self.#client_field.call_async(#web_api_string_name, (), false).await
+                }
+
+                pub async fn #ident_compressed(&self) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
+                    self.#client_field.call_async(#web_api_string_name, (), true).await
                 }
             }
         }
@@ -71,13 +81,13 @@ impl RpcMethod {
     fn service_method(&self) -> TokenStream2 {
         let method_ident = &self.ident;
         let web_api_ident = self.ident_web_api();
+        let web_api_ident_compressed = quote::format_ident!("{}_compressed", web_api_ident);
         let req_args: Vec<_> = self.args.iter().map(|x| &x.pat).collect();
         let req_args2 = req_args.clone();
         let req_type = self.req_type();
         let call_line  = if req_args.len() > 0 {
             quote::quote! {
-                 let input: #req_type = ::smol::unblock(move || ::bincode::deserialize(body.as_ref()))
-                     .await
+                 let input: #req_type = ::tokio::task::block_in_place(|| ::bincode::deserialize(body.as_ref()))
                      .context(::persia_rpc::SerializationFailure {})?;
                  let (#( #req_args, )*) = input;
                  let output = self.#method_ident(#( #req_args2, )* ).await;
@@ -97,9 +107,39 @@ impl RpcMethod {
                                 msg: "hyper read body error".to_string(),
                             })?;
                     #call_line
-                    let output = ::smol::unblock(move || ::bincode::serialize(&output))
-                        .await
+                    let output = ::tokio::task::block_in_place(|| ::bincode::serialize(&output))
                         .context(::persia_rpc::SerializationFailure {})?;
+                    Ok::<_, ::persia_rpc::PersiaRpcError>(output)
+                }
+                .await;
+                match result {
+                    Ok(x) => Ok(::hyper::Response::new(::hyper::body::Body::from(x))),
+                    Err(e) => {
+                        ::tracing::error!("server side error {:?}", e);
+                        let mut resp = ::hyper::Response::default();
+                        *resp.status_mut() = ::hyper::StatusCode::INTERNAL_SERVER_ERROR;
+                        *resp.body_mut() = ::hyper::body::Body::from(format!("{:#?}", e));
+                        Ok(resp)
+                    }
+                }
+            }
+
+
+            pub async fn #web_api_ident_compressed(&self, req: ::hyper::Request<::hyper::Body>) -> Result<::hyper::Response<hyper::Body>, ::hyper::Error> {
+                let result = async move {
+                    let body =
+                        ::hyper::body::to_bytes(req.into_body())
+                            .await
+                            .context(::persia_rpc::TransportError {
+                                msg: "hyper read body error".to_string(),
+                            })?;
+                    let body = ::tokio::task::block_in_place(|| ::lz4::block::decompress(&body, None))
+                        .context(::persia_rpc::IOFailure {})?;
+                    #call_line
+                    let output = ::tokio::task::block_in_place(|| ::bincode::serialize(&output))
+                        .context(::persia_rpc::SerializationFailure {})?;
+                    let output = ::tokio::task::block_in_place(|| ::lz4::block::compress(&output, None, true))
+                        .context(::persia_rpc::IOFailure {})?;
                     Ok::<_, ::persia_rpc::PersiaRpcError>(output)
                 }
                 .await;
