@@ -4,8 +4,6 @@ use snafu::{ensure, Backtrace, ResultExt, Snafu};
 use std::ops::Add;
 pub use persia_rpc_macro::service;
 use hyper::body::Buf;
-use std::time::Duration;
-use smol_timeout::TimeoutExt;
 
 #[derive(Snafu, Debug)]
 #[snafu(visibility = "pub")]
@@ -15,8 +13,6 @@ pub enum PersiaRpcError {
         source: bincode::Error,
         backtrace: Option<Backtrace>,
     },
-    #[snafu(display("timeout error"))]
-    TimeoutError { },
     #[snafu(display("io error"))]
     IOFailure {
         source: std::io::Error,
@@ -68,18 +64,6 @@ impl RpcClient {
                 .build_http(),
             server_addr,
         })
-    }
-
-    pub async fn call_async_timeout<T: Serialize + Send + 'static, R: DeserializeOwned + Send + 'static>(
-        &self,
-        endpoint_name: &str,
-        input: T,
-        compress: bool,
-        timeout: Duration
-    ) -> Result<R, PersiaRpcError> {
-        let fut = self.call_async(endpoint_name, input, compress);
-        let fut = fut.timeout(timeout);
-        fut.await.ok_or_else(|| PersiaRpcError::TimeoutError {})?
     }
 
     pub async fn call_async<T: Serialize + Send + 'static, R: DeserializeOwned + Send + 'static>(
