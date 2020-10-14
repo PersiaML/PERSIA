@@ -81,7 +81,9 @@ impl RpcMethod {
     fn service_method(&self) -> TokenStream2 {
         let method_ident = &self.ident;
         let web_api_ident = self.ident_web_api();
+        let web_api_ident_string = web_api_ident.to_string();
         let web_api_ident_compressed = quote::format_ident!("{}_compressed", web_api_ident);
+        let web_api_ident_compressed_string = web_api_ident_compressed.to_string();
         let req_args: Vec<_> = self.args.iter().map(|x| &x.pat).collect();
         let req_args2 = req_args.clone();
         let req_type = self.req_type();
@@ -104,7 +106,7 @@ impl RpcMethod {
                         ::hyper::body::to_bytes(req.into_body())
                             .await
                             .context(::persia_rpc::TransportError {
-                                msg: "hyper read body error".to_string(),
+                                msg: format!("hyper read body error: {}", #web_api_ident_string),
                             })?;
                     #call_line
                     let output = ::tokio::task::block_in_place(|| ::bincode::serialize(&output))
@@ -131,7 +133,7 @@ impl RpcMethod {
                         ::hyper::body::to_bytes(req.into_body())
                             .await
                             .context(::persia_rpc::TransportError {
-                                msg: "hyper read body error".to_string(),
+                                msg: format!("hyper read body error: {}", #web_api_ident_compressed_string),
                             })?;
                     let body = ::tokio::task::block_in_place(|| ::lz4::block::decompress(&body, None))
                         .context(::persia_rpc::IOFailure {})?;
