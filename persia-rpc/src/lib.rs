@@ -3,6 +3,7 @@ use serde::Serialize;
 use snafu::{ensure, Backtrace, ResultExt, Snafu};
 use std::ops::Add;
 pub use persia_rpc_macro::service;
+use hyper::body::Buf;
 
 #[derive(Snafu, Debug)]
 #[snafu(visibility = "pub")]
@@ -71,14 +72,9 @@ impl RpcClient {
         input: T,
         compress: bool,
     ) -> Result<R, PersiaRpcError> {
-        let endpoint_name = if compress {
-            endpoint_name.to_owned() + "_compressed"
-        } else {
-            endpoint_name.to_owned()
-        };
         let server_addr = self
             .server_addr
-            .join(endpoint_name.as_str())
+            .join(endpoint_name)
             .context(ServerAddrParseFailure {
                 server_addr: endpoint_name.to_string(),
             })?;
@@ -86,12 +82,13 @@ impl RpcClient {
         let data = tokio::task::block_in_place(|| bincode::serialize(&input))
             .context(SerializationFailure {})?;
 
-        let data = if compress {
-            tokio::task::block_in_place(|| lz4::block::compress(data.as_slice(), None, true))
+        let data = if compress && data.len() > 0 {
+            tokio::task::block_in_place(|| lz4::block::compress(data.as_slice(), Some(lz4::block::CompressionMode::FAST(3)), true))
                 .context(IOFailure {})?
         } else {
             data
         };
+
 
         let req = hyper::Request::builder()
             .method("POST")
@@ -120,15 +117,14 @@ impl RpcClient {
                     msg: format!("call {} recv bytes error", endpoint_name),
                 })?;
 
-        let resp_bytes = if compress {
-            let mut resp_bytes = resp_bytes.to_vec();
-            tokio::task::block_in_place(|| lz4::block::decompress(resp_bytes.as_mut(), None))
+        let resp_bytes = if compress && resp_bytes.len() > 0 {
+            tokio::task::block_in_place(|| lz4::block::decompress(resp_bytes.bytes(), None))
                 .context(IOFailure {})?.into()
         } else {
             resp_bytes
         };
 
-        let resp: R = tokio::task::block_in_place(|| bincode::deserialize(resp_bytes.as_ref()))
+        let resp: R = tokio::task::block_in_place(|| bincode::deserialize(resp_bytes.bytes()))
             .context(SerializationFailure {})?;
         Ok(resp)
     }

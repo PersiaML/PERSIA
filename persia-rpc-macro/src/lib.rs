@@ -20,6 +20,13 @@ impl RpcMethod {
         )
     }
 
+    fn ident_web_api_compressed(&self) -> Ident {
+        quote::format_ident!(
+            "{}_web_api_compressed",
+            self.ident
+        )
+    }
+
     fn req_type(&self) -> TokenStream2 {
         let args = &self.args;
         let all_arg_types: Vec<_> = args.iter().map(|x| &x.ty).collect();
@@ -52,6 +59,7 @@ impl RpcMethod {
         let original_args = self.args.clone();
         let resp_type = self.resp_type();
         let web_api_string_name = self.ident_web_api().to_string();
+        let web_api_compressed_string_name = self.ident_web_api_compressed().to_string();
 
         if req_args.len() > 0 {
             quote::quote! {
@@ -62,7 +70,7 @@ impl RpcMethod {
 
                 pub async fn #ident_compressed(&self, #( #original_args, )*) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
                     let req = (#( #req_args, )*);
-                    self.#client_field.call_async(#web_api_string_name, req, true).await
+                    self.#client_field.call_async(#web_api_compressed_string_name, req, true).await
                 }
             }
         } else {
@@ -72,7 +80,7 @@ impl RpcMethod {
                 }
 
                 pub async fn #ident_compressed(&self) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
-                    self.#client_field.call_async(#web_api_string_name, (), true).await
+                    self.#client_field.call_async(#web_api_compressed_string_name, (), true).await
                 }
             }
         }
@@ -82,12 +90,12 @@ impl RpcMethod {
         let method_ident = &self.ident;
         let web_api_ident = self.ident_web_api();
         let web_api_ident_string = web_api_ident.to_string();
-        let web_api_ident_compressed = quote::format_ident!("{}_compressed", web_api_ident);
+        let web_api_ident_compressed = self.ident_web_api_compressed();
         let web_api_ident_compressed_string = web_api_ident_compressed.to_string();
         let req_args: Vec<_> = self.args.iter().map(|x| &x.pat).collect();
         let req_args2 = req_args.clone();
         let req_type = self.req_type();
-        let call_line  = if req_args.len() > 0 {
+        let call_line = if req_args.len() > 0 {
             quote::quote! {
                  let input: #req_type = ::tokio::task::block_in_place(|| ::bincode::deserialize(body.as_ref()))
                      .context(::persia_rpc::SerializationFailure {})?;
@@ -128,6 +136,7 @@ impl RpcMethod {
 
 
             pub async fn #web_api_ident_compressed(&self, req: ::hyper::Request<::hyper::Body>) -> Result<::hyper::Response<hyper::Body>, ::hyper::Error> {
+                use ::hyper::body::Buf;
                 let result = async move {
                     let body =
                         ::hyper::body::to_bytes(req.into_body())
@@ -135,13 +144,20 @@ impl RpcMethod {
                             .context(::persia_rpc::TransportError {
                                 msg: format!("hyper read body error: {}", #web_api_ident_compressed_string),
                             })?;
-                    let body = ::tokio::task::block_in_place(|| ::lz4::block::decompress(&body, None))
-                        .context(::persia_rpc::IOFailure {})?;
+                    let body = if body.len() > 0 {
+                      ::tokio::task::block_in_place(|| ::lz4::block::decompress(body.bytes(), None))
+                        .context(::persia_rpc::IOFailure {})?.into()
+                    } else {
+                      body
+                    };
                     #call_line
                     let output = ::tokio::task::block_in_place(|| ::bincode::serialize(&output))
                         .context(::persia_rpc::SerializationFailure {})?;
-                    let output = ::tokio::task::block_in_place(|| ::lz4::block::compress(&output, None, true))
-                        .context(::persia_rpc::IOFailure {})?;
+                    let output = if output.len() > 0 {
+                        ::tokio::task::block_in_place(|| ::lz4::block::compress(&output, Some(lz4::block::CompressionMode::FAST(3)), true)).context(::persia_rpc::IOFailure {})?
+                      } else {
+                        output
+                      };
                     Ok::<_, ::persia_rpc::PersiaRpcError>(output)
                 }
                 .await;
@@ -192,10 +208,16 @@ impl Service {
         let service_web_api_impl: Vec<_> = self.rpcs.iter().map(|x| x.service_method()).collect();
         let match_arms: Vec<_> = self.rpcs.iter().map(|x| {
             let web_api_string_name = "/".to_string() + x.ident_web_api().to_string().as_str();
+            let web_api_compressed_string_name = "/".to_string() + x.ident_web_api_compressed().to_string().as_str();
             let ident_web_api = x.ident_web_api();
+            let ident_web_api_compressed = x.ident_web_api_compressed();
             quote::quote! {
                 #web_api_string_name => {
                     Box::pin(async move { server.#ident_web_api(req).await })
+                }
+
+                #web_api_compressed_string_name => {
+                    Box::pin(async move { server.#ident_web_api_compressed(req).await })
                 }
             }
         }).collect();
