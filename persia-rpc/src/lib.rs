@@ -57,10 +57,10 @@ impl RpcClient {
             })?;
         Ok(Self {
             client: hyper::Client::builder()
-                .http2_only(true)
-                .retry_canceled_requests(true)
-                .set_host(false)
-                .http2_adaptive_window(true)
+                // .http2_only(true)
+                // .retry_canceled_requests(true)
+                // .set_host(false)
+                // .http2_adaptive_window(true)
                 .build_http(),
             server_addr,
         })
