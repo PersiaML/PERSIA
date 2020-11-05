@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use snafu::{  ResultExt, };
+use speedy::{Readable, Writable};
 
 
 #[derive(Clone)]
@@ -19,11 +19,11 @@ impl Service {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Readable, Writable, Debug)]
 pub struct Input {
     pub msg: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Readable, Writable, Debug)]
 pub struct Output {}
 

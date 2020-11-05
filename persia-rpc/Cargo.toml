@@ -1,6 +1,6 @@
 [package]
 name = "persia-rpc"
-version = "0.1.12"
+version = "0.2.0"
 authors = ["Xiangru Lian <admin@mail.xrlian.com>"]
 edition = "2018"
 description = "high performance rpc framework on http2"
@@ -13,9 +13,8 @@ categories = ["network-programming"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-persia-rpc-macro = { version = "0.1", path = "../persia-rpc-macro" }
-serde = { version = "1.0", features = ["derive"] }
-bincode = "1.3"
+persia-rpc-macro = { version = "0.2", path = "../persia-rpc-macro" }
+speedy = "0.7"
 bytes = "0.6"
 tracing = "0.1"
 futures = "0.3"

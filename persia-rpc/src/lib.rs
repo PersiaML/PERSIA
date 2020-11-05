@@ -1,5 +1,4 @@
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use speedy::{Readable, Writable};
 use snafu::{ensure, Backtrace, ResultExt, Snafu};
 use std::ops::Add;
 pub use persia_rpc_macro::service;
@@ -10,7 +9,7 @@ use hyper::body::Buf;
 pub enum PersiaRpcError {
     #[snafu(display("serialization error"))]
     SerializationFailure {
-        source: bincode::Error,
+        source: speedy::Error,
         backtrace: Option<Backtrace>,
     },
     #[snafu(display("io error"))]
@@ -66,12 +65,17 @@ impl RpcClient {
         })
     }
 
-    pub async fn call_async<T: Serialize + Send + 'static, R: DeserializeOwned + Send + 'static>(
+    pub async fn call_async<'a, T, R>
+    (
         &self,
         endpoint_name: &str,
         input: T,
         compress: bool,
-    ) -> Result<R, PersiaRpcError> {
+    ) -> Result<R, PersiaRpcError>
+        where
+            R: Readable<'a, speedy::LittleEndian> + Send + 'static,
+            T: Writable<speedy::LittleEndian> + Send + 'static,
+    {
         let server_addr = self
             .server_addr
             .join(endpoint_name)
@@ -79,7 +83,7 @@ impl RpcClient {
                 server_addr: endpoint_name.to_string(),
             })?;
 
-        let data = tokio::task::block_in_place(|| bincode::serialize(&input))
+        let data = tokio::task::block_in_place(|| input.write_to_vec())
             .context(SerializationFailure {})?;
 
         let data = if compress && data.len() > 0 {
@@ -100,15 +104,15 @@ impl RpcClient {
             msg: format!("call {} error", endpoint_name),
         })?;
         ensure!(
-            response.status() == hyper::http::StatusCode::OK,
-            TransportServerSideError {
-                msg: format!(
-                    "call {} server side error: {:?}",
-                    endpoint_name,
-                    response.into_body()
-                ),
-            }
-        );
+    response.status() == hyper::http::StatusCode::OK,
+    TransportServerSideError {
+    msg: format ! (
+    "call {} server side error: {:?}",
+    endpoint_name,
+    response.into_body()
+    ),
+    }
+    );
 
         let resp_bytes =
             hyper::body::to_bytes(response.into_body())
@@ -124,7 +128,7 @@ impl RpcClient {
             resp_bytes
         };
 
-        let resp: R = tokio::task::block_in_place(|| bincode::deserialize(resp_bytes.bytes()))
+        let resp: R = tokio::task::block_in_place(|| R::read_from_buffer_owned(resp_bytes.bytes())) // TODO: this can be zero copy if we use read_from_buffer and correctly deal with lifetime
             .context(SerializationFailure {})?;
         Ok(resp)
     }

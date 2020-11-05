@@ -1,6 +1,6 @@
 [package]
 name = "persia-rpc-macro"
-version = "0.1.12"
+version = "0.2.0"
 authors = ["Xiangru Lian <admin@mail.xrlian.com>"]
 edition = "2018"
 description = "proc macros for the persia-rpc crate"

@@ -97,7 +97,7 @@ impl RpcMethod {
         let req_type = self.req_type();
         let call_line = if req_args.len() > 0 {
             quote::quote! {
-                 let input: #req_type = ::tokio::task::block_in_place(|| ::bincode::deserialize(body.as_ref()))
+                 let input: #req_type = ::tokio::task::block_in_place(|| ::speedy::Readable::read_from_buffer_owned(body.as_ref()))
                      .context(::persia_rpc::SerializationFailure {})?;
                  let (#( #req_args, )*) = input;
                  let output = self.#method_ident(#( #req_args2, )* ).await;
@@ -117,7 +117,7 @@ impl RpcMethod {
                                 msg: format!("hyper read body error: {}", #web_api_ident_string),
                             })?;
                     #call_line
-                    let output = ::tokio::task::block_in_place(|| ::bincode::serialize(&output))
+                    let output = ::tokio::task::block_in_place(|| output.write_to_vec())
                         .context(::persia_rpc::SerializationFailure {})?;
                     Ok::<_, ::persia_rpc::PersiaRpcError>(output)
                 }
@@ -151,7 +151,7 @@ impl RpcMethod {
                       body
                     };
                     #call_line
-                    let output = ::tokio::task::block_in_place(|| ::bincode::serialize(&output))
+                    let output = ::tokio::task::block_in_place(|| output.write_to_vec())
                         .context(::persia_rpc::SerializationFailure {})?;
                     let output = if output.len() > 0 {
                         ::tokio::task::block_in_place(|| ::lz4::block::compress(&output, Some(lz4::block::CompressionMode::FAST(3)), true)).context(::persia_rpc::IOFailure {})?
