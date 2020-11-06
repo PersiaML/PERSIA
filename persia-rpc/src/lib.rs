@@ -1,4 +1,4 @@
-use speedy::{Readable, Writable};
+use persia_speedy::{Readable, Writable};
 use snafu::{ensure, Backtrace, ResultExt, Snafu};
 use std::ops::Add;
 pub use persia_rpc_macro::service;
@@ -9,7 +9,7 @@ use hyper::body::Buf;
 pub enum PersiaRpcError {
     #[snafu(display("serialization error"))]
     SerializationFailure {
-        source: speedy::Error,
+        source: persia_speedy::Error,
         backtrace: Option<Backtrace>,
     },
     #[snafu(display("io error"))]
@@ -73,8 +73,8 @@ impl RpcClient {
         compress: bool,
     ) -> Result<R, PersiaRpcError>
         where
-            R: Readable<'a, speedy::LittleEndian> + Send + 'static,
-            T: Writable<speedy::LittleEndian> + Send + 'static,
+            R: Readable<'a, persia_speedy::LittleEndian> + Send + 'static,
+            T: Writable<persia_speedy::LittleEndian> + Send + 'static,
     {
         let server_addr = self
             .server_addr

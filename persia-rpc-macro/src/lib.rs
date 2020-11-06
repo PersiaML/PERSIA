@@ -97,7 +97,7 @@ impl RpcMethod {
         let req_type = self.req_type();
         let call_line = if req_args.len() > 0 {
             quote::quote! {
-                 let input: #req_type = ::tokio::task::block_in_place(|| ::speedy::Readable::read_from_buffer_owned(body.as_ref()))
+                 let input: #req_type = ::tokio::task::block_in_place(|| ::persia_speedy::Readable::read_from_buffer_owned(body.as_ref()))
                      .context(::persia_rpc::SerializationFailure {})?;
                  let (#( #req_args, )*) = input;
                  let output = self.#method_ident(#( #req_args2, )* ).await;

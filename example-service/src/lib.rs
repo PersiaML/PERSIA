@@ -1,5 +1,5 @@
 use snafu::{  ResultExt, };
-use speedy::{Readable, Writable};
+use persia_speedy::{Readable, Writable};
 
 
 #[derive(Clone)]
