@@ -13,7 +13,7 @@ categories = ["network-programming"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-persia-rpc-macro = { version = "0.3", path = "../persia-rpc-macro" }
+persia-rpc-macro = { version = "0.5", path = "../persia-rpc-macro" }
 persia-speedy = "0.8"
 bytes = "1.0"
 tracing = "0.1"
