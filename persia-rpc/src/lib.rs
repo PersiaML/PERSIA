@@ -2,7 +2,7 @@ use persia_speedy::{Readable, Writable};
 use snafu::{ensure, Backtrace, ResultExt, Snafu};
 use std::ops::Add;
 pub use persia_rpc_macro::service;
-use hyper::body::Buf;
+use bytes::Buf;
 
 #[derive(Snafu, Debug)]
 #[snafu(visibility = "pub")]
@@ -69,7 +69,7 @@ impl RpcClient {
     (
         &self,
         endpoint_name: &str,
-        input: T,
+        input: &T,
         compress: bool,
     ) -> Result<R, PersiaRpcError>
         where
@@ -84,7 +84,7 @@ impl RpcClient {
             })?;
 
         let data = tokio::task::block_in_place(|| input.write_to_vec())
-            .context(SerializationFailure {})?;
+            .context(SerializationFailure {})?; // 30ms
 
         let data = if compress && data.len() > 0 {
             tokio::task::block_in_place(|| lz4::block::compress(data.as_slice(), Some(lz4::block::CompressionMode::FAST(3)), true))
@@ -105,31 +105,35 @@ impl RpcClient {
         })?;
         ensure!(
     response.status() == hyper::http::StatusCode::OK,
-    TransportServerSideError {
-    msg: format ! (
-    "call {} server side error: {:?}",
-    endpoint_name,
-    response.into_body()
-    ),
-    }
+      TransportServerSideError {
+        msg: format ! (
+          "call {} server side error: {:?}",
+          endpoint_name,
+          response.into_body()
+        ),
+      }
     );
 
-        let resp_bytes =
-            hyper::body::to_bytes(response.into_body())
+        let mut resp_bytes =
+            hyper::body::aggregate(response.into_body())
                 .await
                 .context(TransportError {
                     msg: format!("call {} recv bytes error", endpoint_name),
                 })?;
 
-        let resp_bytes = if compress && resp_bytes.len() > 0 {
-            tokio::task::block_in_place(|| lz4::block::decompress(resp_bytes.bytes(), None))
-                .context(IOFailure {})?.into()
+        if compress && resp_bytes.remaining() > 0 {
+            let resp_bytes = tokio::task::block_in_place(|| {
+                let mut buffer = Vec::with_capacity(resp_bytes.remaining());
+                resp_bytes.copy_to_slice(buffer.as_mut());
+                lz4::block::decompress(buffer.as_slice(), None)
+            }).context(IOFailure {})?;
+            let resp: R = tokio::task::block_in_place(|| R::read_from_buffer_owned(resp_bytes.as_slice())) // TODO: this can be zero copy if we use read_from_buffer and correctly deal with lifetime
+                .context(SerializationFailure {})?;
+            return Ok(resp);
         } else {
-            resp_bytes
-        };
-
-        let resp: R = tokio::task::block_in_place(|| R::read_from_buffer_owned(resp_bytes.bytes())) // TODO: this can be zero copy if we use read_from_buffer and correctly deal with lifetime
-            .context(SerializationFailure {})?;
-        Ok(resp)
+            let resp: R = tokio::task::block_in_place(|| R::read_from_stream_unbuffered(resp_bytes.reader())) // TODO: this can be zero copy if we use read_from_buffer and correctly deal with lifetime
+                .context(SerializationFailure {})?;
+            return Ok(resp);
+        }
     }
 }

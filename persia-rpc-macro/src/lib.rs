@@ -1,13 +1,13 @@
 use syn::{Attribute, Ident, ReturnType, PatType, Receiver, FnArg, ImplItem};
 use proc_macro::TokenStream;
-use syn::export::TokenStream2;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::ToTokens;
 
 #[allow(dead_code)]
 struct RpcMethod {
     attrs: Vec<Attribute>,
     ident: Ident,
-    args: Vec<PatType>,
+    arg: PatType,
     receiver: Receiver,
     output: ReturnType,
 }
@@ -28,16 +28,9 @@ impl RpcMethod {
     }
 
     fn req_type(&self) -> TokenStream2 {
-        let args = &self.args;
-        let all_arg_types: Vec<_> = args.iter().map(|x| &x.ty).collect();
-        if all_arg_types.len() > 0 {
-            quote::quote! {
-                (#( #all_arg_types ),*,)
-            }
-        } else {
-            quote::quote! {
-                ()
-            }
+        let arg_type = &self.arg.ty;
+        quote::quote! {
+            #arg_type
         }
     }
 
@@ -55,35 +48,21 @@ impl RpcMethod {
     fn client_method(&self, client_field: &Ident) -> TokenStream2 {
         let ident = &self.ident;
         let ident_compressed = quote::format_ident!("{}_compressed", ident);
-        let req_args: Vec<_> = self.args.iter().map(|x| &x.pat).collect();
-        let original_args = self.args.clone();
+        let req_arg = &self.arg.pat;
+        let req_arg_type = &self.arg.ty;
         let resp_type = self.resp_type();
         let web_api_string_name = self.ident_web_api().to_string();
         let web_api_compressed_string_name = self.ident_web_api_compressed().to_string();
 
-        if req_args.len() > 0 {
-            quote::quote! {
-                pub async fn #ident(&self, #( #original_args, )*) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
-                    let req = (#( #req_args, )*);
-                    self.#client_field.call_async(#web_api_string_name, req, false).await
+        quote::quote! {
+                pub async fn #ident(&self, #req_arg: &#req_arg_type) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
+                    self.#client_field.call_async(#web_api_string_name, #req_arg, false).await
                 }
 
-                pub async fn #ident_compressed(&self, #( #original_args, )*) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
-                    let req = (#( #req_args, )*);
-                    self.#client_field.call_async(#web_api_compressed_string_name, req, true).await
+                pub async fn #ident_compressed(&self, #req_arg: &#req_arg_type) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
+                    self.#client_field.call_async(#web_api_compressed_string_name, #req_arg, true).await
                 }
             }
-        } else {
-            quote::quote! {
-                pub async fn #ident(&self) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
-                    self.#client_field.call_async(#web_api_string_name, (), false).await
-                }
-
-                pub async fn #ident_compressed(&self) -> Result<#resp_type, ::persia_rpc::PersiaRpcError> {
-                    self.#client_field.call_async(#web_api_compressed_string_name, (), true).await
-                }
-            }
-        }
     }
 
     fn service_method(&self) -> TokenStream2 {
@@ -92,26 +71,19 @@ impl RpcMethod {
         let web_api_ident_string = web_api_ident.to_string();
         let web_api_ident_compressed = self.ident_web_api_compressed();
         let web_api_ident_compressed_string = web_api_ident_compressed.to_string();
-        let req_args: Vec<_> = self.args.iter().map(|x| &x.pat).collect();
-        let req_args2 = req_args.clone();
+        // let req_arg = &self.arg.pat;
         let req_type = self.req_type();
-        let call_line = if req_args.len() > 0 {
-            quote::quote! {
-                 let input: #req_type = ::tokio::task::block_in_place(|| ::persia_speedy::Readable::read_from_buffer_owned(body.as_ref()))
+        let call_line = quote::quote! {
+                 use bytes::Buf;
+                 let input: #req_type = ::tokio::task::block_in_place(|| ::persia_speedy::Readable::read_from_stream_unbuffered(body.reader()))
                      .context(::persia_rpc::SerializationFailure {})?;
-                 let (#( #req_args, )*) = input;
-                 let output = self.#method_ident(#( #req_args2, )* ).await;
-            }
-        } else {
-            quote::quote! {
-                 let output = self.#method_ident().await;
-            }
-        };
+                 let output = self.#method_ident(input).await;
+            };
         quote::quote! {
             pub async fn #web_api_ident(&self, req: ::hyper::Request<::hyper::Body>) -> Result<::hyper::Response<hyper::Body>, ::hyper::Error> {
                 let result = async move {
                     let body =
-                        ::hyper::body::to_bytes(req.into_body())
+                        ::hyper::body::aggregate(req.into_body())
                             .await
                             .context(::persia_rpc::TransportError {
                                 msg: format!("hyper read body error: {}", #web_api_ident_string),
@@ -145,8 +117,9 @@ impl RpcMethod {
                                 msg: format!("hyper read body error: {}", #web_api_ident_compressed_string),
                             })?;
                     let body = if body.len() > 0 {
-                      ::tokio::task::block_in_place(|| ::lz4::block::decompress(body.bytes(), None))
-                        .context(::persia_rpc::IOFailure {})?.into()
+                      ::tokio::task::block_in_place(|| {
+                        ::lz4::block::decompress(body.as_ref(), None)
+                      }).context(::persia_rpc::IOFailure {})?.into()
                     } else {
                       body
                     };
@@ -286,10 +259,11 @@ pub fn service(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
                     },
                 }
             }
+            assert_eq!(args.len(), 1, "only support single argument");
             RpcMethod {
                 attrs: m.attrs.clone(),
                 ident: m.sig.ident.clone(),
-                args,
+                arg: args[0].clone(),
                 receiver: receiver.unwrap(),
                 output: m.sig.output.clone(),
             }

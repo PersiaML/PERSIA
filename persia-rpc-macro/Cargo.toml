@@ -1,6 +1,6 @@
 [package]
 name = "persia-rpc-macro"
-version = "0.3.0"
+version = "0.5.0"
 authors = ["Xiangru Lian <admin@mail.xrlian.com>"]
 edition = "2018"
 description = "proc macros for the persia-rpc crate"
@@ -17,3 +17,4 @@ proc-macro = true
 syn = { version = "1.0", features = ["full"] }
 quote = "1.0"
 proc-macro-crate = "0.1"
+proc-macro2 = "1"
