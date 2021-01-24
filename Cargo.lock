@@ -221,7 +221,7 @@ dependencies = [
  "lz4",
  "once_cell",
  "persia-rpc",
- "persia-speedy",
+ "persia-speedy 0.8.1",
  "reqwest",
  "snafu",
  "structopt",
@@ -832,14 +832,14 @@ checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
 
 [[package]]
 name = "persia-rpc"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "bytes 1.0.1",
  "futures",
  "hyper",
  "lz4",
  "persia-rpc-macro",
- "persia-speedy",
+ "persia-speedy 0.9.0",
  "reqwest",
  "snafu",
  "tokio",
@@ -849,7 +849,7 @@ dependencies = [
 
 [[package]]
 name = "persia-rpc-macro"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -864,6 +864,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4531726834380b8e45f94288ae3db395f2ca6b806dad230c60c6909ad00c4e9b"
 dependencies = [
  "bytes 0.6.0",
+ "chrono",
+ "half",
+ "hashbrown",
+ "indexmap",
+ "ndarray",
+ "persia-speedy-derive",
+ "smallvec",
+ "tinystr",
+]
+
+[[package]]
+name = "persia-speedy"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9691906d48b29fde2a2fb4acedf0eaef0c2e7417cb244ebec5196ffab0dd36ab"
+dependencies = [
+ "bytes 1.0.1",
  "chrono",
  "half",
  "hashbrown",
