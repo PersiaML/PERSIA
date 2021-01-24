@@ -123,12 +123,6 @@ checksum = "ae44d1a3d5a19df61dd0c8beb138458ac2a53a7ac09eba97d55592540004306b"
 
 [[package]]
 name = "bytes"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0dcbc35f504eb6fc275a6d20e4ebcda18cf50d40ba6fabff8c711fa16cb3b16"
-
-[[package]]
-name = "bytes"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b700ce4376041dcd0a327fd0097c41095743c4c8af8887265942faf1100bd040"
@@ -215,13 +209,13 @@ name = "example-service"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bytes 1.0.1",
+ "bytes",
  "futures-util",
  "hyper",
  "lz4",
  "once_cell",
  "persia-rpc",
- "persia-speedy 0.8.1",
+ "persia-speedy",
  "reqwest",
  "snafu",
  "structopt",
@@ -379,7 +373,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b67e66362108efccd8ac053abafc8b7a8d86a37e6e48fc4f6f7485eb5e9e6a5"
 dependencies = [
- "bytes 1.0.1",
+ "bytes",
  "fnv",
  "futures-core",
  "futures-sink",
@@ -432,7 +426,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7245cd7449cc792608c3c8a9eaf69bd4eabbabf802713748fd739c98b82f0747"
 dependencies = [
- "bytes 1.0.1",
+ "bytes",
  "fnv",
  "itoa",
 ]
@@ -443,7 +437,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2861bd27ee074e5ee891e8b539837a9430012e249d7f0ca2d795650f579c1994"
 dependencies = [
- "bytes 1.0.1",
+ "bytes",
  "http",
 ]
 
@@ -465,7 +459,7 @@ version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12219dc884514cb4a6a03737f4413c0e01c23a1b059b0156004b23f1e19dccbe"
 dependencies = [
- "bytes 1.0.1",
+ "bytes",
  "futures-channel",
  "futures-core",
  "futures-util",
@@ -489,7 +483,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
 dependencies = [
- "bytes 1.0.1",
+ "bytes",
  "hyper",
  "native-tls",
  "tokio",
@@ -832,14 +826,14 @@ checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
 
 [[package]]
 name = "persia-rpc"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
- "bytes 1.0.1",
+ "bytes",
  "futures",
  "hyper",
  "lz4",
  "persia-rpc-macro",
- "persia-speedy 0.9.0",
+ "persia-speedy",
  "reqwest",
  "snafu",
  "tokio",
@@ -859,28 +853,11 @@ dependencies = [
 
 [[package]]
 name = "persia-speedy"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4531726834380b8e45f94288ae3db395f2ca6b806dad230c60c6909ad00c4e9b"
-dependencies = [
- "bytes 0.6.0",
- "chrono",
- "half",
- "hashbrown",
- "indexmap",
- "ndarray",
- "persia-speedy-derive",
- "smallvec",
- "tinystr",
-]
-
-[[package]]
-name = "persia-speedy"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9691906d48b29fde2a2fb4acedf0eaef0c2e7417cb244ebec5196ffab0dd36ab"
 dependencies = [
- "bytes 1.0.1",
+ "bytes",
  "chrono",
  "half",
  "hashbrown",
@@ -1131,7 +1108,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd281b1030aa675fb90aa994d07187645bb3c8fc756ca766e7c3070b439de9de"
 dependencies = [
  "base64",
- "bytes 1.0.1",
+ "bytes",
  "encoding_rs",
  "futures-core",
  "futures-util",
@@ -1431,7 +1408,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8efab2086f17abcddb8f756117665c958feee6b2e39974c2f1600592ab3a4195"
 dependencies = [
  "autocfg",
- "bytes 1.0.1",
+ "bytes",
  "libc",
  "memchr",
  "mio",
@@ -1483,7 +1460,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "feb971a26599ffd28066d387f109746df178eff14d5ea1e235015c5601967a4b"
 dependencies = [
  "async-stream",
- "bytes 1.0.1",
+ "bytes",
  "futures-core",
  "futures-sink",
  "log",

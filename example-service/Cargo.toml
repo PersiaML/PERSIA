@@ -12,7 +12,7 @@ hyper = { version = "0.14", features = ["full"] }
 futures-util = "0.3"
 structopt = "0.3"
 tokio = { version = "1", features = ["full"] }
-persia-speedy = "0.8"
+persia-speedy = "0.9"
 bytes = "1.0"
 lz4 = "1.23"
 snafu = { version = "0.6", features = ["backtraces"] }

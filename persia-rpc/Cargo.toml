@@ -1,6 +1,6 @@
 [package]
 name = "persia-rpc"
-version = "0.6.0"
+version = "0.6.1"
 authors = ["Xiangru Lian <admin@mail.xrlian.com>"]
 edition = "2018"
 description = "high performance rpc framework on http2"

@@ -84,9 +84,9 @@ impl RpcClient {
             })?;
 
         let data = tokio::task::block_in_place(|| input.write_to_vec())
-            .context(SerializationFailure {})?; // 30ms
+            .context(SerializationFailure {})?;
 
-        let data = if compress && data.len() > 0 {
+        let data = if compress && (data.len() > 0) {
             tokio::task::block_in_place(|| lz4::block::compress(data.as_slice(), Some(lz4::block::CompressionMode::FAST(3)), true))
                 .context(IOFailure {})?
         } else {
@@ -121,9 +121,9 @@ impl RpcClient {
                     msg: format!("call {} recv bytes error", endpoint_name),
                 })?;
 
-        if compress && resp_bytes.remaining() > 0 {
+        if compress && resp_bytes.remaining() >= 4 {
             let resp_bytes = tokio::task::block_in_place(|| {
-                let mut buffer = Vec::with_capacity(resp_bytes.remaining());
+                let mut buffer = vec![0; resp_bytes.remaining()];
                 resp_bytes.copy_to_slice(buffer.as_mut());
                 lz4::block::decompress(buffer.as_slice(), None)
             }).context(IOFailure {})?;

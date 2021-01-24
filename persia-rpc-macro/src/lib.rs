@@ -116,7 +116,7 @@ impl RpcMethod {
                             .context(::persia_rpc::TransportError {
                                 msg: format!("hyper read body error: {}", #web_api_ident_compressed_string),
                             })?;
-                    let body = if body.len() > 0 {
+                    let body = if body.len() >= 4 {
                       ::tokio::task::block_in_place(|| {
                         ::lz4::block::decompress(body.as_ref(), None)
                       }).context(::persia_rpc::IOFailure {})?.into()
