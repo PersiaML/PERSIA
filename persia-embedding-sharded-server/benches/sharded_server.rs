@@ -6,8 +6,7 @@ use criterion_macro::criterion;
 
 extern crate persia_embedding_sharded_server;
 use persia_embedding_sharded_server::dev_utils::{
-    init_sharded_server, init_middleware, gen_sharded_server_request,
-    gen_middleware_request,
+    gen_middleware_request, gen_sharded_server_request, init_middleware, init_sharded_server,
 };
 use std::time::Duration;
 
@@ -27,7 +26,7 @@ fn bench_sharded_server(c: &mut Criterion) {
             join.extend((0..THREADS).map(|_| {
                 std::thread::spawn({
                     let runtime = runtime.clone();
-                    let sharded_server_client = sharded_server_client.clone();                    
+                    let sharded_server_client = sharded_server_client.clone();
                     move || {
                         let mut dur = Duration::new(0, 0);
                         let _guard = runtime.enter();
@@ -36,11 +35,14 @@ fn bench_sharded_server(c: &mut Criterion) {
                             let lookup_req = x.0;
                             let update_grad_req = (x.1, x.2);
                             let start = std::time::Instant::now();
-                            let result =
-                                runtime.block_on(sharded_server_client.lookup_mixed(black_box(&lookup_req)));
+                            let result = runtime.block_on(
+                                sharded_server_client.lookup_mixed(black_box(&lookup_req)),
+                            );
                             assert_eq!(result.is_ok(), true);
-                            let result =
-                                runtime.block_on(sharded_server_client.update_gradient_mixed(black_box(&update_grad_req)));
+                            let result = runtime.block_on(
+                                sharded_server_client
+                                    .update_gradient_mixed(black_box(&update_grad_req)),
+                            );
                             assert_eq!(result.is_ok(), true);
                             dur = dur.checked_add(start.elapsed()).unwrap();
                         }
@@ -67,7 +69,7 @@ fn bench_sharded_server(c: &mut Criterion) {
             join.extend((0..THREADS).map(|_| {
                 std::thread::spawn({
                     let runtime = runtime.clone();
-                    let sharded_server_client = sharded_server_client.clone();                    
+                    let sharded_server_client = sharded_server_client.clone();
                     move || {
                         let mut dur = Duration::new(0, 0);
                         let _guard = runtime.enter();
@@ -76,11 +78,15 @@ fn bench_sharded_server(c: &mut Criterion) {
                             let lookup_req = x.0;
                             let update_grad_req = (x.1, x.2);
                             let start = std::time::Instant::now();
-                            let result =
-                                runtime.block_on(sharded_server_client.lookup_mixed_compressed(black_box(&lookup_req)));
+                            let result = runtime.block_on(
+                                sharded_server_client
+                                    .lookup_mixed_compressed(black_box(&lookup_req)),
+                            );
                             assert_eq!(result.is_ok(), true);
-                            let result =
-                                runtime.block_on(sharded_server_client.update_gradient_mixed_compressed(black_box(&update_grad_req)));
+                            let result = runtime.block_on(
+                                sharded_server_client
+                                    .update_gradient_mixed_compressed(black_box(&update_grad_req)),
+                            );
                             assert_eq!(result.is_ok(), true);
                             dur = dur.checked_add(start.elapsed()).unwrap();
                         }
@@ -107,7 +113,7 @@ fn bench_sharded_server(c: &mut Criterion) {
             join.extend((0..THREADS).map(|_| {
                 std::thread::spawn({
                     let runtime = runtime.clone();
-                    let sharded_server_client = sharded_server_client.clone();                    
+                    let sharded_server_client = sharded_server_client.clone();
                     move || {
                         let mut dur = Duration::new(0, 0);
                         let _guard = runtime.enter();
@@ -116,11 +122,15 @@ fn bench_sharded_server(c: &mut Criterion) {
                             let lookup_req = x.0;
                             let update_grad_req = (x.1, x.2);
                             let start = std::time::Instant::now();
-                            let result =
-                                runtime.block_on(sharded_server_client.lookup_mixed_compressed(black_box(&lookup_req)));
+                            let result = runtime.block_on(
+                                sharded_server_client
+                                    .lookup_mixed_compressed(black_box(&lookup_req)),
+                            );
                             assert_eq!(result.is_ok(), true);
-                            let result =
-                                runtime.block_on(sharded_server_client.update_gradient_mixed(black_box(&update_grad_req)));
+                            let result = runtime.block_on(
+                                sharded_server_client
+                                    .update_gradient_mixed(black_box(&update_grad_req)),
+                            );
                             assert_eq!(result.is_ok(), true);
                             dur = dur.checked_add(start.elapsed()).unwrap();
                         }
@@ -154,15 +164,20 @@ fn bench_sharded_server(c: &mut Criterion) {
                         for _ in 0..iters {
                             let (sparse_batch, grad_batch) = gen_middleware_request(2560);
                             let start = std::time::Instant::now();
-                            let forward_id =
-                                runtime.block_on(middleware_client.forward_batched(black_box(&sparse_batch)))
+                            let forward_id = runtime
+                                .block_on(
+                                    middleware_client.forward_batched(black_box(&sparse_batch)),
+                                )
                                 .unwrap()
                                 .unwrap();
-                            let result =
-                                runtime.block_on(middleware_client.forward_batch_id(black_box(&(forward_id, false))));
+                            let result = runtime.block_on(
+                                middleware_client.forward_batch_id(black_box(&(forward_id, false))),
+                            );
                             assert_eq!(result.is_ok(), true);
-                            let result =
-                                runtime.block_on(middleware_client.update_gradient_batched(black_box(&(forward_id, grad_batch))));
+                            let result = runtime.block_on(
+                                middleware_client
+                                    .update_gradient_batched(black_box(&(forward_id, grad_batch))),
+                            );
                             assert_eq!(result.is_ok(), true);
                             dur = dur.checked_add(start.elapsed()).unwrap();
                         }
@@ -189,7 +204,7 @@ fn bench_sharded_server(c: &mut Criterion) {
             join.extend((0..THREADS).map(|_| {
                 std::thread::spawn({
                     let runtime = runtime.clone();
-                    let sharded_server_client = sharded_server_client.clone();                    
+                    let sharded_server_client = sharded_server_client.clone();
                     move || {
                         let mut dur = Duration::new(0, 0);
                         let _guard = runtime.enter();
@@ -198,11 +213,14 @@ fn bench_sharded_server(c: &mut Criterion) {
                             let lookup_req = x.0;
                             let update_grad_req = (x.1, x.2);
                             let start = std::time::Instant::now();
-                            let result =
-                                runtime.block_on(sharded_server_client.lookup_mixed(black_box(&lookup_req)));
+                            let result = runtime.block_on(
+                                sharded_server_client.lookup_mixed(black_box(&lookup_req)),
+                            );
                             assert_eq!(result.is_ok(), true);
-                            let result =
-                                runtime.block_on(sharded_server_client.update_gradient_mixed(black_box(&update_grad_req)));
+                            let result = runtime.block_on(
+                                sharded_server_client
+                                    .update_gradient_mixed(black_box(&update_grad_req)),
+                            );
                             assert_eq!(result.is_ok(), true);
                             dur = dur.checked_add(start.elapsed()).unwrap();
                         }
@@ -229,7 +247,7 @@ fn bench_sharded_server(c: &mut Criterion) {
             join.extend((0..THREADS).map(|_| {
                 std::thread::spawn({
                     let runtime = runtime.clone();
-                    let sharded_server_client = sharded_server_client.clone();                    
+                    let sharded_server_client = sharded_server_client.clone();
                     move || {
                         let mut dur = Duration::new(0, 0);
                         let _guard = runtime.enter();
@@ -238,11 +256,15 @@ fn bench_sharded_server(c: &mut Criterion) {
                             let lookup_req = x.0;
                             let update_grad_req = (x.1, x.2);
                             let start = std::time::Instant::now();
-                            let result =
-                                runtime.block_on(sharded_server_client.lookup_mixed_compressed(black_box(&lookup_req)));
+                            let result = runtime.block_on(
+                                sharded_server_client
+                                    .lookup_mixed_compressed(black_box(&lookup_req)),
+                            );
                             assert_eq!(result.is_ok(), true);
-                            let result =
-                                runtime.block_on(sharded_server_client.update_gradient_mixed_compressed(black_box(&update_grad_req)));
+                            let result = runtime.block_on(
+                                sharded_server_client
+                                    .update_gradient_mixed_compressed(black_box(&update_grad_req)),
+                            );
                             assert_eq!(result.is_ok(), true);
                             dur = dur.checked_add(start.elapsed()).unwrap();
                         }
@@ -269,7 +291,7 @@ fn bench_sharded_server(c: &mut Criterion) {
             join.extend((0..THREADS).map(|_| {
                 std::thread::spawn({
                     let runtime = runtime.clone();
-                    let sharded_server_client = sharded_server_client.clone();                    
+                    let sharded_server_client = sharded_server_client.clone();
                     move || {
                         let mut dur = Duration::new(0, 0);
                         let _guard = runtime.enter();
@@ -278,11 +300,15 @@ fn bench_sharded_server(c: &mut Criterion) {
                             let lookup_req = x.0;
                             let update_grad_req = (x.1, x.2);
                             let start = std::time::Instant::now();
-                            let result =
-                                runtime.block_on(sharded_server_client.lookup_mixed_compressed(black_box(&lookup_req)));
+                            let result = runtime.block_on(
+                                sharded_server_client
+                                    .lookup_mixed_compressed(black_box(&lookup_req)),
+                            );
                             assert_eq!(result.is_ok(), true);
-                            let result =
-                                runtime.block_on(sharded_server_client.update_gradient_mixed(black_box(&update_grad_req)));
+                            let result = runtime.block_on(
+                                sharded_server_client
+                                    .update_gradient_mixed(black_box(&update_grad_req)),
+                            );
                             assert_eq!(result.is_ok(), true);
                             dur = dur.checked_add(start.elapsed()).unwrap();
                         }
@@ -316,15 +342,20 @@ fn bench_sharded_server(c: &mut Criterion) {
                         for _ in 0..iters {
                             let (sparse_batch, grad_batch) = gen_middleware_request(256);
                             let start = std::time::Instant::now();
-                            let forward_id =
-                                runtime.block_on(middleware_client.forward_batched(black_box(&sparse_batch)))
+                            let forward_id = runtime
+                                .block_on(
+                                    middleware_client.forward_batched(black_box(&sparse_batch)),
+                                )
                                 .unwrap()
                                 .unwrap();
-                            let result =
-                                runtime.block_on(middleware_client.forward_batch_id(black_box(&(forward_id, false))));
+                            let result = runtime.block_on(
+                                middleware_client.forward_batch_id(black_box(&(forward_id, false))),
+                            );
                             assert_eq!(result.is_ok(), true);
-                            let result =
-                                runtime.block_on(middleware_client.update_gradient_batched(black_box(&(forward_id, grad_batch))));
+                            let result = runtime.block_on(
+                                middleware_client
+                                    .update_gradient_batched(black_box(&(forward_id, grad_batch))),
+                            );
                             assert_eq!(result.is_ok(), true);
                             dur = dur.checked_add(start.elapsed()).unwrap();
                         }

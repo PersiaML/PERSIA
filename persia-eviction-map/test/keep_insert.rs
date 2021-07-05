@@ -15,7 +15,6 @@ struct Cli {
 // type ArcEntry = Arc<parking_lot::RwLock<HashMapEmbeddingEntry>>;
 
 fn main() -> () {
-
     let args: Cli = Cli::from_args();
     let cap = args.capacity;
 
@@ -64,7 +63,6 @@ fn main() -> () {
 //         }
 //     }
 // }
-
 
 // fn main() -> () {
 

@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate shadow_rs;
-use persia_embedding_sharded_server::middleware_config_parser::{MiddlewareConfig, convert_middleware_config};
+use persia_embedding_sharded_server::middleware_config_parser::{
+    convert_middleware_config, MiddlewareConfig,
+};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -33,14 +35,14 @@ fn main() -> anyhow::Result<()> {
     let mut config: MiddlewareConfig =
         serde_yaml::from_reader(std::fs::File::open(args.config).expect("cannot read config file"))
             .expect("cannot parse config file");
-    
+
     let _ = convert_middleware_config(&mut config);
 
     serde_yaml::to_writer(
-        std::fs::File::create(args.new_config)
-            .expect("cannot create new config file"),
-        &config)
-        .expect("failed to write new config file");
+        std::fs::File::create(args.new_config).expect("cannot create new config file"),
+        &config,
+    )
+    .expect("failed to write new config file");
 
     Ok(())
 }

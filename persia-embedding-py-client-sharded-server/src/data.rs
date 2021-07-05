@@ -3,10 +3,10 @@ use paste::paste;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use persia_speedy::Writable;
 use persia_embedding_datatypes::{
     BaseTensor, DenseTensor, EmbeddingTensor, PersiaBatchData, SparseBatch, SparseTensor, Tensor,
 };
+use persia_speedy::Writable;
 
 #[pyclass]
 pub struct PyPersiaBatchData {

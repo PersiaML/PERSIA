@@ -1,9 +1,9 @@
-use std::path::PathBuf;
-use anyhow::{Result, anyhow};
-use std::io::{Read, BufReader, BufWriter, Write};
+use anyhow::{anyhow, Result};
 use persia_speedy::{Readable, Writable};
-use std::process::{Command, Stdio};
 use std::fs::File;
+use std::io::{BufReader, BufWriter, Read, Write};
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
 
 use persia_embedding_datatypes::HashMapEmbeddingEntry;
 
@@ -28,7 +28,12 @@ pub trait PersiaStorageVisitor: Send + Sync {
 
     fn dump_to_file(&self, content: Vec<u8>, file_dir: PathBuf, file_name: PathBuf) -> Result<()>;
 
-    fn dump_to_file_speedy(&self, content: SpeedyObj, file_dir: PathBuf, file_name: PathBuf) -> Result<()>;
+    fn dump_to_file_speedy(
+        &self,
+        content: SpeedyObj,
+        file_dir: PathBuf,
+        file_name: PathBuf,
+    ) -> Result<()>;
 
     fn is_file(&self, file_path: PathBuf) -> Result<bool>;
 
@@ -68,7 +73,6 @@ impl PersiaStorageVisitor for PersiaCephVisitor {
     }
 
     fn dump_to_file(&self, content: Vec<u8>, file_dir: PathBuf, file_name: PathBuf) -> Result<()> {
-
         let file_path = self.create_file(file_dir.clone(), file_name.clone())?;
 
         let out_file = File::open(file_path)?;
@@ -80,7 +84,12 @@ impl PersiaStorageVisitor for PersiaCephVisitor {
         Ok(())
     }
 
-    fn dump_to_file_speedy(&self, content: SpeedyObj, file_dir: PathBuf, file_name: PathBuf) -> Result<()> {
+    fn dump_to_file_speedy(
+        &self,
+        content: SpeedyObj,
+        file_dir: PathBuf,
+        file_name: PathBuf,
+    ) -> Result<()> {
         let file_path = self.create_file(file_dir, file_name)?;
         content.write_to_file(&file_path)?;
         Ok(())
@@ -115,7 +124,6 @@ impl PersiaStorageVisitor for PersiaCephVisitor {
         Ok(())
     }
 }
-
 
 pub struct PersiaHdfsVisitor {
     local_buffer_dir: PathBuf,
@@ -159,8 +167,7 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
 
         if touch_out.status.success() {
             Ok(file_path)
-        }
-        else {
+        } else {
             Err(anyhow!("hdfs touchz error"))
         }
     }
@@ -172,16 +179,21 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
             .arg(file_path.as_os_str())
             .arg(self.local_buffer_dir.as_os_str())
             .output()?;
-        
+
         if get_out.status.success() {
-            let local_buffer_file: PathBuf = 
-                [self.local_buffer_dir.clone().as_os_str(), file_path.file_name().unwrap()].iter().collect();
-            let res = self.local_storage_visitor.read_from_file(local_buffer_file.clone());
+            let local_buffer_file: PathBuf = [
+                self.local_buffer_dir.clone().as_os_str(),
+                file_path.file_name().unwrap(),
+            ]
+            .iter()
+            .collect();
+            let res = self
+                .local_storage_visitor
+                .read_from_file(local_buffer_file.clone());
             self.local_storage_visitor.remove_file(file_path.clone())?;
 
             res
-        }
-        else {
+        } else {
             Err(anyhow!("hdfs get error"))
         }
     }
@@ -201,9 +213,15 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
     }
 
     fn dump_to_file(&self, content: Vec<u8>, file_dir: PathBuf, file_name: PathBuf) -> Result<()> {
-        let local_buffer_file: PathBuf = [self.local_buffer_dir.clone(), file_name.clone()].iter().collect();
+        let local_buffer_file: PathBuf = [self.local_buffer_dir.clone(), file_name.clone()]
+            .iter()
+            .collect();
 
-        self.local_storage_visitor.dump_to_file(content, self.local_buffer_dir.clone(), file_name.clone())?;
+        self.local_storage_visitor.dump_to_file(
+            content,
+            self.local_buffer_dir.clone(),
+            file_name.clone(),
+        )?;
 
         let mkdir_out = Command::new("hdfs")
             .arg("dfs")
@@ -230,7 +248,12 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
         self.local_storage_visitor.remove_file(local_buffer_file)
     }
 
-    fn dump_to_file_speedy(&self, content: SpeedyObj, file_dir: PathBuf, file_name: PathBuf) -> Result<()> {
+    fn dump_to_file_speedy(
+        &self,
+        content: SpeedyObj,
+        file_dir: PathBuf,
+        file_name: PathBuf,
+    ) -> Result<()> {
         let file_path = self.create_file(file_dir.clone(), file_name)?;
         let mut append_cmd = Command::new("hdfs")
             .arg("dfs")
@@ -239,7 +262,7 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
             .arg(file_path.as_os_str())
             .stdin(Stdio::piped())
             .spawn()?;
-        
+
         let write_stream = BufWriter::new(append_cmd.stdin.as_mut().unwrap());
         content.write_to_stream(write_stream)?;
 
@@ -247,9 +270,8 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
 
         let out = append_cmd.wait()?;
         if out.success() {
-            return Ok(())
-        }
-        else {
+            return Ok(());
+        } else {
             return Err(anyhow!("hdfs appendToFile error"));
         }
     }
@@ -273,7 +295,7 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
             .arg(dir_path.as_os_str())
             .output()?
             .stdout;
-        
+
         let s = std::str::from_utf8(&ls_out);
         if s.is_err() {
             return Err(anyhow!("hdfs ls error"));
@@ -285,7 +307,6 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
             }
         }
         Ok(file_list)
-
     }
 
     fn remove_file(&self, file_path: PathBuf) -> Result<()> {
@@ -296,8 +317,7 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
             .output()?;
         if rm_out.status.success() {
             Ok(())
-        }
-        else {
+        } else {
             Err(anyhow!("hdfs rm error"))
         }
     }
@@ -329,8 +349,7 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
         let append_out = append_cmd.wait_with_output()?;
         if append_out.status.success() {
             Ok(())
-        }
-        else {
+        } else {
             Err(anyhow!("hdfs appendToFile error"))
         }
     }

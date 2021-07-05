@@ -4,7 +4,6 @@ use std::sync::Arc;
 use hyper::{self, Body, Request, Response};
 use thiserror::Error;
 
-
 #[derive(Error, Debug)]
 pub enum PersiaMessageQueueError {
     #[error("send error")]

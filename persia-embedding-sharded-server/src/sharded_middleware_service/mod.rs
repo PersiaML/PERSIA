@@ -918,8 +918,7 @@ impl ShardedMiddlewareServer {
                         .map_err(|e| ShardedMiddlewareError::RpcError(e.to_string()))??;
                     Ok(())
                 }
-            } 
-        );
+            });
         tracing::info!("register optimizer: {:?}", &optimizer);
         persia_futures::futures::future::try_join_all(futs)
             .await
