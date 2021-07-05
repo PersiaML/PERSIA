@@ -12,6 +12,7 @@ jobs:
             toolchain: stable
             components: rustfmt
             override: true
-      - uses: mbrobbel/rustfmt-check@master
+      - name: rust-rustfmt-check
+        uses: mbrobbel/rustfmt-check@0.3.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
