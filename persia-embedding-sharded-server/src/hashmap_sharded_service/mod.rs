@@ -1,43 +1,45 @@
+use bytes::Bytes;
+use hashbrown::HashMap;
 use persia_embedding_config::{
-    PersiaGlobalConfig, PersiaSparseModelHyperparameters,
-    PerisaShardedServerIntent,
+    PerisaShardedServerIntent, PersiaGlobalConfig, PersiaSparseModelHyperparameters,
 };
-use persia_embedding_datatypes::HashMapEmbeddingEntry;
 use persia_embedding_datatypes::optim::{Optimizable, Optimizer};
+use persia_embedding_datatypes::HashMapEmbeddingEntry;
+use persia_embedding_holder::PersiaEmbeddingHolder;
 use persia_full_amount_manager::FullAmountManager;
-use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
-use persia_model_manager::{
-    PersiaPersistenceManager, PersiaPersistenceStatus,
-};
-use persia_embedding_holder::{PersiaEmbeddingHolder};
-use persia_speedy::{Readable, Writable};
-use persia_metrics::{PersiaMetricsManager, IntCounter, Gauge, Histogram, PersiaMetricsManagerError};
 use persia_futures::tokio;
+use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
+use persia_metrics::{
+    Gauge, Histogram, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError,
+};
+use persia_model_manager::{PersiaPersistenceManager, PersiaPersistenceStatus};
+use persia_speedy::{Readable, Writable};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use snafu::ResultExt;
+use std::collections::LinkedList;
 use std::ops::Deref;
+use std::path::PathBuf;
 use std::sync::Arc;
 use thiserror::Error;
-use bytes::Bytes;
-use std::path::PathBuf;
-use hashbrown::HashMap;
-use std::collections::LinkedList;
 
 static SET_EMBEDDING_POOL: once_cell::sync::OnceCell<EmbeddingPool> =
     once_cell::sync::OnceCell::new();
 
 pub struct EmbeddingPool {
-    pub inner: Arc<parking_lot::RwLock<HashMap<
-        usize,
-        parking_lot::Mutex<LinkedList<Arc<parking_lot::RwLock<HashMapEmbeddingEntry>>>>,
-    >>>,
+    pub inner: Arc<
+        parking_lot::RwLock<
+            HashMap<
+                usize,
+                parking_lot::Mutex<LinkedList<Arc<parking_lot::RwLock<HashMapEmbeddingEntry>>>>,
+            >,
+        >,
+    >,
     pub capacity: usize,
 }
 
 impl EmbeddingPool {
     pub fn push(&self, entry: Arc<parking_lot::RwLock<HashMapEmbeddingEntry>>) -> usize {
-
         let dim = { entry.read().dim_infer() };
         let entry_list_exist = {
             let map = self.inner.read();
@@ -58,8 +60,7 @@ impl EmbeddingPool {
             if let Ok(m) = MetricsHolder::get() {
                 m.recycle_embedding_still_in_use.inc();
             }
-        }
-        else {
+        } else {
             if list.len() < self.capacity {
                 list.push_back(entry);
             }
@@ -97,15 +98,13 @@ impl Default for EmbeddingPool {
     }
 }
 
-
 pub fn get_embedding_pool_cap() -> usize {
     let pool_cap = std::env::var("PERSIA_EMBEDDING_POOL_CAP").unwrap_or("5000".to_string());
     let cap: usize = pool_cap.parse().unwrap_or(5000);
     cap
 }
 
-static METRICS_HOLDER: once_cell::sync::OnceCell<MetricsHolder> =
-    once_cell::sync::OnceCell::new();
+static METRICS_HOLDER: once_cell::sync::OnceCell<MetricsHolder> = once_cell::sync::OnceCell::new();
 
 struct MetricsHolder {
     pub index_miss_count: IntCounter,
@@ -129,17 +128,24 @@ impl MetricsHolder {
         METRICS_HOLDER.get_or_try_init(|| {
             let m = PersiaMetricsManager::get()?;
             let holder = Self {
-                index_miss_count: m.create_counter("index_miss_count", "miss count of index when lookup")?,
-                index_miss_ratio: m.create_gauge("index_miss_ratio", "miss ratio of index when lookup")?,
+                index_miss_count: m
+                    .create_counter("index_miss_count", "miss count of index when lookup")?,
+                index_miss_ratio: m
+                    .create_gauge("index_miss_ratio", "miss ratio of index when lookup")?,
                 set_embedding_time_cost: m.create_histogram("set_embedding_time_cost", "ATT")?,
                 set_embedding_miss_ratio: m.create_gauge("set_embedding_miss_ratio", "ATT")?,
-                set_embedding_recycled_ratio: m.create_gauge("set_embedding_recycled_ratio", "ATT")?,
+                set_embedding_recycled_ratio: m
+                    .create_gauge("set_embedding_recycled_ratio", "ATT")?,
                 decode_indices_time_cost: m.create_histogram("decode_indices_time_cost", "ATT")?,
-                encode_embedding_time_cost: m.create_histogram("encode_embedding_time_cost", "ATT")?,
-                lookup_inference_batch_time_cost: m.create_histogram("lookup_inference_batch_time_cost", "ATT")?,
-                lookup_mixed_batch_time_cost: m.create_histogram("lookup_mixed_batch_time_cost", "ATT")?,
+                encode_embedding_time_cost: m
+                    .create_histogram("encode_embedding_time_cost", "ATT")?,
+                lookup_inference_batch_time_cost: m
+                    .create_histogram("lookup_inference_batch_time_cost", "ATT")?,
+                lookup_mixed_batch_time_cost: m
+                    .create_histogram("lookup_mixed_batch_time_cost", "ATT")?,
                 gradient_id_miss_count: m.create_counter("gradient_id_miss_count", "ATT")?,
-                recycle_embedding_still_in_use: m.create_counter("recycle_embedding_still_in_use", "ATT")?,
+                recycle_embedding_still_in_use: m
+                    .create_counter("recycle_embedding_still_in_use", "ATT")?,
                 embedding_pool_push_qps: m.create_counter("embedding_pool_push_qps", "ATT")?,
                 embedding_pool_pull_qps: m.create_counter("embedding_pool_pull_qps", "ATT")?,
                 embedding_pool_size: m.create_gauge("embedding_pool_size", "ATT")?,
@@ -162,14 +168,15 @@ pub enum ShardEmbeddingError {
     #[error("model manager error")]
     ModelManagerError(String),
     #[error("optimizer not found error")]
-    OptimizerNotFoundError
+    OptimizerNotFoundError,
 }
-
 
 pub struct HashMapShardedServiceInner {
     pub embedding: PersiaEmbeddingHolder,
-    pub optimizer: persia_futures::async_lock::RwLock<Option<Arc<Box<dyn Optimizable + Send + Sync>>>>,
-    pub hyperparameter_config: persia_futures::async_lock::RwLock<Option<Arc<PersiaSparseModelHyperparameters>>>,
+    pub optimizer:
+        persia_futures::async_lock::RwLock<Option<Arc<Box<dyn Optimizable + Send + Sync>>>>,
+    pub hyperparameter_config:
+        persia_futures::async_lock::RwLock<Option<Arc<PersiaSparseModelHyperparameters>>>,
     pub hyperparameter_configured: persia_futures::async_lock::Mutex<bool>,
     pub global_config: Arc<parking_lot::RwLock<PersiaGlobalConfig>>,
     pub inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
@@ -192,28 +199,32 @@ impl Deref for HashMapShardedService {
 }
 
 impl HashMapShardedService {
-    pub async fn new(
-        inner: Arc<HashMapShardedServiceInner>,
-    ) -> Self {
+    pub async fn new(inner: Arc<HashMapShardedServiceInner>) -> Self {
         let service = Self {
-            inner: inner.clone()
+            inner: inner.clone(),
         };
 
         service
     }
 
     pub async fn get_intent(&self) -> Result<PerisaShardedServerIntent, ShardEmbeddingError> {
-        let intent = self.global_config.read().sharded_server_config.intent.clone();
+        let intent = self
+            .global_config
+            .read()
+            .sharded_server_config
+            .intent
+            .clone();
         Ok(intent)
     }
 
-    pub async fn get_configuration(&self) -> Result<Arc<PersiaSparseModelHyperparameters>, ShardEmbeddingError> {
+    pub async fn get_configuration(
+        &self,
+    ) -> Result<Arc<PersiaSparseModelHyperparameters>, ShardEmbeddingError> {
         let conf = self.hyperparameter_config.read().await;
         let conf = conf.as_ref();
         if let Some(conf) = conf {
             Ok(conf.clone())
-        }
-        else {
+        } else {
             Err(ShardEmbeddingError::NotConfiguredError)
         }
     }
@@ -229,14 +240,9 @@ impl HashMapShardedService {
 
         let intent = self.get_intent().await?;
         let conf = match intent {
-            PerisaShardedServerIntent::Train => {
-                Some(self.get_configuration().await?)
-            }
-            _ => {
-                None
-            }
+            PerisaShardedServerIntent::Train => Some(self.get_configuration().await?),
+            _ => None,
         };
-        
 
         let optimizer = self.optimizer.read().await;
         if optimizer.is_none() {
@@ -262,13 +268,13 @@ impl HashMapShardedService {
                                         optimizer.require_space(*dim),
                                         *sign,
                                     );
-    
+
                                     optimizer.state_initialization(emb_entry.as_mut_emb_entry_slice(), *dim);
                                     embeddings.extend_from_slice(&emb_entry.as_emb_entry_slice()[..*dim]);
                                     let (_, evcited) = self.embedding
                                         .inner
                                         .insert(*sign, Arc::new(parking_lot::RwLock::new(emb_entry)));
-    
+
                                     if evcited.is_some() {
                                         evcited_ids.push(sign.clone());
                                     }
@@ -360,7 +366,7 @@ impl HashMapShardedService {
             m.index_miss_ratio.set(index_miss_ratio.into());
         }
 
-        return Ok(embeddings)
+        return Ok(embeddings);
     }
 }
 
@@ -377,14 +383,15 @@ impl HashMapShardedService {
         if !model_ready {
             return false;
         }
-        let intent = self.global_config.read().sharded_server_config.intent.clone();
+        let intent = self
+            .global_config
+            .read()
+            .sharded_server_config
+            .intent
+            .clone();
         match intent {
-            PerisaShardedServerIntent::Infer => {
-                true
-            }
-            _ => {
-                *self.hyperparameter_configured.lock().await
-            }
+            PerisaShardedServerIntent::Infer => true,
+            _ => *self.hyperparameter_configured.lock().await,
         }
     }
 
@@ -413,9 +420,7 @@ impl HashMapShardedService {
                     }
                     None => {
                         num_miss_entry = num_miss_entry + 1;
-                        let pool = SET_EMBEDDING_POOL.get_or_init(|| {
-                            EmbeddingPool::default()
-                        });
+                        let pool = SET_EMBEDDING_POOL.get_or_init(|| EmbeddingPool::default());
                         let recycled = pool.pull(entry.dim_infer());
 
                         let entry_to_insert = {
@@ -425,7 +430,8 @@ impl HashMapShardedService {
                                     r
                                 }
                                 None => {
-                                    let new_entry = HashMapEmbeddingEntry::new_empty(entry.dim_infer());
+                                    let new_entry =
+                                        HashMapEmbeddingEntry::new_empty(entry.dim_infer());
                                     Arc::new(parking_lot::RwLock::new(new_entry))
                                 }
                             }
@@ -438,8 +444,7 @@ impl HashMapShardedService {
                             }
                         }
 
-                        let (old, evicted) = 
-                            self.embedding.inner.insert(id, entry_to_insert);
+                        let (old, evicted) = self.embedding.inner.insert(id, entry_to_insert);
                         if let Some(o) = old {
                             let _pool_size = pool.push(o);
                         }
@@ -451,50 +456,52 @@ impl HashMapShardedService {
             }
 
             if let Ok(m) = MetricsHolder::get() {
-                m.set_embedding_time_cost.observe(start_time.elapsed().as_secs_f64());
+                m.set_embedding_time_cost
+                    .observe(start_time.elapsed().as_secs_f64());
                 let set_embedding_miss_ratio = num_miss_entry as f32 / num_total_entry as f32;
-                m.set_embedding_miss_ratio.set(set_embedding_miss_ratio.into());
+                m.set_embedding_miss_ratio
+                    .set(set_embedding_miss_ratio.into());
                 if num_miss_entry > 0 {
                     let set_embedding_recycled_ratio = num_recycled as f32 / num_miss_entry as f32;
-                    m.set_embedding_recycled_ratio.set(set_embedding_recycled_ratio.into());
+                    m.set_embedding_recycled_ratio
+                        .set(set_embedding_recycled_ratio.into());
                 }
             }
         });
 
-
         Ok(())
     }
 
-    pub async fn lookup_inference(
-        &self,
-        req: Bytes,
-    ) -> Result<Bytes, ShardEmbeddingError> {
+    pub async fn lookup_inference(&self, req: Bytes) -> Result<Bytes, ShardEmbeddingError> {
         let start_time = std::time::Instant::now();
-        let indices = tokio::task::block_in_place(|| {
-            Vec::<(u64, usize)>::read_from_buffer(req.as_ref())
-        });
+        let indices =
+            tokio::task::block_in_place(|| Vec::<(u64, usize)>::read_from_buffer(req.as_ref()));
         if indices.is_err() {
-            return Err(ShardEmbeddingError::RpcError("fail to des request".to_string()));
+            return Err(ShardEmbeddingError::RpcError(
+                "fail to des request".to_string(),
+            ));
         }
         let indices = indices.unwrap();
         if let Ok(m) = MetricsHolder::get() {
-            m.decode_indices_time_cost.observe(start_time.elapsed().as_secs_f64());
+            m.decode_indices_time_cost
+                .observe(start_time.elapsed().as_secs_f64());
         }
 
         let embedding = self.batched_lookup(indices).await;
         if let Ok(emb) = embedding {
             let encode_start_time = std::time::Instant::now();
-            let buffer = tokio::task::block_in_place(|| {
-                emb.write_to_vec().unwrap()
-            });
+            let buffer = tokio::task::block_in_place(|| emb.write_to_vec().unwrap());
             if let Ok(m) = MetricsHolder::get() {
-                m.encode_embedding_time_cost.observe(encode_start_time.elapsed().as_secs_f64());
-                m.lookup_inference_batch_time_cost.observe(start_time.elapsed().as_secs_f64());
+                m.encode_embedding_time_cost
+                    .observe(encode_start_time.elapsed().as_secs_f64());
+                m.lookup_inference_batch_time_cost
+                    .observe(start_time.elapsed().as_secs_f64());
             }
             Ok(Bytes::from(buffer))
-        }
-        else {
-            Err(ShardEmbeddingError::RpcError("fail to lookup embedding".to_string()))
+        } else {
+            Err(ShardEmbeddingError::RpcError(
+                "fail to lookup embedding".to_string(),
+            ))
         }
     }
 
@@ -507,7 +514,8 @@ impl HashMapShardedService {
         let embedding = self.batched_lookup(req).await;
 
         if let Ok(m) = MetricsHolder::get() {
-            m.lookup_mixed_batch_time_cost.observe(start_time.elapsed().as_secs_f64());
+            m.lookup_mixed_batch_time_cost
+                .observe(start_time.elapsed().as_secs_f64());
         }
 
         embedding
@@ -545,10 +553,13 @@ impl HashMapShardedService {
                         let mut entry = entry.write();
                         let emb_entry_slice = entry.as_mut_emb_entry_slice();
                         optimizer.update(emb_entry_slice, grad, entry_dim);
-                        
+
                         if conf.enable_weight_bound {
                             unsafe {
-                                persia_simd::weight_bound(&mut emb_entry_slice[..entry_dim], conf.weight_bound);
+                                persia_simd::weight_bound(
+                                    &mut emb_entry_slice[..entry_dim],
+                                    conf.weight_bound,
+                                );
                             }
                         }
                     }
@@ -569,9 +580,9 @@ impl HashMapShardedService {
         }
 
         let weak_ptrs = indices_to_commit
-                .iter()
-                .map(|(k, v)| (k.clone(), Arc::downgrade(v)))
-                .collect();
+            .iter()
+            .map(|(k, v)| (k.clone(), Arc::downgrade(v)))
+            .collect();
         let commit_result = self.full_amount_manager.try_commit_weak_ptrs(weak_ptrs);
         if commit_result.is_err() {
             tracing::warn!(
@@ -580,10 +591,19 @@ impl HashMapShardedService {
             );
         }
 
-        if self.global_config.read().sharded_server_config.enable_incremental_update {
-            let result = self.inc_update_manager.try_commit_incremental(indices_to_commit);
+        if self
+            .global_config
+            .read()
+            .sharded_server_config
+            .enable_incremental_update
+        {
+            let result = self
+                .inc_update_manager
+                .try_commit_incremental(indices_to_commit);
             if result.is_err() {
-                tracing::error!( "inc update failed, please try a bigger inc_update_sending_buffer_size");
+                tracing::error!(
+                    "inc update failed, please try a bigger inc_update_sending_buffer_size"
+                );
             }
         }
 
@@ -616,22 +636,26 @@ impl HashMapShardedService {
 
     pub async fn dump(&self, req: String) -> Result<(), ShardEmbeddingError> {
         let dst_dir = PathBuf::from(req);
-        if let Err(e) = self.model_persistence_manager.dump_full_amount_embedding(dst_dir) {
+        if let Err(e) = self
+            .model_persistence_manager
+            .dump_full_amount_embedding(dst_dir)
+        {
             let msg = format!("{:?}", e);
             Err(ShardEmbeddingError::ModelManagerError(msg))
-        }
-        else {
+        } else {
             Ok(())
         }
     }
 
     pub async fn load(&self, req: String) -> Result<(), ShardEmbeddingError> {
         let dst_dir = PathBuf::from(req);
-        if let Err(e) = self.model_persistence_manager.load_embedding_from_dir(dst_dir) {
+        if let Err(e) = self
+            .model_persistence_manager
+            .load_embedding_from_dir(dst_dir)
+        {
             let msg = format!("{:?}", e);
             Err(ShardEmbeddingError::ModelManagerError(msg))
-        }
-        else {
+        } else {
             Ok(())
         }
     }

@@ -73,8 +73,20 @@ name = "persia-middleware-config-parser"
 path = "src/bin/persia-middleware-config-parser.rs"
 
 [[bench]]
-name = "sharded_server"
-path = "benches"
+name = "sharded_server_sharding"
+path = "benches/sharding.rs"
+
+[[bench]]
+name = "sharded_server_sharded_server"
+path = "benches/sharded_server.rs"
+
+[[bench]]
+name = "sharded_server_serialize_vec_f16"
+path = "benches/serialize_vec_f16.rs"
+
+[[bench]]
+name = "sharded_server_serialize_vec_f32"
+path = "benches/serialize_vec_f32.rs"
 
 [build-dependencies]
 shadow-rs = "0.5"
