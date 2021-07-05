@@ -168,14 +168,14 @@ mod eviction_map_tests {
         let initialization = InitializationMethod::default();
 
         for i in 0..5 {
-            let entry = HashMapEmbeddingEntry::new(&initialization, 0.1, 8, i);
+            let entry = HashMapEmbeddingEntry::new(&initialization, 8, 16, i);
             map.insert(i, Arc::new(parking_lot::RwLock::new(entry)));
         }
 
         assert_eq!(map.len(), 5);
 
         for i in 5..10 {
-            let entry = HashMapEmbeddingEntry::new(&initialization, 0.1, 8, i);
+            let entry = HashMapEmbeddingEntry::new(&initialization, 8, 16, i);
             map.insert(i, Arc::new(parking_lot::RwLock::new(entry)));
         }
 
@@ -183,7 +183,7 @@ mod eviction_map_tests {
         assert_eq!(map.get_refresh(&4).is_none(), true);
         assert_eq!(map.get_refresh(&5).is_some(), true);
 
-        let entry = HashMapEmbeddingEntry::new(&initialization, 0.1, 8, 10);
+        let entry = HashMapEmbeddingEntry::new(&initialization, 8, 16, 10);
         map.insert(10, Arc::new(parking_lot::RwLock::new(entry)));
 
         assert_eq!(map.len(), 5);

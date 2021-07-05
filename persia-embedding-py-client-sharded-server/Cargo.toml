@@ -46,7 +46,8 @@ default = []
 cuda = ["cuda-runtime-sys"]
 
 [dependencies.pyo3]
-features = ["extension-module"]
+default-features = false
+features = ["macros"]
 version = "0.13"
 
 [build-dependencies]

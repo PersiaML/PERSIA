@@ -989,6 +989,7 @@ impl ShardedMiddlewareServer {
 mod lookup_batched_all_slots_preprocess_tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
+    use persia_embedding_datatypes::FeatureBatch;
 
     #[test]
     fn test_indices_to_hashstack_indices() {
