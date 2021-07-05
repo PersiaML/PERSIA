@@ -1,0 +1,5 @@
+#!/bin/bash
+set -x
+
+/workspace/bin/persia-embedding-sharded-middleware --servers server:$SERVER_PORT \
+    --port $MIDDLEWARE_PORT --config /workspace/config/middleware.yml

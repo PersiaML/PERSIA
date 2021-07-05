@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -x
+
+shard_idx=$(($REPLICA_INDEX - 1))
+/workspace/bin/persia-embedding-sharded-server --port $SERVER_PORT --shard-idx $shard_idx \
+    --capacity 10000000 --num-hashmap-internal-shards 512 \
+    --num-id-per-emb-file 50000
+
