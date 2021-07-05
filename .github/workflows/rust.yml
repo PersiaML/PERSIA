@@ -13,6 +13,7 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    container: ikzk/nozomi-rust:master
 
     steps:
     - uses: actions/checkout@v2
