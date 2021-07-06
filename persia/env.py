@@ -14,3 +14,5 @@ else:
     IS_MASTER = -1
 
 LOCAL_RANK = DEVICE_ID
+REPLICA_SIZE = int(os.environ.get("REPLICA_SIZE", 1))
+REPLICA_INDEX = int(os.environ.get("REPLICA_INDEX", 1))

@@ -9,7 +9,7 @@ from torch.utils.data import IterableDataset
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
 from persia.backend import init_backend
-from persia.prelude import PyForward, PyBackward
+from persia.prelude import PyForward, PyBackward, PyPersiaReplicaInfo, PyPersiaBatchFlowNatsStubResponder
 from persia.error import PersiaRuntimeException
 from persia.data import InfiniteIterator
 
@@ -85,13 +85,11 @@ class TrainCtx(BaseCtx):
         device_id: int = 0,
         enable_backward: bool = True,
         backend_worker_size: int = 20,
-        middleware_services: List[str] = None,
-        wait_server_ready: bool = False,
-        output_addrs: List[str] = None,
-        init_output: bool = False,
         forward_buffer_size: int = 10,
-        deserialize_buffer_size: int = 50,
+        nats_recv_buffer_size: int = 50,
         backward_buffer_size: int = 10,
+        rank_id: int = 0,
+        world_size: int = 1,
         *args,
         **kwargs,
     ):
@@ -113,19 +111,20 @@ class TrainCtx(BaseCtx):
         self.admit_probability = admit_probability
         self.weight_bound = weight_bound
         self.emb_initialization = emb_initialization
+        self.replica_info = PyPersiaReplicaInfo.trainer(world_size, rank_id)
+
+        self.forward_engine = PyForward(
+            forward_buffer_size, nats_recv_buffer_size, self.is_training, self.replica_info
+        )
+
+        self._responder = PyPersiaBatchFlowNatsStubResponder(self.replica_info, self.forward_engine)
 
         self.backend = init_backend(
             backend_worker_size,
-            middleware_services,
-            wait_server_ready,
-            output_addrs,
-            init_output,
+            self.replica_info
         )
         self.enable_backward = enable_backward
 
-        self.forward_engine = PyForward(
-            forward_buffer_size, deserialize_buffer_size, self.is_training
-        )
         if self.is_training or self.enable_backward:
             # create the backward pipeline
             self.backward_engine = PyBackward(backward_buffer_size)
@@ -133,9 +132,9 @@ class TrainCtx(BaseCtx):
         self.current_batch = None
 
     def data_loader(
-        self, port=8000, data_queue_size: int = 5, timeout: int = 1000 * 60 * 10
+        self, rectify_factor: float = 0.0, timeout: int = 1000 * 60 * 10
     ) -> IterableDataset:
-        return InfiniteIterator(self.forward_engine, port, data_queue_size, timeout)
+        return InfiniteIterator(self.forward_engine, rectify_factor, timeout)
 
     def __enter__(self):
         self.backend.set_configuration(

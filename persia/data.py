@@ -21,16 +21,15 @@ class Dataloder:
 
 class InfiniteIterator(torch.utils.data.IterableDataset):
     def __init__(
-        self, forward_engine: PyForward, port: int, data_queue_size: int, timeout: int
+        self, forward_engine: PyForward, rectify_factor: float, timeout: int
     ):
         self.timeout = timeout
-        self.port = port
-        self.data_queue_size = data_queue_size
         self.forward_engine = forward_engine
+        self.rectify_factor = rectify_factor
 
     def __iter__(self):
         self.forward_engine.launch(
-            self.port, self.data_queue_size, torch.cuda.current_device()
+           torch.cuda.current_device(), self.rectify_factor,
         )
 
         while True:
