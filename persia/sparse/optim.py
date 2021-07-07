@@ -10,8 +10,9 @@ class Optimizer(ABC):
 
     @abstractmethod
     def apply(self):
-        # TODO:
-        # update the optimzier args directly
+        r"""abstraction method for optimizer that support different optimizer register
+        function
+        """
         ...
 
     def step(self):
@@ -21,7 +22,7 @@ class Optimizer(ABC):
 
 class SGD(Optimizer):
     r"""A wrapper to config the embedding-server SGD optimizer
-    Args:
+    Arguments:
         params(float): learning rate
         momentum(float, optional): momentum factor
         weight_decay(float, optional): parameters L2 penalty factor
@@ -39,7 +40,7 @@ class SGD(Optimizer):
 
 class Adam(Optimizer):
     r"""A wrapper to config the embedding-server Adam optimizer
-    Args:
+    Arguments:
         lr(float): learning rate
         betas(tuple[float,float], optional): caculate the running averages of gradient and its square
         weight_decay(float, optional): parameters L2 penalty factor
@@ -60,12 +61,14 @@ class Adam(Optimizer):
         self.eps = eps
 
     def apply(self):
-        ...
+        self.optimizer_base.register_adam(
+            self.lr, self.betas, self.weight_decay, self.eps
+        )
 
 
 class Adagrad(Optimizer):
     r"""A wrapper to config the embedding-server Adagrad optimizer
-    Args:
+    Arguments:
         lr(float): learning rate
         initial_accumulator_value(float, optional): initialization accumulator value for adagrad optimzer
         g_square_momentum(float, optional): factor of accumulator incremental

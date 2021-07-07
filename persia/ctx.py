@@ -22,16 +22,20 @@ logger = get_default_logger()
 
 
 def _check_finite(grads: List[torch.Tensor]):
+    """check all gradient tensor is finite or not"""
     return all([torch.isfinite(t).all() if t is not None else True for t in grads])
 
 
 class BaseCtx:
-    """
-    provide feature to inject to current training step
+    r"""provide feature to inject to current training step
         - half training
         - dataloder device memory shared
         - feature space fusion
     provide handy debug ctx mode debug mode for user
+    Arguments:
+        is_training (bool): current context is in training or not
+        block_when_exit (bool): whether block the process when exit the contxt
+        catch_exception (bool): catch the exception or not when occur the exception
     """
 
     def __init__(
@@ -45,11 +49,11 @@ class BaseCtx:
         self.catch_exception = catch_exception
 
     def train(self):
-        # TODO: modify the forward_only variable
-        # at rust side
+        """set current context is_training to true"""
         self.is_training = True
 
     def eval(self):
+        """set current context is_training to false"""
         self.is_training = False
 
     def __enter__(self):
@@ -74,6 +78,28 @@ class LocalCtx(BaseCtx):
 
 
 class TrainCtx(BaseCtx):
+    r"""Training context that provide full feature of sparse training, include half training, optimzier
+    register, forward, backward process
+
+    Arguments:
+        grad_scaler (torch.cuda.amp.GradScaler): scale the loss from float32 to half to support half training
+        emb_initialization (Tuple[float, float]): embedding uniform initialization arguments
+        admit_probability (float): embedding gradient update admit probability, range in [0, 1].
+        sparse_optimizer (persias.sparse.optim.Optimizer): sparse optimizer to make embedding update available
+        weight_bound (float): embedding value bound, normal will update the embedding locate in [-weight_bound, weight_bound]
+        is_training (bool): current context is in training or not
+        device_id (int): current cuda device id
+        enable_backward (bool): enable embeddign gradients update
+        backend_worker_size (int): rpc client thread pool size
+        middleware_services (List[str]): middleware service address list
+        wait_server_ready (bool): whether to wait server configuration ready
+        output_addrs (List[str]): message queue addrs for generate the output message queue
+        init_output: whether init the output message queue
+        forward_buffer_size (int): forward engine buffer size
+        deserialize_buffer_size (int): deserialize buffer size in forward engine decode phase
+        backward_buffer_size (int): backward update buffer size
+    """
+
     def __init__(
         self,
         grad_scaler: torch.cuda.amp.GradScaler = None,
@@ -135,6 +161,13 @@ class TrainCtx(BaseCtx):
     def data_loader(
         self, port=8000, data_queue_size: int = 5, timeout: int = 1000 * 60 * 10
     ) -> IterableDataset:
+        """dataloader for fetch training data or inference data
+
+        Arguments:
+            port (int): port to bind the input server port
+            data_queue_size (int): buffer size for data forward phase
+            timeout (int): timeout for data fetch
+        """
         return InfiniteIterator(self.forward_engine, port, data_queue_size, timeout)
 
     def __enter__(self):
@@ -153,6 +186,16 @@ class TrainCtx(BaseCtx):
         return self
 
     def prepare_features(self, batch, is_training=True):
+        """preprocess the PythonTrainBatch
+        - convert the dense, target tensor to torch float tensors
+        - convert the summation embedding to float16 tensors
+        - extend the raw embedding from 2D data tensor and 2D index tensor to 3D fixed size tensor, provide the corresponding
+            mask to distinct the fixed position
+
+        Arguments:
+            batch (PythonTrainBatch): persia training batch data include dense, target, sparse data and meta info
+            is_training (bool): whether in training scence
+        """
         if is_training:
             batch.target = batch.consume_all_targets()
             assert len(batch.target) == 1
@@ -252,6 +295,14 @@ class TrainCtx(BaseCtx):
     def on_after_backward(
         self, loss_scale: float, batch_idx: int, emb_grad_check_interval: int = 20
     ):
+        """Sparse embedding gradient update step that process the raw embedding and summation embedding
+        gradient from raw format to standar format
+
+        Arguments:
+            loss_scale (float): half training loss scale to scale the gradient
+            batch_idx (int): index of batch data to decide the GradScalar update
+            emb_grad_check_interval (int): check interval to controll the GradScalar update frequnency
+        """
         if grad_queue.full():
             grad_queue.get()
 
