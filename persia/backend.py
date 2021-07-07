@@ -19,10 +19,10 @@ class Backend:
 
     Arguments:
         worker_size (int): rpc client thread pool size
-        middleware_services (List(str)): middleware address
+        middleware_services (List[str]): middleware address
         wait_server_ready (bool): whether to wait server configuration ready
-        output_addrs (List(str)): message queue addrs for generate the output message queue
-        init_output: whether init the output message queue
+        output_addrs (List[str]): message queue addrs for generate the output message queue
+        init_output (bool): whether init the output message queue
     """
 
     def __init__(
