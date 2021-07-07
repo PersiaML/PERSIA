@@ -13,6 +13,16 @@ _backend = None
 
 
 class Backend:
+    r"""PersiaRpcClient wrapper that provide invoke middleware rpc function
+
+    Arguments:
+        worker_size (int): rpc client thread pool size
+        middleware_services (List[str]): middleware address
+        wait_server_ready (bool): whether to wait server configuration ready
+        output_addrs (List[str]): message queue addrs for generate the output message queue
+        init_output (bool): whether init the output message queue
+    """
+
     def __init__(
         self,
         worker_size: int,
@@ -32,6 +42,10 @@ class Backend:
             self.init_output(output_addrs)
 
     def init_output(self, output_addrs: List[str]):
+        """init the rpc wrapper output message queue for data compose scence
+        Arguments:
+            output_addrs (List(str)): message queue addrs for generate the output message queue
+        """
         for output_addr in output_addrs:
             self.output_services.append(PyPersiaMessageQueueClient(output_addr))
 
@@ -49,6 +63,11 @@ class Backend:
         return client
 
     def send_data(self, data: PyPersiaBatchData):
+        """send data from data compose to trainer side
+
+        Arguments:
+            data (PyPersiaBatchData): persia_batch_data
+        """
         self._backend.forward_id(data)
         bytes_data = data.to_bytes()
         self.output_client.put(bytes_data)
@@ -61,6 +80,15 @@ def init_backend(
     output_addrs: List[str] = None,
     init_output: bool = False,
 ) -> PyPersiaRpcClient:
+    """Initialize the rpc wrapper singleton instance
+
+    Arguments:
+        worker_size (int): rpc client thread pool size
+        middleware_services (List(str)): middleware address
+        wait_server_ready (bool): whether to wait server configuration ready
+        output_addrs (List(str)): message queue addrs for generate the output message queue
+        init_output: whether init the output message queue
+    """
     global _backend
     if not _backend:
         # TODO: Add service auto retrive...
@@ -79,6 +107,7 @@ def init_backend(
 
 
 def get_backend():
+    """get rpc wrapper instance"""
     if not _backend:
         raise PersiaRuntimeException("init persia backend first")
     return _backend

@@ -15,6 +15,8 @@ def persia_ctx(
     catch_exception: bool = True,
     verbose: bool = True,
 ):
+    r"""Return a context warpper to process the error 
+    """
     try:
         yield
     except Exception as e:
