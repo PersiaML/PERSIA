@@ -90,6 +90,8 @@ class TrainCtx(BaseCtx):
         backward_buffer_size: int = 10,
         rank_id: int = 0,
         world_size: int = 1,
+        num_forward_workers: int = 8,
+        num_backward_workers: int = 8,
         *args,
         **kwargs,
     ):
@@ -113,6 +115,9 @@ class TrainCtx(BaseCtx):
         self.emb_initialization = emb_initialization
         self.replica_info = PyPersiaReplicaInfo.trainer(world_size, rank_id)
 
+        self.num_forward_workers = num_forward_workers
+        self.num_backward_workers = num_backward_workers
+
         self.forward_engine = PyForward(
             forward_buffer_size, nats_recv_buffer_size, self.is_training, self.replica_info
         )
@@ -132,9 +137,9 @@ class TrainCtx(BaseCtx):
         self.current_batch = None
 
     def data_loader(
-        self, rectify_factor: float = 0.0, timeout: int = 1000 * 60 * 10, num_forward_workers: int = 8,
+        self, rectify_factor: float = 0.0, timeout: int = 1000 * 60 * 10,
     ) -> IterableDataset:
-        return InfiniteIterator(self.forward_engine, rectify_factor, timeout, num_forward_workers)
+        return InfiniteIterator(self.forward_engine, rectify_factor, timeout, self.num_forward_workers)
 
     def __enter__(self):
         self.backend.set_configuration(
@@ -147,7 +152,7 @@ class TrainCtx(BaseCtx):
         self.sparse_optimizer.apply()
 
         if self.is_training:
-            self.backward_engine.launch(self.device_id)
+            self.backward_engine.launch(self.device_id, self.num_backward_workers)
 
         return self
 
