@@ -132,9 +132,9 @@ class TrainCtx(BaseCtx):
         self.current_batch = None
 
     def data_loader(
-        self, rectify_factor: float = 0.0, timeout: int = 1000 * 60 * 10
+        self, rectify_factor: float = 0.0, timeout: int = 1000 * 60 * 10, num_forward_workers: int = 8,
     ) -> IterableDataset:
-        return InfiniteIterator(self.forward_engine, rectify_factor, timeout)
+        return InfiniteIterator(self.forward_engine, rectify_factor, timeout, num_forward_workers)
 
     def __enter__(self):
         self.backend.set_configuration(

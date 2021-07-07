@@ -6,6 +6,7 @@ from persia.prelude import (
     PyPersiaBatchData,
     PyPersiaReplicaInfo,
     PyPersiaBatchFlowNatsStubPublisher,
+    PyOptimizerBase,
 )
 from persia.logger import get_default_logger
 from persia.service import get_middleware_services, get_client_services
@@ -25,10 +26,18 @@ class Backend:
         self.nats_publisher = PyPersiaBatchFlowNatsStubPublisher(replica_info)
 
     def send_data(self, data: PyPersiaBatchData):
-        tries = 10
-        for _ in range(tries):
+        while True:
             try:
                 self.nats_publisher.send_sparse_to_middleware(data)
+            except:
+                logger.warn('failed to send batch, retrying')
+                time.sleep(10)
+            else:
+                break
+        logger.info(f'sending batch {data.batch_id()}')
+
+        while True:
+            try:
                 self.nats_publisher.send_dense_to_trainer(data)
             except:
                 logger.warn('failed to send batch, retrying')
@@ -44,8 +53,7 @@ class Backend:
         enable_weight_bound: bool,
         weight_bound: float,
     ):
-        tries = 10
-        for _ in range(tries):
+        while True:
             try:
                 self.nats_publisher.configure_sharded_servers(
                     initialize_lower,
@@ -54,6 +62,19 @@ class Backend:
                     enable_weight_bound,
                     weight_bound,
                 )
+            except:
+                logger.warn('failed to config sharded server, retrying')
+                time.sleep(10)
+            else:
+                break
+        
+    def register_optimizer(
+        self,
+        optimizer: PyOptimizerBase
+    ):
+        while True:
+            try:
+                self.nats_publisher.register_optimizer(optimizer)
             except:
                 logger.warn('failed to config sharded server, retrying')
                 time.sleep(10)
