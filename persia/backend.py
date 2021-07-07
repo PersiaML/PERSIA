@@ -11,8 +11,6 @@ from persia.error import PersiaRuntimeException
 
 _backend = None
 
-import torch
-
 
 class Backend:
     r"""PersiaRpcClient wrapper that provide invoke middleware rpc function
