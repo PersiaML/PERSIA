@@ -31,31 +31,16 @@ class Backend:
     ):
         self.rpc_client = PyPersiaRpcClient(worker_size)
         self.nats_publisher = PyPersiaBatchFlowNatsStubPublisher(replica_info)
+        self.nats_publisher.wait_servers_ready()
 
-    def send_data(self, data: PyPersiaBatchData):
+    def send_data(self, data: PyPersiaBatchData, block: bool = True):
         """send data from data compose to trainer side
 
         Arguments:
             data (PyPersiaBatchData): persia_batch_data
         """
-        while True:
-            try:
-                self.nats_publisher.send_sparse_to_middleware(data)
-            except:
-                logger.warn('failed to send batch, retrying')
-                time.sleep(10)
-            else:
-                break
-        logger.info(f'sending batch {data.batch_id()}')
-
-        while True:
-            try:
-                self.nats_publisher.send_dense_to_trainer(data)
-            except:
-                logger.warn('failed to send batch, retrying')
-                time.sleep(10)
-            else:
-                break
+        self.nats_publisher.send_sparse_to_middleware(data, block)
+        self.nats_publisher.send_dense_to_trainer(data, block)
 
     def set_configuration(
         self,
@@ -65,34 +50,20 @@ class Backend:
         enable_weight_bound: bool,
         weight_bound: float,
     ):
-        while True:
-            try:
-                self.nats_publisher.configure_sharded_servers(
-                    initialize_lower,
-                    initialize_upper,
-                    admit_probability,
-                    enable_weight_bound,
-                    weight_bound,
-                )
-            except:
-                logger.warn('failed to config sharded server, retrying')
-                time.sleep(10)
-            else:
-                break
-        
+
+        self.nats_publisher.configure_sharded_servers(
+            initialize_lower,
+            initialize_upper,
+            admit_probability,
+            enable_weight_bound,
+            weight_bound,
+        )
+
     def register_optimizer(
         self,
         optimizer: PyOptimizerBase
     ):
-        while True:
-            try:
-                self.nats_publisher.register_optimizer(optimizer)
-            except:
-                logger.warn('failed to config sharded server, retrying')
-                time.sleep(10)
-            else:
-                break
-                
+        self.nats_publisher.register_optimizer(optimizer)
 
 def init_backend(
     worker_size: int = 20,

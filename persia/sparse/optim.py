@@ -25,15 +25,7 @@ class Optimizer(ABC):
 
     def register_optimizer(self):
         backend = get_backend()
-        assert backend is not None
-        while True:
-            try:
-                backend.register_optimizer(self.optimizer_base)
-            except:
-                logger.warn('failed to register optimizer, retrying')
-                time.sleep(10)
-            else:
-                break
+        backend.register_optimizer(self.optimizer_base)
 
 class SGD(Optimizer):
     r"""A wrapper to config the embedding-server SGD optimizer
