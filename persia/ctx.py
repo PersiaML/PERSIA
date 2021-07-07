@@ -117,7 +117,7 @@ class TrainCtx(BaseCtx):
             forward_buffer_size, nats_recv_buffer_size, self.is_training, self.replica_info
         )
 
-        self._responder = PyPersiaBatchFlowNatsStubResponder(self.replica_info, self.forward_engine)
+        self._responder = PyPersiaBatchFlowNatsStubResponder(self.replica_info, self.forward_engine.get_input_channel())
 
         self.backend = init_backend(
             backend_worker_size,
