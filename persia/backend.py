@@ -17,6 +17,16 @@ _backend = None
 logger = get_default_logger()
 
 class Backend:
+    r"""PersiaRpcClient wrapper that provide invoke middleware rpc function
+
+    Arguments:
+        worker_size (int): rpc client thread pool size
+        middleware_services (List[str]): middleware address
+        wait_server_ready (bool): whether to wait server configuration ready
+        output_addrs (List[str]): message queue addrs for generate the output message queue
+        init_output (bool): whether init the output message queue
+    """
+
     def __init__(
         self,
         worker_size: int,
@@ -26,6 +36,11 @@ class Backend:
         self.nats_publisher = PyPersiaBatchFlowNatsStubPublisher(replica_info)
 
     def send_data(self, data: PyPersiaBatchData):
+        """send data from data compose to trainer side
+
+        Arguments:
+            data (PyPersiaBatchData): persia_batch_data
+        """
         while True:
             try:
                 self.nats_publisher.send_sparse_to_middleware(data)
@@ -86,6 +101,12 @@ def init_backend(
     worker_size: int = 20,
     replica_info: PyPersiaReplicaInfo = PyPersiaReplicaInfo.trainer(1, 0),
 ) -> Backend:
+    """Initialize the rpc wrapper singleton instance
+
+    Arguments:
+        worker_size (int): rpc client thread pool size
+        replica_info (PyPersiaReplicaInfo): replica info of current process.
+    """
     global _backend
     if not _backend:
         # TODO: Add service auto retrive...
@@ -96,6 +117,7 @@ def init_backend(
 
 
 def get_backend():
+    """get rpc wrapper instance"""
     if not _backend:
         raise PersiaRuntimeException("init persia backend first")
     return _backend

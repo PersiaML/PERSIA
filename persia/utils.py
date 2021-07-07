@@ -6,6 +6,10 @@ from persia.error import FileNotFoundException
 
 
 def load_yaml(filepath: str):
+    """load the yaml config by provided filepath
+    Arguments:
+        filepath (str): yaml config path
+    """
     if os.path.exists(filepath):
         raise FileNotFoundException(f"filepath {filepath} not found!")
 
@@ -14,5 +18,9 @@ def load_yaml(filepath: str):
 
 
 def block(interval: int = 120):
+    """block the process by sleep function
+    Arguments:
+        interval (int): sleep interval
+    """
     while True:
         time.sleep(interval)

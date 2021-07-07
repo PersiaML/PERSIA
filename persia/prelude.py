@@ -9,6 +9,12 @@ import persia_embedding_py_client_sharded_server
 
 
 def register_submodule(module: ModuleType, root_module_path: str):
+    """register the persia py client wrapper module to sys module
+
+    Arguments:
+        module (ModuleType): root module
+        root_module_path (str): root module path
+    """
     for attr in dir(module):
         if attr.startswith("__"):
             continue
