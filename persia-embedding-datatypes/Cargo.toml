@@ -10,14 +10,14 @@ license = "MIT"
 persia-embedding-config = {path = "../persia-embedding-config"}
 persia-simd = {path = "../persia-simd"}
 bytes = {version = "1.0", features = ["serde"]}
-half = {version = "1.6", features = ["use-intrinsics", "alloc", "std", "serde"]}
+half = {version = "1.6", features = ["alloc", "std", "serde"]}
 hashbrown = {version = "0.9", features = ["serde"]}
 http = "0.2"
 itertools = "0.10"
 ndarray = {version = "0.14", features = ["serde"]}
 ndarray-rand = "0.13"
 numpy = "0.13"
-parking_lot = {version = "0.11", features = ["nightly"]}
+parking_lot = { version = "0.11" }
 paste = "1.0"
 persia-speedy = "0.9"
 rand = {version = "0.8", features = ["small_rng"]}
