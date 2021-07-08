@@ -117,10 +117,14 @@ _ignore_methods = [
     # "bagua.torch_api.contrib.LoadBalancingDistributedSampler.shuffle_chunks",
 ]
 _ignore_functions = [
-    # "bagua.torch_api.env.get_autotune_server_addr",
+    persia.service.get_middleware_services,
+    persia.service.get_client_services
 ]
 _ignore_classes = [
-    # "bagua.torch_api.communication.BaguaGlobalState",
+    persia.data.Dataloder,
+    persia.sparse.emb.Embedding,
+    persia.sparse.emb.VarLenEmbedding,
+    persia.sparse.emb.SumEmbedding
 ]
 
 
