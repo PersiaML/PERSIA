@@ -41,20 +41,11 @@ napoleon_numpy_docstring = True
 autoapi_python_class_content = "both"
 autodoc_typehints = "description"
 autoapi_type = "python"
-autoapi_dirs = ["../bagua"]
+autoapi_dirs = ["../persia"]
 autoapi_root = "autoapi"
 autoapi_template_dir = "_autoapi_templates"
 autoapi_ignore = [
-    "*/bagua/autotune/*",
-    "*/bagua/distributed/*",
-    "*/bagua/script/*",
-    "*/bagua/service/*",
-    "*/bagua/torch_api/tools/*.py",
-    "*/bagua/torch_api/exceptions.py",
-    "*/bagua/torch_api/utils.py",
-    "*/bagua/torch_api/globals.py",
-    "*/bagua/version.py",
-    "*/bagua/bagua_define.py",
+    # "*/bagua/autotune/*",
 ]
 autoapi_options = [
     "members",
