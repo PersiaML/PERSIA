@@ -140,7 +140,7 @@ class TrainCtx(BaseCtx):
         self.admit_probability = admit_probability
         self.weight_bound = weight_bound
         self.emb_initialization = emb_initialization
-        self.replica_info = PyPersiaReplicaInfo.trainer(world_size, rank_id)
+        self.replica_info = PyPersiaReplicaInfo(world_size, rank_id)
 
         self.num_forward_workers = num_forward_workers
         self.num_backward_workers = num_backward_workers

@@ -68,7 +68,7 @@ class Backend:
 
 def init_backend(
     worker_size: int = 20,
-    replica_info: PyPersiaReplicaInfo = PyPersiaReplicaInfo.trainer(1, 0),
+    replica_info: PyPersiaReplicaInfo = PyPersiaReplicaInfo(1, 0),
 ) -> Backend:
     """Initialize the rpc wrapper singleton instance
 
