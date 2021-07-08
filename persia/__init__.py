@@ -9,5 +9,5 @@ from persia import sparse as sparse
 from persia import backend as backend
 from persia import data as data
 from persia import error as error
-from persia import service
+from persia import service as service
 from persia import utils as utils
