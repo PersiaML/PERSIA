@@ -124,37 +124,12 @@ html_show_copyright = True
 
 _ignore_methods = [
     # "bagua.torch_api.contrib.LoadBalancingDistributedSampler.shuffle_chunks",
-    # "bagua.torch_api.contrib.LoadBalancingDistributedBatchSampler.generate_batches",
-    # "bagua.torch_api.contrib.load_balancing_data_loader.LoadBalancingDistributedSampler.shuffle_chunks",
-    # "bagua.torch_api.contrib.load_balancing_data_loader.LoadBalancingDistributedBatchSampler.generate_batches",
 ]
 _ignore_functions = [
     # "bagua.torch_api.env.get_autotune_server_addr",
-    # "bagua.torch_api.env.get_master_addr",
-    # "bagua.torch_api.env.get_bagua_service_port",
-    # "bagua.torch_api.env.is_report_metrics_switch_on",
-    # "bagua.torch_api.env.get_autotune_level",
-    # "bagua.torch_api.env.get_autotune_max_samples",
-    # "bagua.torch_api.env.get_autotune_sampling_confidence_time_s",
-    # "bagua.torch_api.env.get_autotune_warmup_time_s",
-    # "bagua.torch_api.env.get_is_output_autotune_log",
-    # "bagua.torch_api.globals.is_initialized",
-    # "bagua.torch_api.communication.get_bagua_hyperparameters",
-    # "bagua.torch_api.communication.get_hyperparameters_service_client",
-    # "bagua.torch_api.communication.gen_nccl_unique_id",
-    # "bagua.torch_api.communication.init_bagua_inter_communicator",
-    # "bagua.torch_api.communication.init_bagua_intra_communicator",
-    # "bagua.torch_api.communication.init_bagua_communicator",
-    # "bagua.torch_api.communication.broadcast_coalesced",
-    # "bagua.torch_api.communication.allreduce_coalesced",
-    # "bagua.torch_api.communication.start_autotune_server",
-    # "bagua.torch_api.communication.run_flask_app",
 ]
 _ignore_classes = [
     # "bagua.torch_api.communication.BaguaGlobalState",
-    # "bagua.torch_api.algorithms.BaguaModule",
-    # "bagua.torch_api.algorithms.BaguaBucket",
-    # "bagua.torch_api.algorithms.BaguaTensor",
 ]
 
 
