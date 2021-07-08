@@ -56,11 +56,13 @@ def get_mpi_flags():
 
 setup(
     name="persia",
-    version="0.1.0",
+    use_scm_version={"local_scheme": "no-local-version"},
+    setup_requires=["setuptools_scm"],
+    url="https://github.com/PersiaML/PersiaML",
     author="Kuaishou AI Platform Persia Team",
     author_email="admin@mail.xrlian.com",
     description="PersiaML Python Library",
-    packages=find_packages(),
+    packages=find_packages(exclude=("tests",)),
     scripts=["bin/launch_middleware", "bin/launch_server"],
     ext_modules=extensions,
     rust_extensions=rust_extensions,
