@@ -33,14 +33,15 @@ class Backend:
         self.nats_publisher = PyPersiaBatchFlowNatsStubPublisher(replica_info)
         self.nats_publisher.wait_servers_ready()
 
-    def send_data(self, data: PyPersiaBatchData, block: bool = True):
+    def send_data(self, data: PyPersiaBatchData, blocking: bool = True):
         """send data from data compose to trainer side
 
         Arguments:
             data (PyPersiaBatchData): persia_batch_data
+            blocking (bool): whether to block when sending datas, if false, execpt will raised when failed.
         """
-        self.nats_publisher.send_sparse_to_middleware(data, block)
-        self.nats_publisher.send_dense_to_trainer(data, block)
+        self.nats_publisher.send_sparse_to_middleware(data, blocking)
+        self.nats_publisher.send_dense_to_trainer(data, blocking)
 
     def set_configuration(
         self,
