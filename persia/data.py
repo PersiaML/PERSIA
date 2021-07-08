@@ -1,7 +1,5 @@
 import torch
 
-from persia.prelude import PyForward
-
 
 class Dataloder:
     def __init__(self, input_stream, timeout: int):
@@ -23,14 +21,14 @@ class InfiniteIterator(torch.utils.data.IterableDataset):
     r"""InfiniteIterator for streaming data stop by timeout exception
 
     Arguments:
-        forward_engine (PyForward): rust forward engine wrapper for fetch input data
+        forward_engine : rust forward engine wrapper for fetch input data
         port (int): port for input server to bind
         data_queue_size (int): buffer size for data forward phase
         timeout (int): timeout for data fetch
     """
 
     def __init__(
-        self, forward_engine: PyForward, disorder_tolerance: float, timeout: int, num_forward_workers: int
+        self, forward_engine, disorder_tolerance: float, timeout: int, num_forward_workers: int
     ):
         self.timeout = timeout
         self.forward_engine = forward_engine

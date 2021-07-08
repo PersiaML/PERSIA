@@ -77,7 +77,7 @@ class Adam(Optimizer):
 
 class Adagrad(Optimizer):
     r"""A wrapper to config the embedding-server Adagrad optimizer
-    
+
     Arguments:
         lr(float): learning rate
         initial_accumulator_value(float, optional): initialization accumulator value for adagrad optimzer

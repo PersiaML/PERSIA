@@ -33,6 +33,8 @@ register_submodule(
 
 
 # pytype: disable=import-error
+from persia_embedding_py_client_sharded_server import is_cuda_feature_available
+
 from persia_embedding_py_client_sharded_server import (
     PyPersiaRpcClient,
 )
@@ -47,7 +49,9 @@ from persia_embedding_py_client_sharded_server.nats import (
     PyPersiaBatchFlowNatsStubPublisher,
     PyPersiaBatchFlowNatsStubResponder,
 )
-from persia_embedding_py_client_sharded_server.backward import PyBackward
-from persia_embedding_py_client_sharded_server.forward import PyForward
+
+if is_cuda_feature_available():
+    from persia_embedding_py_client_sharded_server.backward import PyBackward
+    from persia_embedding_py_client_sharded_server.forward import PyForward
 
 # pytype: enable=import-error

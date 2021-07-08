@@ -9,11 +9,10 @@ from torch.utils.data import IterableDataset
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
 from persia.backend import init_backend
-from persia.prelude import PyForward, PyBackward, PyPersiaReplicaInfo, PyPersiaBatchFlowNatsStubResponder
+from persia.prelude import PyPersiaReplicaInfo, PyPersiaBatchFlowNatsStubResponder
 from persia.error import PersiaRuntimeException
 from persia.data import InfiniteIterator
 
-import persia_torch_ext as pte  # pytype: disable=import-error
 
 grad_queue_slot_num = os.environ.get("GRAD_SLOT", 60)
 grad_queue = Queue(grad_queue_slot_num)
@@ -32,7 +31,7 @@ class BaseCtx:
         - dataloder device memory shared
         - feature space fusion
     provide handy debug ctx mode debug mode for user
-    
+
     Arguments:
         is_training (bool): current context is in training or not
         block_when_exit (bool): whether block the process when exit the contxt
@@ -157,6 +156,12 @@ class TrainCtx(BaseCtx):
         )
         self.enable_backward = enable_backward
 
+        # dynamic import the PyForward and PyBackward due to conditional compilation
+        from persia.prelude import PyForward, PyBackward
+
+        self.forward_engine = PyForward(
+            forward_buffer_size, deserialize_buffer_size, self.is_training
+        )
         if self.is_training or self.enable_backward:
             # create the backward pipeline
             self.backward_engine = PyBackward(backward_buffer_size)
@@ -201,6 +206,8 @@ class TrainCtx(BaseCtx):
             batch (PythonTrainBatch): persia training batch data include dense, target, sparse data and meta info
             is_training (bool): whether in training scence
         """
+        import persia_torch_ext as pte  # pytype: disable=import-error
+
         if is_training:
             batch.target = batch.consume_all_targets()
             assert len(batch.target) == 1
