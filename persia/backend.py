@@ -85,7 +85,7 @@ def init_backend(
     return _backend
 
 
-def get_backend():
+def get_backend() -> Backend:
     """get rpc wrapper instance"""
     if not _backend:
         raise PersiaRuntimeException("init persia backend first")

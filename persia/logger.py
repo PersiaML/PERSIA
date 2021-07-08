@@ -4,10 +4,21 @@ from colorlog import ColoredFormatter
 
 
 class levelFilter(logging.Filter):
-    def __init__(self, level):
+    r"""log level filter to ensure log fileter
+
+    Arguments:
+        level (int): filter log level, remain the log greater than the setting level
+    """
+
+    def __init__(self, level: int):
         self.level = level
 
-    def filter(self, record):
+    def filter(self, record: logging.LogRecord) -> bool:
+        """filter the record that level greater than the setting log level
+
+        Arguments:
+            record (logging.LogRecord): callback function input record items
+        """
         return record.levelno > self.level
 
 
@@ -44,10 +55,21 @@ def setLogger(
     log_level: int = logging.DEBUG,
     log_filename: str = "train.log",
     enable_file_logger: bool = False,
-    enable_err_redirect: bool = False,
     err_redirect_filepath: str = "error.log",
+    enable_err_redirect: bool = False,
     err_redirect_level: int = logging.INFO,
 ) -> logging.Logger:
+    r"""this function make logger configuration simplify, provide the
+    log_level and log filename.It also make error log redirect available
+
+    Arguments:
+        name (str): logger name
+        log_filename (str): log filename
+        enable_file_logger (bool): whether enable save log into file
+        err_redirect_filepath (str): err log redirect filepath
+        enable_err_redirect (bool): whether enable err log redirect
+        err_redirect_level (int): error redirect log level
+    """
     logger = logging.getLogger(name)
     handler = logging.StreamHandler()
     handler.setFormatter(COLOR_FORMATTER)
@@ -69,10 +91,22 @@ def setLogger(
 
 
 def get_logger(name: str) -> logging.Logger:
+    r"""get logger by name
+
+    Arguments:
+        name (str): logger name
+    """
     return logging.getLogger(name)
 
 
 def set_default_logger(name: str = None, **kwargs) -> logging.Logger:
+    r"""set default logger
+
+    Arguments:
+        name (str): default logger name
+
+    logging.Logger
+    """
     global _default_logger
     if not _default_logger:
         _default_logger = setLogger(name, **kwargs)
@@ -80,8 +114,10 @@ def set_default_logger(name: str = None, **kwargs) -> logging.Logger:
 
 
 def get_default_logger(name: str = None, **kwargs) -> logging.Logger:
-    """
-    lazy init logger, use for global output
+    r"""get default logger or init the default by given name
+
+    Arguments:
+        name (str): logger name
     """
     if _default_logger is None:
         set_default_logger(name or DEFAULT_LOGGER_NAME, **kwargs)

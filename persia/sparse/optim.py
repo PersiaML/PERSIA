@@ -29,6 +29,7 @@ class Optimizer(ABC):
 
 class SGD(Optimizer):
     r"""A wrapper to config the embedding-server SGD optimizer
+
     Arguments:
         params(float): learning rate
         momentum(float, optional): momentum factor
@@ -47,6 +48,7 @@ class SGD(Optimizer):
 
 class Adam(Optimizer):
     r"""A wrapper to config the embedding-server Adam optimizer
+
     Arguments:
         lr(float): learning rate
         betas(tuple[float,float], optional): caculate the running averages of gradient and its square
@@ -75,6 +77,7 @@ class Adam(Optimizer):
 
 class Adagrad(Optimizer):
     r"""A wrapper to config the embedding-server Adagrad optimizer
+    
     Arguments:
         lr(float): learning rate
         initial_accumulator_value(float, optional): initialization accumulator value for adagrad optimzer
