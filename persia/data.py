@@ -34,8 +34,6 @@ class InfiniteIterator(torch.utils.data.IterableDataset):
         self.forward_engine = forward_engine
 
     def __iter__(self):
-        from persia.prelude import PyForward
-
         self.forward_engine.launch(
             self.port, self.data_queue_size, torch.cuda.current_device()
         )
