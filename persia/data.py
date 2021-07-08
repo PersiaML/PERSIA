@@ -30,16 +30,16 @@ class InfiniteIterator(torch.utils.data.IterableDataset):
     """
 
     def __init__(
-        self, forward_engine: PyForward, rectify_factor: float, timeout: int, num_forward_workers: int
+        self, forward_engine: PyForward, disorder_tolerance: float, timeout: int, num_forward_workers: int
     ):
         self.timeout = timeout
         self.forward_engine = forward_engine
-        self.rectify_factor = rectify_factor
+        self.disorder_tolerance = disorder_tolerance
         self.num_forward_workers = num_forward_workers
 
     def __iter__(self):
         self.forward_engine.launch(
-           torch.cuda.current_device(), self.rectify_factor, self.num_forward_workers
+           torch.cuda.current_device(), self.disorder_tolerance, self.num_forward_workers
         )
 
         while True:

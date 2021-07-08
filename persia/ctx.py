@@ -163,15 +163,15 @@ class TrainCtx(BaseCtx):
         self.current_batch = None
 
     def data_loader(
-        self, rectify_factor: float = 0.0, timeout: int = 1000 * 60 * 10,
+        self, disorder_tolerance: float = 1.0, timeout: int = 1000 * 60 * 10,
     ) -> IterableDataset:
         """dataloader for fetch training data or inference data
 
         Arguments:
-            rectify_factor (f32, 0.0 to 1.0): degree of rectification of dataflow, bigger means data comes more orderly。
+            disorder_tolerance (f32, 0.0 to 1.0): degree of orderly of dataflow, bigger means data comes more disorderly。
             timeout (int): timeout for data fetch
         """
-        return InfiniteIterator(self.forward_engine, rectify_factor, timeout, self.num_forward_workers)
+        return InfiniteIterator(self.forward_engine, disorder_tolerance, timeout, self.num_forward_workers)
 
 
     def __enter__(self):
