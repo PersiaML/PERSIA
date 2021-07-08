@@ -43,6 +43,7 @@ class Backend:
 
     def init_output(self, output_addrs: List[str]):
         """init the rpc wrapper output message queue for data compose scence
+
         Arguments:
             output_addrs (List(str)): message queue addrs for generate the output message queue
         """
@@ -106,7 +107,7 @@ def init_backend(
     return _backend
 
 
-def get_backend():
+def get_backend() -> Backend:
     """get rpc wrapper instance"""
     if not _backend:
         raise PersiaRuntimeException("init persia backend first")
