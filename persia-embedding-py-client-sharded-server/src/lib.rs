@@ -24,6 +24,7 @@ use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use pyo3::wrap_pyfunction;
 
 use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
@@ -424,6 +425,15 @@ pub struct PyPersiaRpcClient {
     inner: Arc<PersiaRpcClient>,
 }
 
+#[pyfunction]
+pub fn is_cuda_feature_available() -> bool {
+    if cfg!(feature = "cuda") {
+        true
+    } else {
+        false
+    }
+}
+
 #[pymodule]
 fn persia_embedding_py_client_sharded_server(py: Python, m: &PyModule) -> PyResult<()> {
     tracing_subscriber::fmt()
@@ -440,6 +450,7 @@ fn persia_embedding_py_client_sharded_server(py: Python, m: &PyModule) -> PyResu
     data::init_module(m, py)?;
     utils::init_module(m, py)?;
     optim::init_module(m, py)?;
+    m.add_function(wrap_pyfunction!(is_cuda_feature_available, m)?)?;
 
     #[cfg(feature = "cuda")]
     {
