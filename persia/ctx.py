@@ -144,6 +144,9 @@ class TrainCtx(BaseCtx):
         self.num_forward_workers = num_forward_workers
         self.num_backward_workers = num_backward_workers
 
+        # dynamic import the PyForward and PyBackward due to conditional compilation
+        from persia.prelude import PyForward, PyBackward
+
         self.forward_engine = PyForward(
             forward_buffer_size, nats_recv_buffer_size, self.is_training, self.replica_info
         )
@@ -156,12 +159,6 @@ class TrainCtx(BaseCtx):
         )
         self.enable_backward = enable_backward
 
-        # dynamic import the PyForward and PyBackward due to conditional compilation
-        from persia.prelude import PyForward, PyBackward
-
-        self.forward_engine = PyForward(
-            forward_buffer_size, deserialize_buffer_size, self.is_training
-        )
         if self.is_training or self.enable_backward:
             # create the backward pipeline
             self.backward_engine = PyBackward(backward_buffer_size)
