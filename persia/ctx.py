@@ -32,6 +32,7 @@ class BaseCtx:
         - dataloder device memory shared
         - feature space fusion
     provide handy debug ctx mode debug mode for user
+    
     Arguments:
         is_training (bool): current context is in training or not
         block_when_exit (bool): whether block the process when exit the contxt
