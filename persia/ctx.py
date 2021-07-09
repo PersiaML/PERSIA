@@ -148,15 +148,17 @@ class TrainCtx(BaseCtx):
         from persia.prelude import PyForward, PyBackward
 
         self.forward_engine = PyForward(
-            forward_buffer_size, nats_recv_buffer_size, self.is_training, self.replica_info
+            forward_buffer_size,
+            nats_recv_buffer_size,
+            self.is_training,
+            self.replica_info,
         )
 
-        self._responder = PyPersiaBatchFlowNatsStubResponder(self.replica_info, self.forward_engine.get_input_channel())
-
-        self.backend = init_backend(
-            backend_worker_size,
-            self.replica_info
+        self._responder = PyPersiaBatchFlowNatsStubResponder(
+            self.replica_info, self.forward_engine.get_input_channel()
         )
+
+        self.backend = init_backend(backend_worker_size, self.replica_info)
         self.enable_backward = enable_backward
 
         if self.is_training or self.enable_backward:
@@ -166,7 +168,9 @@ class TrainCtx(BaseCtx):
         self.current_batch = None
 
     def data_loader(
-        self, disorder_tolerance: float = 1.0, timeout: int = 1000 * 60 * 10,
+        self,
+        disorder_tolerance: float = 1.0,
+        timeout: int = 1000 * 60 * 10,
     ) -> IterableDataset:
         """dataloader for fetch training data or inference data
 
@@ -174,8 +178,9 @@ class TrainCtx(BaseCtx):
             disorder_tolerance (f32, 0.0 to 1.0): degree of orderly of dataflow, bigger means data comes more disorderly。
             timeout (int): timeout for data fetch
         """
-        return InfiniteIterator(self.forward_engine, disorder_tolerance, timeout, self.num_forward_workers)
-
+        return InfiniteIterator(
+            self.forward_engine, disorder_tolerance, timeout, self.num_forward_workers
+        )
 
     def __enter__(self):
         self.backend.set_configuration(

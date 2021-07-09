@@ -16,6 +16,7 @@ _backend = None
 
 logger = get_default_logger()
 
+
 class Backend:
     r"""PersiaRpcClient wrapper that provide invoke middleware rpc function
 
@@ -60,11 +61,9 @@ class Backend:
             weight_bound,
         )
 
-    def register_optimizer(
-        self,
-        optimizer: PyOptimizerBase
-    ):
+    def register_optimizer(self, optimizer: PyOptimizerBase):
         self.nats_publisher.register_optimizer(optimizer)
+
 
 def init_backend(
     worker_size: int = 20,
@@ -79,9 +78,7 @@ def init_backend(
     global _backend
     if not _backend:
         # TODO: Add service auto retrive...
-        _backend = Backend(
-            worker_size, replica_info
-        )
+        _backend = Backend(worker_size, replica_info)
     return _backend
 
 

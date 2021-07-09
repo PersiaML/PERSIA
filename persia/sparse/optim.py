@@ -8,6 +8,7 @@ from persia.logger import get_default_logger
 
 logger = get_default_logger()
 
+
 class Optimizer(ABC):
     def __init__(self):
         self.optimizer_base = PyOptimizerBase()
@@ -27,6 +28,7 @@ class Optimizer(ABC):
         backend = get_backend()
         backend.register_optimizer(self.optimizer_base)
 
+
 class SGD(Optimizer):
     r"""A wrapper to config the embedding-server SGD optimizer
 
@@ -45,6 +47,7 @@ class SGD(Optimizer):
     def apply(self):
         self.optimizer_base.init_sgd(self.lr, self.weight_decay)
         self.register_optimizer()
+
 
 class Adam(Optimizer):
     r"""A wrapper to config the embedding-server Adam optimizer
