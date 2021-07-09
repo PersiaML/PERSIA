@@ -25,11 +25,3 @@ structopt = "0.3"
 thread_local = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.2"
-
-[[bench]]
-name = "persia-eviction-map-bench"
-path = "bench/eviction_map_bench.rs"
-
-[[bench]]
-name = "persia-eviction-map-insert-test"
-path = "test/keep_insert.rs"
