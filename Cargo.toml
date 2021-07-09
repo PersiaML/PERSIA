@@ -7,7 +7,7 @@ members = [
     "persia-simd",
     "persia-resource-pool",
     "persia-embedding-sharded-server", #"persia-embedding-c-client-sharded-server",
-    "persia-embedding-py-client-sharded-server",
+    "persia-core",
     "persia-message-queue",
     "persia-eviction-map",
     "others/persia-common-benchmark", #"persia-inference-serde",

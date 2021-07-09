@@ -4,5 +4,5 @@ build-backend = 'setuptools.build_meta'
 
 [tool.setuptools_scm]
 local_scheme = "no-local-version"
-write_to = "python/persia_embedding_py_client_sharded_server/version.py"
+write_to = "python/persia_core/version.py"
 write_to_template = "__version__ = \"{version}\""

@@ -1,14 +1,14 @@
 [package]
 authors = ["Kuaishou AI Platform PersiaML Team <admin@mail.xrlian.com>"]
 edition = "2018"
-name = "persia-embedding-py-client-sharded-server"
+name = "persia-core"
 publish = ["private"]
 version = "0.1.0"
 license = "MIT"
 
 [lib]
 crate-type = ["cdylib"]
-name = "persia_embedding_py_client_sharded_server"
+name = "persia_core"
 path = "src/lib.rs"
 
 [dependencies]

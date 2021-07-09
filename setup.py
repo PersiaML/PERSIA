@@ -10,7 +10,7 @@ if __name__ == "__main__":
     cwd = os.path.dirname(os.path.abspath(__file__))
 
     setup(
-        name="persia_embedding_py_client_sharded_server",
+        name="persia-core",
         use_scm_version={"local_scheme": "no-local-version"},
         setup_requires=["setuptools_scm"],
         url="https://github.com/PersiaML/PersiaML-server",
@@ -20,8 +20,8 @@ if __name__ == "__main__":
         packages=find_packages("python/"),
         rust_extensions=[
             RustExtension(
-                "persia_embedding_py_client_sharded_server.persia_embedding_py_client_sharded_server",
-                path="persia-embedding-py-client-sharded-server/Cargo.toml",
+                "persia_core.persia_core",
+                path="persia-core/Cargo.toml",
                 binding=Binding.PyO3,
                 native=True,
             )

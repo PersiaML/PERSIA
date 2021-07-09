@@ -411,7 +411,7 @@ pub fn is_cuda_feature_available() -> bool {
 }
 
 #[pymodule]
-fn persia_embedding_py_client_sharded_server(py: Python, m: &PyModule) -> PyResult<()> {
+fn persia_core(py: Python, m: &PyModule) -> PyResult<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_env("LOG_LEVEL"))
         .init();
