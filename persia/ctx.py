@@ -9,7 +9,7 @@ from torch.utils.data import IterableDataset
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
 from persia.backend import init_backend
-
+from persia.prelude import PyPersiaReplicaInfo, PyPersiaBatchFlowNatsStubResponder
 from persia.error import PersiaRuntimeException
 from persia.data import InfiniteIterator
 
@@ -91,13 +91,13 @@ class TrainCtx(BaseCtx):
         device_id (int): current cuda device id
         enable_backward (bool): enable embeddign gradients update
         backend_worker_size (int): rpc client thread pool size
-        middleware_services (List[str]): middleware service address list
-        wait_server_ready (bool): whether to wait server configuration ready
-        output_addrs (List[str]): message queue addrs for generate the output message queue
-        init_output: whether init the output message queue
         forward_buffer_size (int): forward engine buffer size
-        deserialize_buffer_size (int): deserialize buffer size in forward engine decode phase
+        nats_recv_buffer_size (int): nats recv buffer size, a buffer before rectifier
         backward_buffer_size (int): backward update buffer size
+        rank_id (int): rank id of this process.
+        world_size (int): world size of this cluster.
+        num_forward_workers (int): worker num of sending forward request to servers.
+        num_backward_workers (int): worker num of sending backward request to servers.
     """
 
     def __init__(
@@ -111,13 +111,13 @@ class TrainCtx(BaseCtx):
         device_id: int = 0,
         enable_backward: bool = True,
         backend_worker_size: int = 20,
-        middleware_services: List[str] = None,
-        wait_server_ready: bool = False,
-        output_addrs: List[str] = None,
-        init_output: bool = False,
         forward_buffer_size: int = 10,
-        deserialize_buffer_size: int = 50,
+        nats_recv_buffer_size: int = 50,
         backward_buffer_size: int = 10,
+        rank_id: int = 0,
+        world_size: int = 1,
+        num_forward_workers: int = 8,
+        num_backward_workers: int = 8,
         *args,
         **kwargs,
     ):
@@ -139,22 +139,26 @@ class TrainCtx(BaseCtx):
         self.admit_probability = admit_probability
         self.weight_bound = weight_bound
         self.emb_initialization = emb_initialization
+        self.replica_info = PyPersiaReplicaInfo(world_size, rank_id)
 
-        self.backend = init_backend(
-            backend_worker_size,
-            middleware_services,
-            wait_server_ready,
-            output_addrs,
-            init_output,
-        )
-        self.enable_backward = enable_backward
+        self.num_forward_workers = num_forward_workers
+        self.num_backward_workers = num_backward_workers
 
         # dynamic import the PyForward and PyBackward due to conditional compilation
         from persia.prelude import PyForward, PyBackward
 
         self.forward_engine = PyForward(
-            forward_buffer_size, deserialize_buffer_size, self.is_training
+            forward_buffer_size, nats_recv_buffer_size, self.is_training, self.replica_info
         )
+
+        self._responder = PyPersiaBatchFlowNatsStubResponder(self.replica_info, self.forward_engine.get_input_channel())
+
+        self.backend = init_backend(
+            backend_worker_size,
+            self.replica_info
+        )
+        self.enable_backward = enable_backward
+
         if self.is_training or self.enable_backward:
             # create the backward pipeline
             self.backward_engine = PyBackward(backward_buffer_size)
@@ -162,16 +166,16 @@ class TrainCtx(BaseCtx):
         self.current_batch = None
 
     def data_loader(
-        self, port=8000, data_queue_size: int = 5, timeout: int = 1000 * 60 * 10
+        self, disorder_tolerance: float = 1.0, timeout: int = 1000 * 60 * 10,
     ) -> IterableDataset:
         """dataloader for fetch training data or inference data
 
         Arguments:
-            port (int): port to bind the input server port
-            data_queue_size (int): buffer size for data forward phase
+            disorder_tolerance (f32, 0.0 to 1.0): degree of orderly of dataflow, bigger means data comes more disorderly。
             timeout (int): timeout for data fetch
         """
-        return InfiniteIterator(self.forward_engine, port, data_queue_size, timeout)
+        return InfiniteIterator(self.forward_engine, disorder_tolerance, timeout, self.num_forward_workers)
+
 
     def __enter__(self):
         self.backend.set_configuration(
@@ -184,7 +188,7 @@ class TrainCtx(BaseCtx):
         self.sparse_optimizer.apply()
 
         if self.is_training:
-            self.backward_engine.launch(self.device_id)
+            self.backward_engine.launch(self.device_id, self.num_backward_workers)
 
         return self
 

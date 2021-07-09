@@ -27,15 +27,17 @@ class InfiniteIterator(torch.utils.data.IterableDataset):
         timeout (int): timeout for data fetch
     """
 
-    def __init__(self, forward_engine, port: int, data_queue_size: int, timeout: int):
+    def __init__(
+        self, forward_engine, disorder_tolerance: float, timeout: int, num_forward_workers: int
+    ):
         self.timeout = timeout
-        self.port = port
-        self.data_queue_size = data_queue_size
         self.forward_engine = forward_engine
+        self.disorder_tolerance = disorder_tolerance
+        self.num_forward_workers = num_forward_workers
 
     def __iter__(self):
         self.forward_engine.launch(
-            self.port, self.data_queue_size, torch.cuda.current_device()
+           torch.cuda.current_device(), self.disorder_tolerance, self.num_forward_workers
         )
 
         while True:

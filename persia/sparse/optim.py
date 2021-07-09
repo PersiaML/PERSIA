@@ -1,8 +1,12 @@
 from abc import abstractmethod, ABC
 from typing import List, Tuple
+import time
 
 from persia.prelude import PyOptimizerBase
+from persia.backend import get_backend
+from persia.logger import get_default_logger
 
+logger = get_default_logger()
 
 class Optimizer(ABC):
     def __init__(self):
@@ -19,6 +23,9 @@ class Optimizer(ABC):
         # TODO: update the sparse grad
         ...
 
+    def register_optimizer(self):
+        backend = get_backend()
+        backend.register_optimizer(self.optimizer_base)
 
 class SGD(Optimizer):
     r"""A wrapper to config the embedding-server SGD optimizer
@@ -36,8 +43,8 @@ class SGD(Optimizer):
         self.weight_decay = weight_decay
 
     def apply(self):
-        self.optimizer_base.register_sgd(self.lr, self.weight_decay)
-
+        self.optimizer_base.init_sgd(self.lr, self.weight_decay)
+        self.register_optimizer()
 
 class Adam(Optimizer):
     r"""A wrapper to config the embedding-server Adam optimizer
@@ -94,10 +101,11 @@ class Adagrad(Optimizer):
         self.eps = eps
 
     def apply(self):
-        self.optimizer_base.register_adagrad(
+        self.optimizer_base.init_adagrad(
             self.lr,
             self.weight_decay,
             self.initial_accumulator_value,
             self.g_square_momentum,
             self.eps,
         )
+        self.register_optimizer()
