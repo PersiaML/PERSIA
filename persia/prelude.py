@@ -3,7 +3,7 @@ import sys
 from types import ModuleType
 
 # pytype: disable=import-error
-import persia_embedding_py_client_sharded_server
+import persia_core
 
 # pytype: enable=import-error
 
@@ -27,31 +27,31 @@ def register_submodule(module: ModuleType, root_module_path: str):
 
 
 register_submodule(
-    persia_embedding_py_client_sharded_server,
-    persia_embedding_py_client_sharded_server.__name__,
+    persia_core,
+    persia_core.__name__,
 )
 
 
 # pytype: disable=import-error
-from persia_embedding_py_client_sharded_server import is_cuda_feature_available
+from persia_core import is_cuda_feature_available
 
-from persia_embedding_py_client_sharded_server import (
+from persia_core import (
     PyPersiaRpcClient,
 )
-from persia_embedding_py_client_sharded_server.optim import PyOptimizerBase
-from persia_embedding_py_client_sharded_server.data import PyPersiaBatchData
-from persia_embedding_py_client_sharded_server.utils import (
+from persia_core.optim import PyOptimizerBase
+from persia_core.data import PyPersiaBatchData
+from persia_core.utils import (
     PyPersiaMessageQueueServer,
     PyPersiaMessageQueueClient,
     PyPersiaReplicaInfo,
 )
-from persia_embedding_py_client_sharded_server.nats import (
+from persia_core.nats import (
     PyPersiaBatchFlowNatsStubPublisher,
     PyPersiaBatchFlowNatsStubResponder,
 )
 
 if is_cuda_feature_available():
-    from persia_embedding_py_client_sharded_server.backward import PyBackward
-    from persia_embedding_py_client_sharded_server.forward import PyForward
+    from persia_core.backward import PyBackward
+    from persia_core.forward import PyForward
 
 # pytype: enable=import-error

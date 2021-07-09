@@ -2,9 +2,8 @@ import os
 import subprocess
 
 from setuptools import setup, find_packages
-from setuptools_rust import Binding, RustExtension
 
-extensions, rust_extensions = [], []
+extensions = []
 cmdclass = {}
 
 use_cuda = os.environ.get("USE_CUDA", False)
@@ -28,24 +27,7 @@ if use_cuda:
             extra_compile_args=["-fopenmp"],
         ),
     )
-
-    rust_extensions.append(
-        RustExtension(
-            "persia_embedding_py_client_sharded_server",
-            path="persia-embedding-real/persia-embedding-py-client-sharded-server/Cargo.toml",
-            features=["cuda"],
-            binding=Binding.PyO3,
-        )
-    )
-    cmdclass={"build_ext": BuildExtension}
-else:
-    rust_extensions.append(
-        RustExtension(
-            "persia_embedding_py_client_sharded_server",
-            path="persia-embedding-real/persia-embedding-py-client-sharded-server/Cargo.toml",
-            binding=Binding.PyO3,
-        )
-    )
+    cmdclass["build_ext"] = BuildExtension
 
 
 def get_mpi_flags():
@@ -58,6 +40,7 @@ setup(
     name="persia",
     use_scm_version={"local_scheme": "no-local-version"},
     setup_requires=["setuptools_scm"],
+    install_requires=["pyyaml", "persia-core", "colorlog"],
     url="https://github.com/PersiaML/PersiaML",
     author="Kuaishou AI Platform Persia Team",
     author_email="admin@mail.xrlian.com",
@@ -65,7 +48,6 @@ setup(
     packages=find_packages(exclude=("tests",)),
     scripts=["bin/launch_middleware", "bin/launch_server"],
     ext_modules=extensions,
-    rust_extensions=rust_extensions,
     cmdclass=cmdclass,
     python_requires=">=3.7",
 )
