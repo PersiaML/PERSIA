@@ -1,20 +1,21 @@
 #![allow(clippy::needless_return)]
 
 pub mod feature_config;
+use once_cell::sync::OnceCell;
 use persia_speedy::{Readable, Writable};
 use serde::{Deserialize, Serialize};
-use std::{io::Read, path::PathBuf, sync::Arc, u64};
+use std::{io::Read, path::PathBuf, sync::Arc};
 use thiserror::Error;
-use yaml_rust::YamlLoader;
+use yaml_rust::{Yaml, YamlLoader};
 
-#[derive(Error, Debug, Clone)]
+#[derive(Readable, Writable, Error, Debug, Clone)]
 pub enum PersiaGlobalConfigError {
     #[error("global config not ready error")]
     NotReadyError,
     #[error("global config set error")]
     SetError,
     #[error("failed to open/read config file error")]
-    ConfigFileError,
+    ConfigFileError(String),
 }
 
 #[derive(Serialize, Deserialize, Readable, Writable, Debug, Default, Clone)]
@@ -85,9 +86,70 @@ impl Default for InitializationMethod {
     }
 }
 
-static PERSIA_GLOBAL_CONFIG: once_cell::sync::OnceCell<
-    Arc<parking_lot::RwLock<PersiaGlobalConfig>>,
-> = once_cell::sync::OnceCell::new();
+#[derive(Readable, Writable, Debug, Clone)]
+pub struct PersiaSparseModelHyperparameters {
+    pub initialization_method: InitializationMethod,
+    pub admit_probability: f32,
+    pub weight_bound: f32,
+    pub enable_weight_bound: bool,
+}
+
+static PERSIA_EMBEDDING_SEVER_CONFIG: OnceCell<
+    Arc<parking_lot::RwLock<PersiaShardedServerConfig>>,
+> = OnceCell::new();
+
+static PERSIA_MIDDLEWARE_CONFIG: OnceCell<Arc<parking_lot::RwLock<PersiaMiddlewareConfig>>> =
+    OnceCell::new();
+
+static PERSIA_COMMON_CONFIG: OnceCell<Arc<parking_lot::RwLock<PersiaCommonConfig>>> =
+    OnceCell::new();
+
+fn read_yaml(config_file: &PathBuf) -> Result<Yaml, PersiaGlobalConfigError> {
+    let f = std::fs::File::open(config_file);
+    if f.is_err() {
+        let err_msg = format!("{:?}", f.unwrap_err());
+        return Err(PersiaGlobalConfigError::ConfigFileError(err_msg));
+    }
+    let mut f = f.unwrap();
+    let mut content = String::new();
+    let res = f.read_to_string(&mut content);
+    if res.is_err() {
+        let err_msg = format!("{:?}", res.unwrap_err());
+        return Err(PersiaGlobalConfigError::ConfigFileError(err_msg));
+    }
+
+    let yaml = YamlLoader::load_from_str(&content);
+    if yaml.is_err() {
+        let err_msg = format!("{:?}", yaml.unwrap_err());
+        return Err(PersiaGlobalConfigError::ConfigFileError(err_msg));
+    }
+    let yaml = yaml.unwrap();
+    let conf = yaml.into_iter().next();
+    if conf.is_none() {
+        let err_msg = String::from("yaml file not include a yaml");
+        return Err(PersiaGlobalConfigError::ConfigFileError(err_msg));
+    }
+    Ok(conf.unwrap())
+}
+
+fn get_local_ip() -> String {
+    let if_addrs = get_if_addrs::get_if_addrs().expect("failed to get local ip address");
+
+    let persia_socket_name = std::env::var("PERSIA_SOCKET_NAME").unwrap_or(String::from("eth0"));
+
+    if let Some(ip_addr) = if_addrs
+        .iter()
+        .find(|x| x.name == persia_socket_name.as_str())
+    {
+        let ip_addr = ip_addr.ip().to_string();
+        return ip_addr;
+    } else {
+        panic!(
+            "failed to get ip of socket {}, please try other by setting PERSIA_SOCKET_NAME",
+            persia_socket_name
+        );
+    }
+}
 
 #[derive(Readable, Writable, Debug, Clone)]
 pub enum PerisaShardedServerIntent {
@@ -103,7 +165,30 @@ pub enum PersiaPersistenceStorage {
 }
 
 #[derive(Readable, Writable, Debug, Clone)]
+pub struct PersiaReplicaInfo {
+    pub replica_size: usize,
+    pub replica_index: usize,
+}
+
+#[derive(Readable, Writable, Debug, Clone)]
+pub struct InstanceInfo {
+    pub ip_address: String,
+    pub port: u16,
+}
+
+impl InstanceInfo {
+    pub fn new(port: u16) -> Self {
+        Self {
+            ip_address: get_local_ip(),
+            port,
+        }
+    }
+}
+
+#[derive(Readable, Writable, Debug, Clone)]
 pub struct PersiaShardedServerConfig {
+    pub instance_info: InstanceInfo,
+
     // cur task
     pub intent: PerisaShardedServerIntent,
 
@@ -125,78 +210,19 @@ pub struct PersiaShardedServerConfig {
     pub incremental_channel_capacity: usize,
 }
 
-#[derive(Readable, Writable, Debug, Clone)]
-pub struct PersiaReplicaInfo {
-    pub replica_name: String,
-    pub replica_size: usize,
-    pub replica_index: usize,
-}
-
-#[derive(Readable, Writable, Debug, Clone)]
-pub struct PersiaMetricsConfig {
-    pub enable_metrics: bool,
-    pub job_name: String,
-    pub instance_name: String,
-    pub ip_addr: String,
-    pub push_interval: u64,
-}
-
-#[derive(Readable, Writable, Debug, Clone)]
-pub struct PersiaSparseModelHyperparameters {
-    pub initialization_method: InitializationMethod,
-    pub admit_probability: f32,
-    pub weight_bound: f32,
-    pub enable_weight_bound: bool,
-}
-
-#[derive(Readable, Writable, Debug, Clone)]
-pub struct PersiaMiddlewareConfig {
-    pub forward_buffer_size: usize,
-}
-
-#[derive(Readable, Writable, Debug, Clone)]
-pub struct PersiaGlobalConfig {
-    pub replica_info: PersiaReplicaInfo,
-    pub sharded_server_config: PersiaShardedServerConfig,
-    pub middleware_config: PersiaMiddlewareConfig,
-    pub metrics_config: PersiaMetricsConfig,
-}
-
-impl PersiaGlobalConfig {
+impl PersiaShardedServerConfig {
     pub fn get() -> Result<Arc<parking_lot::RwLock<Self>>, PersiaGlobalConfigError> {
-        let singleton = PERSIA_GLOBAL_CONFIG.get();
+        let singleton = PERSIA_EMBEDDING_SEVER_CONFIG.get();
         match singleton {
             Some(s) => Ok(s.clone()),
             None => Err(PersiaGlobalConfigError::NotReadyError),
         }
     }
 
-    pub fn set(
-        config_file: PathBuf,
-        replica_index: usize,
-        replica_size: usize,
-        replica_name: String,
-    ) -> Result<(), PersiaGlobalConfigError> {
-        let f = std::fs::File::open(config_file);
-        if f.is_err() {
-            tracing::error!("failed to open config file, {:?}", f.unwrap_err());
-            return Err(PersiaGlobalConfigError::ConfigFileError);
-        }
-        let mut f = f.unwrap();
-        let mut content = String::new();
-        let res = f.read_to_string(&mut content);
-        if res.is_err() {
-            tracing::error!("failed to read config file, {:?}", res.unwrap_err());
-            return Err(PersiaGlobalConfigError::ConfigFileError);
-        }
+    pub fn set(config_file: &PathBuf, port: u16) -> Result<(), PersiaGlobalConfigError> {
+        let conf = read_yaml(config_file)?;
 
-        let yaml = YamlLoader::load_from_str(&content);
-        if yaml.is_err() {
-            tracing::error!("fail to parse config file");
-            return Err(PersiaGlobalConfigError::ConfigFileError);
-        }
-        let yaml = yaml.unwrap();
-        let conf = yaml.first().unwrap();
+        let instance_info = InstanceInfo::new(port);
 
         let server_intent = conf["PersiaShardedServerConfig"]["intent"]
             .as_str()
@@ -263,9 +289,108 @@ impl PersiaGlobalConfig {
             .as_i64()
             .unwrap_or(1000) as usize;
 
+        let singleton = Self {
+            instance_info,
+            intent,
+            capacity,
+            num_hashmap_internal_shards,
+            full_amount_manager_buffer_size,
+            num_persistence_workers,
+            num_signs_per_file,
+            storage,
+            local_buffer_dir,
+            enable_incremental_update,
+            incremental_buffer_size,
+            incremental_dir,
+            incremental_channel_capacity,
+        };
+
+        tracing::info!("PersiaShardedServerConfig parsed \n{:?}", singleton);
+
+        let singleton = Arc::new(parking_lot::RwLock::new(singleton));
+        let res = PERSIA_EMBEDDING_SEVER_CONFIG.set(singleton);
+        if res.is_err() {
+            return Err(PersiaGlobalConfigError::SetError);
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Readable, Writable, Debug, Clone)]
+pub struct PersiaMiddlewareConfig {
+    pub instance_info: InstanceInfo,
+    pub forward_buffer_size: usize,
+}
+
+impl PersiaMiddlewareConfig {
+    pub fn get() -> Result<Arc<parking_lot::RwLock<Self>>, PersiaGlobalConfigError> {
+        let singleton = PERSIA_MIDDLEWARE_CONFIG.get();
+        match singleton {
+            Some(s) => Ok(s.clone()),
+            None => Err(PersiaGlobalConfigError::NotReadyError),
+        }
+    }
+
+    pub fn set(config_file: &PathBuf, port: u16) -> Result<(), PersiaGlobalConfigError> {
+        let conf = read_yaml(config_file)?;
+
+        let instance_info = InstanceInfo::new(port);
+
         let forward_buffer_size = conf["PersiaMiddlewareConfig"]["forward_buffer_size"]
             .as_i64()
             .unwrap_or(1000) as usize;
+
+        let singleton = Self {
+            instance_info,
+            forward_buffer_size,
+        };
+
+        tracing::info!("PersiaMiddlewareConfig parsed \n{:?}", singleton);
+        let singleton = Arc::new(parking_lot::RwLock::new(singleton));
+        let res = PERSIA_MIDDLEWARE_CONFIG.set(singleton);
+        if res.is_err() {
+            return Err(PersiaGlobalConfigError::SetError);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Readable, Writable, Debug, Clone)]
+pub struct PersiaMetricsConfig {
+    pub enable_metrics: bool,
+    pub job_name: String,
+    pub instance_name: String,
+    pub ip_addr: String,
+    pub push_interval: u64,
+}
+
+#[derive(Readable, Writable, Debug, Clone)]
+pub struct PersiaCommonConfig {
+    pub replica_info: PersiaReplicaInfo,
+    pub metrics_config: PersiaMetricsConfig,
+}
+
+impl PersiaCommonConfig {
+    pub fn get() -> Result<Arc<parking_lot::RwLock<Self>>, PersiaGlobalConfigError> {
+        let singleton = PERSIA_COMMON_CONFIG.get();
+        match singleton {
+            Some(s) => Ok(s.clone()),
+            None => Err(PersiaGlobalConfigError::NotReadyError),
+        }
+    }
+
+    pub fn set(
+        config_file: &PathBuf,
+        replica_index: usize,
+        replica_size: usize,
+    ) -> Result<PersiaReplicaInfo, PersiaGlobalConfigError> {
+        let conf = read_yaml(config_file)?;
+
+        let replica_info = PersiaReplicaInfo {
+            replica_index,
+            replica_size,
+        };
 
         let enable_metrics = conf["PersiaMetricsConfig"]["enable_metrics"]
             .as_bool()
@@ -275,49 +400,28 @@ impl PersiaGlobalConfig {
             .unwrap_or(10) as u64;
         let job_name =
             std::env::var("PERSIA_JOB_NAME").unwrap_or(String::from("persia_default_job_name"));
-        let instance_name = format!("{}-{}", replica_name, replica_size);
-        let ip_addr = local_ipaddress::get().unwrap_or(String::from("NA"));
+        let instance_name = format!("{}", replica_index);
+        let ip_addr = get_local_ip();
 
-        let singleton = Self {
-            replica_info: PersiaReplicaInfo {
-                replica_name,
-                replica_size,
-                replica_index,
-            },
-            sharded_server_config: PersiaShardedServerConfig {
-                intent,
-                capacity,
-                num_hashmap_internal_shards,
-                full_amount_manager_buffer_size,
-                num_persistence_workers,
-                num_signs_per_file,
-                storage,
-                local_buffer_dir,
-                enable_incremental_update,
-                incremental_buffer_size,
-                incremental_dir,
-                incremental_channel_capacity,
-            },
-            middleware_config: PersiaMiddlewareConfig {
-                forward_buffer_size,
-            },
-            metrics_config: PersiaMetricsConfig {
-                enable_metrics,
-                job_name,
-                instance_name,
-                ip_addr,
-                push_interval,
-            },
+        let metrics_config = PersiaMetricsConfig {
+            enable_metrics,
+            job_name,
+            instance_name,
+            ip_addr,
+            push_interval,
         };
 
-        tracing::info!("PersiaGlobalConfig parsed \n{:?}", singleton);
+        let singleton = Self {
+            replica_info: replica_info.clone(),
+            metrics_config,
+        };
 
+        tracing::info!("PersiaCommonConfig parsed \n{:?}", singleton);
         let singleton = Arc::new(parking_lot::RwLock::new(singleton));
-        let res = PERSIA_GLOBAL_CONFIG.set(singleton);
+        let res = PERSIA_COMMON_CONFIG.set(singleton);
         if res.is_err() {
             return Err(PersiaGlobalConfigError::SetError);
         }
-
-        Ok(())
+        Ok(replica_info)
     }
 }

@@ -9,6 +9,7 @@ use ndarray_rand::RandomExt;
 use numpy::PyArray1;
 use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 
 use persia_embedding_config::InitializationMethod;
 use persia_speedy::{Readable, Writable};
@@ -319,6 +320,7 @@ pub struct PersiaBatchData {
     pub target_data: Vec<DenseTensor>,
     pub map_data: HashMap<String, Tensor>,
     pub meta_data: Option<Vec<u8>>,
+    pub batch_id: Option<usize>,
 }
 
 impl Default for PersiaBatchData {
@@ -329,7 +331,31 @@ impl Default for PersiaBatchData {
             target_data: Vec::new(),
             map_data: HashMap::new(),
             meta_data: None,
+            batch_id: None,
         }
+    }
+}
+
+impl PartialEq for PersiaBatchData {
+    fn eq(&self, other: &Self) -> bool {
+        self.batch_id.unwrap_or(usize::MIN) == other.batch_id.unwrap_or(usize::MIN)
+    }
+}
+
+impl Eq for PersiaBatchData {}
+
+impl PartialOrd for PersiaBatchData {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for PersiaBatchData {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.batch_id
+            .unwrap_or(usize::MIN)
+            .cmp(&other.batch_id.unwrap_or(usize::MIN))
+            .reverse()
     }
 }
 

@@ -1,14 +1,16 @@
 #[macro_use]
 extern crate shadow_rs;
 use hashbrown::HashMap;
-use persia_embedding_config::PersiaGlobalConfig;
-use persia_embedding_sharded_server::hashmap_sharded_service::HashMapShardedServiceClient;
+use persia_embedding_config::{PersiaCommonConfig, PersiaMiddlewareConfig};
+use persia_embedding_sharded_server::hashmap_sharded_service::EmbeddingServerNatsStubPublisher;
 use persia_embedding_sharded_server::middleware_config_parser::{
-    convert_middleware_config, MiddlewareConfig,
+    convert_middleware_config, EmbeddingConfig,
 };
 use persia_embedding_sharded_server::sharded_middleware_service::{
-    AllShardsClient, ShardedMiddlewareServer, ShardedMiddlewareServerInner,
+    AllShardsClient, MiddlewareNatsStub, MiddlewareNatsStubResponder, ShardedMiddlewareServer,
+    ShardedMiddlewareServerInner,
 };
+use persia_nats_client::NatsClient;
 use std::path::PathBuf;
 use std::sync::Arc;
 use structopt::StructOpt;
@@ -17,13 +19,11 @@ use structopt::StructOpt;
 #[structopt()]
 struct Cli {
     #[structopt(long)]
-    servers: Vec<String>,
-    #[structopt(long)]
     port: u16,
     #[structopt(long)]
-    config: PathBuf,
+    embedding_config: PathBuf,
     #[structopt(long)]
-    global_config: PathBuf,
+    middleware_config: PathBuf,
     #[structopt(long)]
     replica_index: usize,
     #[structopt(long)]
@@ -48,73 +48,68 @@ async fn main() -> anyhow::Result<()> {
     eprintln!("build_time: {}", build::BUILD_TIME);
     let args: Cli = Cli::from_args();
 
-    PersiaGlobalConfig::set(
-        args.global_config,
+    let replica_info = PersiaCommonConfig::set(
+        &args.middleware_config,
         args.replica_index,
         args.replica_size,
-        String::from("middleware"),
     )?;
 
-    let num_shards = args.servers.len() as u64;
+    PersiaMiddlewareConfig::set(&args.middleware_config, args.port)?;
 
-    let mut clients = Vec::new();
-    for server_addr in args.servers {
-        let rpc_client = persia_rpc::RpcClient::new(server_addr.as_str()).unwrap();
-        let client = HashMapShardedServiceClient::new(rpc_client);
-        clients.push(Arc::new(client));
+    let nats_publisher = EmbeddingServerNatsStubPublisher {
+        nats_client: NatsClient::new(replica_info.clone()),
+    };
+
+    let all_shards_client = AllShardsClient::new(nats_publisher);
+
+    let num_shards = all_shards_client.num_shards() as u64;
+
+    while !args.embedding_config.is_file() {
+        tracing::warn!("waiting for embedding config yaml file...");
+        std::thread::sleep(std::time::Duration::from_secs(10));
     }
+    let mut embedding_config: EmbeddingConfig = serde_yaml::from_reader(
+        std::fs::File::open(args.embedding_config).expect("cannot read config file"),
+    )
+    .expect("cannot parse config file");
 
-    clients.sort_by_key(|c| {
-        while persia_futures::smol::block_on(c.shard_idx(&())).is_err() {
-            persia_futures::smol::block_on(persia_futures::tokio::time::sleep(
-                persia_futures::tokio::time::Duration::from_secs(1),
-            ));
-        }
-        persia_futures::smol::block_on(c.shard_idx(&())).expect("cannot get server shard idx");
+    let feature2group = convert_middleware_config(&mut embedding_config);
+
+    tracing::info!("embedding config: {:#?}", embedding_config);
+
+    let middleware_config = PersiaMiddlewareConfig::get()?;
+    let guard = middleware_config.read();
+
+    let inner = Arc::new(ShardedMiddlewareServerInner {
+        all_shards_client,
+        num_shards,
+        forward_id: std::sync::atomic::AtomicU64::new(rand::random()),
+        forward_id_buffer: persia_futures::async_lock::RwLock::new(HashMap::with_capacity(10000)),
+        post_forward_buffer: persia_futures::async_lock::RwLock::new(HashMap::with_capacity(10000)),
+        cannot_forward_batched_time: crossbeam::atomic::AtomicCell::new(
+            std::time::SystemTime::now(),
+        ),
+        embedding_config,
+        staleness: Default::default(),
+        feature2group,
+        forward_buffer_size: guard.forward_buffer_size,
     });
 
-    for (i, c) in clients.iter().enumerate() {
-        while c.shard_idx(&()).await.is_err() {
-            assert_eq!(i, c.shard_idx(&()).await?, "shard idx mismatch");
-        }
-    }
-
-    let all_shards_client = AllShardsClient::new(clients);
-
-    while !args.config.is_file() {
-        tracing::warn!("waiting for middleware config yaml file...");
-    }
-    let mut config: MiddlewareConfig =
-        serde_yaml::from_reader(std::fs::File::open(args.config).expect("cannot read config file"))
-            .expect("cannot parse config file");
-
-    let feature2group = convert_middleware_config(&mut config);
-
-    tracing::info!("middleware config: {:#?}", config);
-
-    let global_config = PersiaGlobalConfig::get()?;
-    let guard = global_config.read();
-
-    let service = ShardedMiddlewareServer {
-        inner: Arc::new(ShardedMiddlewareServerInner {
-            all_shards_client,
-            num_shards,
-            forward_id: std::sync::atomic::AtomicU64::new(rand::random()),
-            forward_id_buffer: persia_futures::async_lock::RwLock::new(HashMap::with_capacity(
-                10000,
-            )),
-            post_forward_buffer: persia_futures::async_lock::RwLock::new(HashMap::with_capacity(
-                10000,
-            )),
-            cannot_forward_batched_time: crossbeam::atomic::AtomicCell::new(
-                std::time::SystemTime::now(),
-            ),
-            config,
-            staleness: Default::default(),
-            feature2group,
-            forward_buffer_size: guard.middleware_config.forward_buffer_size,
-        }),
+    let nats_stub = MiddlewareNatsStub {
+        inner: inner.clone(),
     };
+
+    let responder = MiddlewareNatsStubResponder {
+        inner: nats_stub,
+        nats_client: NatsClient::new(replica_info),
+    };
+
+    responder
+        .spawn_subscriptions()
+        .expect("failed to spawn nats subscriptions");
+    tracing::info!("middleware responder started");
+
+    let service = ShardedMiddlewareServer { inner: inner };
 
     let server = hyper::server::Server::bind(&([0, 0, 0, 0], args.port).into())
         // .http2_only(true)
@@ -124,6 +119,8 @@ async fn main() -> anyhow::Result<()> {
             let service = service.clone();
             async { Ok::<_, hyper::Error>(service) }
         }));
+
+    tracing::info!("middleware rpc server started");
 
     server.await?;
 

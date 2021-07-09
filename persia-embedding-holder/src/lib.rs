@@ -1,15 +1,16 @@
-use persia_embedding_config::{PersiaGlobalConfig, PersiaGlobalConfigError};
+use persia_embedding_config::{PersiaGlobalConfigError, PersiaShardedServerConfig};
 use persia_embedding_datatypes::HashMapEmbeddingEntry;
 use persia_eviction_map::PersiaEvictionMap;
+use persia_speedy::{Readable, Writable};
 
 use parking_lot::RwLock;
 use std::sync::Arc;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Readable, Writable, Error, Debug)]
 pub enum PersiaEmbeddingHolderError {
     #[error("global config error")]
-    GlobalConfigError(PersiaGlobalConfigError),
+    PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
 }
 
 static PERSIA_EMBEDDING_HOLDER: once_cell::sync::OnceCell<PersiaEmbeddingHolder> =
@@ -23,21 +24,13 @@ pub struct PersiaEmbeddingHolder {
 impl PersiaEmbeddingHolder {
     pub fn get() -> Result<PersiaEmbeddingHolder, PersiaEmbeddingHolderError> {
         let singleton = PERSIA_EMBEDDING_HOLDER.get_or_try_init(|| {
-            if let Ok(global_config) = PersiaGlobalConfig::get() {
-                let guard = global_config.read();
-                let eviction_map: PersiaEvictionMap<u64, Arc<RwLock<HashMapEmbeddingEntry>>> =
-                    PersiaEvictionMap::new(
-                        guard.sharded_server_config.capacity,
-                        guard.sharded_server_config.num_hashmap_internal_shards,
-                    );
-                Ok(PersiaEmbeddingHolder {
-                    inner: Arc::new(eviction_map),
-                })
-            } else {
-                Err(PersiaEmbeddingHolderError::GlobalConfigError(
-                    PersiaGlobalConfigError::NotReadyError,
-                ))
-            }
+            let config = PersiaShardedServerConfig::get()?;
+            let guard = config.read();
+            let eviction_map: PersiaEvictionMap<u64, Arc<RwLock<HashMapEmbeddingEntry>>> =
+                PersiaEvictionMap::new(guard.capacity, guard.num_hashmap_internal_shards);
+            Ok(PersiaEmbeddingHolder {
+                inner: Arc::new(eviction_map),
+            })
         });
         match singleton {
             Ok(s) => Ok(s.clone()),

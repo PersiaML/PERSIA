@@ -19,6 +19,8 @@ persia-futures = {path = "../persia-futures"}
 persia-message-queue = {path = "../persia-message-queue"}
 persia-metrics = {path = "../persia-metrics"}
 persia-model-manager = {path = "../persia-model-manager"}
+persia-nats-marcos = {path = "../others/persia-nats-marcos"}
+persia-nats-client = {path = "../others/persia-nats-client"}
 resource_pool = {path = "../persia-resource-pool"}
 anyhow = "1.0"
 bytes = "1.0"
@@ -39,6 +41,7 @@ shadow-rs = "0.5"
 thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = "0.2.5"
+retry = "1.2.1"
 
 [features]
 default = []

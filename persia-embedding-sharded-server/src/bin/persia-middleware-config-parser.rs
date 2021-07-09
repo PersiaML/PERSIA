@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate shadow_rs;
 use persia_embedding_sharded_server::middleware_config_parser::{
-    convert_middleware_config, MiddlewareConfig,
+    convert_middleware_config, EmbeddingConfig,
 };
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -32,7 +32,7 @@ fn main() -> anyhow::Result<()> {
     eprintln!("build_time: {}", build::BUILD_TIME);
     let args: Cli = Cli::from_args();
 
-    let mut config: MiddlewareConfig =
+    let mut config: EmbeddingConfig =
         serde_yaml::from_reader(std::fs::File::open(args.config).expect("cannot read config file"))
             .expect("cannot parse config file");
 

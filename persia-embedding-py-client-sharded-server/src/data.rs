@@ -69,6 +69,12 @@ impl PyPersiaBatchData {
     pub fn to_bytes<'a>(&mut self, _py: Python<'a>) -> &'a PyBytes {
         PyBytes::new(_py, self.inner.write_to_vec().unwrap().as_slice())
     }
+
+    pub fn batch_id(&self) -> usize {
+        self.inner
+            .batch_id
+            .expect("please call forward_id before get batch_id")
+    }
 }
 
 macro_rules! add_dense_func2batch_data {

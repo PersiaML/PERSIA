@@ -4,11 +4,12 @@ use once_cell::sync::OnceCell;
 
 use parking_lot::RwLock;
 use persia_embedding_config::{
-    PerisaShardedServerIntent, PersiaGlobalConfig, PersiaPersistenceStorage,
+    PerisaShardedServerIntent, PersiaCommonConfig, PersiaGlobalConfigError,
+    PersiaPersistenceStorage, PersiaShardedServerConfig,
 };
 use persia_embedding_datatypes::HashMapEmbeddingEntry;
-use persia_embedding_holder::PersiaEmbeddingHolder;
-use persia_full_amount_manager::FullAmountManager;
+use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
+use persia_full_amount_manager::{FullAmountManager, PersiaFullAmountManagerError};
 use persia_speedy::{Readable, Writable};
 use persia_storage_visitor::{
     PersiaCephVisitor, PersiaHdfsVisitor, PersiaStorageVisitor, SpeedyObj,
@@ -19,24 +20,16 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use thiserror::Error;
 
-pub fn get_total_shard_num() -> usize {
-    let resume_dir = std::env::var("PERSIA_GROUP_REPLICAS").unwrap_or("0".to_string());
-    let total_shard_num: usize = resume_dir
-        .parse()
-        .expect("failed to parse PERSIA_GROUP_REPLICAS, it shound be a number");
-    total_shard_num
-}
-
-#[derive(Error, Debug)]
+#[derive(Readable, Writable, Error, Debug)]
 pub enum PersistenceManagerError {
     #[error("storage error")]
     StorageError(String),
     #[error("full amount manager not found error")]
-    FullAmountManagerNotFoundError,
+    PersiaFullAmountManagerError(#[from] PersiaFullAmountManagerError),
     #[error("embedding holder not found error")]
-    EmbeddingHolderNotFoundError,
-    #[error("global config not found error")]
-    GlobalConfigNotFoundError,
+    PersiaEmbeddingHolderError(#[from] PersiaEmbeddingHolderError),
+    #[error("global config error")]
+    PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
     #[error("wait for other shard time out when dump embedding")]
     WaitForOtherShardTimeOut,
     #[error("loading from an uncompelete embedding ckpt")]
@@ -73,45 +66,34 @@ pub struct PersiaPersistenceManager {
     thread_pool: Arc<rayon::ThreadPool>,
     sign_per_file: usize,
     shard_idx: usize,
+    shard_num: usize,
     cur_task: PerisaShardedServerIntent,
 }
 
 impl PersiaPersistenceManager {
     pub fn get() -> Result<Arc<Self>, PersistenceManagerError> {
         let singleton = MODEL_PERSISTENCE_MANAGER.get_or_try_init(|| {
-            let global_config = PersiaGlobalConfig::get();
-            if global_config.is_err() {
-                return Err(PersistenceManagerError::GlobalConfigNotFoundError);
-            }
-            let global_config = global_config.unwrap();
+            let server_config = PersiaShardedServerConfig::get()?;
+            let common_config = PersiaCommonConfig::get()?;
+            let embedding_holder = PersiaEmbeddingHolder::get()?;
+            let full_amount_manager = FullAmountManager::get()?;
 
-            let embedding_holder = PersiaEmbeddingHolder::get();
-            if embedding_holder.is_err() {
-                return Err(PersistenceManagerError::EmbeddingHolderNotFoundError);
-            }
-            let embedding_holder = embedding_holder.unwrap();
-
-            let full_amount_manager = FullAmountManager::get();
-            if full_amount_manager.is_err() {
-                return Err(PersistenceManagerError::FullAmountManagerNotFoundError);
-            }
-            let full_amount_manager = full_amount_manager.unwrap();
-
-            let guard = global_config.read();
-            let storage_visitor: Arc<dyn PersiaStorageVisitor> =
-                match guard.sharded_server_config.storage {
-                    PersiaPersistenceStorage::Ceph => Arc::new(PersiaCephVisitor {}),
-                    PersiaPersistenceStorage::Hdfs => Arc::new(PersiaHdfsVisitor::new()),
-                };
+            let server_config_guard = server_config.read();
+            let common_config_guard = common_config.read();
+            let storage_visitor: Arc<dyn PersiaStorageVisitor> = match server_config_guard.storage {
+                PersiaPersistenceStorage::Ceph => Arc::new(PersiaCephVisitor {}),
+                PersiaPersistenceStorage::Hdfs => Arc::new(PersiaHdfsVisitor::new()),
+            };
 
             let singleton = Arc::new(Self::new(
                 storage_visitor,
                 embedding_holder,
                 full_amount_manager,
-                guard.sharded_server_config.num_persistence_workers,
-                guard.sharded_server_config.num_signs_per_file,
-                guard.replica_info.replica_index,
-                guard.sharded_server_config.intent.clone(),
+                server_config_guard.num_persistence_workers,
+                server_config_guard.num_signs_per_file,
+                common_config_guard.replica_info.replica_index,
+                common_config_guard.replica_info.replica_size,
+                server_config_guard.intent.clone(),
             ));
             Ok(singleton)
         });
@@ -129,6 +111,7 @@ impl PersiaPersistenceManager {
         concurrent_size: usize,
         sign_per_file: usize,
         shard_idx: usize,
+        shard_num: usize,
         cur_task: PerisaShardedServerIntent,
     ) -> Self {
         Self {
@@ -144,6 +127,7 @@ impl PersiaPersistenceManager {
             ),
             sign_per_file,
             shard_idx,
+            shard_num,
             cur_task,
         }
     }
@@ -208,7 +192,7 @@ impl PersiaPersistenceManager {
         timeout_sec: usize,
         dst_dir: PathBuf,
     ) -> Result<(), PersistenceManagerError> {
-        let num_total_shard = get_total_shard_num();
+        let num_total_shard = self.shard_num;
         if num_total_shard < 2 {
             tracing::info!("num_total_shard < 2, will not wait for other sharded servers");
             return Ok(());

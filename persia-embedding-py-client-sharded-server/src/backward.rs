@@ -113,10 +113,10 @@ impl Backward {
         }
     }
 
-    fn launch(&mut self, device_id: i32) {
+    fn launch(&mut self, device_id: i32, num_backward_worker: usize) {
         if !self.launch {
             self.spawn_backward_to_cpu_worker(device_id);
-            self.spawn_backward_worker();
+            self.spawn_backward_worker(num_backward_worker);
             self.launch = true;
         }
     }
@@ -197,12 +197,11 @@ impl Backward {
         self.threaded_workers.push(handler);
     }
 
-    fn spawn_backward_worker(&mut self) {
+    fn spawn_backward_worker(&mut self, num_backward_worker: usize) {
         let rpc_client = PersiaRpcClient::get_instance();
         let runtime = rpc_client.runtime.clone();
-        let num_workers = { rpc_client.clients.read().len() * 2 };
 
-        for _ in 0..num_workers {
+        for _ in 0..num_backward_worker {
             let channel_r = self.cpu_backward_channel_r.clone();
             let rpc_client = rpc_client.clone();
             let _guard = runtime.enter();
@@ -244,8 +243,8 @@ impl PyBackward {
         }
     }
 
-    pub fn launch(&mut self, device_id: i32) {
-        self.inner.launch(device_id);
+    pub fn launch(&mut self, device_id: i32, num_backward_worker: usize) {
+        self.inner.launch(device_id, num_backward_worker);
     }
 
     pub fn update_sparse_gradient_batched(

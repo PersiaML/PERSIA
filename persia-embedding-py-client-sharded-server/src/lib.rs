@@ -10,6 +10,7 @@ mod cuda;
 mod data;
 #[cfg(feature = "cuda")]
 mod forward;
+mod nats;
 mod optim;
 mod utils;
 
@@ -40,8 +41,6 @@ static METRICS_HOLDER: once_cell::sync::OnceCell<MetricsHolder> = once_cell::syn
 static RPC_CLIENT: OnceCell<Arc<PersiaRpcClient>> = OnceCell::new();
 
 struct MetricsHolder {
-    pub client_zmq_recv_batch_time_cost: Histogram,
-    pub client_pmq_recv_batch_time_cost: Histogram,
     pub forward_client_to_gpu_time_cost: Histogram,
     pub forward_client_time_cost: Histogram,
     pub forward_error: IntCounter,
@@ -55,10 +54,6 @@ impl MetricsHolder {
         METRICS_HOLDER.get_or_try_init(|| {
             let m = PersiaMetricsManager::get()?;
             let holder = Self {
-                client_zmq_recv_batch_time_cost: m
-                    .create_histogram("client_zmq_recv_batch_time_cost", "ATT")?,
-                client_pmq_recv_batch_time_cost: m
-                    .create_histogram("client_pmq_recv_batch_time_cost", "ATT")?,
                 forward_client_to_gpu_time_cost: m
                     .create_histogram("forward_client_to_gpu_time_cost", "ATT")?,
                 forward_client_time_cost: m.create_histogram("forward_client_time_cost", "ATT")?,
@@ -77,7 +72,7 @@ impl MetricsHolder {
 
 struct PersiaRpcClient {
     pub clients: RwLock<HashMap<String, Arc<ShardedMiddlewareServerClient>>>,
-    pub middleware_addrs: Vec<String>,
+    pub middleware_addrs: RwLock<Vec<String>>,
     pub runtime: Arc<persia_futures::tokio::runtime::Runtime>,
 }
 
@@ -89,11 +84,7 @@ impl PersiaRpcClient {
         }
     }
 
-    fn new(
-        middleware_addrs: Vec<String>,
-        wait_server_ready: bool,
-        worker_size: usize,
-    ) -> Arc<PersiaRpcClient> {
+    fn new(worker_size: usize) -> Arc<PersiaRpcClient> {
         RPC_CLIENT
             .get_or_init(|| {
                 let runtime = Arc::new(
@@ -104,37 +95,20 @@ impl PersiaRpcClient {
                         .unwrap(),
                 );
 
-                let mut middleware_clients: HashMap<String, Arc<ShardedMiddlewareServerClient>> =
-                    HashMap::new();
-
-                for addr in middleware_addrs.iter() {
-                    let rpc_client = persia_rpc::RpcClient::new(addr.as_str()).unwrap();
-                    let client = ShardedMiddlewareServerClient::new(rpc_client);
-                    if wait_server_ready {
-                        while !runtime
-                            .block_on(client.ready_for_serving(&()))
-                            .unwrap_or(false)
-                        {
-                            std::thread::sleep(Duration::from_secs(10));
-                            tracing::info!("server {:?} not yet ready", addr.as_str());
-                        }
-                    }
-                    middleware_clients.insert(addr.to_owned(), Arc::new(client));
-                }
                 Arc::new(Self {
-                    clients: RwLock::new(middleware_clients),
-                    middleware_addrs,
+                    clients: RwLock::new(HashMap::new()),
+                    middleware_addrs: RwLock::new(vec![]),
                     runtime: runtime,
                 })
             })
             .clone()
     }
 
-    fn get_random_client_with_addr(&self) -> (&str, Arc<ShardedMiddlewareServerClient>) {
-        let addr =
-            self.middleware_addrs[rand::random::<usize>() % self.middleware_addrs.len()].as_str();
+    fn get_random_client_with_addr(&self) -> (String, Arc<ShardedMiddlewareServerClient>) {
+        let middleware_addrs = self.middleware_addrs.read();
+        let addr = middleware_addrs[rand::random::<usize>() % middleware_addrs.len()].as_str();
         let client = self.get_client_by_addr(addr);
-        (addr, client)
+        (addr.to_string(), client)
     }
 
     fn get_random_client(&self) -> Arc<ShardedMiddlewareServerClient> {
@@ -152,6 +126,10 @@ impl PersiaRpcClient {
             self.clients
                 .write()
                 .insert(middleware_addr.to_string(), client.clone());
+
+            self.middleware_addrs
+                .write()
+                .push(middleware_addr.to_string());
             tracing::info!("created client for middleware{}", middleware_addr);
             client
         }
@@ -343,13 +321,9 @@ impl PersiaRpcClient {
 #[pymethods]
 impl PyPersiaRpcClient {
     #[new]
-    pub fn new(
-        middleware_servers: Vec<String>,
-        wait_server_ready: bool,
-        worker_size: usize,
-    ) -> Self {
+    pub fn new(worker_size: usize) -> Self {
         PyPersiaRpcClient {
-            inner: PersiaRpcClient::new(middleware_servers, wait_server_ready, worker_size),
+            inner: PersiaRpcClient::new(worker_size),
         }
     }
 
@@ -404,19 +378,21 @@ impl PyPersiaRpcClient {
     }
 
     pub fn forward_id(&self, data: &mut PyPersiaBatchData) -> PyResult<()> {
-        match &data.inner.sparse_data {
+        let result = match &data.inner.sparse_data {
             EmbeddingTensor::SparseBatch(val) => {
                 let resp = self.inner.forward_sparse_batch(&val);
                 match resp {
                     Ok(forward_id) => {
                         data.inner.sparse_data = EmbeddingTensor::ID(forward_id);
-                        return Ok(());
+                        Ok(())
                     }
-                    Err(err) => return Err(PyRuntimeError::new_err(err.to_string())),
-                };
+                    Err(err) => Err(PyRuntimeError::new_err(err.to_string())),
+                }
             }
             _ => panic!("sparse data empty invalid! pass the sparse data even empty!"),
         };
+
+        result
     }
 }
 
@@ -450,6 +426,7 @@ fn persia_embedding_py_client_sharded_server(py: Python, m: &PyModule) -> PyResu
     data::init_module(m, py)?;
     utils::init_module(m, py)?;
     optim::init_module(m, py)?;
+    nats::init_module(m, py)?;
     m.add_function(wrap_pyfunction!(is_cuda_feature_available, m)?)?;
 
     #[cfg(feature = "cuda")]

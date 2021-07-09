@@ -16,4 +16,6 @@ members = [
     "persia-storage-visitor",
     "persia-embedding-holder",
     "persia-metrics",
+    "others/persia-nats-client",
+    "others/persia-nats-marcos",
 ]

@@ -1,5 +1,5 @@
 use once_cell::sync::OnceCell;
-use persia_embedding_config::PersiaGlobalConfig;
+use persia_embedding_config::PersiaCommonConfig;
 use persia_scheduled_thread_pool::SCHEDULED_THREAD_POOL;
 use prometheus::{Encoder, HistogramOpts, Opts, TextEncoder};
 use std::collections::HashMap;
@@ -28,13 +28,13 @@ pub struct PersiaMetricsManager {
 
 impl PersiaMetricsManager {
     pub fn get() -> Result<Arc<Self>, PersiaMetricsManagerError> {
-        let global_config = PersiaGlobalConfig::get();
-        if global_config.is_err() {
+        let config = PersiaCommonConfig::get();
+        if config.is_err() {
             return Err(PersiaMetricsManagerError::GlobalConfigNotFoundError);
         }
-        let global_config = global_config.unwrap();
+        let config = config.unwrap();
         let singleton = PERSIA_METRICS_MANAGER.get_or_try_init(|| {
-            let guard = global_config.read();
+            let guard = config.read();
             if !guard.metrics_config.enable_metrics {
                 return Err(PersiaMetricsManagerError::NotEnabledError);
             }

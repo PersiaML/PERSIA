@@ -71,7 +71,7 @@ pub struct SlotConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize, Readable, Writable, Clone)]
-pub struct MiddlewareConfig {
+pub struct EmbeddingConfig {
     /// starts limiting requests at this point
     #[serde(default = "get_thousand")]
     pub forward_buffer_size: usize,
@@ -83,8 +83,8 @@ pub struct MiddlewareConfig {
     pub target_config: Vec<ExtractTargetConfig>,
 }
 
-impl MiddlewareConfig {
-    pub fn from_ptr(ptr: *const MiddlewareConfig) -> &'static Self {
+impl EmbeddingConfig {
+    pub fn from_ptr(ptr: *const EmbeddingConfig) -> &'static Self {
         unsafe { &*ptr }
     }
 }
@@ -96,7 +96,7 @@ pub struct FeatureGroup {
     pub monitor: Option<Arc<EmbeddingMonitorInner>>,
 }
 
-pub fn convert_middleware_config(config: &mut MiddlewareConfig) -> HashMap<String, FeatureGroup> {
+pub fn convert_middleware_config(config: &mut EmbeddingConfig) -> HashMap<String, FeatureGroup> {
     let mut feature2group: HashMap<String, FeatureGroup> = HashMap::new();
 
     let feature_prefix_bias = u64::BITS - config.feature_index_prefix_bit as u32;

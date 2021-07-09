@@ -13,10 +13,11 @@ use rayon::{ThreadPool, ThreadPoolBuilder};
 use thiserror::Error;
 
 use persia_embedding_config::{
-    PerisaShardedServerIntent, PersiaGlobalConfig, PersiaPersistenceStorage,
+    PerisaShardedServerIntent, PersiaCommonConfig, PersiaGlobalConfigError,
+    PersiaPersistenceStorage, PersiaShardedServerConfig,
 };
 use persia_embedding_datatypes::HashMapEmbeddingEntry;
-use persia_embedding_holder::PersiaEmbeddingHolder;
+use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
 use persia_futures::ChannelPair;
 use persia_metrics::{Gauge, PersiaMetricsManager, PersiaMetricsManagerError};
 use persia_storage_visitor::{
@@ -25,10 +26,10 @@ use persia_storage_visitor::{
 
 #[derive(Error, Debug)]
 pub enum IncrementalUpdateError {
-    #[error("global config not found error")]
-    GlobalConfigNotFoundError,
-    #[error("embedding holder not found error")]
-    EmbeddingHolderNotFoundError,
+    #[error("embedding holder error")]
+    PersiaEmbeddingHolderError(#[from] PersiaEmbeddingHolderError),
+    #[error("global config error")]
+    PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
     #[error("embedding holder not found error")]
     CommitIncrementalError,
 }
@@ -78,30 +79,23 @@ pub struct PerisaIncrementalUpdateManager {
 impl PerisaIncrementalUpdateManager {
     pub fn get() -> Result<Arc<Self>, IncrementalUpdateError> {
         let singleton = INCREMENTAL_UPDATE_MANAGER.get_or_try_init(|| {
-            let global_config = PersiaGlobalConfig::get();
-            if global_config.is_err() {
-                return Err(IncrementalUpdateError::GlobalConfigNotFoundError);
-            }
-            let global_config = global_config.unwrap();
+            let server_config = PersiaShardedServerConfig::get()?;
+            let common_comfig = PersiaCommonConfig::get()?;
+            let embedding_holder = PersiaEmbeddingHolder::get()?;
 
-            let embedding_holder = PersiaEmbeddingHolder::get();
-            if embedding_holder.is_err() {
-                return Err(IncrementalUpdateError::EmbeddingHolderNotFoundError);
-            }
-            let embedding_holder = embedding_holder.unwrap();
-
-            let guard = global_config.read();
+            let server_config_guard = server_config.read();
+            let common_comfig_guard = common_comfig.read();
 
             let singleton = Self::new(
-                guard.sharded_server_config.storage.clone(),
+                server_config_guard.storage.clone(),
                 embedding_holder,
-                guard.sharded_server_config.intent.clone(),
-                guard.sharded_server_config.num_persistence_workers,
-                guard.sharded_server_config.num_signs_per_file,
-                guard.replica_info.replica_index,
-                guard.sharded_server_config.incremental_buffer_size,
-                guard.sharded_server_config.incremental_dir.clone(),
-                guard.sharded_server_config.incremental_channel_capacity,
+                server_config_guard.intent.clone(),
+                server_config_guard.num_persistence_workers,
+                server_config_guard.num_signs_per_file,
+                common_comfig_guard.replica_info.replica_index,
+                server_config_guard.incremental_buffer_size,
+                server_config_guard.incremental_dir.clone(),
+                server_config_guard.incremental_channel_capacity,
             );
 
             Ok(singleton)

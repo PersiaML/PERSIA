@@ -2,14 +2,17 @@ use crate::backward::PythonGradientBatch;
 use crate::cuda::utils::{cuda_dense_tensor_h2d, embedding2cuda_tensor};
 use crate::cuda::{set_device, AsyncEmbeddingOnCuda, AsyncTensorOnCuda};
 use crate::data::PyPersiaBatchData;
+use crate::utils::{PyPersiaBatchDataChannel, PyPersiaReplicaInfo};
 use crate::{MetricsHolder, PersiaRpcClient};
 
-use std::time::Duration;
+use std::collections::BinaryHeap;
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
+use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_datatypes::{EmbeddingBatch, EmbeddingTensor, PersiaBatchData};
 use persia_embedding_sharded_server::sharded_middleware_service::ShardedMiddlewareError;
 use persia_futures::flume;
-use persia_message_queue::PersiaMessageQueueServer;
 use persia_speedy::Readable;
 
 use pyo3::exceptions::PyRuntimeError;
@@ -173,11 +176,91 @@ pub struct PersiaTrainingBatchShardedServerOnGpu {
     pub forward_id: u64,
 }
 
+struct PerisaDataOrderManager {
+    pub world_size: usize,
+    pub disorder_tolerance: f32,
+    pub expect_batch_id: usize,
+    pub data_buffer: BinaryHeap<PersiaBatchData>,
+    pub latest_pop: Instant,
+}
+
+impl PerisaDataOrderManager {
+    pub fn new(world_size: usize, rank_id: usize, disorder_tolerance: f32) -> Self {
+        Self {
+            world_size,
+            disorder_tolerance,
+            expect_batch_id: rank_id,
+            data_buffer: BinaryHeap::new(),
+            latest_pop: Instant::now(),
+        }
+    }
+
+    pub fn spawn_reorder_worker(
+        world_size: usize,
+        rank_id: usize,
+        disorder_tolerance: f32,
+        channel_r: flume::Receiver<PersiaBatchData>,
+        channel_s: flume::Sender<PersiaBatchData>,
+    ) -> JoinHandle<()> {
+        std::thread::spawn(move || {
+            if disorder_tolerance == 1.0 {
+                channel_r.iter().for_each(|batch| {
+                    channel_s.send(batch).unwrap();
+                });
+            } else {
+                let mut order_manager = Self::new(world_size, rank_id, disorder_tolerance);
+                loop {
+                    if let Ok(batch) = channel_r.recv_timeout(Duration::from_millis(10)) {
+                        order_manager.data_buffer.push(batch);
+                        while let Some(data) = order_manager.data_buffer.peek() {
+                            let data_batch_id = data.batch_id.unwrap_or(usize::MIN);
+                            let num_absent = (data_batch_id - order_manager.expect_batch_id) as f32
+                                / order_manager.world_size as f32;
+                            if data_batch_id <= order_manager.expect_batch_id
+                                || num_absent
+                                    < order_manager.data_buffer.len() as f32
+                                        * order_manager.disorder_tolerance
+                            {
+                                channel_s
+                                    .send(order_manager.pop_from_buffer().unwrap())
+                                    .unwrap();
+                            } else {
+                                break;
+                            }
+                        }
+                    } else if order_manager.data_buffer.len() > 0
+                        && order_manager.latest_pop.elapsed().as_secs() > 1
+                    {
+                        tracing::warn!(
+                            "PerisaDataOrderManager waiting for batch exceed 1 sec, it's possible because that data input is slow.
+                            Now, pulling all buffered input batches, which may causes disorderly of input batch. If you do not care
+                            about the order of input batches, please set disorder_tolerance to 1.0 to get a higher training efficiency."
+                        );
+                        while let Some(poped) = order_manager.pop_from_buffer() {
+                            channel_s.send(poped).unwrap();
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    fn pop_from_buffer(&mut self) -> Option<PersiaBatchData> {
+        if let Some(poped) = self.data_buffer.pop() {
+            self.latest_pop = Instant::now();
+            self.expect_batch_id = poped.batch_id.unwrap_or(self.expect_batch_id) + self.world_size;
+            Some(poped)
+        } else {
+            None
+        }
+    }
+}
+
 struct Forward {
-    pub zmq_channel_s: flume::Sender<Vec<u8>>,
-    pub zmq_channel_r: flume::Receiver<Vec<u8>>,
-    pub deserialized_channel_s: flume::Sender<PersiaBatchData>,
-    pub deserialized_channel_r: flume::Receiver<PersiaBatchData>,
+    pub nats_channel_s: flume::Sender<PersiaBatchData>,
+    pub nats_channel_r: flume::Receiver<PersiaBatchData>,
+    pub reorder_buffer_channel_s: flume::Sender<PersiaBatchData>,
+    pub reorder_buffer_channel_r: flume::Receiver<PersiaBatchData>,
     pub forwarded_channel_s: flume::Sender<(PersiaBatchData, EmbeddingBatch)>,
     pub forwarded_channel_r: flume::Receiver<(PersiaBatchData, EmbeddingBatch)>,
     pub gpu_forwarded_channel_s: flume::Sender<PersiaTrainingBatchShardedServerOnGpu>,
@@ -185,22 +268,27 @@ struct Forward {
     pub forward_only: bool,
     pub launch: bool,
     pub threaded_workers: Vec<std::thread::JoinHandle<()>>,
+    pub replica_info: PersiaReplicaInfo,
 }
 
 impl Forward {
-    fn new(forward_buffer_size: usize, deserialize_buffer_size: usize, forward_only: bool) -> Self {
-        let (zmq_channel_s, zmq_channel_r) = flume::bounded(deserialize_buffer_size);
-        let (deserialized_channel_s, deserialized_channel_r) =
-            flume::bounded(deserialize_buffer_size);
+    fn new(
+        forward_buffer_size: usize,
+        nats_recv_buffer_size: usize,
+        forward_only: bool,
+        replica_info: PersiaReplicaInfo,
+    ) -> Self {
+        let (nats_channel_s, nats_channel_r) = flume::bounded(nats_recv_buffer_size);
+        let (reorder_buffer_channel_s, reorder_buffer_channel_r) = flume::bounded(1);
         let (forwarded_channel_s, forwarded_channel_r) = flume::bounded(forward_buffer_size);
         let (gpu_forwarded_channel_s, gpu_forwarded_channel_r) =
             flume::bounded(forward_buffer_size);
 
         Self {
-            zmq_channel_s,
-            zmq_channel_r,
-            deserialized_channel_s,
-            deserialized_channel_r,
+            nats_channel_s,
+            nats_channel_r,
+            reorder_buffer_channel_s,
+            reorder_buffer_channel_r,
             forwarded_channel_r,
             forwarded_channel_s,
             gpu_forwarded_channel_r,
@@ -208,63 +296,29 @@ impl Forward {
             forward_only,
             launch: false,
             threaded_workers: Vec::new(),
+            replica_info,
         }
     }
 
-    pub fn launch(&mut self, input_port: u16, queue_size: usize, device_id: i32) {
+    pub fn launch(&mut self, device_id: i32, disorder_tolerance: f32, num_workers: usize) {
         if !self.launch {
-            self.spawn_zmq_worker(input_port, queue_size);
-            self.spawn_deserialize_worker();
+            self.spawn_reorder_buffer_worker(disorder_tolerance);
             self.spawn_to_gpu_worker(device_id);
-            self.spawn_forward_worker();
+            self.spawn_forward_worker(num_workers);
             self.launch = true;
         } else {
             tracing::warn!("forward engine already launch");
         }
     }
 
-    fn spawn_zmq_worker(&mut self, input_port: u16, queue_size: usize) {
-        let rpc_client = PersiaRpcClient::get_instance();
-        let channel_s = self.zmq_channel_s.clone();
-        let runtime = rpc_client.runtime.clone();
-
-        let server = {
-            let _guard = runtime.enter();
-            PersiaMessageQueueServer::new(input_port, queue_size)
-        };
-
-        let handler = std::thread::spawn(move || loop {
-            let start_time = std::time::Instant::now();
-            let message = {
-                let _guard = runtime.enter();
-                runtime.block_on(server.recv())
-            };
-            tracing::debug!(
-                "zmq message received, length {}, time cost {:?}",
-                message.len(),
-                start_time.elapsed()
-            );
-            if let Ok(m) = MetricsHolder::get() {
-                m.client_zmq_recv_batch_time_cost
-                    .observe(start_time.elapsed().as_secs_f64());
-            }
-            channel_s.send(message).unwrap();
-        });
-        self.threaded_workers.push(handler);
-    }
-
-    fn spawn_deserialize_worker(&mut self) {
-        let channel_r = self.zmq_channel_r.clone();
-        let channel_s = self.deserialized_channel_s.clone();
-
-        let handler = std::thread::spawn(move || loop {
-            let start_time = std::time::Instant::now();
-            let message = channel_r.recv().unwrap();
-            tracing::debug!("get zmq vec message time cost {:?}", start_time.elapsed());
-            let batch: PersiaBatchData =
-                Readable::read_from_buffer(&message).expect("cannot deserialize persia batch");
-            channel_s.send(batch).unwrap();
-        });
+    fn spawn_reorder_buffer_worker(&mut self, disorder_tolerance: f32) {
+        let handler = PerisaDataOrderManager::spawn_reorder_worker(
+            self.replica_info.replica_size,
+            self.replica_info.replica_index,
+            disorder_tolerance,
+            self.nats_channel_r.clone(),
+            self.reorder_buffer_channel_s.clone(),
+        );
 
         self.threaded_workers.push(handler);
     }
@@ -317,14 +371,13 @@ impl Forward {
         self.threaded_workers.push(handler);
     }
 
-    fn spawn_forward_worker(&mut self) {
+    fn spawn_forward_worker(&mut self, num_workers: usize) {
         let rpc_client = PersiaRpcClient::get_instance();
-        let num_workers = { rpc_client.clients.read().len() * 2 };
 
         for _ in 0..num_workers {
             let rpc_client = rpc_client.clone();
             let channel_s = self.forwarded_channel_s.clone();
-            let channel_r = self.deserialized_channel_r.clone();
+            let channel_r = self.reorder_buffer_channel_r.clone();
             let _guard = rpc_client.runtime.enter();
             let forward_only = self.forward_only;
             persia_futures::tokio::spawn(async move {
@@ -463,8 +516,14 @@ pub fn forward_directly_from_bytes(batch: &PyBytes, device_id: i32) -> PyResult<
 }
 
 #[pyclass]
-struct PyForward {
+pub struct PyForward {
     inner: Forward,
+}
+
+impl PyForward {
+    pub fn get_nats_channel_s(&self) -> flume::Sender<PersiaBatchData> {
+        self.inner.nats_channel_s.clone()
+    }
 }
 
 #[pymethods]
@@ -472,16 +531,23 @@ impl PyForward {
     #[new]
     fn new(
         forward_buffer_size: usize,
-        deserialize_size: usize,
+        nats_recv_buffer_size: usize,
         forward_only: bool,
+        repilca_info: &PyPersiaReplicaInfo,
     ) -> PyResult<PyForward> {
         Ok(PyForward {
-            inner: Forward::new(forward_buffer_size, deserialize_size, forward_only),
+            inner: Forward::new(
+                forward_buffer_size,
+                nats_recv_buffer_size,
+                forward_only,
+                repilca_info.get_replica_info(),
+            ),
         })
     }
 
-    fn launch(&mut self, input_port: u16, queue_size: usize, device_id: i32) {
-        self.inner.launch(input_port, queue_size, device_id)
+    fn launch(&mut self, device_id: i32, disorder_tolerance: f32, num_workers: usize) {
+        self.inner
+            .launch(device_id, disorder_tolerance, num_workers)
     }
 
     pub fn get_batch(&self, timeout_ms: u64) -> PyResult<PythonTrainBatch> {
@@ -515,6 +581,12 @@ impl PyForward {
         }
 
         return batch;
+    }
+
+    fn get_input_channel(&self) -> PyPersiaBatchDataChannel {
+        PyPersiaBatchDataChannel {
+            sender: self.get_nats_channel_s(),
+        }
     }
 }
 

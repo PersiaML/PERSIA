@@ -1,5 +1,7 @@
-use crate::hashmap_sharded_service::{HashMapShardedServiceClient, ShardEmbeddingError};
-use crate::middleware_config_parser::{FeatureGroup, MiddlewareConfig, SlotConfig};
+use crate::hashmap_sharded_service::{
+    EmbeddingServerNatsStubPublisher, HashMapShardedServiceClient, ShardEmbeddingError,
+};
+use crate::middleware_config_parser::{EmbeddingConfig, FeatureGroup, SlotConfig};
 
 use std::ops::MulAssign;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -8,11 +10,14 @@ use std::time::{Duration, Instant, SystemTime};
 
 use hashbrown::HashMap;
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
+use retry::{delay::Fixed, retry};
 use snafu::ResultExt;
 use thiserror::Error;
 
-use persia_embedding_config::PersiaSparseModelHyperparameters;
+use persia_embedding_config::{
+    PersiaGlobalConfigError, PersiaMiddlewareConfig, PersiaReplicaInfo,
+    PersiaSparseModelHyperparameters,
+};
 use persia_embedding_datatypes::optim::Optimizer;
 use persia_embedding_datatypes::{
     ndarray_f16_to_f32, ndarray_f32_to_f16, EmbeddingBatch, EmbeddingGradientBatch,
@@ -20,12 +25,14 @@ use persia_embedding_datatypes::{
     HashMapEmbeddingEntry, SingleSignInFeatureBatch, SkippableFeatureEmbeddingGradientBatch,
     SparseBatch,
 };
-
+use persia_futures::async_lock::RwLock;
+use persia_futures::smol::block_on;
+use persia_futures::tokio;
 use persia_metrics::{
     Gauge, GaugeVec, Histogram, IntCounterVec, PersiaMetricsManager, PersiaMetricsManagerError,
 };
 use persia_model_manager::PersiaPersistenceStatus;
-
+use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::{Readable, Writable};
 
 static METRICS_HOLDER: once_cell::sync::OnceCell<MetricsHolder> = once_cell::sync::OnceCell::new();
@@ -73,7 +80,7 @@ impl MetricsHolder {
     }
 }
 
-#[derive(Error, Debug, Serialize, Deserialize, Readable, Writable)]
+#[derive(Error, Debug, Readable, Writable)]
 pub enum ShardedMiddlewareError {
     #[error("rpc error")]
     RpcError(String),
@@ -89,19 +96,56 @@ pub enum ShardedMiddlewareError {
     ShutdownError,
     #[error("gradient contains nan")]
     NanGradient,
+    #[error("nats error")]
+    NatsError(#[from] NatsError),
+    #[error("global config error")]
+    PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
 }
 
 pub struct AllShardsClient {
-    pub clients: Vec<Arc<HashMapShardedServiceClient>>,
+    pub clients: RwLock<Vec<Arc<HashMapShardedServiceClient>>>,
+    pub nats_publisher: EmbeddingServerNatsStubPublisher,
+    pub dst_replica_info: PersiaReplicaInfo,
 }
 
 impl AllShardsClient {
-    pub fn new(clients: Vec<Arc<HashMapShardedServiceClient>>) -> Self {
-        Self { clients }
+    pub fn new(nats_publisher: EmbeddingServerNatsStubPublisher) -> Self {
+        tracing::info!("trying to get replica info of embedding servers");
+        let dst_replica_info: Result<PersiaReplicaInfo, _> =
+            retry(Fixed::from_millis(5000), || {
+                let resp = block_on(AllShardsClient::get_dst_replica_info(&nats_publisher));
+                if resp.is_err() {
+                    tracing::warn!(
+                        "failed to get replica info of embedding servers, due to {:?}, retrying",
+                        resp
+                    );
+                } else {
+                    tracing::info!(
+                        "succeed to get replica info of embedding servers, {:?}",
+                        resp
+                    );
+                }
+                resp
+            });
+        let dst_replica_info =
+            dst_replica_info.expect("failed to get replica info of embedding server");
+
+        let instance = Self {
+            clients: RwLock::new(Vec::with_capacity(dst_replica_info.replica_size)),
+            nats_publisher,
+            dst_replica_info,
+        };
+
+        instance
+            .update_rpc_clients()
+            .expect("failed to init rpc client for embedding server");
+
+        instance
     }
 
     pub async fn ready_for_serving(&self) -> bool {
-        let futs = self.clients.iter().map(|client| async move {
+        let clients = block_on(self.clients.read());
+        let futs = clients.iter().map(|client| async move {
             let resp = client.ready_for_serving(&()).await;
             if let Ok(x) = resp {
                 if x {
@@ -117,8 +161,8 @@ impl AllShardsClient {
     }
 
     pub async fn model_manager_status(&self) -> Vec<PersiaPersistenceStatus> {
-        let futs = self
-            .clients
+        let clients = block_on(self.clients.read());
+        let futs = clients
             .iter()
             .map(|client| async move { client.model_manager_status(&()).await });
 
@@ -128,10 +172,107 @@ impl AllShardsClient {
                 PersiaPersistenceStatus::Failed(String::from(
                     "failed to get status"
                 ));
-                self.clients.len()
+                self.clients.read().await.len()
             ]);
 
         return status;
+    }
+
+    pub fn num_shards(&self) -> usize {
+        self.dst_replica_info.replica_size
+    }
+
+    pub async fn get_client_by_index(
+        &self,
+        client_index: usize,
+    ) -> Arc<HashMapShardedServiceClient> {
+        let clients = self.clients.read().await;
+        clients.get(client_index).unwrap().clone()
+    }
+
+    pub async fn get_dst_replica_info(
+        nats_publisher: &EmbeddingServerNatsStubPublisher,
+    ) -> Result<PersiaReplicaInfo, ShardedMiddlewareError> {
+        let dst_replica_info = nats_publisher.publish_get_replica_info(&(), None).await??;
+        Ok(dst_replica_info)
+    }
+
+    pub async fn get_address(
+        &self,
+        replica_index: usize,
+    ) -> Result<String, ShardedMiddlewareError> {
+        let addr = self
+            .nats_publisher
+            .publish_get_address(&(), Some(replica_index))
+            .await??;
+        Ok(addr)
+    }
+
+    pub fn get_all_addresses(&self) -> Result<Vec<String>, ShardedMiddlewareError> {
+        let servers: Vec<_> = (0..self.dst_replica_info.replica_size)
+            .map(|replica_index| {
+                tracing::info!("trying to get ip address of server {}", replica_index);
+                retry(Fixed::from_millis(1000), || {
+                    let addr = block_on(self.get_address(replica_index));
+                    if addr.is_err() {
+                        tracing::warn!(
+                            "failed to get address of server {}, due to {:?}, retrying",
+                            replica_index,
+                            addr
+                        );
+                    } else {
+                        tracing::info!(
+                            "succeed to get address of embedding server {}, {:?}",
+                            replica_index,
+                            addr
+                        );
+                    }
+                    addr
+                })
+            })
+            .collect();
+
+        if servers.iter().any(|x| x.is_err()) {
+            return Err(ShardedMiddlewareError::ShutdownError);
+        }
+        let servers = servers.into_iter().map(|x| x.unwrap()).collect();
+        Ok(servers)
+    }
+
+    pub fn update_rpc_clients(&self) -> Result<(), ShardedMiddlewareError> {
+        let servers = self.get_all_addresses()?;
+
+        let mut clients = block_on(self.clients.write());
+        clients.clear();
+
+        for server_addr in servers {
+            let rpc_client = persia_rpc::RpcClient::new(server_addr.as_str()).unwrap();
+            let client = HashMapShardedServiceClient::new(rpc_client);
+            clients.push(Arc::new(client));
+        }
+
+        clients.sort_by_key(|c| {
+            let shard_idx = retry(Fixed::from_millis(100), || block_on(c.shard_idx(&())));
+            let shard_idx = shard_idx.expect("failed to call shard_idx via rpc");
+            shard_idx
+        });
+
+        for (i, c) in clients.iter().enumerate() {
+            match block_on(c.shard_idx(&())) {
+                Ok(idx) => {
+                    if idx != i {
+                        tracing::error!("shard index wrong");
+                        return Err(ShardedMiddlewareError::ShutdownError);
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("failed to call shard_idx due to {:?}", e);
+                    return Err(ShardedMiddlewareError::ShutdownError);
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -142,7 +283,7 @@ pub fn sign_to_shard_modulo(sign: u64, num_shards: u64) -> u64 {
 }
 
 #[inline]
-pub fn indices_to_hashstack_indices(indices: &mut SparseBatch, config: &MiddlewareConfig) -> () {
+pub fn indices_to_hashstack_indices(indices: &mut SparseBatch, config: &EmbeddingConfig) -> () {
     for feature_batch in indices.batches.iter_mut() {
         let slot_conf = config
             .slot_config
@@ -199,7 +340,7 @@ pub fn indices_to_hashstack_indices(indices: &mut SparseBatch, config: &Middlewa
 #[inline]
 pub fn indices_add_prefix(
     indices: &mut SparseBatch,
-    config: &MiddlewareConfig,
+    config: &EmbeddingConfig,
     feature2group: Option<&HashMap<String, FeatureGroup>>,
 ) -> () {
     let feature_spacing = if config.feature_index_prefix_bit > 0 {
@@ -260,14 +401,14 @@ impl SignWithConfig {
 
 pub fn lookup_batched_all_slots_preprocess(
     indices: &mut SparseBatch,
-    config: &MiddlewareConfig,
+    config: &EmbeddingConfig,
     feature2group: Option<&HashMap<String, FeatureGroup>>,
     num_shards: u64,
 ) -> Vec<Vec<SignWithConfig>> {
     #[inline]
     fn indices_to_sharded_indices(
         indices: &SparseBatch,
-        config: &MiddlewareConfig,
+        config: &EmbeddingConfig,
         num_shards: u64,
     ) -> Vec<Vec<SignWithConfig>> {
         // TODO: optimization point: duplicate sign may exists in lookup result, split
@@ -303,7 +444,7 @@ pub fn lookup_batched_all_slots_preprocess(
 pub fn lookup_batched_all_slots_postprocess<'a>(
     indices: &SparseBatch,
     forwarded_groups: Vec<(Vec<f32>, Vec<SignWithConfig>)>,
-    config: &'a MiddlewareConfig,
+    config: &'a EmbeddingConfig,
 ) -> Vec<FeatureEmbeddingBatch> {
     struct LookupResultWithSlotConfig<'a> {
         result: ndarray::Array2<f32>,
@@ -457,14 +598,9 @@ pub struct ShardedMiddlewareServerInner {
     pub forward_id_buffer: persia_futures::async_lock::RwLock<HashMap<u64, SparseBatch>>,
     pub post_forward_buffer: persia_futures::async_lock::RwLock<HashMap<u64, SparseBatch>>,
     pub staleness: AtomicUsize,
-    pub config: MiddlewareConfig,
+    pub embedding_config: EmbeddingConfig,
     pub feature2group: HashMap<String, FeatureGroup>,
     pub forward_buffer_size: usize,
-}
-
-#[derive(Clone)]
-pub struct ShardedMiddlewareServer {
-    pub inner: Arc<ShardedMiddlewareServerInner>,
 }
 
 impl ShardedMiddlewareServerInner {
@@ -503,7 +639,7 @@ impl ShardedMiddlewareServerInner {
     }
 
     fn get_slot_conf(&self, slot_name: &str) -> &SlotConfig {
-        self.config
+        self.embedding_config
             .slot_config
             .get(slot_name)
             .expect("slot not found")
@@ -514,8 +650,6 @@ impl ShardedMiddlewareServerInner {
         gradients: &EmbeddingGradientBatch,
         indices: &SparseBatch,
     ) -> Result<(), ShardedMiddlewareError> {
-        // TODO: calculate each count of each feature group
-        // to help optimizer update
         let start_time = std::time::Instant::now();
 
         let indices_kv: HashMap<_, _> = indices
@@ -524,8 +658,8 @@ impl ShardedMiddlewareServerInner {
             .map(|batch| (batch.feature_name.as_str(), batch))
             .collect();
 
-        let mut sharded_gradients = vec![vec![]; self.all_shards_client.clients.len()];
-        let mut sharded_gradient_signs = vec![vec![]; self.all_shards_client.clients.len()];
+        let mut sharded_gradients = vec![vec![]; self.all_shards_client.num_shards()];
+        let mut sharded_gradient_signs = vec![vec![]; self.all_shards_client.num_shards()];
 
         for gradient in &gradients.gradients {
             match gradient {
@@ -645,10 +779,10 @@ impl ShardedMiddlewareServerInner {
             .zip(sharded_gradient_signs)
             .enumerate()
             .map(|(shard_idx, (grads, signs))| {
-                let client_pool = &self.all_shards_client.clients[shard_idx as usize];
+                let client = block_on(self.all_shards_client.get_client_by_index(shard_idx));
                 async move {
                     let start_time = Instant::now();
-                    client_pool
+                    client
                         .update_gradient_mixed(&(signs, grads))
                         .await
                         .map_err(|e| ShardedMiddlewareError::RpcError(format!("{:?}", e)))??;
@@ -687,7 +821,7 @@ impl ShardedMiddlewareServerInner {
         let all_shards_ids = tokio::task::block_in_place(|| {
             lookup_batched_all_slots_preprocess(
                 indices,
-                &self.config,
+                &self.embedding_config,
                 Some(&self.feature2group),
                 self.num_shards,
             )
@@ -695,11 +829,12 @@ impl ShardedMiddlewareServerInner {
 
         let futs = all_shards_ids
             .into_iter()
-            .zip(self.all_shards_client.clients.iter())
-            .map(|(shard_indices, client)| {
+            .enumerate()
+            .map(|(shard_idx, shard_indices)| {
                 let req = tokio::task::block_in_place(|| {
                     shard_indices.iter().map(|x| (x.sign, x.dim)).collect()
                 });
+                let client = block_on(self.all_shards_client.get_client_by_index(shard_idx));
                 async move {
                     let lookup_results: Vec<f32> = client
                         .lookup_mixed(&req)
@@ -730,7 +865,7 @@ impl ShardedMiddlewareServerInner {
         let start_time = std::time::Instant::now();
 
         let batches = tokio::task::block_in_place(|| {
-            lookup_batched_all_slots_postprocess(indices, forwarded_groups, &self.config)
+            lookup_batched_all_slots_postprocess(indices, forwarded_groups, &self.embedding_config)
         });
 
         tracing::debug!("summation time cost {:?}", start_time.elapsed());
@@ -742,18 +877,15 @@ impl ShardedMiddlewareServerInner {
         }
         return Ok(EmbeddingBatch { batches });
     }
-}
 
-#[persia_rpc::service]
-impl ShardedMiddlewareServer {
-    pub async fn ready_for_serving(&self, _req: ()) -> bool {
-        let result = self.inner.all_shards_client.ready_for_serving().await;
+    pub async fn ready_for_serving(&self) -> bool {
+        let result = self.all_shards_client.ready_for_serving().await;
         tracing::info!("middleware server ready for serving: {}", result);
         result
     }
 
-    pub async fn model_manager_status(&self, _req: ()) -> Vec<PersiaPersistenceStatus> {
-        let result = self.inner.all_shards_client.model_manager_status().await;
+    pub async fn model_manager_status(&self) -> Vec<PersiaPersistenceStatus> {
+        let result = self.all_shards_client.model_manager_status().await;
         tracing::info!("sharded server dumping model: {:?}", result);
         result
     }
@@ -762,7 +894,7 @@ impl ShardedMiddlewareServer {
         &self,
         req: Vec<(u64, HashMapEmbeddingEntry)>,
     ) -> Result<(), ShardedMiddlewareError> {
-        let num_shards = self.inner.num_shards;
+        let num_shards = self.num_shards;
         let futs: Vec<_> = tokio::task::block_in_place(|| {
             let grouped_entries = req
                 .into_iter()
@@ -773,9 +905,12 @@ impl ShardedMiddlewareServer {
                 .into_iter()
                 .map(|(shard_idx, requests)| {
                     let group = requests.into_iter().collect_vec();
-                    let client_pool = &self.inner.all_shards_client.clients[shard_idx as usize];
+                    let client = block_on(
+                        self.all_shards_client
+                            .get_client_by_index(shard_idx as usize),
+                    );
                     async move {
-                        client_pool
+                        client
                             .set_embedding(&group)
                             .await
                             .map_err(|e| ShardedMiddlewareError::RpcError(format!("{:?}", e)))??;
@@ -789,14 +924,13 @@ impl ShardedMiddlewareServer {
             .map(|_| ())
     }
 
-    pub async fn can_forward_batched(&self, _req: ()) -> bool {
-        let result =
-            self.inner.forward_id_buffer.read().await.len() < self.inner.forward_buffer_size;
-        let t = self.inner.cannot_forward_batched_time.load();
+    pub async fn can_forward_batched(&self) -> bool {
+        let result = self.forward_id_buffer.read().await.len() < self.forward_buffer_size;
+        let t = self.cannot_forward_batched_time.load();
         if !result {
             let current_time = SystemTime::now();
             if current_time.duration_since(t).unwrap() > Duration::from_secs(60) {
-                let mut forward_id_buffer = self.inner.forward_id_buffer.write().await;
+                let mut forward_id_buffer = self.forward_id_buffer.write().await;
                 tokio::task::block_in_place(|| {
                     let old_keys = forward_id_buffer
                         .iter()
@@ -815,24 +949,13 @@ impl ShardedMiddlewareServer {
                     for k in old_keys {
                         forward_id_buffer.remove(&k);
                     }
-                    self.inner
-                        .cannot_forward_batched_time
-                        .store(SystemTime::now());
+                    self.cannot_forward_batched_time.store(SystemTime::now());
                 });
             }
         } else {
-            self.inner
-                .cannot_forward_batched_time
-                .store(SystemTime::now());
+            self.cannot_forward_batched_time.store(SystemTime::now());
         }
         result
-    }
-
-    pub async fn forward_batched(
-        &self,
-        indices: SparseBatch,
-    ) -> Result<u64, ShardedMiddlewareError> {
-        self.inner.forward_batched(indices).await
     }
 
     pub async fn forward_batch_id(
@@ -840,7 +963,7 @@ impl ShardedMiddlewareServer {
         req: (u64, bool),
     ) -> Result<EmbeddingBatch, ShardedMiddlewareError> {
         let (forward_id, forward_only) = req;
-        let inner = self.inner.clone();
+        let inner = self.clone();
         let mut indices = {
             inner
                 .forward_id_buffer
@@ -850,10 +973,10 @@ impl ShardedMiddlewareServer {
                 .ok_or_else(|| ShardedMiddlewareError::ForwardIdNotFound(forward_id))?
         };
         tracing::debug!("received forward_batch_id request");
-        self.inner.staleness.fetch_add(1, Ordering::AcqRel);
+        self.staleness.fetch_add(1, Ordering::AcqRel);
         let result = inner.lookup_batched_all_slots(&mut indices).await;
         if result.is_err() {
-            self.inner.staleness.fetch_sub(1, Ordering::AcqRel);
+            self.staleness.fetch_sub(1, Ordering::AcqRel);
         }
         let result = result?;
 
@@ -874,7 +997,7 @@ impl ShardedMiddlewareServer {
         indices: SparseBatch,
     ) -> Result<EmbeddingBatch, ShardedMiddlewareError> {
         let mut indices = indices;
-        self.inner.lookup_batched_all_slots(&mut indices).await
+        self.lookup_batched_all_slots(&mut indices).await
     }
 
     pub async fn update_gradient_batched(
@@ -883,53 +1006,31 @@ impl ShardedMiddlewareServer {
     ) -> Result<(), ShardedMiddlewareError> {
         let (forward_id, gradients) = req;
         let indices = self
-            .inner
             .post_forward_buffer
             .write()
             .await
             .remove(&forward_id)
             .ok_or_else(|| ShardedMiddlewareError::ForwardIdNotFound(forward_id))?;
 
-        let inner = self.inner.clone();
+        let inner = self.clone();
         inner
             .update_all_batched_gradients(&gradients, &indices)
             .await?;
 
-        self.inner.staleness.fetch_sub(1, Ordering::AcqRel);
+        self.staleness.fetch_sub(1, Ordering::AcqRel);
 
         Ok(())
     }
 
-    pub async fn register_optimizer(
-        &self,
-        optimizer: Optimizer,
-    ) -> Result<(), ShardedMiddlewareError> {
-        let server_rpc = self.inner.clone();
-        let futs = server_rpc
-            .all_shards_client
-            .clients
-            .iter()
-            .map(|rpc_client| {
-                let optimizer = optimizer.clone();
-                async move {
-                    rpc_client
-                        .register_optimizer(&optimizer)
-                        .await
-                        .map_err(|e| ShardedMiddlewareError::RpcError(e.to_string()))??;
-                    Ok(())
-                }
-            });
-        tracing::info!("register optimizer: {:?}", &optimizer);
-        persia_futures::futures::future::try_join_all(futs)
-            .await
-            .map(|_| ())
-    }
-
     pub async fn dump(&self, req: String) -> Result<(), ShardedMiddlewareError> {
-        let inner = self.inner.clone();
-        let futs = inner.all_shards_client.clients.iter().map(|client| {
+        let inner = self.clone();
+        let futs = (0..inner.all_shards_client.num_shards()).map(|client_idx| {
             let req = req.clone();
             async move {
+                let client = inner
+                    .all_shards_client
+                    .get_client_by_index(client_idx)
+                    .await;
                 client
                     .dump(&req)
                     .await
@@ -943,10 +1044,14 @@ impl ShardedMiddlewareServer {
     }
 
     pub async fn load(&self, req: String) -> Result<(), ShardedMiddlewareError> {
-        let inner = self.inner.clone();
-        let futs = inner.all_shards_client.clients.iter().map(|client| {
+        let inner = self.clone();
+        let futs = (0..inner.all_shards_client.num_shards()).map(|client_idx| {
             let req = req.clone();
             async move {
+                let client = inner
+                    .all_shards_client
+                    .get_client_by_index(client_idx)
+                    .await;
                 client
                     .load(&req)
                     .await
@@ -964,11 +1069,15 @@ impl ShardedMiddlewareServer {
         &self,
         req: PersiaSparseModelHyperparameters,
     ) -> Result<(), ShardedMiddlewareError> {
-        let inner = self.inner.clone();
+        let inner = self.clone();
         let req = req;
-        let futs = inner.all_shards_client.clients.iter().map(|client| {
+        let futs = (0..inner.all_shards_client.num_shards()).map(|client_idx| {
             let req = req.clone();
             async move {
+                let client = inner
+                    .all_shards_client
+                    .get_client_by_index(client_idx)
+                    .await;
                 client
                     .configure(&req)
                     .await
@@ -982,6 +1091,189 @@ impl ShardedMiddlewareServer {
         tracing::info!("sharded servers configured: {:?}", result);
         result
     }
+
+    pub async fn register_optimizer(
+        &self,
+        optimizer: Optimizer,
+    ) -> Result<(), ShardedMiddlewareError> {
+        let inner = self.clone();
+        let futs = (0..inner.all_shards_client.num_shards()).map(|client_idx| {
+            let optimizer = optimizer.clone();
+            async move {
+                let client = inner
+                    .all_shards_client
+                    .get_client_by_index(client_idx)
+                    .await;
+                client
+                    .register_optimizer(&optimizer)
+                    .await
+                    .map_err(|e| ShardedMiddlewareError::RpcError(e.to_string()))??;
+                Ok(())
+            }
+        });
+        tracing::info!("register optimizer: {:?}", &optimizer);
+        persia_futures::futures::future::try_join_all(futs)
+            .await
+            .map(|_| ())
+    }
+
+    pub async fn get_address(&self) -> Result<String, ShardedMiddlewareError> {
+        let config = PersiaMiddlewareConfig::get()?;
+        let guard = config.read();
+        let port = guard.instance_info.port;
+        let address = format!("{}:{}", guard.instance_info.ip_address, port);
+        Ok(address)
+    }
+
+    pub async fn error_handle(
+        &self,
+        err: &ShardedMiddlewareError,
+    ) -> Result<(), ShardedMiddlewareError> {
+        match err {
+            ShardedMiddlewareError::RpcError(_) => self.all_shards_client.update_rpc_clients(),
+            _ => Ok(()),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct ShardedMiddlewareServer {
+    pub inner: Arc<ShardedMiddlewareServerInner>,
+}
+
+#[persia_rpc::service]
+impl ShardedMiddlewareServer {
+    pub async fn ready_for_serving(&self, _req: ()) -> bool {
+        self.inner.ready_for_serving().await
+    }
+
+    pub async fn model_manager_status(&self, _req: ()) -> Vec<PersiaPersistenceStatus> {
+        self.inner.model_manager_status().await
+    }
+
+    pub async fn set_embedding(
+        &self,
+        req: Vec<(u64, HashMapEmbeddingEntry)>,
+    ) -> Result<(), ShardedMiddlewareError> {
+        self.inner.set_embedding(req).await
+    }
+
+    pub async fn can_forward_batched(&self, _req: ()) -> bool {
+        self.inner.can_forward_batched().await
+    }
+
+    pub async fn forward_batched(
+        &self,
+        indices: SparseBatch,
+    ) -> Result<u64, ShardedMiddlewareError> {
+        self.inner.forward_batched(indices).await
+    }
+
+    pub async fn forward_batch_id(
+        &self,
+        req: (u64, bool),
+    ) -> Result<EmbeddingBatch, ShardedMiddlewareError> {
+        let resp = self.inner.forward_batch_id(req).await;
+        if resp.is_err() {
+            self.inner.error_handle(resp.as_ref().unwrap_err()).await?
+        }
+        resp
+    }
+
+    pub async fn forward_batched_direct(
+        &self,
+        indices: SparseBatch,
+    ) -> Result<EmbeddingBatch, ShardedMiddlewareError> {
+        self.inner.forward_batched_direct(indices).await
+    }
+
+    pub async fn update_gradient_batched(
+        &self,
+        req: (u64, EmbeddingGradientBatch),
+    ) -> Result<(), ShardedMiddlewareError> {
+        let resp = self.inner.update_gradient_batched(req).await;
+        if resp.is_err() {
+            self.inner.error_handle(resp.as_ref().unwrap_err()).await?
+        }
+        resp
+    }
+
+    pub async fn dump(&self, req: String) -> Result<(), ShardedMiddlewareError> {
+        self.inner.dump(req).await
+    }
+
+    pub async fn load(&self, req: String) -> Result<(), ShardedMiddlewareError> {
+        self.inner.load(req).await
+    }
+
+    pub async fn configure_sharded_servers(
+        &self,
+        req: PersiaSparseModelHyperparameters,
+    ) -> Result<(), ShardedMiddlewareError> {
+        self.inner.configure_sharded_servers(req).await
+    }
+
+    pub async fn register_optimizer(
+        &self,
+        optimizer: Optimizer,
+    ) -> Result<(), ShardedMiddlewareError> {
+        self.inner.register_optimizer(optimizer).await
+    }
+}
+
+#[derive(Clone)]
+pub struct MiddlewareNatsStub {
+    pub inner: Arc<ShardedMiddlewareServerInner>,
+}
+
+#[persia_nats_marcos::stub]
+impl MiddlewareNatsStub {
+    pub async fn ready_for_serving(&self, _req: ()) -> bool {
+        self.inner.ready_for_serving().await
+    }
+
+    pub async fn model_manager_status(&self, _req: ()) -> Vec<PersiaPersistenceStatus> {
+        self.inner.model_manager_status().await
+    }
+
+    pub async fn can_forward_batched(&self, _req: ()) -> bool {
+        self.inner.can_forward_batched().await
+    }
+
+    pub async fn forward_batched(
+        &self,
+        indices: SparseBatch,
+    ) -> Result<(String, u64), ShardedMiddlewareError> {
+        let forward_id = self.inner.forward_batched(indices).await?;
+        let addr = self.inner.get_address().await?;
+        Ok((addr, forward_id))
+    }
+
+    pub async fn dump(&self, req: String) -> Result<(), ShardedMiddlewareError> {
+        self.inner.dump(req).await
+    }
+
+    pub async fn load(&self, req: String) -> Result<(), ShardedMiddlewareError> {
+        self.inner.load(req).await
+    }
+
+    pub async fn configure_sharded_servers(
+        &self,
+        req: PersiaSparseModelHyperparameters,
+    ) -> Result<(), ShardedMiddlewareError> {
+        self.inner.configure_sharded_servers(req).await
+    }
+
+    pub async fn register_optimizer(
+        &self,
+        optimizer: Optimizer,
+    ) -> Result<(), ShardedMiddlewareError> {
+        self.inner.register_optimizer(optimizer).await
+    }
+
+    pub async fn get_address(&self, _req: ()) -> Result<String, ShardedMiddlewareError> {
+        self.inner.get_address().await
+    }
 }
 
 #[cfg(test)]
@@ -994,8 +1286,7 @@ mod lookup_batched_all_slots_preprocess_tests {
     fn test_indices_to_hashstack_indices() {
         let config = "forward_buffer_size: 1000\nfeature_index_prefix_bit: 12\nslot_config:\n  Test:\n    dim: 32\n    hash_stack_config:\n      hash_stack_rounds: 2\n      embedding_size: 10\nfeature_groups: {}\ntarget_config:\n  - name: unused\n    negative: [unused]\n    positive: [unused]\n";
 
-        let config: MiddlewareConfig =
-            serde_yaml::from_str(config).expect("failed to parse config");
+        let config: EmbeddingConfig = serde_yaml::from_str(config).expect("failed to parse config");
 
         let raw_batch: Vec<Vec<u64>> = vec![vec![12, 23, 34], vec![56, 78, 90], vec![12, 56]];
         let feature_name = "Test".to_string();
@@ -1038,8 +1329,7 @@ mod lookup_batched_all_slots_preprocess_tests {
     fn test_indices_add_prefix() {
         let config = "forward_buffer_size: 1000\nfeature_index_prefix_bit: 12\nslot_config:\n  feature1:\n    dim: 64\n    index_prefix: 450359962737049600\nfeature_groups:\n  100:\n    - feature1\ntarget_config:\n  - name: unused\n    negative: [unused]\n    positive: [unused]\n";
 
-        let config: MiddlewareConfig =
-            serde_yaml::from_str(config).expect("failed to parse config");
+        let config: EmbeddingConfig = serde_yaml::from_str(config).expect("failed to parse config");
 
         let raw_batch: Vec<Vec<u64>> = vec![
             vec![12, 23, 34],

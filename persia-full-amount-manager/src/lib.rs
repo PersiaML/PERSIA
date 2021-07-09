@@ -7,16 +7,17 @@ use hashbrown::HashMap;
 use parking_lot::RwLock;
 use thiserror::Error;
 
-use persia_embedding_config::{PersiaGlobalConfig, PersiaGlobalConfigError};
+use persia_embedding_config::{PersiaGlobalConfigError, PersiaShardedServerConfig};
 use persia_embedding_datatypes::HashMapEmbeddingEntry;
 use persia_eviction_map::Sharded;
+use persia_speedy::{Readable, Writable};
 
-#[derive(Error, Debug, Clone)]
+#[derive(Readable, Writable, Error, Debug, Clone)]
 pub enum PersiaFullAmountManagerError {
     #[error("full amount manager not ready error")]
     NotReadyError,
     #[error("global config error")]
-    GlobalConfigError(PersiaGlobalConfigError),
+    PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
     #[error("failed to commit weakptrs or evicted ids, please try a bigger buffer size for full anmount manager")]
     CommitError,
 }
@@ -35,48 +36,40 @@ pub struct FullAmountManager {
 impl FullAmountManager {
     pub fn get() -> Result<Arc<Self>, PersiaFullAmountManagerError> {
         let singleton = FULL_AMOUNT_MANAGER.get_or_try_init(|| {
-            if let Ok(global_config) = PersiaGlobalConfig::get() {
-                let handles = Arc::new(parking_lot::Mutex::new(Vec::new()));
-                let guard = global_config.read();
-                let full_amount_manager = Self::new(
-                    guard.sharded_server_config.capacity,
-                    guard.sharded_server_config.num_hashmap_internal_shards,
-                    guard.sharded_server_config.full_amount_manager_buffer_size,
-                    handles.clone(),
-                );
-                let singleton = Arc::new(full_amount_manager);
+            let config = PersiaShardedServerConfig::get()?;
+            let handles = Arc::new(parking_lot::Mutex::new(Vec::new()));
+            let guard = config.read();
+            let full_amount_manager = Self::new(
+                guard.capacity,
+                guard.num_hashmap_internal_shards,
+                guard.full_amount_manager_buffer_size,
+                handles.clone(),
+            );
+            let singleton = Arc::new(full_amount_manager);
 
-                let num_collect_threads = max(
-                    1,
-                    guard.sharded_server_config.num_hashmap_internal_shards / 32,
-                );
-                for _ in 0..num_collect_threads {
-                    let handle = std::thread::spawn({
-                        let singleton = singleton.clone();
-                        move || {
-                            singleton.collect_weak_ptrs();
-                        }
-                    });
-                    let mut handles_guard = handles.lock();
-                    handles_guard.push(handle);
-                }
-                for _ in 0..num_collect_threads {
-                    let handle = std::thread::spawn({
-                        let singleton = singleton.clone();
-                        move || {
-                            singleton.remove_evicted_ids();
-                        }
-                    });
-                    let mut handles_guard = handles.lock();
-                    handles_guard.push(handle);
-                }
-
-                Ok(singleton)
-            } else {
-                Err(PersiaFullAmountManagerError::GlobalConfigError(
-                    PersiaGlobalConfigError::NotReadyError,
-                ))
+            let num_collect_threads = max(1, guard.num_hashmap_internal_shards / 32);
+            for _ in 0..num_collect_threads {
+                let handle = std::thread::spawn({
+                    let singleton = singleton.clone();
+                    move || {
+                        singleton.collect_weak_ptrs();
+                    }
+                });
+                let mut handles_guard = handles.lock();
+                handles_guard.push(handle);
             }
+            for _ in 0..num_collect_threads {
+                let handle = std::thread::spawn({
+                    let singleton = singleton.clone();
+                    move || {
+                        singleton.remove_evicted_ids();
+                    }
+                });
+                let mut handles_guard = handles.lock();
+                handles_guard.push(handle);
+            }
+
+            Ok(singleton)
         });
 
         match singleton {
