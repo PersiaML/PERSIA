@@ -75,15 +75,21 @@ pub(crate) fn cuda_dense_tensor_h2d(mut tensor: DenseTensor) -> Result<AsyncTens
         let stream = CUDA_STREAM_POOL.allocate(0);
         let byte_count = tensor.shape.iter().product::<usize>() * tensor.data.type_size();
 
-        let pinned_host_ptr = PINNED_MEMORY_POOL.allocate(byte_count);
-        let host_ptr = match tensor.data {
+        tracing::debug!(
+            "tensor shape is: {:?}, bytes: {:?}",
+            &tensor.shape,
+            &byte_count
+        );
+
+        let host_ptr = match &tensor.data {
             BaseTensor::F32(val) => val.as_ptr() as *const std::os::raw::c_void,
             BaseTensor::F64(val) => val.as_ptr() as *const std::os::raw::c_void,
             BaseTensor::I32(val) => val.as_ptr() as *const std::os::raw::c_void,
             BaseTensor::I64(val) => val.as_ptr() as *const std::os::raw::c_void,
         };
-
+        let pinned_host_ptr = PINNED_MEMORY_POOL.allocate(byte_count);
         std::ptr::copy_nonoverlapping(host_ptr, pinned_host_ptr.inner, byte_count);
+
         let data_ptr = CUDA_DEVICE_MEMORY_POOL.allocate(byte_count);
         let result = cuda::cudaMemcpyAsync(
             data_ptr.inner,
