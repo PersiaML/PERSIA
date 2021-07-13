@@ -208,6 +208,7 @@ class TrainCtx(BaseCtx):
         world_size (int): world size of this cluster.
         num_forward_workers (int): worker num of sending forward request to servers.
         num_backward_workers (int): worker num of sending backward request to servers.
+        initial_embedding_dir(str): initial embedding dir, load checkpoint in this dir when enter TrainCtx.
     """
 
     def __init__(
@@ -228,6 +229,7 @@ class TrainCtx(BaseCtx):
         world_size: int = 1,
         num_forward_workers: int = 8,
         num_backward_workers: int = 8,
+        initial_embedding_dir: str = None,
         *args,
         **kwargs,
     ):
@@ -253,6 +255,8 @@ class TrainCtx(BaseCtx):
 
         self.num_forward_workers = num_forward_workers
         self.num_backward_workers = num_backward_workers
+
+        self.initial_embedding_dir = initial_embedding_dir
 
         # dynamic import the PyForward and PyBackward due to conditional compilation
         from persia.prelude import PyForward, PyBackward
@@ -299,6 +303,10 @@ class TrainCtx(BaseCtx):
             self.weight_bound,
         )
         self.sparse_optimizer.apply()
+
+        if self.initial_embedding_dir is not None:
+            self.load_embedding(self.initial_embedding_dir)
+            self.initial_embedding_dir = None
 
         if self.is_training:
             self.backward_engine.launch(self.device_id, self.num_backward_workers)
@@ -374,6 +382,12 @@ class TrainCtx(BaseCtx):
                 f"current batch grad empty num: {len(empty_grad)}, {empty_grad}"
             )
         return finite
+
+    def dump_embedding(self, dst_dir: str, blocking: bool = False):
+        self.backend.dump_embedding(dst_dir, blocking)
+
+    def load_embedding(self, dst_dir: str, blocking: bool = True):
+        self.backend.load_embedding(dst_dir, blocking)
 
 class InferCtx(BaseCtx):
     r"""Inference context that provide full feature of embedding lookup
