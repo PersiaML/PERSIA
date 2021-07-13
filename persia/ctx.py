@@ -9,10 +9,10 @@ from torch.utils.data import IterableDataset
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
 from persia.backend import init_backend
-from persia.prelude import PyPersiaReplicaInfo, PyPersiaBatchFlowNatsStubResponder
+from persia.prelude import PyPersiaReplicaInfo, PyPersiaBatchFlowNatsStubResponder, PyPersiaRpcClient
 from persia.error import PersiaRuntimeException
 from persia.data import InfiniteIterator
-
+from persia.service import get_middleware_services
 
 grad_queue_slot_num = os.environ.get("GRAD_SLOT", 60)
 grad_queue = Queue(grad_queue_slot_num)
@@ -47,6 +47,7 @@ class BaseCtx:
         self.is_training = is_training
         self.block_when_exit = block_when_exit
         self.catch_exception = catch_exception
+        self.current_batch = None
 
     def train(self):
         """set current context is_training to true"""
@@ -70,6 +71,115 @@ class BaseCtx:
 
             block()
         return PersiaRuntimeException(value)
+
+    def prepare_features(self, batch, is_training=True):
+        """preprocess the PythonTrainBatch
+        - convert the dense, target tensor to torch float tensors
+        - convert the summation embedding to float16 tensors
+        - extend the raw embedding from 2D data tensor and 2D index tensor to 3D fixed size tensor, provide the corresponding
+            mask to distinct the fixed position
+
+        Arguments:
+            batch (PythonTrainBatch): persia training batch data include dense, target, sparse data and meta info
+            is_training (bool): whether in training scence
+        """
+        import persia_torch_ext as pte  # pytype: disable=import-error
+
+        if is_training:
+            batch.target = batch.consume_all_targets()
+            assert len(batch.target) == 1
+            batch.target = batch.target[0]
+
+            batch.target_tensor = pte.ptr_to_tensor_f32(
+                batch.target.data_ptr(), batch.target.shape(), False
+            )
+        else:
+            batch.target_tensor = None
+
+        batch.dense = batch.consume_all_dense_features()
+        # assert len(batch.dense) == 1
+        batch.dense = batch.dense[0]
+        batch.dense_tensor = pte.ptr_to_tensor_f32(
+            batch.dense.data_ptr(), batch.dense.shape(), False
+        )
+
+        batch.emb = batch.consume_all_sparse_features()
+        batch.emb_slot = []
+        # sparse embedding processing
+        emb_tensors, forward_tensors = [], []
+
+        for emb in batch.emb:
+            if emb.is_raw_embedding():
+                # no duplicate id in raw_id_tensor
+                (
+                    raw_embedding,
+                    index,
+                    non_empty_index,
+                    sample_id_num,
+                ) = emb.get_raw_embedding()
+
+                batch.emb_slot.append([raw_embedding, index, non_empty_index])
+
+                distinct_id_tensor = pte.ptr_to_tensor_f16(
+                    raw_embedding.data_ptr(), raw_embedding.shape(), False
+                )
+                index_tensor = pte.ptr_to_tensor_long(
+                    index.data_ptr(),
+                    index.shape(),
+                )  # tensor shape (1, batch_size * sample_fixed_size)
+                max_index = index_tensor.max()
+                size_of_distinct_id_tensor = distinct_id_tensor.shape[0]
+                torch.cuda.synchronize()
+
+                assert (
+                    max_index < size_of_distinct_id_tensor
+                ), "raw embedding select index larger than tensor"
+                non_empty_index_tensor = pte.ptr_to_tensor_long(
+                    non_empty_index.data_ptr(), non_empty_index.shape()
+                )  # tensor shape (-1), variable length
+
+                batch_size = len(sample_id_num)
+                dim = distinct_id_tensor.shape[-1]
+                sample_fixed_size = index_tensor.shape[1] // batch_size
+                index_select_raw_tensor = distinct_id_tensor.index_select(
+                    0, index_tensor.view(-1)
+                )
+                index_select_raw_tensor.requires_grad = is_training
+
+                raw_fixed_size_tensor = index_select_raw_tensor.view(
+                    -1, sample_fixed_size, dim
+                )
+                mask = (
+                    index_tensor.view(batch_size, sample_fixed_size, 1) != 0
+                ).half()  # generate mask
+                raw_fixed_size_tensor_with_mask = torch.cat(
+                    [raw_fixed_size_tensor, mask], dim=2
+                )
+                emb_tensors.append(
+                    (
+                        raw_embedding.name(),
+                        distinct_id_tensor,
+                        index_tensor,
+                        non_empty_index_tensor,
+                        index_select_raw_tensor,
+                    )
+                )
+                forward_tensors.append(raw_fixed_size_tensor_with_mask)
+            else:
+                emb = emb.get_sum_embedding()
+                batch.emb_slot.append([emb])
+
+                sum_tensor = pte.ptr_to_tensor_f16(
+                    emb.data_ptr(), emb.shape(), is_training
+                )
+                forward_tensors.append(sum_tensor)
+                emb_tensors.append((emb.name(), None, None, None, sum_tensor))
+
+        batch.forward_tensors = forward_tensors
+        batch.emb_tensors = emb_tensors
+        self.current_batch = batch
+
+        return (batch.dense_tensor, batch.forward_tensors), batch.target_tensor
 
 
 class LocalCtx(BaseCtx):
@@ -165,8 +275,6 @@ class TrainCtx(BaseCtx):
             # create the backward pipeline
             self.backward_engine = PyBackward(backward_buffer_size)
 
-        self.current_batch = None
-
     def data_loader(
         self,
         disorder_tolerance: float = 1.0,
@@ -196,115 +304,6 @@ class TrainCtx(BaseCtx):
             self.backward_engine.launch(self.device_id, self.num_backward_workers)
 
         return self
-
-    def prepare_features(self, batch, is_training=True):
-        """preprocess the PythonTrainBatch
-        - convert the dense, target tensor to torch float tensors
-        - convert the summation embedding to float16 tensors
-        - extend the raw embedding from 2D data tensor and 2D index tensor to 3D fixed size tensor, provide the corresponding
-            mask to distinct the fixed position
-
-        Arguments:
-            batch (PythonTrainBatch): persia training batch data include dense, target, sparse data and meta info
-            is_training (bool): whether in training scence
-        """
-        import persia_torch_ext as pte  # pytype: disable=import-error
-
-        if is_training:
-            batch.target = batch.consume_all_targets()
-            assert len(batch.target) == 1
-            batch.target = batch.target[0]
-
-            batch.target_tensor = pte.ptr_to_tensor_f32(
-                batch.target.data_ptr(), batch.target.shape(), False
-            )
-        else:
-            batch.target_tensor = None
-
-        batch.dense = batch.consume_all_dense_features()
-        # assert len(batch.dense) == 1
-        batch.dense = batch.dense[0]
-        batch.dense_tensor = pte.ptr_to_tensor_f32(
-            batch.dense.data_ptr(), batch.dense.shape(), False
-        )
-
-        batch.emb = batch.consume_all_sparse_features()
-        batch.emb_slot = []
-        # sparse embedding processing
-        emb_tensors, forward_tensors = [], []
-
-        for emb in batch.emb:
-            if emb.is_raw_embedding():
-                # no duplicate id in raw_id_tensor
-                (
-                    raw_embedding,
-                    index,
-                    non_empty_index,
-                    sample_id_num,
-                ) = emb.get_raw_embedding()
-
-                batch.emb_slot.append([raw_embedding, index, non_empty_index])
-
-                distinct_id_tensor = pte.ptr_to_tensor_f16(
-                    raw_embedding.data_ptr(), raw_embedding.shape(), False
-                )
-                index_tensor = pte.ptr_to_tensor_long(
-                    index.data_ptr(),
-                    index.shape(),
-                )  # tensor shape (1, batch_size * sample_fixed_size)
-                max_index = index_tensor.max()
-                size_of_distinct_id_tensor = distinct_id_tensor.shape[0]
-                torch.cuda.synchronize()
-
-                assert (
-                    max_index < size_of_distinct_id_tensor
-                ), "raw embedding select index larger than tensor"
-                non_empty_index_tensor = pte.ptr_to_tensor_long(
-                    non_empty_index.data_ptr(), non_empty_index.shape()
-                )  # tensor shape (-1), variable length
-
-                batch_size = len(sample_id_num)
-                dim = distinct_id_tensor.shape[-1]
-                sample_fixed_size = index_tensor.shape[1] // batch_size
-                index_select_raw_tensor = distinct_id_tensor.index_select(
-                    0, index_tensor.view(-1)
-                )
-                index_select_raw_tensor.requires_grad = self.is_training
-
-                raw_fixed_size_tensor = index_select_raw_tensor.view(
-                    -1, sample_fixed_size, dim
-                )
-                mask = (
-                    index_tensor.view(batch_size, sample_fixed_size, 1) != 0
-                ).half()  # generate mask
-                raw_fixed_size_tensor_with_mask = torch.cat(
-                    [raw_fixed_size_tensor, mask], dim=2
-                )
-                emb_tensors.append(
-                    (
-                        raw_embedding.name(),
-                        distinct_id_tensor,
-                        index_tensor,
-                        non_empty_index_tensor,
-                        index_select_raw_tensor,
-                    )
-                )
-                forward_tensors.append(raw_fixed_size_tensor_with_mask)
-            else:
-                emb = emb.get_sum_embedding()
-                batch.emb_slot.append([emb])
-
-                sum_tensor = pte.ptr_to_tensor_f16(
-                    emb.data_ptr(), emb.shape(), self.is_training
-                )
-                forward_tensors.append(sum_tensor)
-                emb_tensors.append((emb.name(), None, None, None, sum_tensor))
-
-        batch.forward_tensors = forward_tensors
-        batch.emb_tensors = emb_tensors
-        self.current_batch = batch
-
-        return (batch.dense_tensor, batch.forward_tensors), batch.target_tensor
 
     def on_after_backward(
         self, loss_scale: float, batch_idx: int, emb_grad_check_interval: int = 20
@@ -375,3 +374,23 @@ class TrainCtx(BaseCtx):
                 f"current batch grad empty num: {len(empty_grad)}, {empty_grad}"
             )
         return finite
+
+class InferCtx(BaseCtx):
+    r"""Inference context that provide full feature of embedding lookup
+
+    Arguments:
+        backend_worker_size (int): rpc client thread pool size
+        middleware_addr([str]): addr of middlewares
+
+    """
+    def __init__(
+        self,
+        backend_worker_size: int = 20,
+        middleware_addrs = get_middleware_services(),
+        *args,
+        **kwargs,
+    ):
+        super(InferCtx, self).__init__(False, *args, **kwargs)
+        self.rpc_client = PyPersiaRpcClient(backend_worker_size)
+        for addr in middleware_addrs:
+            self.rpc_client.add_rpc_client(addr)
