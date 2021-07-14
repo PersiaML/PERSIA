@@ -1,4 +1,6 @@
+from abc import ABC, abstractmethod
 from threading import Thread
+
 import torch
 
 
@@ -11,9 +13,9 @@ from persia.prelude import (
 )
 
 
-class IterableDatasetBase(object):
+class IterableDatasetBase(ABC):
     def __init__(self, buffer_size: int, replica_info: PyPersiaReplicaInfo):
-        self._persia_batch_channel = PyPersiaBatchDataChannel(buffer_size)
+        self.persia_batch_channel = PyPersiaBatchDataChannel(buffer_size)
         self.replica_info = replica_info
 
     @property
@@ -24,9 +26,13 @@ class IterableDatasetBase(object):
     def sender(self) -> PyPersiaBatchDataReceiver:
         return self.persia_batch_channel.get_sender()
 
+    @abstractmethod
     def __iter__(self):
         ...
 
+    @abstractmethod
+    def __len__(self):
+        ...
 
 class NatsInfiniteDataset(IterableDatasetBase):
     r"""InfiniteIterator for streaming data stop by timeout exception
@@ -56,7 +62,7 @@ class NatsInfiniteDataset(IterableDatasetBase):
 
 class FiniteAsyncDataset(IterableDatasetBase):
     def __init__(self, buffer_size: int, replica_info: PyPersiaReplicaInfo = None):
-        super(FiniteAsyncDataset, self).__init__(buffer_size)
+        super(FiniteAsyncDataset, self).__init__(buffer_size, replica_info)
 
     def fetch_data(self, sender: PyPersiaBatchDataSender):
         raise NotImplementedError("implement this function to fetch data")

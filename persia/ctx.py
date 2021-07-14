@@ -10,7 +10,7 @@ from persia.sparse.optim import Optimizer
 from persia.backend import init_backend
 from persia.prelude import PyPersiaReplicaInfo
 from persia.error import PersiaRuntimeException
-from persia.data import NatsInfiniteDataIterator
+from persia.data import NatsInfiniteDataset
 
 
 grad_queue_slot_num = os.environ.get("GRAD_SLOT", 60)
@@ -159,10 +159,8 @@ class TrainCtx(BaseCtx):
         self,
         nats_recv_buffer_size: int = 50,
         timeout: int = 1000 * 60 * 10,
-    ) -> NatsInfiniteDataIterator:
-        return NatsInfiniteDataIterator(
-            self.replica_info, nats_recv_buffer_size, timeout, self.num_forward_workers
-        )
+    ) -> NatsInfiniteDataset:
+        return NatsInfiniteDataset(nats_recv_buffer_size, self.replica_info)
 
     def __enter__(self):
         self.backend.set_configuration(
