@@ -1,4 +1,3 @@
-import torch
 import traceback
 
 from contextlib import contextmanager

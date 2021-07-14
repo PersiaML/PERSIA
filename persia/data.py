@@ -1,6 +1,4 @@
-# from multiprocessing import Process, Queue
 from threading import Thread
-from itertools import cycle
 import torch
 
 
@@ -9,12 +7,14 @@ from persia.prelude import (
     PyPersiaReplicaInfo,
     PyPersiaBatchDataReceiver,
     PyPersiaBatchDataSender,
+    PyPersiaBatchFlowNatsStubResponder,
 )
 
 
 class IterableDatasetBase(object):
-    def __init__(self, buffer_size: int):
-        self.persia_batch_channel = PyPersiaBatchDataChannel(buffer_size)
+    def __init__(self, buffer_size: int, replica_info: PyPersiaReplicaInfo):
+        self._persia_batch_channel = PyPersiaBatchDataChannel(buffer_size)
+        self.replica_info = replica_info
 
     @property
     def receiver(self) -> PyPersiaBatchDataReceiver:
@@ -23,6 +23,9 @@ class IterableDatasetBase(object):
     @property
     def sender(self) -> PyPersiaBatchDataReceiver:
         return self.persia_batch_channel.get_sender()
+
+    def __iter__(self):
+        ...
 
 
 class NatsInfiniteDataset(IterableDatasetBase):
@@ -40,7 +43,7 @@ class NatsInfiniteDataset(IterableDatasetBase):
         buffer_size: int,
         replica_info: PyPersiaReplicaInfo,
     ):
-        super(NatsInfiniteDataIterator, self).__init__(buffer_size)
+        super(NatsInfiniteDataset, self).__init__(buffer_size, replica_info)
         self._responder = PyPersiaBatchFlowNatsStubResponder(replica_info, self.sender)
 
     def __iter__(self):
@@ -52,7 +55,7 @@ class NatsInfiniteDataset(IterableDatasetBase):
 
 
 class FiniteAsyncDataset(IterableDatasetBase):
-    def __init__(self, buffer_size: int, worker_type: WorkerType = WorkerType.THREAD):
+    def __init__(self, buffer_size: int, replica_info: PyPersiaReplicaInfo = None):
         super(FiniteAsyncDataset, self).__init__(buffer_size)
 
     def fetch_data(self, sender: PyPersiaBatchDataSender):
@@ -77,6 +80,8 @@ class Dataloder(object):
     def __init__(
         self,
         dataset: IterableDatasetBase,
+        forward_buffer_size: int = 10,
+        is_training: bool = True,
         timeout: int = 1000 * 60 * 10,
         num_workers: int = 10,
         shuffle: bool = False,
@@ -90,8 +95,8 @@ class Dataloder(object):
         self.forward_engine = PyForward(
             forward_buffer_size,
             shuffle,
-            self.is_training,
-            self.replica_info,
+            is_training,
+            dataset.replica_info,
         )
         self.forward_engine.set_input_channel(dataset.receiver)
         self.forward_engine.launch(

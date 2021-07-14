@@ -1,6 +1,5 @@
 from abc import abstractmethod, ABC
-from typing import List, Tuple
-import time
+from typing import Tuple
 
 from persia.prelude import PyOptimizerBase
 from persia.backend import get_backend

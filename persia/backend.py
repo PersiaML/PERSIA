@@ -1,5 +1,3 @@
-from typing import List, Tuple
-
 from persia.prelude import (
     PyPersiaRpcClient,
     PyPersiaBatchData,

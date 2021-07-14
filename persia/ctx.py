@@ -4,18 +4,13 @@ from queue import Queue
 from typing import List, Tuple
 
 import torch
-from torch.utils.data import NatsInfiniteDataIterator
 
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
 from persia.backend import init_backend
-from persia.prelude import (
-    PyPersiaReplicaInfo,
-    PyPersiaBatchFlowNatsStubResponder,
-    PyPersiaBatchDataChannel,
-)
+from persia.prelude import PyPersiaReplicaInfo
 from persia.error import PersiaRuntimeException
-from persia.data import InfiniteIterator
+from persia.data import NatsInfiniteDataIterator
 
 
 grad_queue_slot_num = os.environ.get("GRAD_SLOT", 60)
