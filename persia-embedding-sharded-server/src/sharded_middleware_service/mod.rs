@@ -962,7 +962,7 @@ impl ShardedMiddlewareServerInner {
         &self,
         req: (u64, bool),
     ) -> Result<EmbeddingBatch, ShardedMiddlewareError> {
-        let (forward_id, forward_only) = req;
+        let (forward_id, is_training) = req;
         let inner = self.clone();
         let mut indices = {
             inner
@@ -980,7 +980,7 @@ impl ShardedMiddlewareServerInner {
         }
         let result = result?;
 
-        if !forward_only {
+        if is_training {
             indices.enter_post_forward_buffer_time = Some(SystemTime::now());
             inner
                 .post_forward_buffer

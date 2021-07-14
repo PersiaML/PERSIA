@@ -215,8 +215,15 @@ impl Backward {
                     );
 
                     let client = rpc_client.get_client_by_addr(middleware_addr.as_str());
-                    if let Err(e) = client.update_gradient_batched(&(forward_id, req)).await {
-                        tracing::error!("backward error {:?}", e);
+                    let result = client.update_gradient_batched(&(forward_id, req)).await;
+
+                    if result.is_err() {
+                        tracing::error!("backward error {:?}", result.unwrap_err());
+                    } else {
+                        let result = result.unwrap();
+                        if result.is_err() {
+                            tracing::error!("backward error {:?}", result.unwrap_err());
+                        }
                     }
 
                     if let Ok(m) = MetricsHolder::get() {

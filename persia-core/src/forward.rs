@@ -265,7 +265,7 @@ struct Forward {
     pub forwarded_channel_r: flume::Receiver<(PersiaBatchData, EmbeddingBatch)>,
     pub gpu_forwarded_channel_s: flume::Sender<PersiaTrainingBatchShardedServerOnGpu>,
     pub gpu_forwarded_channel_r: flume::Receiver<PersiaTrainingBatchShardedServerOnGpu>,
-    pub forward_only: bool,
+    pub is_training: bool,
     pub launch: bool,
     pub threaded_workers: Vec<std::thread::JoinHandle<()>>,
     pub replica_info: PersiaReplicaInfo,
@@ -275,7 +275,7 @@ impl Forward {
     fn new(
         forward_buffer_size: usize,
         nats_recv_buffer_size: usize,
-        forward_only: bool,
+        is_training: bool,
         replica_info: PersiaReplicaInfo,
     ) -> Self {
         let (nats_channel_s, nats_channel_r) = flume::bounded(nats_recv_buffer_size);
@@ -293,7 +293,7 @@ impl Forward {
             forwarded_channel_s,
             gpu_forwarded_channel_r,
             gpu_forwarded_channel_s,
-            forward_only,
+            is_training,
             launch: false,
             threaded_workers: Vec::new(),
             replica_info,
@@ -379,7 +379,7 @@ impl Forward {
             let channel_s = self.forwarded_channel_s.clone();
             let channel_r = self.reorder_buffer_channel_r.clone();
             let _guard = rpc_client.runtime.enter();
-            let forward_only = self.forward_only;
+            let is_training = self.is_training;
             persia_futures::tokio::spawn(async move {
                 loop {
                     let start_time = std::time::Instant::now();
@@ -391,7 +391,7 @@ impl Forward {
                     let (ref server_addr, forward_id) = batch.sparse_data.to_forward_id();
                     let client = rpc_client.get_client_by_addr(server_addr);
                     let embeddings_result =
-                        client.forward_batch_id(&(forward_id, forward_only)).await;
+                        client.forward_batch_id(&(forward_id, is_training)).await;
                     if embeddings_result.is_err() {
                         tracing::error!(
                             "forward failed {:?}, server: {:?}, sleeping 5s",
@@ -532,14 +532,14 @@ impl PyForward {
     fn new(
         forward_buffer_size: usize,
         nats_recv_buffer_size: usize,
-        forward_only: bool,
+        is_training: bool,
         repilca_info: &PyPersiaReplicaInfo,
     ) -> PyResult<PyForward> {
         Ok(PyForward {
             inner: Forward::new(
                 forward_buffer_size,
                 nats_recv_buffer_size,
-                forward_only,
+                is_training,
                 repilca_info.get_replica_info(),
             ),
         })
