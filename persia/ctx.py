@@ -4,12 +4,16 @@ from queue import Queue
 from typing import List, Tuple
 
 import torch
-from torch.utils.data import IterableDataset
+from torch.utils.data import NatsInfiniteDataIterator
 
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
 from persia.backend import init_backend
-from persia.prelude import PyPersiaReplicaInfo, PyPersiaBatchFlowNatsStubResponder
+from persia.prelude import (
+    PyPersiaReplicaInfo,
+    PyPersiaBatchFlowNatsStubResponder,
+    PyPersiaBatchDataChannel,
+)
 from persia.error import PersiaRuntimeException
 from persia.data import InfiniteIterator
 
@@ -21,7 +25,11 @@ logger = get_default_logger()
 
 
 def _check_finite(grads: List[torch.Tensor]):
-    """check all gradient tensor is finite or not"""
+    """check all gradient tensor is finite or not
+
+    Arguments:
+        grads (List[torch.Tensor]): grad tensor list that need to check finite or not
+    """
     return all([torch.isfinite(t).all() if t is not None else True for t in grads])
 
 
@@ -111,8 +119,6 @@ class TrainCtx(BaseCtx):
         device_id: int = 0,
         enable_backward: bool = True,
         backend_worker_size: int = 20,
-        forward_buffer_size: int = 10,
-        nats_recv_buffer_size: int = 50,
         backward_buffer_size: int = 10,
         rank_id: int = 0,
         world_size: int = 1,
@@ -141,45 +147,26 @@ class TrainCtx(BaseCtx):
         self.emb_initialization = emb_initialization
         self.replica_info = PyPersiaReplicaInfo(world_size, rank_id)
 
-        self.num_forward_workers = num_forward_workers
         self.num_backward_workers = num_backward_workers
-
-        # dynamic import the PyForward and PyBackward due to conditional compilation
-        from persia.prelude import PyForward, PyBackward
-
-        self.forward_engine = PyForward(
-            forward_buffer_size,
-            nats_recv_buffer_size,
-            self.is_training,
-            self.replica_info,
-        )
-
-        self._responder = PyPersiaBatchFlowNatsStubResponder(
-            self.replica_info, self.forward_engine.get_input_channel()
-        )
 
         self.backend = init_backend(backend_worker_size, self.replica_info)
         self.enable_backward = enable_backward
 
         if self.is_training or self.enable_backward:
-            # create the backward pipeline
+            from persia.prelude import PyBackward
+
+            # dynamic import the PyForward due to conditional compilation
             self.backward_engine = PyBackward(backward_buffer_size)
 
         self.current_batch = None
 
-    def data_loader(
+    def nats_publisher_streaming_dataset(
         self,
-        disorder_tolerance: float = 1.0,
+        nats_recv_buffer_size: int = 50,
         timeout: int = 1000 * 60 * 10,
-    ) -> IterableDataset:
-        """dataloader for fetch training data or inference data
-
-        Arguments:
-            disorder_tolerance (f32, 0.0 to 1.0): degree of orderly of dataflow, bigger means data comes more disorderly。
-            timeout (int): timeout for data fetch
-        """
-        return InfiniteIterator(
-            self.forward_engine, disorder_tolerance, timeout, self.num_forward_workers
+    ) -> NatsInfiniteDataIterator:
+        return NatsInfiniteDataIterator(
+            self.replica_info, nats_recv_buffer_size, timeout, self.num_forward_workers
         )
 
     def __enter__(self):
