@@ -37,7 +37,7 @@ class NatsInfiniteDataset(IterableDatasetBase):
 
     def __init__(
         self,
-        buffer_size: int = 10,
+        buffer_size: int,
         replica_info: PyPersiaReplicaInfo,
     ):
         super(NatsInfiniteDataIterator, self).__init__(buffer_size)
@@ -50,9 +50,10 @@ class NatsInfiniteDataset(IterableDatasetBase):
     def __len__(self) -> int:
         raise NotImplementedError("InfiteIterator not implement __len__ function")
 
+
 class FiniteAsyncDataset(IterableDatasetBase):
     def __init__(self, buffer_size: int, worker_type: WorkerType = WorkerType.THREAD):
-        super(FiniteAsyncDataset, self).__init__(buffer_size) 
+        super(FiniteAsyncDataset, self).__init__(buffer_size)
 
     def fetch_data(self, sender: PyPersiaBatchDataSender):
         raise NotImplementedError("implement this function to fetch data")
@@ -70,6 +71,7 @@ class FiniteAsyncDataset(IterableDatasetBase):
             yield _val
 
         handler.join()
+
 
 class Dataloder(object):
     def __init__(
