@@ -34,6 +34,7 @@ class IterableDatasetBase(ABC):
     def __len__(self):
         ...
 
+
 class NatsInfiniteDataset(IterableDatasetBase):
     r"""InfiniteIterator for streaming data stop by timeout exception
 

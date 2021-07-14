@@ -7,4 +7,7 @@ flake8:
 format:
 	python3 -m black --config pyproject.toml
 
-all: lint flake8 format
+pytest:
+	pytest
+
+all: lint flake8 format pytest
