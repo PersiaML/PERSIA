@@ -407,6 +407,12 @@ class TrainCtx(BaseCtx):
     def load_embedding(self, dst_dir: str, blocking: bool = True):
         self.backend.load_embedding(dst_dir, blocking)
 
+    def wait_for_dump_embedding(self):
+        self.backend.wait_for_dump_embedding()
+
+    def wait_for_load_embedding(self):
+        self.backend.wait_for_load_embedding()
+
 
 class InferCtx(BaseCtx):
     r"""Inference context that provide full feature of embedding lookup

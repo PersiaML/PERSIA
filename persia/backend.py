@@ -74,6 +74,12 @@ class Backend:
         if blocking:
             self.rpc_client.wait_for_load_embedding()
 
+    def wait_for_dump_embedding(self):
+        self.rpc_client.wait_for_dump_embedding()
+
+    def wait_for_load_embedding(self):
+        self.rpc_client.wait_for_load_embedding()
+
 
 def init_backend(
     worker_size: int = 20,
