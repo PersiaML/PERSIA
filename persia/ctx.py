@@ -258,6 +258,7 @@ class TrainCtx(BaseCtx):
         self.num_backward_workers = num_backward_workers
 
         self.embedding_checkpoint = embedding_checkpoint
+        self.pretrained_loaded = False
 
         # dynamic import the PyForward and PyBackward due to conditional compilation
         from persia.prelude import PyForward, PyBackward
@@ -307,9 +308,9 @@ class TrainCtx(BaseCtx):
         )
         self.sparse_optimizer.apply()
 
-        if self.embedding_checkpoint is not None:
+        if not self.pretrained_loaded and self.embedding_checkpoint is not None:
             self.load_embedding(self.embedding_checkpoint)
-            self.embedding_checkpoint = None
+            self.pretrained_loaded = True
 
         if self.is_training:
             self.backward_engine.launch(self.device_id, self.num_backward_workers)
