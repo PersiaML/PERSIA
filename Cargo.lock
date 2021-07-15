@@ -1916,12 +1916,11 @@ version = "0.1.0"
 dependencies = [
  "get_if_addrs",
  "once_cell",
- "parking_lot",
  "persia-speedy",
  "serde",
+ "serde_yaml",
  "thiserror",
  "tracing",
- "yaml-rust",
 ]
 
 [[package]]

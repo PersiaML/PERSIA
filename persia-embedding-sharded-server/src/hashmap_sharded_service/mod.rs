@@ -1,8 +1,8 @@
 use bytes::Bytes;
 use hashbrown::HashMap;
 use persia_embedding_config::{
-    PerisaShardedServerIntent, PersiaCommonConfig, PersiaReplicaInfo, PersiaShardedServerConfig,
-    PersiaSparseModelHyperparameters,
+    InstanceInfo, PerisaIntent, PersiaCommonConfig, PersiaGlobalConfigError, PersiaReplicaInfo,
+    PersiaShardedServerConfig, PersiaSparseModelHyperparameters,
 };
 use persia_embedding_datatypes::optim::{Optimizable, Optimizer};
 use persia_embedding_datatypes::HashMapEmbeddingEntry;
@@ -167,12 +167,14 @@ pub enum ShardEmbeddingError {
     NotReadyError,
     #[error("service not configured error")]
     NotConfiguredError,
-    #[error("model manager error")]
+    #[error("model manager error: {0}")]
     PersistenceManagerError(#[from] PersistenceManagerError),
-    #[error("nats error")]
+    #[error("nats error: {0}")]
     NatsError(#[from] NatsError),
     #[error("optimizer not found error")]
     OptimizerNotFoundError,
+    #[error("global config error: {0}")]
+    PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
 }
 
 pub struct HashMapShardedServiceInner {
@@ -182,8 +184,8 @@ pub struct HashMapShardedServiceInner {
     pub hyperparameter_config:
         persia_futures::async_lock::RwLock<Option<Arc<PersiaSparseModelHyperparameters>>>,
     pub hyperparameter_configured: persia_futures::async_lock::Mutex<bool>,
-    pub server_config: Arc<parking_lot::RwLock<PersiaShardedServerConfig>>,
-    pub common_config: Arc<parking_lot::RwLock<PersiaCommonConfig>>,
+    pub server_config: Arc<PersiaShardedServerConfig>,
+    pub common_config: Arc<PersiaCommonConfig>,
     pub inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
     pub model_persistence_manager: Arc<PersiaPersistenceManager>,
     pub full_amount_manager: Arc<FullAmountManager>,
@@ -193,8 +195,8 @@ pub struct HashMapShardedServiceInner {
 impl HashMapShardedServiceInner {
     pub fn new(
         embedding: PersiaEmbeddingHolder,
-        server_config: Arc<parking_lot::RwLock<PersiaShardedServerConfig>>,
-        common_config: Arc<parking_lot::RwLock<PersiaCommonConfig>>,
+        server_config: Arc<PersiaShardedServerConfig>,
+        common_config: Arc<PersiaCommonConfig>,
         inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
         model_persistence_manager: Arc<PersiaPersistenceManager>,
         full_amount_manager: Arc<FullAmountManager>,
@@ -218,8 +220,8 @@ impl HashMapShardedServiceInner {
         self.shard_idx
     }
 
-    pub fn get_intent(&self) -> Result<PerisaShardedServerIntent, ShardEmbeddingError> {
-        let intent = self.server_config.read().intent.clone();
+    pub fn get_intent(&self) -> Result<PerisaIntent, ShardEmbeddingError> {
+        let intent = self.common_config.intent.clone();
         Ok(intent)
     }
 
@@ -246,23 +248,22 @@ impl HashMapShardedServiceInner {
 
         let intent = self.get_intent()?;
         let conf = match intent {
-            PerisaShardedServerIntent::Train => Some(self.get_configuration().await?),
+            PerisaIntent::Train => Some(self.get_configuration().await?),
             _ => None,
         };
 
         let optimizer = self.optimizer.read().await;
-        if optimizer.is_none() {
-            return Err(ShardEmbeddingError::OptimizerNotFoundError);
-        }
 
-        let optimizer = optimizer.as_ref().unwrap();
+        tokio::task::block_in_place(|| match intent {
+            PerisaIntent::Train => {
+                if optimizer.is_none() {
+                    return Err(ShardEmbeddingError::OptimizerNotFoundError);
+                }
+                let optimizer = optimizer.as_ref().unwrap();
 
-        tokio::task::block_in_place(|| {
-            match intent {
-                PerisaShardedServerIntent::Train => {
-                    let mut evcited_ids = Vec::with_capacity(1000);
+                let mut evcited_ids = Vec::with_capacity(1000);
 
-                    req.iter().for_each(|(sign, dim)| {
+                req.iter().for_each(|(sign, dim)| {
                         let conf = conf.as_ref().unwrap();
                         let e = self.embedding.inner.get_refresh(sign);
                         match e {
@@ -314,15 +315,16 @@ impl HashMapShardedServiceInner {
                             }
                         }
                     });
-                    if let Err(_) = self.full_amount_manager.try_commit_evicted_ids(evcited_ids) {
-                        tracing::warn!(
+                if let Err(_) = self.full_amount_manager.try_commit_evicted_ids(evcited_ids) {
+                    tracing::warn!(
                             "commit to full_amount_manager failed, it is ok when dumping emb, otherwise, 
                             please try a bigger full_amount_manager_buffer_size or num_hashmap_internal_shards"
                         );
-                    }
                 }
-                PerisaShardedServerIntent::Eval => {
-                    req.iter().for_each(|(sign, dim)| {
+                Ok(())
+            }
+            PerisaIntent::Eval => {
+                req.iter().for_each(|(sign, dim)| {
                         let e = self.embedding.inner.get(sign);
                         match e {
                             None => {
@@ -340,10 +342,11 @@ impl HashMapShardedServiceInner {
                                 }
                             }
                         }
-                    })
-                }
-                PerisaShardedServerIntent::Infer => {
-                    req.iter().for_each(|(sign, dim)| {
+                    });
+                Ok(())
+            }
+            PerisaIntent::Infer(_) => {
+                req.iter().for_each(|(sign, dim)| {
                         let e = self.embedding.inner.get(sign);
                         match e {
                             None => {
@@ -361,10 +364,10 @@ impl HashMapShardedServiceInner {
                                 }
                             }
                         }
-                    })
-                }
+                    });
+                Ok(())
             }
-        });
+        })?;
 
         if let Ok(m) = MetricsHolder::get() {
             m.index_miss_count.inc();
@@ -386,9 +389,9 @@ impl HashMapShardedServiceInner {
         if !model_ready {
             return false;
         }
-        let intent = self.server_config.read().intent.clone();
+        let intent = self.common_config.intent.clone();
         match intent {
-            PerisaShardedServerIntent::Infer => true,
+            PerisaIntent::Infer(_) => true,
             _ => *self.hyperparameter_configured.lock().await,
         }
     }
@@ -583,7 +586,7 @@ impl HashMapShardedServiceInner {
             );
         }
 
-        if self.server_config.read().enable_incremental_update {
+        if self.server_config.enable_incremental_update {
             let result = self
                 .inc_update_manager
                 .try_commit_incremental(indices_to_commit);
@@ -636,15 +639,14 @@ impl HashMapShardedServiceInner {
     }
 
     pub async fn get_address(&self) -> Result<String, ShardEmbeddingError> {
-        let guard = self.server_config.read();
-        let port = guard.instance_info.port;
-        let address = format!("{}:{}", guard.instance_info.ip_address, port);
+        let instance_info = InstanceInfo::get()?;
+        let address = format!("{}:{}", instance_info.ip_address, instance_info.port);
         Ok(address)
     }
 
     pub async fn get_replica_info(&self) -> Result<PersiaReplicaInfo, ShardEmbeddingError> {
-        let guard = self.common_config.read();
-        let replica_info = guard.replica_info.clone();
+        let replica_info = PersiaReplicaInfo::get()?;
+        let replica_info = replica_info.as_ref().clone();
         Ok(replica_info)
     }
 }

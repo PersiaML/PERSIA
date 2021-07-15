@@ -16,7 +16,7 @@ use persia_speedy::{Readable, Writable};
 pub enum PersiaFullAmountManagerError {
     #[error("full amount manager not ready error")]
     NotReadyError,
-    #[error("global config error")]
+    #[error("global config error: {0}")]
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
     #[error("failed to commit weakptrs or evicted ids, please try a bigger buffer size for full anmount manager")]
     CommitError,
@@ -38,16 +38,15 @@ impl FullAmountManager {
         let singleton = FULL_AMOUNT_MANAGER.get_or_try_init(|| {
             let config = PersiaShardedServerConfig::get()?;
             let handles = Arc::new(parking_lot::Mutex::new(Vec::new()));
-            let guard = config.read();
             let full_amount_manager = Self::new(
-                guard.capacity,
-                guard.num_hashmap_internal_shards,
-                guard.full_amount_manager_buffer_size,
+                config.capacity,
+                config.num_hashmap_internal_shards,
+                config.full_amount_manager_buffer_size,
                 handles.clone(),
             );
             let singleton = Arc::new(full_amount_manager);
 
-            let num_collect_threads = max(1, guard.num_hashmap_internal_shards / 32);
+            let num_collect_threads = max(1, config.num_hashmap_internal_shards / 32);
             for _ in 0..num_collect_threads {
                 let handle = std::thread::spawn({
                     let singleton = singleton.clone();

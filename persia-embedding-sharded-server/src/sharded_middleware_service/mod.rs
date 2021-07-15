@@ -15,8 +15,7 @@ use snafu::ResultExt;
 use thiserror::Error;
 
 use persia_embedding_config::{
-    PersiaGlobalConfigError, PersiaMiddlewareConfig, PersiaReplicaInfo,
-    PersiaSparseModelHyperparameters,
+    InstanceInfo, PersiaGlobalConfigError, PersiaReplicaInfo, PersiaSparseModelHyperparameters,
 };
 use persia_embedding_datatypes::optim::Optimizer;
 use persia_embedding_datatypes::{
@@ -84,7 +83,7 @@ impl MetricsHolder {
 pub enum ShardedMiddlewareError {
     #[error("rpc error")]
     RpcError(String),
-    #[error("shard server error")]
+    #[error("shard server error: {0}")]
     ShardServerError(#[from] ShardEmbeddingError),
     #[error("forward id not found")]
     ForwardIdNotFound(u64),
@@ -96,20 +95,20 @@ pub enum ShardedMiddlewareError {
     ShutdownError,
     #[error("gradient contains nan")]
     NanGradient,
-    #[error("nats error")]
+    #[error("nats error: {0}")]
     NatsError(#[from] NatsError),
-    #[error("global config error")]
+    #[error("global config error: {0}")]
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
 }
 
 pub struct AllShardsClient {
     pub clients: RwLock<Vec<Arc<HashMapShardedServiceClient>>>,
-    pub nats_publisher: EmbeddingServerNatsStubPublisher,
-    pub dst_replica_info: PersiaReplicaInfo,
+    pub nats_publisher: Option<EmbeddingServerNatsStubPublisher>,
+    pub dst_replica_size: usize,
 }
 
 impl AllShardsClient {
-    pub fn new(nats_publisher: EmbeddingServerNatsStubPublisher) -> Self {
+    pub fn with_nats(nats_publisher: EmbeddingServerNatsStubPublisher) -> Self {
         tracing::info!("trying to get replica info of embedding servers");
         let dst_replica_info: Result<PersiaReplicaInfo, _> =
             retry(Fixed::from_millis(5000), || {
@@ -132,12 +131,31 @@ impl AllShardsClient {
 
         let instance = Self {
             clients: RwLock::new(Vec::with_capacity(dst_replica_info.replica_size)),
-            nats_publisher,
-            dst_replica_info,
+            nats_publisher: Some(nats_publisher),
+            dst_replica_size: dst_replica_info.replica_size,
+        };
+
+        let servers = instance
+            .get_all_addresses()
+            .expect("failed to get ips of servers");
+
+        instance
+            .update_rpc_clients(servers)
+            .expect("failed to init rpc client for embedding server");
+
+        instance
+    }
+
+    pub fn with_addrs(servers: Vec<String>) -> Self {
+        tracing::info!("AllShardsClient::with_addrs, servers are {:?}", servers);
+        let instance = Self {
+            clients: RwLock::new(Vec::with_capacity(servers.len())),
+            nats_publisher: None,
+            dst_replica_size: servers.len(),
         };
 
         instance
-            .update_rpc_clients()
+            .update_rpc_clients(servers)
             .expect("failed to init rpc client for embedding server");
 
         instance
@@ -179,7 +197,7 @@ impl AllShardsClient {
     }
 
     pub fn num_shards(&self) -> usize {
-        self.dst_replica_info.replica_size
+        self.dst_replica_size
     }
 
     pub async fn get_client_by_index(
@@ -203,13 +221,15 @@ impl AllShardsClient {
     ) -> Result<String, ShardedMiddlewareError> {
         let addr = self
             .nats_publisher
+            .as_ref()
+            .expect("nats_publisher is None, you are using infer mode")
             .publish_get_address(&(), Some(replica_index))
             .await??;
         Ok(addr)
     }
 
     pub fn get_all_addresses(&self) -> Result<Vec<String>, ShardedMiddlewareError> {
-        let servers: Vec<_> = (0..self.dst_replica_info.replica_size)
+        let servers: Vec<_> = (0..self.dst_replica_size)
             .map(|replica_index| {
                 tracing::info!("trying to get ip address of server {}", replica_index);
                 retry(Fixed::from_millis(1000), || {
@@ -239,9 +259,7 @@ impl AllShardsClient {
         Ok(servers)
     }
 
-    pub fn update_rpc_clients(&self) -> Result<(), ShardedMiddlewareError> {
-        let servers = self.get_all_addresses()?;
-
+    pub fn update_rpc_clients(&self, servers: Vec<String>) -> Result<(), ShardedMiddlewareError> {
         let mut clients = block_on(self.clients.write());
         clients.clear();
 
@@ -1118,10 +1136,8 @@ impl ShardedMiddlewareServerInner {
     }
 
     pub async fn get_address(&self) -> Result<String, ShardedMiddlewareError> {
-        let config = PersiaMiddlewareConfig::get()?;
-        let guard = config.read();
-        let port = guard.instance_info.port;
-        let address = format!("{}:{}", guard.instance_info.ip_address, port);
+        let instance_info = InstanceInfo::get()?;
+        let address = format!("{}:{}", instance_info.ip_address, instance_info.port);
         Ok(address)
     }
 
@@ -1130,7 +1146,10 @@ impl ShardedMiddlewareServerInner {
         err: &ShardedMiddlewareError,
     ) -> Result<(), ShardedMiddlewareError> {
         match err {
-            ShardedMiddlewareError::RpcError(_) => self.all_shards_client.update_rpc_clients(),
+            ShardedMiddlewareError::RpcError(_) => {
+                let servers = self.all_shards_client.get_all_addresses()?;
+                self.all_shards_client.update_rpc_clients(servers)
+            }
             _ => Ok(()),
         }
     }

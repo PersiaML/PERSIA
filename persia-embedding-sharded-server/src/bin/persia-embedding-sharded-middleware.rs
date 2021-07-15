@@ -1,7 +1,9 @@
 #[macro_use]
 extern crate shadow_rs;
 use hashbrown::HashMap;
-use persia_embedding_config::{PersiaCommonConfig, PersiaMiddlewareConfig};
+use persia_embedding_config::{
+    PerisaIntent, PersiaCommonConfig, PersiaGlobalConfig, PersiaMiddlewareConfig, PersiaReplicaInfo,
+};
 use persia_embedding_sharded_server::hashmap_sharded_service::EmbeddingServerNatsStubPublisher;
 use persia_embedding_sharded_server::middleware_config_parser::{
     convert_middleware_config, EmbeddingConfig,
@@ -23,7 +25,7 @@ struct Cli {
     #[structopt(long)]
     embedding_config: PathBuf,
     #[structopt(long)]
-    middleware_config: PathBuf,
+    global_config: PathBuf,
     #[structopt(long)]
     replica_index: usize,
     #[structopt(long)]
@@ -48,19 +50,28 @@ async fn main() -> anyhow::Result<()> {
     eprintln!("build_time: {}", build::BUILD_TIME);
     let args: Cli = Cli::from_args();
 
-    let replica_info = PersiaCommonConfig::set(
-        &args.middleware_config,
+    PersiaGlobalConfig::set_configures(
+        &args.global_config,
+        args.port,
         args.replica_index,
         args.replica_size,
     )?;
 
-    PersiaMiddlewareConfig::set(&args.middleware_config, args.port)?;
+    let intent = &PersiaCommonConfig::get()?.intent;
+    let all_shards_client = match intent {
+        PerisaIntent::Infer(ref conf) => {
+            let servers = conf.servers.clone();
+            AllShardsClient::with_addrs(servers)
+        }
+        _ => {
+            let replica_info = PersiaReplicaInfo::get()?.as_ref().clone();
+            let nats_publisher = EmbeddingServerNatsStubPublisher {
+                nats_client: NatsClient::new(replica_info),
+            };
 
-    let nats_publisher = EmbeddingServerNatsStubPublisher {
-        nats_client: NatsClient::new(replica_info.clone()),
+            AllShardsClient::with_nats(nats_publisher)
+        }
     };
-
-    let all_shards_client = AllShardsClient::new(nats_publisher);
 
     let num_shards = all_shards_client.num_shards() as u64;
 
@@ -78,7 +89,6 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("embedding config: {:#?}", embedding_config);
 
     let middleware_config = PersiaMiddlewareConfig::get()?;
-    let guard = middleware_config.read();
 
     let inner = Arc::new(ShardedMiddlewareServerInner {
         all_shards_client,
@@ -92,22 +102,30 @@ async fn main() -> anyhow::Result<()> {
         embedding_config,
         staleness: Default::default(),
         feature2group,
-        forward_buffer_size: guard.forward_buffer_size,
+        forward_buffer_size: middleware_config.forward_buffer_size,
     });
 
-    let nats_stub = MiddlewareNatsStub {
-        inner: inner.clone(),
-    };
+    let _responder = match intent {
+        PerisaIntent::Infer(_) => None,
+        _ => {
+            let nats_stub = MiddlewareNatsStub {
+                inner: inner.clone(),
+            };
 
-    let responder = MiddlewareNatsStubResponder {
-        inner: nats_stub,
-        nats_client: NatsClient::new(replica_info),
-    };
+            let repilca_info = PersiaReplicaInfo::get()?.as_ref().clone();
+            let responder = MiddlewareNatsStubResponder {
+                inner: nats_stub,
+                nats_client: NatsClient::new(repilca_info),
+            };
 
-    responder
-        .spawn_subscriptions()
-        .expect("failed to spawn nats subscriptions");
-    tracing::info!("middleware responder started");
+            responder
+                .spawn_subscriptions()
+                .expect("failed to spawn nats subscriptions");
+            tracing::info!("middleware responder started");
+
+            Some(responder)
+        }
+    };
 
     let service = ShardedMiddlewareServer { inner: inner };
 

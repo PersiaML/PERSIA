@@ -130,7 +130,7 @@ impl PersiaRpcClient {
             self.middleware_addrs
                 .write()
                 .push(middleware_addr.to_string());
-            tracing::info!("created client for middleware{}", middleware_addr);
+            tracing::info!("created client for middleware {}", middleware_addr);
             client
         }
     }
@@ -223,48 +223,7 @@ impl PersiaRpcClient {
             .unwrap_or_else(|e| Err(ShardedMiddlewareError::RpcError(format!("{:?}", e))))
     }
 
-    fn wait_for_serving(&self) -> () {
-        let handler = self.runtime.clone();
-        let _guard = handler.enter();
-        let client = self
-            .clients
-            .read()
-            .iter()
-            .next()
-            .expect("clients not initialized")
-            .1
-            .clone();
-        while !handler.block_on(client.ready_for_serving(&())).unwrap() {
-            std::thread::sleep(Duration::from_secs(60));
-            let status: Vec<PersiaPersistenceStatus> =
-                handler.block_on(client.model_manager_status(&())).unwrap();
-
-            status
-                .into_iter()
-                .enumerate()
-                .for_each(|(shard_id, s)| match s {
-                    PersiaPersistenceStatus::Loading(p) => {
-                        tracing::info!(
-                            "loading emb for shard {}, pregress: {:?}%",
-                            shard_id,
-                            p * 100.0
-                        );
-                    }
-                    PersiaPersistenceStatus::Idle => {
-                        tracing::info!("loading emb compelete for shard {}", shard_id);
-                    }
-                    PersiaPersistenceStatus::Failed(e) => {
-                        tracing::error!("loading emb failed for shard {}, {}", shard_id, e);
-                    }
-                    PersiaPersistenceStatus::Dumping(_) => {
-                        tracing::error!("emb status is dumping but waiting for load");
-                    }
-                });
-        }
-        tracing::info!("waiting for server ready");
-    }
-
-    fn wait_for_emb_dumping(&self) -> bool {
+    fn wait_for_serving(&self) -> PyResult<()> {
         let handler = self.runtime.clone();
         let _guard = handler.enter();
         let client = self
@@ -277,43 +236,100 @@ impl PersiaRpcClient {
             .clone();
 
         loop {
-            std::thread::sleep(Duration::from_secs(60));
-            tracing::info!("waiting for emb dumping");
-            let status: Vec<PersiaPersistenceStatus> =
-                handler.block_on(client.model_manager_status(&())).unwrap();
-            let mut num_idle: usize = 0;
-            let mut num_failed: usize = 0;
-            let num_total: usize = status.len();
-            status
-                .into_iter()
-                .enumerate()
-                .for_each(|(shard_idx, s)| match s {
-                    PersiaPersistenceStatus::Failed(e) => {
-                        tracing::error!("emb dump FAILED for shard {}, {}", shard_idx, e);
-                        num_failed = num_failed + 1;
+            if let Ok(ready) = handler.block_on(client.ready_for_serving(&())) {
+                if ready {
+                    return Ok(());
+                }
+                std::thread::sleep(Duration::from_secs(5));
+                let status: Vec<PersiaPersistenceStatus> =
+                    handler.block_on(client.model_manager_status(&())).unwrap();
+
+                match self.process_status(status) {
+                    Ok(_) => {}
+                    Err(err_msg) => {
+                        return Err(PyRuntimeError::new_err(err_msg));
                     }
-                    PersiaPersistenceStatus::Loading(_) => {
-                        tracing::error!("emb status is loading but waiting for dump");
-                        num_failed = num_failed + 1;
-                    }
-                    PersiaPersistenceStatus::Idle => {
-                        num_idle = num_idle + 1;
-                        tracing::info!("emb dump compelete for shard {}", shard_idx);
-                    }
-                    PersiaPersistenceStatus::Dumping(p) => {
-                        tracing::info!(
-                            "dumping emb for shard {}, pregress: {:?}%",
-                            shard_idx,
-                            p * 100.0
-                        );
-                    }
-                });
-            if num_idle == num_total {
-                return true;
+                }
+            } else {
+                tracing::warn!("failed to get sparse model status, retry later");
             }
-            if num_failed > 0 {
-                return false;
+        }
+    }
+
+    fn wait_for_emb_dumping(&self) -> PyResult<()> {
+        let handler = self.runtime.clone();
+        let _guard = handler.enter();
+        let client = self
+            .clients
+            .read()
+            .iter()
+            .next()
+            .expect("clients not initialized")
+            .1
+            .clone();
+
+        loop {
+            std::thread::sleep(Duration::from_secs(5));
+            let status: Result<Vec<PersiaPersistenceStatus>, _> =
+                handler.block_on(client.model_manager_status(&()));
+            if let Ok(status) = status {
+                if status.iter().any(|s| match s {
+                    PersiaPersistenceStatus::Loading(_) => true,
+                    _ => false,
+                }) {
+                    let err_msg = String::from("emb status is loading but waiting for dump.");
+                    return Err(PyRuntimeError::new_err(err_msg));
+                }
+                let num_total = status.len();
+                match self.process_status(status) {
+                    Ok(num_compeleted) => {
+                        if num_compeleted == num_total {
+                            return Ok(());
+                        }
+                    }
+                    Err(err_msg) => {
+                        return Err(PyRuntimeError::new_err(err_msg));
+                    }
+                }
+            } else {
+                tracing::warn!("failed to get sparse model status, retry later");
             }
+        }
+    }
+
+    fn process_status(&self, status: Vec<PersiaPersistenceStatus>) -> Result<usize, String> {
+        let mut num_compeleted: usize = 0;
+        let mut errors = Vec::new();
+        status
+            .into_iter()
+            .enumerate()
+            .for_each(|(shard_idx, s)| match s {
+                PersiaPersistenceStatus::Failed(e) => {
+                    let err_msg = format!("emb dump FAILED for shard {}, due to {}.", shard_idx, e);
+                    errors.push(err_msg);
+                }
+                PersiaPersistenceStatus::Loading(p) => {
+                    tracing::info!(
+                        "loading emb for shard {}, pregress: {:?}%",
+                        shard_idx,
+                        p * 100.0
+                    );
+                }
+                PersiaPersistenceStatus::Idle => {
+                    num_compeleted = num_compeleted + 1;
+                }
+                PersiaPersistenceStatus::Dumping(p) => {
+                    tracing::info!(
+                        "dumping emb for shard {}, pregress: {:?}%",
+                        shard_idx,
+                        p * 100.0
+                    );
+                }
+            });
+        if errors.len() > 0 {
+            Err(errors.join(", "))
+        } else {
+            Ok(num_compeleted)
         }
     }
 }
@@ -325,6 +341,11 @@ impl PyPersiaRpcClient {
         PyPersiaRpcClient {
             inner: PersiaRpcClient::new(worker_size),
         }
+    }
+
+    pub fn add_rpc_client(&mut self, addr: &str) -> PyResult<()> {
+        let _ = self.inner.get_client_by_addr(addr);
+        Ok(())
     }
 
     pub fn set_configuration(
@@ -357,12 +378,11 @@ impl PyPersiaRpcClient {
     }
 
     pub fn wait_for_load_embedding(&self) -> PyResult<()> {
-        self.inner.wait_for_serving();
-        Ok(())
+        self.inner.wait_for_serving()
     }
 
-    pub fn wait_for_dump_embedding(&self) -> PyResult<bool> {
-        Ok(self.inner.wait_for_emb_dumping())
+    pub fn wait_for_dump_embedding(&self) -> PyResult<()> {
+        self.inner.wait_for_emb_dumping()
     }
 
     pub fn dump_embedding(&self, dst_dir: String) -> PyResult<()> {

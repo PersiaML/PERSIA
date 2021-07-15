@@ -9,7 +9,7 @@ use thiserror::Error;
 
 #[derive(Readable, Writable, Error, Debug)]
 pub enum PersiaEmbeddingHolderError {
-    #[error("global config error")]
+    #[error("global config error: {0}")]
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
 }
 
@@ -25,9 +25,8 @@ impl PersiaEmbeddingHolder {
     pub fn get() -> Result<PersiaEmbeddingHolder, PersiaEmbeddingHolderError> {
         let singleton = PERSIA_EMBEDDING_HOLDER.get_or_try_init(|| {
             let config = PersiaShardedServerConfig::get()?;
-            let guard = config.read();
             let eviction_map: PersiaEvictionMap<u64, Arc<RwLock<HashMapEmbeddingEntry>>> =
-                PersiaEvictionMap::new(guard.capacity, guard.num_hashmap_internal_shards);
+                PersiaEvictionMap::new(config.capacity, config.num_hashmap_internal_shards);
             Ok(PersiaEmbeddingHolder {
                 inner: Arc::new(eviction_map),
             })

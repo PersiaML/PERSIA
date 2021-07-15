@@ -13,8 +13,8 @@ use rayon::{ThreadPool, ThreadPoolBuilder};
 use thiserror::Error;
 
 use persia_embedding_config::{
-    PerisaShardedServerIntent, PersiaCommonConfig, PersiaGlobalConfigError,
-    PersiaPersistenceStorage, PersiaShardedServerConfig,
+    PerisaIntent, PersiaCommonConfig, PersiaGlobalConfigError, PersiaPersistenceStorage,
+    PersiaReplicaInfo, PersiaShardedServerConfig,
 };
 use persia_embedding_datatypes::HashMapEmbeddingEntry;
 use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
@@ -26,9 +26,9 @@ use persia_storage_visitor::{
 
 #[derive(Error, Debug)]
 pub enum IncrementalUpdateError {
-    #[error("embedding holder error")]
+    #[error("embedding holder error: {0}")]
     PersiaEmbeddingHolderError(#[from] PersiaEmbeddingHolderError),
-    #[error("global config error")]
+    #[error("global config error: {0}")]
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
     #[error("embedding holder not found error")]
     CommitIncrementalError,
@@ -82,20 +82,18 @@ impl PerisaIncrementalUpdateManager {
             let server_config = PersiaShardedServerConfig::get()?;
             let common_comfig = PersiaCommonConfig::get()?;
             let embedding_holder = PersiaEmbeddingHolder::get()?;
-
-            let server_config_guard = server_config.read();
-            let common_comfig_guard = common_comfig.read();
+            let replica_info = PersiaReplicaInfo::get()?;
 
             let singleton = Self::new(
-                server_config_guard.storage.clone(),
+                server_config.storage.clone(),
                 embedding_holder,
-                server_config_guard.intent.clone(),
-                server_config_guard.num_persistence_workers,
-                server_config_guard.num_signs_per_file,
-                common_comfig_guard.replica_info.replica_index,
-                server_config_guard.incremental_buffer_size,
-                server_config_guard.incremental_dir.clone(),
-                server_config_guard.incremental_channel_capacity,
+                common_comfig.intent.clone(),
+                server_config.num_persistence_workers,
+                server_config.num_signs_per_file,
+                replica_info.replica_index,
+                server_config.incremental_buffer_size,
+                server_config.incremental_dir.clone(),
+                server_config.incremental_channel_capacity,
             );
 
             Ok(singleton)
@@ -109,7 +107,7 @@ impl PerisaIncrementalUpdateManager {
     fn new(
         storage: PersiaPersistenceStorage,
         embedding_holder: PersiaEmbeddingHolder,
-        cur_task: PerisaShardedServerIntent,
+        cur_task: PerisaIntent,
         num_executors: usize,
         sign_per_file: usize,
         shard_idx: usize,
@@ -153,7 +151,7 @@ impl PerisaIncrementalUpdateManager {
 
         let mut handle_guard = background_threads.lock();
         match cur_task {
-            PerisaShardedServerIntent::Train => {
+            PerisaIntent::Train => {
                 let handle = std::thread::spawn({
                     let instance = instance.clone();
                     move || {
@@ -170,7 +168,7 @@ impl PerisaIncrementalUpdateManager {
                 });
                 handle_guard.push(handle);
             }
-            PerisaShardedServerIntent::Infer => {
+            PerisaIntent::Infer(_) => {
                 let handle = std::thread::spawn({
                     let instance = instance.clone();
                     move || {

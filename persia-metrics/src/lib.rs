@@ -1,9 +1,12 @@
 use once_cell::sync::OnceCell;
-use persia_embedding_config::PersiaCommonConfig;
+use persia_embedding_config::{
+    InstanceInfo, PersiaCommonConfig, PersiaGlobalConfigError, PersiaReplicaInfo,
+};
 use persia_scheduled_thread_pool::SCHEDULED_THREAD_POOL;
 use prometheus::{Encoder, HistogramOpts, Opts, TextEncoder};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use thiserror::Error;
 
 pub use prometheus::{Gauge, GaugeVec, Histogram, HistogramVec, IntCounter, IntCounterVec};
@@ -14,35 +17,33 @@ pub enum PersiaMetricsManagerError {
     RegistryError,
     #[error("persia metrics not enabled")]
     NotEnabledError,
-    #[error("persia global config not found")]
-    GlobalConfigNotFoundError,
+    #[error("global config error: {0}")]
+    PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
 }
 
 static PERSIA_METRICS_MANAGER: OnceCell<Arc<PersiaMetricsManager>> = OnceCell::new();
 
 pub struct PersiaMetricsManager {
     const_labels: HashMap<String, String>,
-    push_interval: std::time::Duration,
+    push_interval: Duration,
     job_name: String,
 }
 
 impl PersiaMetricsManager {
     pub fn get() -> Result<Arc<Self>, PersiaMetricsManagerError> {
-        let config = PersiaCommonConfig::get();
-        if config.is_err() {
-            return Err(PersiaMetricsManagerError::GlobalConfigNotFoundError);
-        }
-        let config = config.unwrap();
+        let common_config = PersiaCommonConfig::get()?;
+        let instance_info = InstanceInfo::get()?;
+        let replica_info = PersiaReplicaInfo::get()?;
         let singleton = PERSIA_METRICS_MANAGER.get_or_try_init(|| {
-            let guard = config.read();
-            if !guard.metrics_config.enable_metrics {
+            if !common_config.metrics_config.enable_metrics {
                 return Err(PersiaMetricsManagerError::NotEnabledError);
             }
+            let instance_name = format!("rep_{}", replica_info.replica_index);
             let singleton = Arc::new(Self::new(
-                guard.metrics_config.job_name.clone(),
-                guard.metrics_config.instance_name.clone(),
-                guard.metrics_config.ip_addr.clone(),
-                guard.metrics_config.push_interval.clone(),
+                common_config.metrics_config.job_name.clone(),
+                instance_name,
+                instance_info.ip_address.clone(),
+                Duration::from_secs(common_config.metrics_config.push_interval_seconds as u64),
             ));
             Ok(singleton)
         });
@@ -52,14 +53,19 @@ impl PersiaMetricsManager {
         }
     }
 
-    fn new(job_name: String, instance_name: String, ip_addr: String, push_interval: u64) -> Self {
+    fn new(
+        job_name: String,
+        instance_name: String,
+        ip_addr: String,
+        push_interval: Duration,
+    ) -> Self {
         let mut const_labels = HashMap::with_capacity(2);
         const_labels.insert(String::from("instance"), instance_name);
         const_labels.insert(String::from("ip_addr"), ip_addr);
 
         let instance = Self {
             const_labels,
-            push_interval: std::time::Duration::from_secs(push_interval),
+            push_interval,
             job_name,
         };
         instance.spawn_push();

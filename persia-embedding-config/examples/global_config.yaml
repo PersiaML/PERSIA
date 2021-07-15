@@ -13,4 +13,4 @@ PersiaShardedServerConfig:
   incremental_channel_capacity: 1000
 PersiaMetricsConfig:
   enable_metrics: true
-  push_interval: 10
+  push_interval_seconds: 10

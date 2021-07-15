@@ -472,7 +472,7 @@ pub fn forward_directly(batch: PersiaBatchData, device_id: i32) -> PyResult<Pyth
             let (_middleware_addr, client) = rpc_client.get_random_client_with_addr();
             let embeddings: EmbeddingBatch = runtime
                 .block_on(client.forward_batched_direct(sparse_batch))
-                .unwrap()
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
             let embeddings: Vec<AsyncEmbeddingOnCuda> = embeddings

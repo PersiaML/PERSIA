@@ -4,7 +4,10 @@
 extern crate shadow_rs;
 
 use anyhow::Result;
-use persia_embedding_config::{PersiaCommonConfig, PersiaShardedServerConfig};
+use persia_embedding_config::{
+    PerisaIntent, PersiaCommonConfig, PersiaGlobalConfig, PersiaReplicaInfo,
+    PersiaShardedServerConfig,
+};
 use persia_embedding_holder::PersiaEmbeddingHolder;
 use persia_embedding_sharded_server::hashmap_sharded_service::{
     EmbeddingServerNatsStub, EmbeddingServerNatsStubResponder, HashMapShardedService,
@@ -28,7 +31,7 @@ struct Cli {
     #[structopt(long)]
     num_shards: usize,
     #[structopt(long)]
-    config: PathBuf,
+    global_config: PathBuf,
 }
 
 #[tokio::main]
@@ -49,9 +52,12 @@ async fn main() -> Result<()> {
     eprintln!("build_time: {}", build::BUILD_TIME);
     let args: Cli = Cli::from_args();
 
-    let replica_info = PersiaCommonConfig::set(&args.config, args.shard_idx, args.num_shards)?;
-
-    PersiaShardedServerConfig::set(&args.config, args.port)?;
+    PersiaGlobalConfig::set_configures(
+        &args.global_config,
+        args.port,
+        args.shard_idx,
+        args.num_shards,
+    )?;
 
     let common_config = PersiaCommonConfig::get()?;
     let server_config = PersiaShardedServerConfig::get()?;
@@ -83,17 +89,32 @@ async fn main() -> Result<()> {
             async move { Ok::<_, hyper::Error>(service) }
         }));
 
-    let nats_stub = EmbeddingServerNatsStub {
-        inner: inner.clone(),
-    };
-    let responder = EmbeddingServerNatsStubResponder {
-        inner: nats_stub,
-        nats_client: NatsClient::new(replica_info),
+    let intent = inner.get_intent()?;
+    let _responder = match intent {
+        PerisaIntent::Infer(_) => None,
+        _ => {
+            let nats_stub = EmbeddingServerNatsStub {
+                inner: inner.clone(),
+            };
+            let repilca_info = PersiaReplicaInfo::get()?.as_ref().clone();
+            let responder = EmbeddingServerNatsStubResponder {
+                inner: nats_stub,
+                nats_client: NatsClient::new(repilca_info),
+            };
+            responder
+                .spawn_subscriptions()
+                .expect("failed to spawn nats subscriptions");
+            Some(responder)
+        }
     };
 
-    responder
-        .spawn_subscriptions()
-        .expect("failed to spawn nats subscriptions");
+    match intent {
+        PerisaIntent::Infer(ref conf) => {
+            let sparse_ckpt = conf.embedding_checkpoint.clone();
+            inner.load(sparse_ckpt).await?;
+        }
+        _ => {}
+    }
 
     server.await?;
     Ok(())
