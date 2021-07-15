@@ -52,6 +52,10 @@ from persia_core.nats import (
 
 if is_cuda_feature_available():
     from persia_core.backward import PyBackward
-    from persia_core.forward import PyForward
+    from persia_core.forward import (
+        PyForward,
+        forward_directly_from_data,
+        forward_directly_from_bytes,
+    )
 
 # pytype: enable=import-error

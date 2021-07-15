@@ -64,6 +64,16 @@ class Backend:
     def register_optimizer(self, optimizer: PyOptimizerBase):
         self.nats_publisher.register_optimizer(optimizer)
 
+    def dump_embedding(self, dst_dir: str, blocking: bool = False):
+        self.rpc_client.dump_embedding(dst_dir)
+        if blocking:
+            self.rpc_client.wait_for_dump_embedding()
+
+    def load_embedding(self, dst_dir: str, blocking: bool = True):
+        self.rpc_client.load_embedding(dst_dir)
+        if blocking:
+            self.rpc_client.wait_for_load_embedding()
+
 
 def init_backend(
     worker_size: int = 20,
