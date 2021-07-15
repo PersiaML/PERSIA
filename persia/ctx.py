@@ -209,7 +209,7 @@ class TrainCtx(BaseCtx):
         world_size (int): world size of this cluster.
         num_forward_workers (int): worker num of sending forward request to servers.
         num_backward_workers (int): worker num of sending backward request to servers.
-        initial_embedding_dir(str): initial embedding dir, load checkpoint in this dir when enter TrainCtx.
+        embedding_checkpoint(str): initial embedding dir, load checkpoint in this dir when enter TrainCtx.
     """
 
     def __init__(
@@ -230,7 +230,7 @@ class TrainCtx(BaseCtx):
         world_size: int = 1,
         num_forward_workers: int = 8,
         num_backward_workers: int = 8,
-        initial_embedding_dir: str = None,
+        embedding_checkpoint: str = None,
         *args,
         **kwargs,
     ):
@@ -257,7 +257,7 @@ class TrainCtx(BaseCtx):
         self.num_forward_workers = num_forward_workers
         self.num_backward_workers = num_backward_workers
 
-        self.initial_embedding_dir = initial_embedding_dir
+        self.embedding_checkpoint = embedding_checkpoint
 
         # dynamic import the PyForward and PyBackward due to conditional compilation
         from persia.prelude import PyForward, PyBackward
@@ -307,9 +307,9 @@ class TrainCtx(BaseCtx):
         )
         self.sparse_optimizer.apply()
 
-        if self.initial_embedding_dir is not None:
-            self.load_embedding(self.initial_embedding_dir)
-            self.initial_embedding_dir = None
+        if self.embedding_checkpoint is not None:
+            self.load_embedding(self.embedding_checkpoint)
+            self.embedding_checkpoint = None
 
         if self.is_training:
             self.backward_engine.launch(self.device_id, self.num_backward_workers)
@@ -327,7 +327,7 @@ class TrainCtx(BaseCtx):
             batch (PythonTrainBatch): persia training batch data include dense, target, sparse data and meta info
             is_training (bool): whether in training scence
         """
-        batch = super(TrainCtx, self).prepare_features(batch, is_training)
+        batch = super().prepare_features(batch, is_training)
         self.current_batch = batch
         return (batch.dense_tensor, batch.forward_tensors), batch.target_tensor
 
@@ -420,12 +420,14 @@ class InferCtx(BaseCtx):
     def __init__(
         self,
         backend_worker_size: int = 20,
-        middleware_addrs=get_middleware_services(),
+        middleware_addrs: str = None,
         *args,
         **kwargs,
     ):
         super(InferCtx, self).__init__(False, *args, **kwargs)
         self.rpc_client = PyPersiaRpcClient(backend_worker_size)
+        if middleware_addrs is None:
+            middleware_addrs = get_middleware_services()
         for addr in middleware_addrs:
             self.rpc_client.add_rpc_client(addr)
 
@@ -435,5 +437,5 @@ class InferCtx(BaseCtx):
         Arguments:
             batch (PythonTrainBatch): persia training batch data include dense, target, sparse data and meta info
         """
-        batch = super(InferCtx, self).prepare_features(batch, False)
+        batch = super().prepare_features(batch, False)
         return (batch.dense_tensor, batch.forward_tensors)
