@@ -41,13 +41,13 @@ from persia_core import (
 from persia_core.optim import PyOptimizerBase
 from persia_core.data import (
     PyPersiaBatchData,
-    PyPersiaBatchDataChannel,
-    PyPersiaBatchDataSender,
-    PyPersiaBatchDataReceiver,
 )
 from persia_core.utils import (
     PyPersiaMessageQueueServer,
     PyPersiaMessageQueueClient,
+    PyPersiaBatchDataChannel,
+    PyPersiaBatchDataSender,
+    PyPersiaBatchDataReceiver,
     PyPersiaReplicaInfo,
 )
 from persia_core.nats import (

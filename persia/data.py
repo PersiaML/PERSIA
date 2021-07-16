@@ -13,7 +13,7 @@ from persia.prelude import (
 )
 
 
-class IterableDatasetBase(ABC):
+class IterableChanneltBase(ABC):
     def __init__(self, buffer_size: int, replica_info: PyPersiaReplicaInfo):
         self.persia_batch_channel = PyPersiaBatchDataChannel(buffer_size)
         self.replica_info = replica_info
@@ -35,7 +35,7 @@ class IterableDatasetBase(ABC):
         ...
 
 
-class NatsInfiniteDataset(IterableDatasetBase):
+class NatsInfiniteDataset(IterableChanneltBase):
     r"""InfiniteIterator for streaming data stop by timeout exception
 
     Arguments:
@@ -61,9 +61,15 @@ class NatsInfiniteDataset(IterableDatasetBase):
         raise NotImplementedError("InfiteIterator not implement __len__ function")
 
 
-class FiniteAsyncDataset(IterableDatasetBase):
-    def __init__(self, buffer_size: int, replica_info: PyPersiaReplicaInfo = None):
-        super(FiniteAsyncDataset, self).__init__(buffer_size, replica_info)
+class FiniteDataset(IterableChanneltBase):
+    def __init__(
+        self,
+        buffer_size: int,
+        replica_info: PyPersiaReplicaInfo = None,
+        async_iterator: bool = True,
+    ):
+        super(FiniteDataset, self).__init__(buffer_size, replica_info)
+        self.async_iterator = async_iterator
 
     def fetch_data(self, sender: PyPersiaBatchDataSender):
         raise NotImplementedError("implement this function to fetch data")
@@ -73,20 +79,23 @@ class FiniteAsyncDataset(IterableDatasetBase):
         # class WorkerType(Enum):
         #     THREAD = 1
         #     PROCESS = 2
-        handler = Thread(target=self.fetch_data, args=(self.sender,), daemon=True)
-        handler.start()
 
+        if self.async_iterator:
+            handler = Thread(target=self.fetch_data, args=(self.sender,), daemon=True)
+            handler.start()
+            
         # TODO: process the forward engine error to prevent blocking
         for _val in range(len(self)):
             yield _val
 
-        handler.join()
+        if self.async_iterator:
+            handler.join()
 
 
 class Dataloder(object):
     def __init__(
         self,
-        dataset: IterableDatasetBase,
+        channel: IterableChanneltBase,
         forward_buffer_size: int = 10,
         is_training: bool = True,
         timeout: int = 1000 * 60 * 10,
@@ -96,25 +105,27 @@ class Dataloder(object):
         # dynamic import the PyForward due to conditional compilation
         from persia.prelude import PyForward
 
-        self.dataset = dataset
+        self.channel = channel
         self.timeout = timeout
+        self.num_workers = num_workers
 
         self.forward_engine = PyForward(
             forward_buffer_size,
-            shuffle,
-            is_training,
-            dataset.replica_info,
+            not is_training,
+            not shuffle,
+            channel.replica_info,
         )
-        self.forward_engine.set_input_channel(dataset.receiver)
+        self.forward_engine.set_input_channel(channel.receiver)
         self.forward_engine.launch(
             torch.cuda.current_device(),
-            num_workers,
+            self.num_workers,
         )
 
-    def __next__(self):
+    def __iter__(self):
+
         # TODO: warp the rust exception to python Exception
-        for _ in self.dataset:
+        for _ in self.channel:
             yield self.forward_engine.get_batch(self.timeout)
 
     def __len__(self):
-        return len(self.dataset)
+        return len(self.channel)

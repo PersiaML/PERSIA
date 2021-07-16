@@ -115,6 +115,7 @@ class TrainCtx(BaseCtx):
         enable_backward: bool = True,
         backend_worker_size: int = 20,
         backward_buffer_size: int = 10,
+        nats_recv_buffer_size: int = 50,
         rank_id: int = 0,
         world_size: int = 1,
         num_forward_workers: int = 8,
@@ -140,10 +141,17 @@ class TrainCtx(BaseCtx):
         self.admit_probability = admit_probability
         self.weight_bound = weight_bound
         self.emb_initialization = emb_initialization
+
         self.replica_info = PyPersiaReplicaInfo(world_size, rank_id)
 
         self.num_backward_workers = num_backward_workers
+        # TODO: PyPersiaBatchFlowNatsStubResponder should decouple with data channel
+        # data channel create by datachannel
+        self.nats_dataset = NatsInfiniteDataset(
+            nats_recv_buffer_size, self.replica_info
+        )
 
+        logger.info(f"world size: {world_size} rank_id: {rank_id} init backend...")
         self.backend = init_backend(backend_worker_size, self.replica_info)
         self.enable_backward = enable_backward
 
@@ -155,12 +163,10 @@ class TrainCtx(BaseCtx):
 
         self.current_batch = None
 
-    def nats_publisher_streaming_dataset(
+    def nats_publisher_streaming_datachannel(
         self,
-        nats_recv_buffer_size: int = 50,
-        timeout: int = 1000 * 60 * 10,
     ) -> NatsInfiniteDataset:
-        return NatsInfiniteDataset(nats_recv_buffer_size, self.replica_info)
+        return self.nats_dataset
 
     def __enter__(self):
         self.backend.set_configuration(
@@ -190,16 +196,13 @@ class TrainCtx(BaseCtx):
         """
         import persia_torch_ext as pte  # pytype: disable=import-error
 
-        if is_training:
-            batch.target = batch.consume_all_targets()
-            assert len(batch.target) == 1
-            batch.target = batch.target[0]
+        batch.target = batch.consume_all_targets()
+        assert len(batch.target) == 1, len(batch.target)
+        batch.target = batch.target[0]
 
-            batch.target_tensor = pte.ptr_to_tensor_f32(
-                batch.target.data_ptr(), batch.target.shape(), False
-            )
-        else:
-            batch.target_tensor = None
+        batch.target_tensor = pte.ptr_to_tensor_f32(
+            batch.target.data_ptr(), batch.target.shape(), False
+        )
 
         batch.dense = batch.consume_all_dense_features()
         # assert len(batch.dense) == 1
