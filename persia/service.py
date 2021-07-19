@@ -1,6 +1,6 @@
 import os
 
-from typing import List, Tuple
+from typing import List
 
 
 def get_middleware_services() -> List[str]:

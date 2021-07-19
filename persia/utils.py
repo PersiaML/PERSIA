@@ -22,7 +22,7 @@ def block(interval: int = 120):
     """block the process by sleep function
 
     Arguments:
-        interval (int): sleep interval
+        interval (int, optinal): sleep interval
     """
     while True:
         time.sleep(interval)

@@ -17,9 +17,9 @@ def persia_ctx(
     r"""Return a context warpper to process the error
 
     Arguments:
-        exit_when_meet_exception (bool): whether block the process when exit the contxt
-        catch_exception (bool): catch the exception or not when occur the exception
-        verbose (bool): output the exception
+        exit_when_meet_exception (bool, optional): whether block the process when exit the contxt
+        catch_exception (bool, optinal): catch the exception or not when occur the exception
+        verbose (bool, optional): output the exception
     """
     try:
         yield

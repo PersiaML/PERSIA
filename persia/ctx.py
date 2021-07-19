@@ -12,7 +12,6 @@ from persia.backend import init_backend
 from persia.prelude import PyPersiaReplicaInfo
 from persia.error import PersiaRuntimeException
 from persia.data import NatsStreamingChannel
-from persia.service import get_middleware_services
 
 grad_queue_slot_num = os.environ.get("GRAD_SLOT", 60)
 grad_queue = Queue(grad_queue_slot_num)
@@ -30,19 +29,21 @@ def _check_finite(grads: List[torch.Tensor]):
 
 
 class CtxStatus(Enum):
+    r"""Enum status to identify which mode current context is.Context will preprocess the
+    batch input data according to different mode.
+    """
     TRAIN = 1
     EVAL = 2
     INFERENCE = 3
 
 
 class BaseCtx:
-    r"""provide feature to inject to current training step
-    provide handy debug ctx mode debug mode for user
+    r"""Base context to provide fundamental function
 
     Arguments:
-        is_training (bool): current context is in training or not
-        block_when_exit (bool): whether block the process when exit the contxt
-        catch_exception (bool): catch the exception or not when occur the exception
+        ctx_status (CtxStatus): represent current context status
+        block_when_exit (bool, optional): whether block the process when exit the contxt
+        catch_exception (bool, optional): catch the exception or not when occur the exception
     """
 
     def __init__(
@@ -54,19 +55,22 @@ class BaseCtx:
         self.status = ctx_status
         self.block_when_exit = block_when_exit
         self.catch_exception = catch_exception
-        
+
         self.current_batch = None
 
     @property
     def is_training(self) -> bool:
+        """Whether current context is training or not """
         return self.status == CtxStatus.TRAIN
 
     @property
     def is_eval(self) -> bool:
+        """Whether current context is eval or not """
         return self.status == CtxStatus.EVAL
 
     @property
     def is_inference(self) -> bool:
+        """Whether current context is inference or not """
         return self.status == CtxStatus.INFERENCE
 
     def train(self):
@@ -97,11 +101,11 @@ class BaseCtx:
         return PersiaRuntimeException(value)
 
     def prepare_features(self, batch):
-        """preprocess the PythonTrainBatch
+        """preprocess the PythonTrainBatch to pytorch tensor. Multiple dense, sparse and target tensors
+        will converted to tensor from rust cuda pointer.
 
         Arguments:
             batch (PythonTrainBatch): persia training batch data include dense, target, sparse data and meta info
-            is_training (bool): whether in training scence
         """
         import persia_torch_ext as pte  # pytype: disable=import-error
 
@@ -210,27 +214,29 @@ class LocalCtx(BaseCtx):
 
 
 class TrainCtx(BaseCtx):
-    r"""Training context that provide full feature of sparse training, include half training, optimzier
-    register, forward, backward process
+    r"""Training context that provide full feature of sparse training, include optimzier
+    register, embedding forward, embedding backward process, ckp load and ckp dump.
 
     Arguments:
-        grad_scaler (torch.cuda.amp.GradScaler): scale the loss from float32 to half to support half training
-        emb_initialization (Tuple[float, float]): embedding uniform initialization arguments
-        admit_probability (float): embedding gradient update admit probability, range in [0, 1].
-        sparse_optimizer (persias.sparse.optim.Optimizer): sparse optimizer to make embedding update available
-        weight_bound (float): embedding value bound, normal will update the embedding locate in [-weight_bound, weight_bound]
-        is_training (bool): current context is in training or not
-        device_id (int): current cuda device id
-        enable_backward (bool): enable embeddign gradients update
-        backend_worker_size (int): rpc client thread pool size
-        forward_buffer_size (int): forward engine buffer size
-        nats_recv_buffer_size (int): nats recv buffer size, a buffer before rectifier
-        backward_buffer_size (int): backward update buffer size
-        rank_id (int): rank id of this process.
-        world_size (int): world size of this cluster.
-        num_forward_workers (int): worker num of sending forward request to servers.
-        num_backward_workers (int): worker num of sending backward request to servers.
-        embedding_checkpoint(str): initial embedding dir, load checkpoint in this dir when enter TrainCtx.
+        grad_scaler (torch.cuda.amp.GradScaler, optional): scale the loss from float32 to half to support half training
+        emb_initialization (Tuple[float, float], optional): embedding uniform initialization arguments
+        admit_probability (float): probability of embedding generation. value in [0, 1]. Generate a random
+        value(range in [0, 1]) for each sparse embedding, generate the new embedding once the value is
+        small than the admit_probability. Always generate the new embedding when the admit_probability set
+        to 1.
+        sparse_optimizer (persias.sparse.optim.Optimizer, optional): sparse optimizer to make embedding update available
+        weight_bound (float, optional): embedding value bound, normal will update the embedding locate in [-weight_bound, weight_bound]
+        ctx_status (CtxStatus, optional): represent current context status
+        device_id (int, optional): current cuda device id
+        enable_backward (bool, optional): enable embeddign gradients update
+        backend_worker_size (int, optional): rpc client thread pool size
+        backward_buffer_size (int, optional): backward update buffer size
+        nats_recv_buffer_size (int, optional): nats recv buffer size, a buffer before rectifier
+        rank_id (int, optional): rank id of this process.
+        world_size (int, optional): world size of this cluster.
+        num_forward_workers (int, optional): worker num of sending forward request to servers.
+        num_backward_workers (int, optional): worker num of sending backward request to servers.
+        embedding_checkpoint(str, optional): pretrained embedding directory, load checkpoint in this dir when enter TrainCtx.
     """
 
     def __init__(
@@ -295,9 +301,10 @@ class TrainCtx(BaseCtx):
             # dynamic import the PyForward due to conditional compilation
             self.backward_engine = PyBackward(backward_buffer_size)
 
-    def nats_publisher_streaming_datachannel(
+    def get_nats_publisher_streaming_datachannel(
         self,
     ) -> NatsStreamingChannel:
+        """Get nats streaming datachannel"""
         return self.nats_dataset
 
     def __enter__(self):
@@ -328,7 +335,7 @@ class TrainCtx(BaseCtx):
         Arguments:
             loss_scale (float): half training loss scale to scale the gradient
             batch_idx (int): index of batch data to decide the GradScalar update
-            emb_grad_check_interval (int): check interval to controll the GradScalar update frequnency
+            emb_grad_check_interval (int, optional):Gradient check interval to controll the GradScalar update frequnency
         """
         if grad_queue.full():
             grad_queue.get()
@@ -391,13 +398,29 @@ class TrainCtx(BaseCtx):
         return finite
 
     def dump_embedding(self, dst_dir: str, blocking: bool = False):
+        """Dump the sparse embedding to destination directory.This method provide not blocking
+        mode, invoke the TrainCtx.wait_for_dump_embedding once set blocking to False.
+
+        Arguments:
+            dst_dir (str): destination directory
+            blocking (bool, optional): dump embedding in blocking mode or not
+        """
         self.backend.dump_embedding(dst_dir, blocking)
 
-    def load_embedding(self, dst_dir: str, blocking: bool = True):
-        self.backend.load_embedding(dst_dir, blocking)
+    def load_embedding(self, src_dir: str, blocking: bool = True):
+        """Load the sparse embedding from source directory.This method provide not blocking mode,
+        invoke the TrainCtx.wait_for_load_embedding once set the blocking to False.
+
+        Arguments:
+            src_dir (str): destination directory
+            blocking (bool, optional): dump embedding in blocking mode or not
+        """
+        self.backend.load_embedding(src_dir, blocking)
 
     def wait_for_dump_embedding(self):
+        """Wait for dump the sparse embedding"""
         self.backend.wait_for_dump_embedding()
 
     def wait_for_load_embedding(self):
+        """Wait for load the sparse embedding"""
         self.backend.wait_for_load_embedding()

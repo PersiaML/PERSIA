@@ -13,36 +13,46 @@ from persia.prelude import (
 )
 
 
-class IterableChanneltBase(ABC):
+class IterableChannelBase(ABC):
+    r"""IterableChannelBase wrap the PyPersiaBatchDataChannel that provide the channel sender and
+    receiver.
+
+    Arguments:
+        buffer_size (int): PyPersiaBatchDataChannel buffer size
+        replica_info (PyPersiaReplicaInfo): replica info of current process to enable the data reorder ability
+    """
+
     def __init__(self, buffer_size: int, replica_info: PyPersiaReplicaInfo):
         self.persia_batch_channel = PyPersiaBatchDataChannel(buffer_size)
         self.replica_info = replica_info
 
     @property
     def receiver(self) -> PyPersiaBatchDataReceiver:
+        """Get PyPersiaBatchDataReceiver python wrapper"""
         return self.persia_batch_channel.get_receiver()
 
     @property
-    def sender(self) -> PyPersiaBatchDataReceiver:
+    def sender(self) -> PyPersiaBatchDataSender:
+        """Get PyPersiaBatchDataSender python wrapper"""
         return self.persia_batch_channel.get_sender()
 
     @abstractmethod
     def __iter__(self):
+        """Implement this function to iterate data from PyForward"""
         ...
 
     @abstractmethod
     def __len__(self):
+        """Fixed size dataset should implement this function"""
         ...
 
 
-class NatsStreamingChannel(IterableChanneltBase):
-    r"""InfiniteIterator for streaming data stop by timeout exception
+class NatsStreamingChannel(IterableChannelBase):
+    r"""NatsStreamingChannel  recive data from nats publisher
 
     Arguments:
-        forward_engine : rust forward engine wrapper for fetch input data
-        port (int): port for input server to bind
-        data_queue_size (int): buffer size for data forward phase
-        timeout (int): timeout for data fetch
+        buffer_size (int): PyPersiaBatchDataChannel buffer size
+        replica_info (PyPersiaReplicaInfo): replica info of current process to enable the data reorder ability
     """
 
     def __init__(
@@ -58,10 +68,10 @@ class NatsStreamingChannel(IterableChanneltBase):
             yield None
 
     def __len__(self) -> int:
-        raise NotImplementedError("InfiteIterator not implement __len__ function")
+        raise NotImplementedError("StreamingChannel do not implement __len__ function")
 
 
-class PersiaChannel(IterableChanneltBase):
+class PersiaChannel(IterableChannelBase):
     def __init__(
         self,
         buffer_size: int,
@@ -72,6 +82,7 @@ class PersiaChannel(IterableChanneltBase):
         self.async_iterator = async_iterator
 
     def fetch_data(self, sender: PyPersiaBatchDataSender):
+        """Callback function to put the data into PyPersiaBatchDataSender"""
         raise NotImplementedError("implement this function to fetch data")
 
     def __iter__(self):
@@ -83,7 +94,7 @@ class PersiaChannel(IterableChanneltBase):
         if self.async_iterator:
             handler = Thread(target=self.fetch_data, args=(self.sender,), daemon=True)
             handler.start()
-            
+
         # TODO: process the forward engine error to prevent blocking
         for _val in range(len(self)):
             yield _val
@@ -93,9 +104,21 @@ class PersiaChannel(IterableChanneltBase):
 
 
 class Dataloder(object):
+    r"""Dataloder provide the interface to fetch the PythonBatchData from PyForward
+    wrapper.
+
+    Arguments:
+        channel (IterableChannelBase): data channel for Dataloder to retrive replica info and sender channel
+        forward_buffer_size: (int, optional): gpu forward channel buffer size, this args effect the gpu memory cost
+        is_training (bool, optional): wheter current forward status is training or not
+        timeout (int, optional): timeout for PyFoward to fetch data, millisecond unit
+        num_workers (int, optional): spawn thread worker number for  PyForward to lookup embedding and PythonBatchData prefetch
+        shuffle (bool, optional): iterate the data in order, make the dataflow deterministic
+    """
+
     def __init__(
         self,
-        channel: IterableChanneltBase,
+        channel: IterableChannelBase,
         forward_buffer_size: int = 10,
         is_training: bool = True,
         timeout: int = 1000 * 60 * 10,
@@ -123,7 +146,6 @@ class Dataloder(object):
 
     def __iter__(self):
 
-        # TODO: warp the rust exception to python Exception
         for _ in self.channel:
             yield self.forward_engine.get_batch(self.timeout)
 
