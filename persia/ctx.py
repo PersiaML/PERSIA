@@ -11,7 +11,7 @@ from persia.sparse.optim import Optimizer
 from persia.backend import init_backend
 from persia.prelude import PyPersiaReplicaInfo
 from persia.error import PersiaRuntimeException
-from persia.data import NatsInfiniteDataset
+from persia.data import NatsStreamingChannel
 from persia.service import get_middleware_services
 
 grad_queue_slot_num = os.environ.get("GRAD_SLOT", 60)
@@ -29,6 +29,12 @@ def _check_finite(grads: List[torch.Tensor]):
     return all([torch.isfinite(t).all() if t is not None else True for t in grads])
 
 
+class CtxStatus(Enum):
+    TRAIN = 1
+    EVAL = 2
+    INFERENCE = 3
+
+
 class BaseCtx:
     r"""provide feature to inject to current training step
     provide handy debug ctx mode debug mode for user
@@ -41,23 +47,39 @@ class BaseCtx:
 
     def __init__(
         self,
-        is_training: bool = False,
+        ctx_status: CtxStatus,
         block_when_exit: bool = True,
         catch_exception: bool = False,
     ):
-        self.is_training = is_training
+        self.status = ctx_status
         self.block_when_exit = block_when_exit
         self.catch_exception = catch_exception
-
+        
         self.current_batch = None
 
+    @property
+    def is_training(self) -> bool:
+        return self.status == CtxStatus.TRAIN
+
+    @property
+    def is_eval(self) -> bool:
+        return self.status == CtxStatus.EVAL
+
+    @property
+    def is_inference(self) -> bool:
+        return self.status == CtxStatus.INFERENCE
+
     def train(self):
-        """set current context is_training to true"""
-        self.is_training = True
+        """set current context status to train"""
+        self.status = CtxStatus.TRAIN
 
     def eval(self):
-        """set current context is_training to false"""
-        self.is_training = False
+        """set current context status to eval"""
+        self.status = CtxStatus.EVAL
+
+    def inference(self):
+        """set current context status to inference"""
+        self.status = CtxStatus.INFERENCE
 
     def __enter__(self):
         return self
@@ -74,7 +96,7 @@ class BaseCtx:
             block()
         return PersiaRuntimeException(value)
 
-    def prepare_features(self, batch, is_training=True):
+    def prepare_features(self, batch):
         """preprocess the PythonTrainBatch
 
         Arguments:
@@ -83,13 +105,18 @@ class BaseCtx:
         """
         import persia_torch_ext as pte  # pytype: disable=import-error
 
-        batch.target = batch.consume_all_targets()
-        assert len(batch.target) == 1
-        batch.target = batch.target[0]
+        if self.is_inference:
+            batch.target_tensor = None
+        else:
+            batch.target = batch.consume_all_targets()
+            assert len(batch.target) == 1
+            batch.target = batch.target[0]
 
-        batch.target_tensor = pte.ptr_to_tensor_f32(
-            batch.target.data_ptr(), batch.target.shape(), False
-        )
+            batch.target_tensor = pte.ptr_to_tensor_f32(
+                batch.target.data_ptr(), batch.target.shape(), False
+            )
+
+        is_training = self.is_training  # cache property
 
         batch.dense = batch.consume_all_dense_features()
         # assert len(batch.dense) == 1
@@ -213,7 +240,7 @@ class TrainCtx(BaseCtx):
         admit_probability: float = 1.0,
         sparse_optimizer: Optimizer = None,
         weight_bound: float = 10,
-        is_training: bool = True,
+        ctx_status: CtxStatus = CtxStatus.TRAIN,
         device_id: int = 0,
         enable_backward: bool = True,
         backend_worker_size: int = 20,
@@ -227,9 +254,10 @@ class TrainCtx(BaseCtx):
         *args,
         **kwargs,
     ):
-        super(TrainCtx, self).__init__(is_training, *args, **kwargs)
-        assert not is_training or (
-            is_training and sparse_optimizer is not None
+        super(TrainCtx, self).__init__(ctx_status, *args, **kwargs)
+
+        assert not self.is_training or (
+            self.is_training and sparse_optimizer is not None
         ), "sparse_optimizer should not be none when is_training set to true"
         assert (
             0 <= device_id < torch.cuda.device_count()
@@ -239,7 +267,6 @@ class TrainCtx(BaseCtx):
 
         self.device_id = device_id
         self.grad_scaler = grad_scaler
-        self.is_training = is_training
 
         self.sparse_optimizer = sparse_optimizer
         self.admit_probability = admit_probability
@@ -251,7 +278,7 @@ class TrainCtx(BaseCtx):
         self.num_backward_workers = num_backward_workers
         # TODO: PyPersiaBatchFlowNatsStubResponder should decouple with data channel
         # data channel create by datachannel
-        self.nats_dataset = NatsInfiniteDataset(
+        self.nats_dataset = NatsStreamingChannel(
             nats_recv_buffer_size, self.replica_info
         )
 
@@ -270,7 +297,7 @@ class TrainCtx(BaseCtx):
 
     def nats_publisher_streaming_datachannel(
         self,
-    ) -> NatsInfiniteDataset:
+    ) -> NatsStreamingChannel:
         return self.nats_dataset
 
     def __enter__(self):

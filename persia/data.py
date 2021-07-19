@@ -35,7 +35,7 @@ class IterableChanneltBase(ABC):
         ...
 
 
-class NatsInfiniteDataset(IterableChanneltBase):
+class NatsStreamingChannel(IterableChanneltBase):
     r"""InfiniteIterator for streaming data stop by timeout exception
 
     Arguments:
@@ -50,7 +50,7 @@ class NatsInfiniteDataset(IterableChanneltBase):
         buffer_size: int,
         replica_info: PyPersiaReplicaInfo,
     ):
-        super(NatsInfiniteDataset, self).__init__(buffer_size, replica_info)
+        super(NatsStreamingChannel, self).__init__(buffer_size, replica_info)
         self._responder = PyPersiaBatchFlowNatsStubResponder(replica_info, self.sender)
 
     def __iter__(self):
@@ -61,14 +61,14 @@ class NatsInfiniteDataset(IterableChanneltBase):
         raise NotImplementedError("InfiteIterator not implement __len__ function")
 
 
-class FiniteDataset(IterableChanneltBase):
+class PersiaChannel(IterableChanneltBase):
     def __init__(
         self,
         buffer_size: int,
         replica_info: PyPersiaReplicaInfo = None,
         async_iterator: bool = True,
     ):
-        super(FiniteDataset, self).__init__(buffer_size, replica_info)
+        super(PersiaChannel, self).__init__(buffer_size, replica_info)
         self.async_iterator = async_iterator
 
     def fetch_data(self, sender: PyPersiaBatchDataSender):
