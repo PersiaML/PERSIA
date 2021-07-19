@@ -116,16 +116,21 @@ html_show_copyright = True
 _ignore_methods = [
     # "bagua.torch_api.contrib.LoadBalancingDistributedSampler.shuffle_chunks",
 ]
+
 _ignore_functions = [
     "persia.service.get_middleware_services",
-    "persia.service.get_client_services"
+    "persia.service.get_client_services",
 ]
+
 _ignore_classes = []
 
 _ignore_module = [
     "persia.version",
-    "persia.sparse.emb"
+    "persia.sparse.emb",
+    "persia.error",
+    "persia.sparse.__init__",
 ]
+
 
 def skip_methods(app, what, name, obj, skip, options):
     if what == "method" and name in _ignore_methods:
@@ -139,7 +144,7 @@ def skip_methods(app, what, name, obj, skip, options):
     if what == "class" and name in _ignore_classes:
         skip = True
         return skip
-    
+
     if what == "module" and name in _ignore_module:
         skip = True
         return skip
