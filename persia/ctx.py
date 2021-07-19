@@ -234,7 +234,6 @@ class TrainCtx(BaseCtx):
         nats_recv_buffer_size (int, optional): nats recv buffer size, a buffer before rectifier
         rank_id (int, optional): rank id of this process.
         world_size (int, optional): world size of this cluster.
-        num_forward_workers (int, optional): worker num of sending forward request to servers.
         num_backward_workers (int, optional): worker num of sending backward request to servers.
         embedding_checkpoint(str, optional): pretrained embedding directory, load checkpoint in this dir when enter TrainCtx.
     """
@@ -254,7 +253,6 @@ class TrainCtx(BaseCtx):
         nats_recv_buffer_size: int = 50,
         rank_id: int = 0,
         world_size: int = 1,
-        num_forward_workers: int = 8,
         num_backward_workers: int = 8,
         embedding_checkpoint: str = None,
         *args,

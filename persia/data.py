@@ -72,6 +72,14 @@ class NatsStreamingChannel(IterableChannelBase):
 
 
 class PersiaChannel(IterableChannelBase):
+    r"""Persia data channel that provide asynchronous data handler feature to improve the performance of data preprocess.
+    Not support synchronous data handler temporary.
+
+    Arguments:
+        buffer_size (int): PyPersiaBatchDataChannel buffer size
+        replica_info (PyPersiaReplicaInfo): replica info of current process to enable the data reorder ability
+    """
+
     def __init__(
         self,
         buffer_size: int,
@@ -139,8 +147,8 @@ class Dataloder(object):
 
         self.forward_engine = PyForward(
             forward_buffer_size,
-            not is_training,
-            not shuffle,
+            is_training,
+            shuffle,
             channel.replica_info,
         )
         self.forward_engine.set_input_channel(channel.receiver)
