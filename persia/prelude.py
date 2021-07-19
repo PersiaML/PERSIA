@@ -9,7 +9,7 @@ import persia_core
 
 
 def register_submodule(module: ModuleType, root_module_path: str):
-    """register the persia py client wrapper module to sys module
+    """register the persia core module to sys module path
 
     Arguments:
         module (ModuleType): root module

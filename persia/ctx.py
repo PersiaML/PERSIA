@@ -29,8 +29,8 @@ def _check_finite(grads: List[torch.Tensor]):
 
 
 class CtxStatus(Enum):
-    r"""Enum status to identify which mode current context is.Context will preprocess the
-    batch input data according to different mode.
+    r"""Enum struct to identify which status current context is.Context will preprocess the
+    batch input data according to different status.
     """
     TRAIN = 1
     EVAL = 2
@@ -60,17 +60,17 @@ class BaseCtx:
 
     @property
     def is_training(self) -> bool:
-        """Whether current context is training or not """
+        """Whether current context is training status or not"""
         return self.status == CtxStatus.TRAIN
 
     @property
     def is_eval(self) -> bool:
-        """Whether current context is eval or not """
+        """Whether current context is eval status or not"""
         return self.status == CtxStatus.EVAL
 
     @property
     def is_inference(self) -> bool:
-        """Whether current context is inference or not """
+        """Whether current context is inference status or not"""
         return self.status == CtxStatus.INFERENCE
 
     def train(self):
@@ -301,7 +301,7 @@ class TrainCtx(BaseCtx):
             # dynamic import the PyForward due to conditional compilation
             self.backward_engine = PyBackward(backward_buffer_size)
 
-    def get_nats_publisher_streaming_datachannel(
+    def get_nats_streaming_datachannel(
         self,
     ) -> NatsStreamingChannel:
         """Get nats streaming datachannel"""

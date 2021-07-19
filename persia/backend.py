@@ -36,8 +36,8 @@ class Backend:
 
         Arguments:
             data (PyPersiaBatchData): persia_batch_data
-            blocking (bool): whether retry sending data when meet exception.RuntimeExcption will raised
-            directly without retry when set it to False.
+            blocking (bool): whether retry sending data when meet exception.RuntimeExcption will raised directly
+                without retry when set it to False.
         """
         self.nats_publisher.send_sparse_to_middleware(data, blocking)
         self.nats_publisher.send_dense_to_trainer(data, blocking)
@@ -55,10 +55,9 @@ class Backend:
         Arguments:
             initialize_lower (float): embedding uniform initialization lower bound args
             initialize_upper (float): embedding uniform initialization upper bound args
-            admit_probability (float): probability of embedding generation. value in [0, 1]. Generate a random
-            value(range in [0, 1]) for each sparse embedding, generate the new embedding once the value is
-            small than the admit_probability. Always generate the new embedding when the admit_probability set
-            to 1.
+            admit_probability (float): probability of embedding generation. value in [0, 1]. Generate a random value(range in [0, 1]) for each sparse embedding,
+                    generate the new embedding once the value is small than the admit_probability. Always generate the new embedding when the admit_probability set
+                    to 1.
         """
         self.nats_publisher.configure_sharded_servers(
             initialize_lower,

@@ -120,13 +120,12 @@ _ignore_functions = [
     "persia.service.get_middleware_services",
     "persia.service.get_client_services"
 ]
-_ignore_classes = [
-    "persia.data.Dataloder",
-    "persia.sparse.emb.Embedding",
-    "persia.sparse.emb.VarLenEmbedding",
-    "persia.sparse.emb.SumEmbedding"
-]
+_ignore_classes = []
 
+_ignore_module = [
+    "persia.version",
+    "persia.sparse.emb"
+]
 
 def skip_methods(app, what, name, obj, skip, options):
     if what == "method" and name in _ignore_methods:
@@ -138,6 +137,10 @@ def skip_methods(app, what, name, obj, skip, options):
         return skip
 
     if what == "class" and name in _ignore_classes:
+        skip = True
+        return skip
+    
+    if what == "module" and name in _ignore_module:
         skip = True
         return skip
 

@@ -82,7 +82,12 @@ class PersiaChannel(IterableChannelBase):
         self.async_iterator = async_iterator
 
     def fetch_data(self, sender: PyPersiaBatchDataSender):
-        """Callback function to put the data into PyPersiaBatchDataSender"""
+        """Callback function to put the data into PyPersiaBatchDataSender
+
+        Arguments:
+            sender (PyPersiaBatchDataSender): PersiaBatchData sender channel to send the generate data
+                to the PersiaBatchData receive channel
+        """
         raise NotImplementedError("implement this function to fetch data")
 
     def __iter__(self):
