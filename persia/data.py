@@ -128,7 +128,7 @@ class Dataloder(object):
         is_training (bool, optional): wheter current forward status is training or not
         timeout (int, optional): timeout for PyFoward to fetch data, millisecond unit
         num_workers (int, optional): spawn thread worker number for  PyForward to lookup embedding and PythonBatchData prefetch
-        reproducible (bool, optional): iterate the data in fixed order, make the dataflow deterministic
+        shuffle (bool, optional): iterate the data in fixed order, make the dataflow deterministic
     """
 
     def __init__(
@@ -138,7 +138,7 @@ class Dataloder(object):
         is_training: bool = True,
         timeout: int = 1000 * 60 * 10,
         num_workers: int = 10,
-        reproducible: bool = False,
+        shuffle: bool = False,
     ):
         # dynamic import the PyForward due to conditional compilation
         from persia.prelude import PyForward
@@ -150,7 +150,7 @@ class Dataloder(object):
         self.forward_engine = PyForward(
             forward_buffer_size,
             is_training,
-            reproducible,
+            shuffle,
             channel.replica_info,
         )
         self.forward_engine.set_input_channel(channel.receiver)
