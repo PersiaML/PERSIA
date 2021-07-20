@@ -1,6 +1,6 @@
 import os
 
-from typing import List, Tuple
+from typing import List
 
 
 def get_middleware_services() -> List[str]:
@@ -12,7 +12,7 @@ def get_middleware_services() -> List[str]:
     )
 
 
-def get_client_services() -> List[str]:
+def get_trainer_services() -> List[str]:
     """return the current trainer service list by environment variable"""
     return (
         [os.environ["TRAINER_SERVICE"]]

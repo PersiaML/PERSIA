@@ -9,7 +9,7 @@ import persia_core
 
 
 def register_submodule(module: ModuleType, root_module_path: str):
-    """register the persia py client wrapper module to sys module
+    """register the persia core module to sys module path
 
     Arguments:
         module (ModuleType): root module
@@ -39,10 +39,15 @@ from persia_core import (
     PyPersiaRpcClient,
 )
 from persia_core.optim import PyOptimizerBase
-from persia_core.data import PyPersiaBatchData
+from persia_core.data import (
+    PyPersiaBatchData,
+)
 from persia_core.utils import (
     PyPersiaMessageQueueServer,
     PyPersiaMessageQueueClient,
+    PyPersiaBatchDataChannel,
+    PyPersiaBatchDataSender,
+    PyPersiaBatchDataReceiver,
     PyPersiaReplicaInfo,
 )
 from persia_core.nats import (
