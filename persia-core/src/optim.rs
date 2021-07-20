@@ -38,12 +38,10 @@ impl PyOptimizerBase {
             initialization,
             eps,
         ));
-        // self.register_optimizer2middleware()
     }
 
     pub fn init_sgd(&mut self, lr: f32, wd: f32) -> () {
         self.inner = Some(Optimizer::new_sgd(lr, wd));
-        // self.register_optimizer2middleware()
     }
 
     fn register_optimizer2middleware(&self) -> PyResult<()> {

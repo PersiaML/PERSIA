@@ -309,6 +309,7 @@ impl EmbeddingTensor {
     pub fn to_forward_id(&self) -> (&str, u64) {
         match &self {
             EmbeddingTensor::ID((middleware_addr, forward_id)) => (middleware_addr, *forward_id),
+            EmbeddingTensor::SparseBatch(_) => ("", 0u64),
             _ => panic!("forward id not found on embedding tensor"),
         }
     }

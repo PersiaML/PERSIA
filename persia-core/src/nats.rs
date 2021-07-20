@@ -1,6 +1,6 @@
 use crate::data::PyPersiaBatchData;
 use crate::optim::PyOptimizerBase;
-use crate::utils::{PyPersiaBatchDataChannel, PyPersiaReplicaInfo};
+use crate::utils::{PyPersiaBatchDataSender, PyPersiaReplicaInfo};
 use crate::PersiaRpcClient;
 
 use persia_embedding_config::PersiaReplicaInfo;
@@ -67,7 +67,6 @@ impl PyPersiaBatchFlowNatsStubPublisher {
             resp
         });
         let world_size = world_size.expect("failed to get world_size of trainer");
-
         Self {
             to_trainer,
             to_middleware: MiddlewareNatsStubPublisher { nats_client },
@@ -265,10 +264,10 @@ pub struct PyPersiaBatchFlowNatsStubResponder {
 #[pymethods]
 impl PyPersiaBatchFlowNatsStubResponder {
     #[new]
-    fn new(repilca_info: &PyPersiaReplicaInfo, forward_input: &PyPersiaBatchDataChannel) -> Self {
+    fn new(repilca_info: &PyPersiaReplicaInfo, py_channel_s: &PyPersiaBatchDataSender) -> Self {
         let replica_info = repilca_info.get_replica_info();
         let nats_stub = PersiaBatchFlowNatsStub {
-            nats_channel_s: forward_input.sender.clone(),
+            nats_channel_s: py_channel_s.inner.clone(),
             world_size: replica_info.replica_size,
         };
         let nats_responder = PersiaBatchFlowNatsStubResponder {

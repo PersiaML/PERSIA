@@ -1,10 +1,12 @@
+use pyo3::prelude::*;
+use pyo3::types::PyBytes;
+
+use crate::data::PyPersiaBatchData;
+
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_datatypes::PersiaBatchData;
 use persia_futures::{flume, tokio::runtime::Runtime};
 use persia_message_queue::{PersiaMessageQueueClient, PersiaMessageQueueServer};
-
-use pyo3::prelude::*;
-use pyo3::types::PyBytes;
 
 #[pyclass]
 pub struct PyPersiaMessageQueueClient {
@@ -111,8 +113,50 @@ impl PyPersiaReplicaInfo {
 }
 
 #[pyclass]
+pub struct PyPersiaBatchDataSender {
+    pub inner: flume::Sender<PersiaBatchData>,
+}
+
+#[pymethods]
+impl PyPersiaBatchDataSender {
+    pub fn send(&self, batch_data: &mut PyPersiaBatchData, py: Python) -> PyResult<()> {
+        let batch_data = std::mem::take(&mut batch_data.inner);
+        py.allow_threads(move || {
+            self.inner.send(batch_data).unwrap();
+            Ok(())
+        })
+    }
+}
+
+#[pyclass]
+pub struct PyPersiaBatchDataReceiver {
+    pub inner: flume::Receiver<PersiaBatchData>,
+}
+#[pyclass]
 pub struct PyPersiaBatchDataChannel {
     pub sender: flume::Sender<PersiaBatchData>,
+    pub receiver: flume::Receiver<PersiaBatchData>,
+}
+
+#[pymethods]
+impl PyPersiaBatchDataChannel {
+    #[new]
+    pub fn new(capacity: usize) -> Self {
+        let (sender, receiver) = flume::bounded(capacity);
+        Self { sender, receiver }
+    }
+
+    pub fn get_sender(&self) -> PyPersiaBatchDataSender {
+        PyPersiaBatchDataSender {
+            inner: self.sender.clone(),
+        }
+    }
+
+    pub fn get_receiver(&self) -> PyPersiaBatchDataReceiver {
+        PyPersiaBatchDataReceiver {
+            inner: self.receiver.clone(),
+        }
+    }
 }
 
 pub fn init_module(super_module: &PyModule, py: Python) -> PyResult<()> {
@@ -121,6 +165,8 @@ pub fn init_module(super_module: &PyModule, py: Python) -> PyResult<()> {
     module.add_class::<PyPersiaMessageQueueServer>()?;
     module.add_class::<PyPersiaReplicaInfo>()?;
     module.add_class::<PyPersiaBatchDataChannel>()?;
+    module.add_class::<PyPersiaBatchDataReceiver>()?;
+    module.add_class::<PyPersiaBatchDataSender>()?;
     super_module.add_submodule(module)?;
     Ok(())
 }
