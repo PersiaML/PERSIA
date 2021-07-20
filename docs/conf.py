@@ -126,6 +126,7 @@ _ignore_module = [
     "persia.sparse.emb",
     "persia.error",
     "persia.logger",
+    "persia.prelude",
     "persia.sparse.__init__",
 ]
 

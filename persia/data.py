@@ -78,7 +78,8 @@ class PersiaChannel(IterableChannelBase):
 
     Arguments:
         buffer_size (int): PyPersiaBatchDataChannel buffer size
-        replica_info (PyPersiaReplicaInfo): replica info of current process to enable the data reorder ability
+        replica_info (PyPersiaReplicaInfo, optional): replica info of current process to enable the data reorder ability
+        async_iterator (bool, optional): launch the thread to generate the data asynchronous
     """
 
     def __init__(
