@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from threading import Thread
+from typing import Optional
 
 import torch
 
@@ -83,7 +84,7 @@ class PersiaChannel(IterableChannelBase):
     def __init__(
         self,
         buffer_size: int,
-        replica_info: PyPersiaReplicaInfo = None,
+        replica_info: Optional[PyPersiaReplicaInfo] = None,
         async_iterator: bool = True,
     ):
         super(PersiaChannel, self).__init__(buffer_size, replica_info)

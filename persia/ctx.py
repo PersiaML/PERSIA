@@ -1,6 +1,6 @@
 from enum import Enum
 from queue import Queue
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import torch
 
@@ -231,10 +231,10 @@ class TrainCtx(BaseCtx):
 
     def __init__(
         self,
-        grad_scaler: torch.cuda.amp.GradScaler = None,
+        grad_scaler: Optional[torch.cuda.amp.GradScaler] = None,
         emb_initialization: Tuple[float, float] = (-0.01, 0.01),
         admit_probability: float = 1.0,
-        sparse_optimizer: Optimizer = None,
+        sparse_optimizer: Optional[Optimizer] = None,
         weight_bound: float = 10,
         ctx_status: CtxStatus = CtxStatus.TRAIN,
         device_id: int = 0,
@@ -246,7 +246,7 @@ class TrainCtx(BaseCtx):
         rank_id: int = 0,
         world_size: int = 1,
         num_backward_workers: int = 8,
-        embedding_checkpoint: str = None,
+        embedding_checkpoint: Optional[str] = None,
         *args,
         **kwargs,
     ):
