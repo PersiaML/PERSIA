@@ -117,8 +117,7 @@ _ignore_methods = [
     # "bagua.torch_api.contrib.LoadBalancingDistributedSampler.shuffle_chunks",
 ]
 
-_ignore_functions = [
-]
+_ignore_functions = []
 
 _ignore_classes = []
 

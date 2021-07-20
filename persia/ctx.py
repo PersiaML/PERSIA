@@ -89,7 +89,7 @@ class BaseCtx:
         if exc_type:
             import traceback
 
-            logger.error("\n" + traceback.format_exc())
+            _logger.error("\n" + traceback.format_exc())
 
         if self.block_when_exit:
             from persia.utils import block
@@ -331,7 +331,7 @@ class TrainCtx(BaseCtx):
             emb_grad_check_interval (int, optional):Gradient check interval to controll the GradScalar update frequnency
         """
         if self.grad_queue.full():
-            self.rad_queue.get()
+            self.grad_queue.get()
 
         finite = True
         if batch_idx % emb_grad_check_interval == 0:
@@ -385,7 +385,7 @@ class TrainCtx(BaseCtx):
         self.grad_queue.put(grad_slot)
 
         if self.is_training and len(empty_grad) > 0:
-            logger.warning(
+            _logger.warning(
                 f"current batch grad empty num: {len(empty_grad)}, {empty_grad}"
             )
         return finite

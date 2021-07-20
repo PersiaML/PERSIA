@@ -14,7 +14,7 @@ def persia_ctx(
     catch_exception: bool = True,
     verbose: bool = True,
 ):
-    r"""Return a context warpper to process the error
+    r"""Return a context warpper to process the error, to prevent process exit in docker service
 
     Arguments:
         exit_when_meet_exception (bool, optional): whether block the process when exit the contxt

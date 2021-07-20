@@ -122,5 +122,5 @@ def get_default_logger(name: Optional[str] = None, **kwargs) -> logging.Logger:
         name (str, optional): logger name
     """
     if _default_logger is None:
-        set_default_logger(name or DEFAULT_LOGGER_NAME, **kwargs)
+        _set_default_logger(name or DEFAULT_LOGGER_NAME, **kwargs)
     return _default_logger

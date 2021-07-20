@@ -3,9 +3,6 @@ from typing import Tuple
 
 from persia.prelude import PyOptimizerBase
 from persia.backend import get_backend
-from persia.logger import get_default_logger
-
-logger = get_default_logger()
 
 
 class Optimizer(ABC):
