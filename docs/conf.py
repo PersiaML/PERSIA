@@ -118,8 +118,6 @@ _ignore_methods = [
 ]
 
 _ignore_functions = [
-    "persia.service.get_middleware_services",
-    "persia.service.get_client_services",
 ]
 
 _ignore_classes = []
@@ -128,6 +126,7 @@ _ignore_module = [
     "persia.version",
     "persia.sparse.emb",
     "persia.error",
+    "persia.logger",
     "persia.sparse.__init__",
 ]
 

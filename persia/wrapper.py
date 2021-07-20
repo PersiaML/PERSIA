@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from persia.utils import block
 from persia.logger import get_default_logger
 
-logger = get_default_logger()
+_logger = get_default_logger()
 
 
 @contextmanager
@@ -26,7 +26,7 @@ def persia_ctx(
     except Exception as e:
         if verbose:
             exception_str = traceback.format_exc()
-            logger.error("\n" + exception_str)
+            _logger.error("\n" + exception_str)
 
         if not catch_exception:
             raise e

@@ -13,10 +13,7 @@ from persia.prelude import PyPersiaReplicaInfo
 from persia.error import PersiaRuntimeException
 from persia.data import NatsStreamingChannel
 
-grad_queue_slot_num = os.environ.get("GRAD_SLOT", 60)
-grad_queue = Queue(grad_queue_slot_num)
-
-logger = get_default_logger()
+_logger = get_default_logger()
 
 
 def _check_finite(grads: List[torch.Tensor]):
@@ -208,11 +205,6 @@ class BaseCtx:
         return (batch.dense_tensor, batch.forward_tensors), batch.target_tensor
 
 
-class LocalCtx(BaseCtx):
-    def __init__(self):
-        ...
-
-
 class TrainCtx(BaseCtx):
     r"""Training context that provide full feature of sparse training, include optimzier
     register, embedding forward, embedding backward process, ckp load and ckp dump.
@@ -221,9 +213,8 @@ class TrainCtx(BaseCtx):
         grad_scaler (torch.cuda.amp.GradScaler, optional): scale the loss from float32 to half to support half training
         emb_initialization (Tuple[float, float], optional): embedding uniform initialization arguments
         admit_probability (float): probability of embedding generation. value in [0, 1]. Generate a random
-        value(range in [0, 1]) for each sparse embedding, generate the new embedding once the value is
-        small than the admit_probability. Always generate the new embedding when the admit_probability set
-        to 1.
+            value(range in [0, 1]) for each sparse embedding, generate the new embedding once the value is
+            small than the admit_probability. Always generate the new embedding when the admit_probability set to 1
         sparse_optimizer (persias.sparse.optim.Optimizer, optional): sparse optimizer to make embedding update available
         weight_bound (float, optional): embedding value bound, normal will update the embedding locate in [-weight_bound, weight_bound]
         ctx_status (CtxStatus, optional): represent current context status
@@ -232,6 +223,8 @@ class TrainCtx(BaseCtx):
         backend_worker_size (int, optional): rpc client thread pool size
         backward_buffer_size (int, optional): backward update buffer size
         nats_recv_buffer_size (int, optional): nats recv buffer size, a buffer before rectifier
+        grad_queue_slot_num (int, optional): the slot size of queue that cache the torch gradient tensor to ensure
+            the garbage collector collect the device memory after update_sparse_gradient_batched finished
         rank_id (int, optional): rank id of this process.
         world_size (int, optional): world size of this cluster.
         num_backward_workers (int, optional): worker num of sending backward request to servers.
@@ -251,6 +244,7 @@ class TrainCtx(BaseCtx):
         backend_worker_size: int = 20,
         backward_buffer_size: int = 10,
         nats_recv_buffer_size: int = 50,
+        grad_queue_slot_num: int = 60,
         rank_id: int = 0,
         world_size: int = 1,
         num_backward_workers: int = 8,
@@ -286,7 +280,7 @@ class TrainCtx(BaseCtx):
             nats_recv_buffer_size, self.replica_info
         )
 
-        logger.info(f"world size: {world_size} rank_id: {rank_id} init backend...")
+        _logger.info(f"world size: {world_size} rank_id: {rank_id} init backend...")
         self.backend = init_backend(backend_worker_size, self.replica_info)
         self.enable_backward = enable_backward
 
@@ -297,6 +291,7 @@ class TrainCtx(BaseCtx):
             from persia.prelude import PyBackward
 
             # dynamic import the PyForward due to conditional compilation
+            self.grad_queue = Queue(grad_queue_slot_num)
             self.backward_engine = PyBackward(backward_buffer_size)
 
     def get_nats_streaming_datachannel(
@@ -335,8 +330,8 @@ class TrainCtx(BaseCtx):
             batch_idx (int): index of batch data to decide the GradScalar update
             emb_grad_check_interval (int, optional):Gradient check interval to controll the GradScalar update frequnency
         """
-        if grad_queue.full():
-            grad_queue.get()
+        if self.grad_queue.full():
+            self.rad_queue.get()
 
         finite = True
         if batch_idx % emb_grad_check_interval == 0:
@@ -387,7 +382,7 @@ class TrainCtx(BaseCtx):
 
         torch.cuda.synchronize()
         self.backward_engine.update_sparse_gradient_batched(gradient_batch)
-        grad_queue.put(grad_slot)
+        self.grad_queue.put(grad_slot)
 
         if self.is_training and len(empty_grad) > 0:
             logger.warning(

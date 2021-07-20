@@ -1,5 +1,7 @@
 import logging
 
+from typing import Optional
+
 from colorlog import ColoredFormatter
 
 
@@ -99,7 +101,7 @@ def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 
-def set_default_logger(name: str = None, **kwargs) -> logging.Logger:
+def _set_default_logger(name: str, **kwargs) -> logging.Logger:
     r"""set default logger
 
     Arguments:
@@ -113,30 +115,12 @@ def set_default_logger(name: str = None, **kwargs) -> logging.Logger:
     return _default_logger
 
 
-def get_default_logger(name: str = None, **kwargs) -> logging.Logger:
+def get_default_logger(name: Optional[str] = None, **kwargs) -> logging.Logger:
     r"""get default logger or init the default by given name
 
     Arguments:
-        name (str): logger name
+        name (str, optional): logger name
     """
     if _default_logger is None:
         set_default_logger(name or DEFAULT_LOGGER_NAME, **kwargs)
     return _default_logger
-
-
-if __name__ == "__main__":
-
-    logger = logging.getLogger("test")
-    logger.debug("test logger")
-    logger.info("test logger")
-    logger.warning("test logger")
-    logger.error("test logger")
-    logger.critical("test logger")
-
-    setLogger("test")
-
-    logger.debug("test logger")
-    logger.info("test logger")
-    logger.warning("test logger")
-    logger.error("test logger")
-    logger.critical("test logger")

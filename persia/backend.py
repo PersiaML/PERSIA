@@ -5,12 +5,9 @@ from persia.prelude import (
     PyPersiaBatchFlowNatsStubPublisher,
     PyOptimizerBase,
 )
-from persia.logger import get_default_logger
 from persia.error import PersiaRuntimeException
 
 _backend = None
-
-logger = get_default_logger()
 
 
 class Backend:
