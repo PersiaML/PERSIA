@@ -117,10 +117,7 @@ _ignore_methods = [
     # "bagua.torch_api.contrib.LoadBalancingDistributedSampler.shuffle_chunks",
 ]
 
-_ignore_functions = [
-    "persia.service.get_middleware_services",
-    "persia.service.get_client_services",
-]
+_ignore_functions = []
 
 _ignore_classes = []
 
@@ -128,6 +125,8 @@ _ignore_module = [
     "persia.version",
     "persia.sparse.emb",
     "persia.error",
+    "persia.logger",
+    "persia.prelude",
     "persia.sparse.__init__",
 ]
 

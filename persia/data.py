@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from threading import Thread
+from typing import Optional
 
 import torch
 
@@ -77,13 +78,14 @@ class PersiaChannel(IterableChannelBase):
 
     Arguments:
         buffer_size (int): PyPersiaBatchDataChannel buffer size
-        replica_info (PyPersiaReplicaInfo): replica info of current process to enable the data reorder ability
+        replica_info (PyPersiaReplicaInfo, optional): replica info of current process to enable the data reorder ability
+        async_iterator (bool, optional): launch the thread to generate the data asynchronous
     """
 
     def __init__(
         self,
         buffer_size: int,
-        replica_info: PyPersiaReplicaInfo = None,
+        replica_info: Optional[PyPersiaReplicaInfo] = None,
         async_iterator: bool = True,
     ):
         super(PersiaChannel, self).__init__(buffer_size, replica_info)
@@ -126,7 +128,7 @@ class Dataloder(object):
         is_training (bool, optional): wheter current forward status is training or not
         timeout (int, optional): timeout for PyFoward to fetch data, millisecond unit
         num_workers (int, optional): spawn thread worker number for  PyForward to lookup embedding and PythonBatchData prefetch
-        reproducible (bool, optional): iterate the data in order, make the dataflow deterministic
+        reproducible (bool, optional): iterate the data in fixed order, make the dataflow deterministic
     """
 
     def __init__(
