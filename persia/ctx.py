@@ -14,18 +14,19 @@ from persia.data import NatsStreamingChannel
 _logger = get_default_logger()
 
 
-def _check_finite(grads: List[torch.Tensor]):
-    """check all gradient tensor is finite or not
+def _check_finite(tensors: List[torch.Tensor]) -> bool:
+    """Check all tensors in the input list contain only finite elements.
 
     Arguments:
-        grads (List[torch.Tensor]): grad tensor list that need to check finite or not
+        tensors: tensor list that need to check finite or not
     """
-    return all([torch.isfinite(t).all() if t is not None else True for t in grads])
+    return all([torch.isfinite(t).all() if t is not None else True for t in tensors])
 
 
-class CtxStatus(Enum):
-    r"""Enum struct to identify which status current context is.Context will preprocess the
-    batch input data according to different status.
+class CtxStatus(Enum):  # TODO: seems better to call it PreprocessMode
+    r"""Enum struct to identify which status current context is.
+    Context will preprocess the batch input data according to different status.
+    # TODO: need more explanation about each status
     """
     TRAIN = 1
     EVAL = 2
@@ -33,12 +34,12 @@ class CtxStatus(Enum):
 
 
 class BaseCtx:
-    r"""Base context to provide fundamental function
+    r"""Base context to provide fundamental function # TODO: too vague, need more explanation about what this does and where to use
 
-    Arguments:
-        ctx_status (CtxStatus): represent current context status
-        block_when_exit (bool, optional): whether block the process when exit the contxt
-        catch_exception (bool, optional): catch the exception or not when occur the exception
+    Arguments:  # TODO: move this to __init__ doc string
+        ctx_status: represent current context status # TODO: the preprocess mode to use
+        block_when_exit: whether block the process when exit the context  # TODO: why?
+        catch_exception: catch the exception or not when occur the exception # TODO: why?
     """
 
     def __init__(
@@ -55,29 +56,29 @@ class BaseCtx:
 
     @property
     def is_training(self) -> bool:
-        """Whether current context is training status or not"""
+        """Whether current context is training status or not""" # TODO:
         return self.status == CtxStatus.TRAIN
 
     @property
     def is_eval(self) -> bool:
-        """Whether current context is eval status or not"""
+        """Whether current context is eval status or not""" # TODO:
         return self.status == CtxStatus.EVAL
 
     @property
     def is_inference(self) -> bool:
-        """Whether current context is inference status or not"""
+        """Whether current context is inference status or not""" # TODO:
         return self.status == CtxStatus.INFERENCE
 
     def train(self):
-        """set current context status to train"""
+        """set current context status to train""" # TODO:
         self.status = CtxStatus.TRAIN
 
     def eval(self):
-        """set current context status to eval"""
+        """set current context status to eval""" # TODO:
         self.status = CtxStatus.EVAL
 
     def inference(self):
-        """set current context status to inference"""
+        """set current context status to inference""" # TODO:
         self.status = CtxStatus.INFERENCE
 
     def __enter__(self):
@@ -95,12 +96,15 @@ class BaseCtx:
             block()
         return PersiaRuntimeException(value)
 
-    def prepare_features(self, batch):
-        """preprocess the PythonTrainBatch to pytorch tensor. Multiple dense, sparse and target tensors
-        will converted to tensor from rust cuda pointer.
+    def prepare_features(self, batch): # TODO: add argument and return type annotation
+        """Preprocess the PythonTrainBatch to PyTorch tensor.
 
-        Arguments:
-            batch (PythonTrainBatch): persia training batch data include dense, target, sparse data and meta info
+        Arguments: batch (PythonTrainBatch): Training data provided by PersiaML
+            upstream including dense, target, sparse data and meta info.
+
+        Returns:
+            # TODO: fill this
+
         """
         import persia_torch_ext as pte  # pytype: disable=import-error
 
