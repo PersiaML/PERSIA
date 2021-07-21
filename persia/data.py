@@ -14,7 +14,7 @@ from persia.prelude import (
 )
 
 
-class IterableChannelBase(ABC):
+class IterableChannelBase(ABC): # TODO: cannot understand the whole doc string
     r"""IterableChannelBase wrap the PyPersiaBatchDataChannel that provide the channel sender and
     receiver.
 
