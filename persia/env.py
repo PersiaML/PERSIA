@@ -15,25 +15,27 @@ else:
 
 
 def get_world_size() -> int:
-    """Get the number of current process group"""
+    """Get the total number of processes"""
     return _WORLD_SIZE
 
 
 def get_rank() -> int:
-    """Get the rank of current process group"""
+    """Get the rank of this process"""
     return _RANK_ID
 
 
 def get_local_rank() -> int:
-    """Get the local rank of current process group"""
+    """Get the local rank of this process (the rank of the process on the local machine)"""
     return _LOCAL_RANK
 
 
 def get_replica_size() -> int:
     """Get the replica size of current service"""
+    # TODO: need more explanation
     return _REPLICA_SIZE
 
 
 def get_replica_index() -> int:
     """Get the replica index of current service"""
+    # TODO: need more explanation
     return _REPLICA_INDEX
