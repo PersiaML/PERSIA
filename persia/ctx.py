@@ -6,10 +6,11 @@ import torch
 
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
+from persia.env import get_world_size, get_rank
 from persia.backend import init_backend
 from persia.prelude import PyPersiaReplicaInfo
 from persia.error import PersiaRuntimeException
-from persia.data import NatsStreamingChannel
+from persia.data import StreamingDataset
 
 _logger = get_default_logger()
 
@@ -23,7 +24,7 @@ def _check_finite(tensors: List[torch.Tensor]) -> bool:
     return all([torch.isfinite(t).all() if t is not None else True for t in tensors])
 
 
-class CtxStatus(Enum):  # TODO: seems better to call it PreprocessMode
+class PreprocessMode(Enum):
     r"""Enum struct to identify which status current context is.
     Context will preprocess the batch input data according to different status.
     # TODO: need more explanation about each status
@@ -56,29 +57,29 @@ class BaseCtx:
 
     @property
     def is_training(self) -> bool:
-        """Whether current context is training status or not""" # TODO:
+        """Whether current context is training status or not"""  # TODO:
         return self.status == CtxStatus.TRAIN
 
     @property
     def is_eval(self) -> bool:
-        """Whether current context is eval status or not""" # TODO:
+        """Whether current context is eval status or not"""  # TODO:
         return self.status == CtxStatus.EVAL
 
     @property
     def is_inference(self) -> bool:
-        """Whether current context is inference status or not""" # TODO:
+        """Whether current context is inference status or not"""  # TODO:
         return self.status == CtxStatus.INFERENCE
 
     def train(self):
-        """set current context status to train""" # TODO:
+        """set current context status to train"""  # TODO:
         self.status = CtxStatus.TRAIN
 
     def eval(self):
-        """set current context status to eval""" # TODO:
+        """set current context status to eval"""  # TODO:
         self.status = CtxStatus.EVAL
 
     def inference(self):
-        """set current context status to inference""" # TODO:
+        """set current context status to inference"""  # TODO:
         self.status = CtxStatus.INFERENCE
 
     def __enter__(self):
@@ -96,7 +97,9 @@ class BaseCtx:
             block()
         return PersiaRuntimeException(value)
 
-    def prepare_features(self, batch): # TODO: add argument and return type annotation
+    def prepare_features(
+        self, batch: "PythonTrainBatch"
+    ) -> Tuple[Tuple[torch.Tensor, List[torch.Tensor]], Optional[torch.Tensor]]:
         """Preprocess the PythonTrainBatch to PyTorch tensor.
 
         Arguments: batch (PythonTrainBatch): Training data provided by PersiaML
@@ -122,7 +125,6 @@ class BaseCtx:
         is_training = self.is_training  # cache property
 
         batch.dense = batch.consume_all_dense_features()
-        # assert len(batch.dense) == 1
         batch.dense = batch.dense[0]
         batch.dense_tensor = pte.ptr_to_tensor_f32(
             batch.dense.data_ptr(), batch.dense.shape(), False
@@ -216,21 +218,19 @@ class TrainCtx(BaseCtx):
 
     # TODO: move arguments to __init__ doc string
     Arguments:
-        grad_scaler (torch.cuda.amp.GradScaler, optional): scale the loss from float32 to half to support half training # TODO: use mixed_precision: bool?
+        mixed_precision (bool, optional): whether to enable mixed precision training
         emb_initialization (Tuple[float, float], optional): embedding uniform initialization arguments # TODO: need explanation
         admit_probability: The probability (0<=, <=1) of admitting a new embedding.
-        sparse_optimizer (persias.sparse.optim.Optimizer, optional): Optimizer for the embeddings.
+        sparse_optimizer (persia.sparse.optim.Optimizer, optional): Optimizer for the embeddings.
         weight_bound (float, optional): Restrict each element value of an embedding in [-weight_bound, weight_bound].
         ctx_status (CtxStatus, optional): represent current context status # TODO:
         device_id (int, optional): The CUDA device to use for this process.
-        enable_backward (bool, optional): enable embeddign gradients update # TODO: training mode should always update embeddings?
+        enable_backward (bool, optional): whether to enable embedding gradients update # TODO: training mode should always update embeddings?
         backend_worker_size (int, optional): PersiaML background thread pool size.
         backward_buffer_size (int, optional): Max number of not updated gradients queued.
-        nats_recv_buffer_size (int, optional): nats recv buffer size, a buffer before rectifier # TODO: need user understandable explanation and name
+        recv_buffer_size (int, optional): buffer size that recv data from data compose
         grad_queue_slot_num (int, optional): the slot size of queue that cache the torch gradient tensor to ensure
             the garbage collector collect the device memory after update_sparse_gradient_batched finished # TODO: need user understandable explanation and name
-        rank_id (int, optional): rank id of this process. # TODO: this can be acquired by persia.env automatically?
-        world_size (int, optional): world size of this cluster. # TODO: this can be acquired by persia.env automatically?
         num_backward_workers (int, optional): Number of workers sending embedding gradients in parallel.
         embedding_checkpoint(str, optional): pretrained embedding directory, load checkpoint in this dir when enter TrainCtx. # TODO: rename to checkpoint_dir, and save both dense and embedding to the same location
 
@@ -238,7 +238,7 @@ class TrainCtx(BaseCtx):
 
     def __init__(
         self,
-        grad_scaler: Optional[torch.cuda.amp.GradScaler] = None,
+        mixed_precision: bool = True,
         emb_initialization: Tuple[float, float] = (-0.01, 0.01),
         admit_probability: float = 1.0,
         sparse_optimizer: Optional[Optimizer] = None,
@@ -248,10 +248,8 @@ class TrainCtx(BaseCtx):
         enable_backward: bool = True,
         backend_worker_size: int = 20,
         backward_buffer_size: int = 10,
-        nats_recv_buffer_size: int = 50,
+        recv_buffer_size: int = 50,
         grad_queue_slot_num: int = 60,
-        rank_id: int = 0,
-        world_size: int = 1,
         num_backward_workers: int = 8,
         embedding_checkpoint: Optional[str] = None,
         *args,
@@ -269,20 +267,23 @@ class TrainCtx(BaseCtx):
         torch.cuda.set_device(device_id)
 
         self.device_id = device_id
-        self.grad_scaler = grad_scaler
-
+        self.mixed_precision = mixed_precision
+        self.grad_scaler = torch.cuda.amp.GradScaler() if self.mixed_precision else None
+        
+        self.batch_idx = 0
         self.sparse_optimizer = sparse_optimizer
         self.admit_probability = admit_probability
         self.weight_bound = weight_bound
         self.emb_initialization = emb_initialization
 
+        world_size, rank_id = get_world_size(), get_rank()
         self.replica_info = PyPersiaReplicaInfo(world_size, rank_id)
 
         self.num_backward_workers = num_backward_workers
+
         # TODO: PyPersiaBatchFlowNatsStubResponder should decouple with data channel
-        # data channel create by datachannel
-        self.nats_dataset = NatsStreamingChannel(
-            nats_recv_buffer_size, self.replica_info
+        self.streaming_dataset = StreamingDataset(
+            recv_buffer_size, self.replica_info
         )
 
         _logger.info(f"world size: {world_size} rank_id: {rank_id} init backend...")
@@ -299,11 +300,30 @@ class TrainCtx(BaseCtx):
             self.grad_queue = Queue(grad_queue_slot_num)
             self.backward_engine = PyBackward(backward_buffer_size)
 
-    def get_nats_streaming_datachannel(
+    def backward(self, loss: torch.Tensor) -> torch.Tensor:
+
+        if self.mixed_precision:
+            loss = self.scaler.scale(loss).
+            scale = self.scaler.get_scale()
+        else:
+            scale = 1
+
+        loss.backward()
+        finite = self.on_after_backward(scale)
+
+        if self.mixed_precision:
+            if finite:
+                scaler.update()
+            else:
+                scaler.update(scale / 4.0)
+
+        return loss
+
+    def get_streaming_dataset(
         self,
-    ) -> NatsStreamingChannel:
-        """Get nats streaming datachannel""" # TODO: need user understandable explanation and name or hide this if this is not expected to be used by user
-        return self.nats_dataset
+    ) -> StreamingDataset:
+        """Get streaming dataset"""  # TODO: need user understandable explanation and name or hide this if this is not expected to be used by user
+        return self.streaming_dataset
 
     def __enter__(self):
         self.backend.set_configuration(
@@ -325,7 +345,7 @@ class TrainCtx(BaseCtx):
         return self
 
     def on_after_backward(
-        self, loss_scale: float, batch_idx: int, emb_grad_check_interval: int = 20
+        self, loss_scale: float, emb_grad_check_interval: int = 20
     ):
         """Sparse embedding gradient update step that process the raw embedding and summation embedding
         gradient from raw format to standard format # TODO: cannot understand
@@ -339,7 +359,8 @@ class TrainCtx(BaseCtx):
             self.grad_queue.get()
 
         finite = True
-        if batch_idx % emb_grad_check_interval == 0:
+        if self.batch_idx % emb_grad_check_interval == 0:
+            self.batch_idx += 1
             finite = _check_finite(
                 [emb[-1].grad for emb in self.current_batch.emb_tensors]
             )
