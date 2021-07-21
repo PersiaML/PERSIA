@@ -3,7 +3,7 @@ from threading import Thread
 from typing import Optional
 
 import torch
-
+from torch.utils.data.dataset import IterableDataset as TorchIterableDataset
 
 from persia.prelude import (
     PyPersiaBatchDataChannel,
@@ -14,7 +14,9 @@ from persia.prelude import (
 )
 
 
-class IterableChannelBase(ABC): # TODO: cannot understand the whole doc string
+class IterableDataset(
+    TorchIterableDataset
+):  # TODO: cannot understand the whole doc string
     r"""IterableChannelBase wrap the PyPersiaBatchDataChannel that provide the channel sender and
     receiver.
 
@@ -38,17 +40,12 @@ class IterableChannelBase(ABC): # TODO: cannot understand the whole doc string
         return self.persia_batch_channel.get_sender()
 
     @abstractmethod
-    def __iter__(self):
-        """Implement this function to iterate data from PyForward"""
-        ...
-
-    @abstractmethod
     def __len__(self):
         """Fixed size dataset should implement this function"""
         ...
 
 
-class NatsStreamingChannel(IterableChannelBase):
+class StreamingDataset(IterableDataset):
     r"""NatsStreamingChannel  recive data from nats publisher
 
     Arguments:
@@ -72,7 +69,7 @@ class NatsStreamingChannel(IterableChannelBase):
         raise NotImplementedError("StreamingChannel do not implement __len__ function")
 
 
-class PersiaChannel(IterableChannelBase):
+class PersiaDataset(IterableDataset):
     r"""Persia data channel that provide asynchronous data handler feature to improve the performance of data preprocess.
     Not support synchronous data handler temporary.
 
@@ -123,17 +120,17 @@ class Dataloder(object):
     wrapper.
 
     Arguments:
-        channel (IterableChannelBase): data channel for Dataloder to retrive replica info and sender channel
+        dataset (IterableChannelBase): dataset for Dataloder to retrive replica info and sender channel
         forward_buffer_size: (int, optional): gpu forward channel buffer size, this args effect the gpu memory cost
-        is_training (bool, optional): wheter current forward status is training or not
-        timeout (int, optional): timeout for PyFoward to fetch data, millisecond unit
+        is_training (bool, optional): whether current forward status is training or not
+        timeout (int, optional): timeout for PyForward to fetch data, millisecond unit
         num_workers (int, optional): spawn thread worker number for  PyForward to lookup embedding and PythonBatchData prefetch
         reproducible (bool, optional): iterate the data in fixed order, make the dataflow deterministic
     """
 
     def __init__(
         self,
-        channel: IterableChannelBase,
+        dataset: IterableDataset,
         forward_buffer_size: int = 10,
         is_training: bool = True,
         timeout: int = 1000 * 60 * 10,
@@ -143,7 +140,7 @@ class Dataloder(object):
         # dynamic import the PyForward due to conditional compilation
         from persia.prelude import PyForward
 
-        self.channel = channel
+        self.dataset = dataset
         self.timeout = timeout
         self.num_workers = num_workers
 
@@ -151,9 +148,9 @@ class Dataloder(object):
             forward_buffer_size,
             is_training,
             reproducible,
-            channel.replica_info,
+            dataset.replica_info,
         )
-        self.forward_engine.set_input_channel(channel.receiver)
+        self.forward_engine.set_input_channel(dataset.receiver)
         self.forward_engine.launch(
             torch.cuda.current_device(),
             self.num_workers,
@@ -161,8 +158,8 @@ class Dataloder(object):
 
     def __iter__(self):
 
-        for _ in self.channel:
+        for _ in self.dataset:
             yield self.forward_engine.get_batch(self.timeout)
 
     def __len__(self):
-        return len(self.channel)
+        return len(self.dataset)
