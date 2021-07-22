@@ -5,12 +5,13 @@ from typing import Optional
 import torch
 from torch.utils.data.dataset import IterableDataset as TorchIterableDataset
 
+from persia.ctx import cnt_ctx
 from persia.prelude import (
     PyPersiaBatchDataChannel,
     PyPersiaReplicaInfo,
     PyPersiaBatchDataReceiver,
     PyPersiaBatchDataSender,
-    PyPersiaBatchFlowNatsStubResponder,
+    set_responder_output_channel,
 )
 
 
@@ -22,12 +23,10 @@ class IterableDataset(
 
     Arguments:
         buffer_size (int): PyPersiaBatchDataChannel buffer size
-        replica_info (PyPersiaReplicaInfo): replica info of current process to enable the data reorder ability
     """
 
     def __init__(self, buffer_size: int, replica_info: PyPersiaReplicaInfo):
         self.persia_batch_channel = PyPersiaBatchDataChannel(buffer_size)
-        self.replica_info = replica_info
 
     @property
     def receiver(self) -> PyPersiaBatchDataReceiver:
@@ -46,7 +45,7 @@ class IterableDataset(
 
 
 class StreamingDataset(IterableDataset):
-    r"""NatsStreamingChannel  recive data from nats publisher
+    r"""NatsStreamingChannel receive data from nats publisher
 
     Arguments:
         buffer_size (int): PyPersiaBatchDataChannel buffer size
@@ -56,12 +55,12 @@ class StreamingDataset(IterableDataset):
     def __init__(
         self,
         buffer_size: int,
-        replica_info: PyPersiaReplicaInfo,
     ):
         super(NatsStreamingChannel, self).__init__(buffer_size, replica_info)
-        self._responder = PyPersiaBatchFlowNatsStubResponder(replica_info, self.sender)
 
     def __iter__(self):
+        set_responder_output_channel(self.sender)
+
         while True:
             yield None
 
@@ -82,7 +81,6 @@ class PersiaDataset(IterableDataset):
     def __init__(
         self,
         buffer_size: int,
-        replica_info: Optional[PyPersiaReplicaInfo] = None,
         async_iterator: bool = True,
     ):
         super(PersiaChannel, self).__init__(buffer_size, replica_info)
@@ -135,6 +133,7 @@ class Dataloder(object):
         is_training: bool = True,
         timeout: int = 1000 * 60 * 10,
         num_workers: int = 10,
+        replica_info: PyPersiaReplicaInfo = None,
         reproducible: bool = False,
     ):
         # dynamic import the PyForward due to conditional compilation
@@ -144,11 +143,13 @@ class Dataloder(object):
         self.timeout = timeout
         self.num_workers = num_workers
 
+        if not replica_info:
+            current_ctx = cnt_ctx()
+            assert current_ctx is not None, "Current conext is None!"
+            replica_info = current_ctx.replica_info
+
         self.forward_engine = PyForward(
-            forward_buffer_size,
-            is_training,
-            reproducible,
-            dataset.replica_info,
+            forward_buffer_size, is_training, reproducible, replica_info
         )
         self.forward_engine.set_input_channel(dataset.receiver)
         self.forward_engine.launch(

@@ -8,9 +8,11 @@ from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
 from persia.env import get_world_size, get_rank
 from persia.backend import init_backend
-from persia.prelude import PyPersiaReplicaInfo
+from persia.prelude import PyPersiaReplicaInfo, PyPersiaBatchFlowNatsStubResponder
 from persia.error import PersiaRuntimeException
 from persia.data import StreamingDataset
+
+_CURRENT_CXT = None
 
 _logger = get_default_logger()
 
@@ -37,55 +39,48 @@ class PreprocessMode(Enum):
 class BaseCtx:
     r"""Base context to provide fundamental function # TODO: too vague, need more explanation about what this does and where to use
 
+    Examples:
+        ...
+
     Arguments:  # TODO: move this to __init__ doc string
-        ctx_status: represent current context status # TODO: the preprocess mode to use
         block_when_exit: whether block the process when exit the context  # TODO: why?
         catch_exception: catch the exception or not when occur the exception # TODO: why?
     """
 
     def __init__(
         self,
-        ctx_status: CtxStatus,
         block_when_exit: bool = True,
         catch_exception: bool = False,
     ):
-        self.status = ctx_status
         self.block_when_exit = block_when_exit
         self.catch_exception = catch_exception
 
-        self.current_batch = None
+        world_size, rank_id = get_world_size(), get_rank()
+        self.replica_info = PyPersiaReplicaInfo(world_size, rank_id)
+        _logger.info(f"world size: {world_size} rank_id: {rank_id} init backend...")
 
-    @property
-    def is_training(self) -> bool:
-        """Whether current context is training status or not"""  # TODO:
-        return self.status == CtxStatus.TRAIN
+        self.backend = init_backend(backend_worker_size, self.replica_info)
 
-    @property
-    def is_eval(self) -> bool:
-        """Whether current context is eval status or not"""  # TODO:
-        return self.status == CtxStatus.EVAL
+    def _enter(self):
+        ...
 
-    @property
-    def is_inference(self) -> bool:
-        """Whether current context is inference status or not"""  # TODO:
-        return self.status == CtxStatus.INFERENCE
-
-    def train(self):
-        """set current context status to train"""  # TODO:
-        self.status = CtxStatus.TRAIN
-
-    def eval(self):
-        """set current context status to eval"""  # TODO:
-        self.status = CtxStatus.EVAL
-
-    def inference(self):
-        """set current context status to inference"""  # TODO:
-        self.status = CtxStatus.INFERENCE
+    def _exit(self):
+        ...
 
     def __enter__(self):
+        self._launch()
+
+        global _CURRENT_CXT
+        _CURRENT_CXT = self
+
         return self
 
     def __exit__(self, exc_type, value, trace):
+        self._exit()
+
+        global _CURRENT_CXT
+        _CURRENT_CXT = None
+
         if exc_type:
             import traceback
 
@@ -96,6 +91,30 @@ class BaseCtx:
 
             block()
         return PersiaRuntimeException(value)
+
+
+class EmbeddingCtx(BaseCtx):
+    def __init__(
+        self,
+        preprocess_mode: PreprocessMode,
+        emb_initialization: Tuple[float, float] = (-0.01, 0.01),
+        admit_probability: float = 1.0,
+        weight_bound: float = 10,
+        embedding_checkpoint: Optional[str] = None,
+        block_when_exit: bool = True,
+        catch_exception: bool = False,
+    ):
+        super(EmbeddingCtx, self).__init__(block_when_exit, catch_exception)
+        self.preprocess_mode = preprocess_mode
+        self.emb_initialization = emb_initialization
+        self.admit_probability = admit_probability
+        self.weight_bound = weight_bound
+        self.embedding_checkpoint = embedding_checkpoint
+
+        self.responder = PyPersiaBatchFlowNatsStubResponder(replica_info)
+
+        self.current_batch = None
+        self.pretrained_loaded = False
 
     def prepare_features(
         self, batch: "PythonTrainBatch"
@@ -111,7 +130,7 @@ class BaseCtx:
         """
         import persia_torch_ext as pte  # pytype: disable=import-error
 
-        if self.is_inference:
+        if self.preprocess_mode == PreprocessMode.INFERENCE:
             batch.target_tensor = None
         else:
             batch.target = batch.consume_all_targets()
@@ -122,7 +141,7 @@ class BaseCtx:
                 batch.target.data_ptr(), batch.target.shape(), False
             )
 
-        is_training = self.is_training  # cache property
+        is_training = self.preprocess_mode == PreprocessMode.TRAIN  # cache property
 
         batch.dense = batch.consume_all_dense_features()
         batch.dense = batch.dense[0]
@@ -208,8 +227,49 @@ class BaseCtx:
 
         return (batch.dense_tensor, batch.forward_tensors), batch.target_tensor
 
+    def _enter(self):
+        self.backend.set_configuration(
+            self.emb_initialization[0],
+            self.emb_initialization[1],
+            self.admit_probability,
+            self.weight_bound > 0,
+            self.weight_bound,
+        )
 
-class TrainCtx(BaseCtx):
+        if not self.pretrained_loaded and self.embedding_checkpoint is not None:
+            self.load_embedding(self.embedding_checkpoint)
+            self.pretrained_loaded = True
+
+    def dump_embedding(self, dst_dir: str, blocking: bool = False):
+        """Dump embeddings to ``dst_dir``. Use ``TrainCtx.wait_for_dump_embedding`` to wait until finished
+        if ``blocking=False``.
+
+        Arguments:
+            dst_dir (str): Destination directory.
+            blocking (bool, optional): Dump embedding in blocking mode or not.
+        """
+        self.backend.dump_embedding(dst_dir, blocking)
+
+    def load_embedding(self, src_dir: str, blocking: bool = True):
+        """Load embeddings from ``src_dir``. Use ``TrainCtx.wait_for_load_embedding`` to wait until finished
+        if ``blocking=False``.
+
+        Arguments:
+            src_dir (str): Directory to load embeddings.
+            blocking (bool, optional): Dump embedding in blocking mode or not.
+        """
+        self.backend.load_embedding(src_dir, blocking)
+
+    def wait_for_dump_embedding(self):
+        """Wait for the embedding dump process."""
+        self.backend.wait_for_dump_embedding()
+
+    def wait_for_load_embedding(self):
+        """Wait for the embedding load process."""
+        self.backend.wait_for_load_embedding()
+
+
+class TrainCtx(EmbeddingCtx):
     r"""Training context that provides full hybrid training support, including embedding
     optimizer registration, embedding lookup and update, and checkpointing.
 
@@ -218,14 +278,13 @@ class TrainCtx(BaseCtx):
 
     # TODO: move arguments to __init__ doc string
     Arguments:
+        device_id (int, optional): The CUDA device to use for this process.
         mixed_precision (bool, optional): whether to enable mixed precision training
+        grad_scalar_update_factor (float, optional): Update factor of Gradscalar to ensure loss scale finitely if set ``mixed_precision=True``
         emb_initialization (Tuple[float, float], optional): embedding uniform initialization arguments # TODO: need explanation
-        admit_probability: The probability (0<=, <=1) of admitting a new embedding.
+        admit_probability (float, optional): The probability (0<=, <=1) of admitting a new embedding.
         sparse_optimizer (persia.sparse.optim.Optimizer, optional): Optimizer for the embeddings.
         weight_bound (float, optional): Restrict each element value of an embedding in [-weight_bound, weight_bound].
-        ctx_status (CtxStatus, optional): represent current context status # TODO:
-        device_id (int, optional): The CUDA device to use for this process.
-        enable_backward (bool, optional): whether to enable embedding gradients update # TODO: training mode should always update embeddings?
         backend_worker_size (int, optional): PersiaML background thread pool size.
         backward_buffer_size (int, optional): Max number of not updated gradients queued.
         recv_buffer_size (int, optional): buffer size that recv data from data compose
@@ -233,29 +292,30 @@ class TrainCtx(BaseCtx):
             the garbage collector collect the device memory after update_sparse_gradient_batched finished # TODO: need user understandable explanation and name
         num_backward_workers (int, optional): Number of workers sending embedding gradients in parallel.
         embedding_checkpoint(str, optional): pretrained embedding directory, load checkpoint in this dir when enter TrainCtx. # TODO: rename to checkpoint_dir, and save both dense and embedding to the same location
-
     """
 
     def __init__(
         self,
-        mixed_precision: bool = True,
+        device_id: int = 0,
         emb_initialization: Tuple[float, float] = (-0.01, 0.01),
         admit_probability: float = 1.0,
-        sparse_optimizer: Optional[Optimizer] = None,
         weight_bound: float = 10,
-        ctx_status: CtxStatus = CtxStatus.TRAIN,
-        device_id: int = 0,
-        enable_backward: bool = True,
-        backend_worker_size: int = 20,
-        backward_buffer_size: int = 10,
-        recv_buffer_size: int = 50,
-        grad_queue_slot_num: int = 60,
-        num_backward_workers: int = 8,
         embedding_checkpoint: Optional[str] = None,
+        dense_optimizer: Optional[torch.optim.Optimizer] = None,
+        sparse_optimizer: Optional[Optimizer] = None,
+        backend_worker_size: int = 20,
+        enable_backward: bool = True,
+        mixed_precision: bool = True,
+        grad_scalar_update_factor: float = 4,
+        backward_buffer_size: int = 10,
+        num_backward_workers: int = 8,
+        grad_queue_slot_num: int = 60,
+        block_when_exit: bool = True,
+        catch_exception: bool = False,
         *args,
         **kwargs,
     ):
-        super(TrainCtx, self).__init__(ctx_status, *args, **kwargs)
+        super(TrainCtx, self).__init__(CtxStatus.TRAIN, *args, **kwargs)
 
         assert not self.is_training or (
             self.is_training and sparse_optimizer is not None
@@ -267,93 +327,78 @@ class TrainCtx(BaseCtx):
         torch.cuda.set_device(device_id)
 
         self.device_id = device_id
-        self.mixed_precision = mixed_precision
-        self.grad_scaler = torch.cuda.amp.GradScaler() if self.mixed_precision else None
-        
-        self.batch_idx = 0
-        self.sparse_optimizer = sparse_optimizer
         self.admit_probability = admit_probability
         self.weight_bound = weight_bound
         self.emb_initialization = emb_initialization
 
-        world_size, rank_id = get_world_size(), get_rank()
-        self.replica_info = PyPersiaReplicaInfo(world_size, rank_id)
-
-        self.num_backward_workers = num_backward_workers
-
-        # TODO: PyPersiaBatchFlowNatsStubResponder should decouple with data channel
-        self.streaming_dataset = StreamingDataset(
-            recv_buffer_size, self.replica_info
-        )
-
-        _logger.info(f"world size: {world_size} rank_id: {rank_id} init backend...")
-        self.backend = init_backend(backend_worker_size, self.replica_info)
-        self.enable_backward = enable_backward
-
         self.embedding_checkpoint = embedding_checkpoint
         self.pretrained_loaded = False
 
-        if self.is_training or self.enable_backward:
-            from persia.prelude import PyBackward
+        self.batch_idx = 0
+        self.enable_backward = enable_backward
+        self.mixed_precision = mixed_precision
+        self.grad_scalar_update_factor = grad_scalar_update_factor
+        self.grad_scaler = torch.cuda.amp.GradScaler() if self.mixed_precision else None
+        self.sparse_optimizer = sparse_optimizer
+        self.dense_optimizer = dense_optimizer
+        self.num_backward_workers = num_backward_workers
 
-            # dynamic import the PyForward due to conditional compilation
-            self.grad_queue = Queue(grad_queue_slot_num)
-            self.backward_engine = PyBackward(backward_buffer_size)
+        from persia.prelude import PyBackward
 
-    def backward(self, loss: torch.Tensor) -> torch.Tensor:
+        # dynamic import the PyForward due to conditional compilation
+        self.grad_queue = Queue(grad_queue_slot_num)
+        self.backward_engine = PyBackward(backward_buffer_size)
+
+    def _enter(self):
+        super()._enter()
+
+        self.sparse_optimizer.apply()
+
+        self.backward_engine.launch(self.device_id, self.num_backward_workers)
+
+    def _exit(self):
+        # dump cpk
+        ...
+
+    def backward(
+        self, loss: torch.Tensor, emb_grad_check_interval: int
+    ) -> torch.Tensor:
+        """...
+
+        Arguments:
+            loss (torch.Tensor): ...
+            emb_grad_check_interval (int, optional): Gradient check interval to control the GradScalar update frequency # TODO: cannot understand
+        """
+        assert (
+            self.dense_optimizer is not None
+        ), "dense_optimizer not exists in TrainCtx"
 
         if self.mixed_precision:
-            loss = self.scaler.scale(loss).
+            loss = self.scaler.scale(loss)
             scale = self.scaler.get_scale()
         else:
             scale = 1
 
         loss.backward()
+
         finite = self.on_after_backward(scale)
 
         if self.mixed_precision:
             if finite:
                 scaler.update()
             else:
-                scaler.update(scale / 4.0)
+                scaler.update(scale / self.grad_scalar_update_factor)
 
+        self.grad_scaler.step(self.dense_optimizer)
         return loss
 
-    def get_streaming_dataset(
-        self,
-    ) -> StreamingDataset:
-        """Get streaming dataset"""  # TODO: need user understandable explanation and name or hide this if this is not expected to be used by user
-        return self.streaming_dataset
-
-    def __enter__(self):
-        self.backend.set_configuration(
-            self.emb_initialization[0],
-            self.emb_initialization[1],
-            self.admit_probability,
-            self.weight_bound > 0,
-            self.weight_bound,
-        )
-        self.sparse_optimizer.apply()
-
-        if not self.pretrained_loaded and self.embedding_checkpoint is not None:
-            self.load_embedding(self.embedding_checkpoint)
-            self.pretrained_loaded = True
-
-        if self.is_training:
-            self.backward_engine.launch(self.device_id, self.num_backward_workers)
-
-        return self
-
-    def on_after_backward(
-        self, loss_scale: float, emb_grad_check_interval: int = 20
-    ):
+    def on_after_backward(self, loss_scale: float, emb_grad_check_interval: int = 20):
         """Sparse embedding gradient update step that process the raw embedding and summation embedding
         gradient from raw format to standard format # TODO: cannot understand
 
         Arguments:
             loss_scale (float): half training loss scale to scale the gradient # TODO: this can be done without user explicitly pass in?
             batch_idx (int): index of batch data to decide the GradScalar update # TODO: cannot understand
-            emb_grad_check_interval (int, optional): Gradient check interval to control the GradScalar update frequency # TODO: cannot understand
         """
         if self.grad_queue.full():
             self.grad_queue.get()
@@ -416,30 +461,6 @@ class TrainCtx(BaseCtx):
             )
         return finite
 
-    def dump_embedding(self, dst_dir: str, blocking: bool = False):
-        """Dump embeddings to ``dst_dir``. Use ``TrainCtx.wait_for_dump_embedding`` to wait until finished
-        if ``blocking=False``.
 
-        Arguments:
-            dst_dir (str): Destination directory.
-            blocking (bool, optional): Dump embedding in blocking mode or not.
-        """
-        self.backend.dump_embedding(dst_dir, blocking)
-
-    def load_embedding(self, src_dir: str, blocking: bool = True):
-        """Load embeddings from ``src_dir``. Use ``TrainCtx.wait_for_load_embedding`` to wait until finished
-        if ``blocking=False``.
-
-        Arguments:
-            src_dir (str): Directory to load embeddings.
-            blocking (bool, optional): Dump embedding in blocking mode or not.
-        """
-        self.backend.load_embedding(src_dir, blocking)
-
-    def wait_for_dump_embedding(self):
-        """Wait for the embedding dump process."""
-        self.backend.wait_for_dump_embedding()
-
-    def wait_for_load_embedding(self):
-        """Wait for the embedding load process."""
-        self.backend.wait_for_load_embedding()
+def cnt_ctx() -> Optional[BaseCtx]:
+    return _CURRENT_CXT

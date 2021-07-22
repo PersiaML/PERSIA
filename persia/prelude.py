@@ -53,6 +53,7 @@ from persia_core.utils import (
 from persia_core.nats import (
     PyPersiaBatchFlowNatsStubPublisher,
     PyPersiaBatchFlowNatsStubResponder,
+    set_responder_output_channel
 )
 
 if is_cuda_feature_available():

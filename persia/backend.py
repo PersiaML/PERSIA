@@ -19,11 +19,7 @@ class Backend:
         replica_info (PyPersiaReplicaInfo): replica info of current process.
     """
 
-    def __init__(
-        self,
-        worker_size: int,
-        replica_info: PyPersiaReplicaInfo,
-    ):
+    def __init__(self, worker_size: int, replica_info: PyPersiaReplicaInfo):
         self.rpc_client = PyPersiaRpcClient(worker_size)
         self.nats_publisher = PyPersiaBatchFlowNatsStubPublisher(replica_info)
         self.nats_publisher.wait_servers_ready()
