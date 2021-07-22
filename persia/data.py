@@ -1,6 +1,4 @@
-from abc import ABC, abstractmethod
 from threading import Thread
-from typing import Optional
 
 import torch
 from torch.utils.data.dataset import IterableDataset as TorchIterableDataset
@@ -25,7 +23,7 @@ class IterableDataset(
         buffer_size (int): PyPersiaBatchDataChannel buffer size
     """
 
-    def __init__(self, buffer_size: int, replica_info: PyPersiaReplicaInfo):
+    def __init__(self, buffer_size: int):
         self.persia_batch_channel = PyPersiaBatchDataChannel(buffer_size)
 
     @property
@@ -37,11 +35,6 @@ class IterableDataset(
     def sender(self) -> PyPersiaBatchDataSender:
         """Get PyPersiaBatchDataSender python wrapper"""
         return self.persia_batch_channel.get_sender()
-
-    @abstractmethod
-    def __len__(self):
-        """Fixed size dataset should implement this function"""
-        ...
 
 
 class StreamingDataset(IterableDataset):
@@ -56,16 +49,13 @@ class StreamingDataset(IterableDataset):
         self,
         buffer_size: int,
     ):
-        super(NatsStreamingChannel, self).__init__(buffer_size, replica_info)
+        super(StreamingDataset, self).__init__(buffer_size)
 
     def __iter__(self):
         set_responder_output_channel(self.sender)
 
         while True:
             yield None
-
-    def __len__(self) -> int:
-        raise NotImplementedError("StreamingChannel do not implement __len__ function")
 
 
 class PersiaDataset(IterableDataset):
@@ -83,7 +73,9 @@ class PersiaDataset(IterableDataset):
         buffer_size: int,
         async_iterator: bool = True,
     ):
-        super(PersiaChannel, self).__init__(buffer_size, replica_info)
+        super(PersiaDataset, self).__init__(
+            buffer_size,
+        )
         self.async_iterator = async_iterator
 
     def fetch_data(self, sender: PyPersiaBatchDataSender):

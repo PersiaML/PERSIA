@@ -1,6 +1,8 @@
+import os
+
 from enum import Enum
 from queue import Queue
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, NewType
 
 import torch
 
@@ -10,11 +12,12 @@ from persia.env import get_world_size, get_rank
 from persia.backend import init_backend
 from persia.prelude import PyPersiaReplicaInfo, PyPersiaBatchFlowNatsStubResponder
 from persia.error import PersiaRuntimeException
-from persia.data import StreamingDataset
 
 _CURRENT_CXT = None
 
 _logger = get_default_logger()
+
+PythonTrainBatch = NewType("PythonTrainBatch", object)  # type: ignore
 
 
 def _check_finite(tensors: List[torch.Tensor]) -> bool:
@@ -49,6 +52,7 @@ class BaseCtx:
 
     def __init__(
         self,
+        backend_worker_size: int,
         block_when_exit: bool = True,
         catch_exception: bool = False,
     ):
@@ -68,7 +72,7 @@ class BaseCtx:
         ...
 
     def __enter__(self):
-        self._launch()
+        self._enter()
 
         global _CURRENT_CXT
         _CURRENT_CXT = self
@@ -101,23 +105,26 @@ class EmbeddingCtx(BaseCtx):
         admit_probability: float = 1.0,
         weight_bound: float = 10,
         embedding_checkpoint: Optional[str] = None,
+        backend_worker_size: int = 10,
         block_when_exit: bool = True,
         catch_exception: bool = False,
     ):
-        super(EmbeddingCtx, self).__init__(block_when_exit, catch_exception)
+        super(EmbeddingCtx, self).__init__(
+            backend_worker_size, block_when_exit, catch_exception
+        )
         self.preprocess_mode = preprocess_mode
         self.emb_initialization = emb_initialization
         self.admit_probability = admit_probability
         self.weight_bound = weight_bound
         self.embedding_checkpoint = embedding_checkpoint
 
-        self.responder = PyPersiaBatchFlowNatsStubResponder(replica_info)
+        self.responder = PyPersiaBatchFlowNatsStubResponder(self.replica_info)
 
         self.current_batch = None
         self.pretrained_loaded = False
 
     def prepare_features(
-        self, batch: "PythonTrainBatch"
+        self, batch: PythonTrainBatch
     ) -> Tuple[Tuple[torch.Tensor, List[torch.Tensor]], Optional[torch.Tensor]]:
         """Preprocess the PythonTrainBatch to PyTorch tensor.
 
@@ -133,7 +140,9 @@ class EmbeddingCtx(BaseCtx):
         if self.preprocess_mode == PreprocessMode.INFERENCE:
             batch.target_tensor = None
         else:
+            # pytype: disable=attribute-error
             batch.target = batch.consume_all_targets()
+            # pytype: enable=attribute-error
             assert len(batch.target) == 1
             batch.target = batch.target[0]
 
@@ -143,13 +152,17 @@ class EmbeddingCtx(BaseCtx):
 
         is_training = self.preprocess_mode == PreprocessMode.TRAIN  # cache property
 
+        # pytype: disable=attribute-error
         batch.dense = batch.consume_all_dense_features()
+        # pytype: enable=attribute-error
         batch.dense = batch.dense[0]
         batch.dense_tensor = pte.ptr_to_tensor_f32(
             batch.dense.data_ptr(), batch.dense.shape(), False
         )
 
+        # pytype: disable=attribute-error
         batch.emb = batch.consume_all_sparse_features()
+        # pytype: enable=attribute-error
         batch.emb_slot = []
         # sparse embedding processing
         emb_tensors, forward_tensors = [], []
@@ -240,6 +253,54 @@ class EmbeddingCtx(BaseCtx):
             self.load_embedding(self.embedding_checkpoint)
             self.pretrained_loaded = True
 
+    def dump_cpk(
+        self,
+        dst_dir: str,
+        model: Optional[torch.nn.Module] = None,
+        optimizer: Optional[torch.optim.Optimizer] = None,
+        default_filename: str = "dense.pt",
+        blocking: bool = True,
+    ):
+        os.makedirs(dst_dir, exist_ok=True)
+
+        cpk_dict = {}
+        if model:
+            cpk_dict["model"] = model.state_dict()
+
+        if optimizer:
+            cpk_dict["opt"] = optimizer.state_dict()
+
+        if len(cpk_dict.keys()) > 0:
+            dense_model_filepath = os.path.join(dst_dir, default_filename)
+            torch.save(cpk_dict, dense_model_filepath)
+
+        self.dump_embedding(dst_dir, blocking=blocking)
+
+    def load_cpk(
+        self,
+        src_dir: str,
+        model: Optional[torch.nn.Module] = None,
+        optimizer: Optional[torch.optim.Optimizer] = None,
+        map_location: Optional[str] = None,
+        default_filename: str = "dense.pt",
+        blocking=True,
+    ):
+        if not os.path.exists(src_dir):
+            _logger.warn(f"src_dir: {src_dir} not exists")
+            return
+
+        dense_model_filepath = os.path.join(src_dir, default_filename)
+        if os.path.exists(dense_model_filepath):
+            cpk_dict = torch.load(dense_model_filepath, map_location)
+
+            if model:
+                model.load_state_dict(cpk_dict["model"], strict=True)
+
+            if optimizer:
+                optimizer.load_state_dict(cpk_dict["opt"])
+
+        self.load_embedding(src_dir, blocking=blocking)
+
     def dump_embedding(self, dst_dir: str, blocking: bool = False):
         """Dump embeddings to ``dst_dir``. Use ``TrainCtx.wait_for_dump_embedding`` to wait until finished
         if ``blocking=False``.
@@ -296,13 +357,13 @@ class TrainCtx(EmbeddingCtx):
 
     def __init__(
         self,
+        sparse_optimizer: Optimizer,
         device_id: int = 0,
         emb_initialization: Tuple[float, float] = (-0.01, 0.01),
         admit_probability: float = 1.0,
         weight_bound: float = 10,
         embedding_checkpoint: Optional[str] = None,
         dense_optimizer: Optional[torch.optim.Optimizer] = None,
-        sparse_optimizer: Optional[Optimizer] = None,
         backend_worker_size: int = 20,
         enable_backward: bool = True,
         mixed_precision: bool = True,
@@ -315,11 +376,11 @@ class TrainCtx(EmbeddingCtx):
         *args,
         **kwargs,
     ):
-        super(TrainCtx, self).__init__(CtxStatus.TRAIN, *args, **kwargs)
+        super(TrainCtx, self).__init__(PreprocessMode.TRAIN, *args, **kwargs)
 
-        assert not self.is_training or (
-            self.is_training and sparse_optimizer is not None
-        ), "sparse_optimizer should not be none when is_training set to true"
+        assert (
+            sparse_optimizer is not None
+        ), "Sparse_optimizer should not be none in train context"
         assert (
             0 <= device_id < torch.cuda.device_count()
         ), f"device_id: {device_id} invalid!"
@@ -330,9 +391,6 @@ class TrainCtx(EmbeddingCtx):
         self.admit_probability = admit_probability
         self.weight_bound = weight_bound
         self.emb_initialization = emb_initialization
-
-        self.embedding_checkpoint = embedding_checkpoint
-        self.pretrained_loaded = False
 
         self.batch_idx = 0
         self.enable_backward = enable_backward
@@ -356,10 +414,6 @@ class TrainCtx(EmbeddingCtx):
 
         self.backward_engine.launch(self.device_id, self.num_backward_workers)
 
-    def _exit(self):
-        # dump cpk
-        ...
-
     def backward(
         self, loss: torch.Tensor, emb_grad_check_interval: int
     ) -> torch.Tensor:
@@ -374,8 +428,8 @@ class TrainCtx(EmbeddingCtx):
         ), "dense_optimizer not exists in TrainCtx"
 
         if self.mixed_precision:
-            loss = self.scaler.scale(loss)
-            scale = self.scaler.get_scale()
+            loss = self.grad_scaler.scale(loss)
+            scale = self.grad_scaler.get_scale()
         else:
             scale = 1
 
@@ -385,9 +439,9 @@ class TrainCtx(EmbeddingCtx):
 
         if self.mixed_precision:
             if finite:
-                scaler.update()
+                self.grad_scaler.update()
             else:
-                scaler.update(scale / self.grad_scalar_update_factor)
+                self.grad_scaler.update(scale / self.grad_scalar_update_factor)
 
         self.grad_scaler.step(self.dense_optimizer)
         return loss
@@ -455,9 +509,9 @@ class TrainCtx(EmbeddingCtx):
         self.backward_engine.update_sparse_gradient_batched(gradient_batch)
         self.grad_queue.put(grad_slot)
 
-        if self.is_training and len(empty_grad) > 0:
+        if len(empty_grad) > 0:
             _logger.warning(
-                f"current batch grad empty num: {len(empty_grad)}, {empty_grad}"
+                f"Current batch exists empty gradient tensors, num: {len(empty_grad)}, {empty_grad}"
             )
         return finite
 
