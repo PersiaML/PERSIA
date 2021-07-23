@@ -50,11 +50,7 @@ from persia_core.utils import (
     PyPersiaBatchDataReceiver,
     PyPersiaReplicaInfo,
 )
-from persia_core.nats import (
-    PyPersiaBatchFlowNatsStubPublisher,
-    PyPersiaBatchFlowNatsStubResponder,
-    set_responder_output_channel
-)
+from persia_core.nats import PyPersiaBatchFlowNatsStubPublisher, init_responder
 
 if is_cuda_feature_available():
     from persia_core.backward import PyBackward

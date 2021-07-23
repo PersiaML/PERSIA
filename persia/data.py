@@ -4,13 +4,16 @@ import torch
 from torch.utils.data.dataset import IterableDataset as TorchIterableDataset
 
 from persia.ctx import cnt_ctx
+from persia.logger import get_default_logger
 from persia.prelude import (
     PyPersiaBatchDataChannel,
     PyPersiaReplicaInfo,
     PyPersiaBatchDataReceiver,
     PyPersiaBatchDataSender,
-    set_responder_output_channel,
+    init_responder,
 )
+
+_logger = get_default_logger()
 
 
 class IterableDataset(
@@ -42,7 +45,6 @@ class StreamingDataset(IterableDataset):
 
     Arguments:
         buffer_size (int): PyPersiaBatchDataChannel buffer size
-        replica_info (PyPersiaReplicaInfo): replica info of current process to enable the data reorder ability
     """
 
     def __init__(
@@ -50,9 +52,15 @@ class StreamingDataset(IterableDataset):
         buffer_size: int,
     ):
         super(StreamingDataset, self).__init__(buffer_size)
+        self.initialized = False
 
     def __iter__(self):
-        set_responder_output_channel(self.sender)
+        if not self.initialized:
+            replica_info = cnt_ctx().replica_info
+            init_responder(replica_info, self.sender)
+
+            _logger.info("initialize the responder")
+            self.initialized = True
 
         while True:
             yield None
@@ -64,7 +72,6 @@ class PersiaDataset(IterableDataset):
 
     Arguments:
         buffer_size (int): PyPersiaBatchDataChannel buffer size
-        replica_info (PyPersiaReplicaInfo, optional): replica info of current process to enable the data reorder ability
         async_iterator (bool, optional): launch the thread to generate the data asynchronous
     """
 

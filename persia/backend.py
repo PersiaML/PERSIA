@@ -6,6 +6,7 @@ from persia.prelude import (
     PyOptimizerBase,
 )
 from persia.error import PersiaRuntimeException
+from persia.env import get_world_size
 
 _backend = None
 
@@ -21,7 +22,11 @@ class Backend:
 
     def __init__(self, worker_size: int, replica_info: PyPersiaReplicaInfo):
         self.rpc_client = PyPersiaRpcClient(worker_size)
-        self.nats_publisher = PyPersiaBatchFlowNatsStubPublisher(replica_info)
+
+        world_size = get_world_size()
+        self.nats_publisher = PyPersiaBatchFlowNatsStubPublisher(
+            replica_info, world_size if world_size != -1 else None
+        )
         self.nats_publisher.wait_servers_ready()
 
     def send_data(self, data: PyPersiaBatchData, blocking: bool = True):
@@ -51,6 +56,8 @@ class Backend:
             admit_probability (float): probability of embedding generation. value in [0, 1]. Generate a random value(range in [0, 1]) for each sparse embedding,
                     generate the new embedding once the value is small than the admit_probability. Always generate the new embedding when the admit_probability set
                     to 1.
+            enable_weight_bound (bool): TODO:
+            weight_bound (float): TODO:
         """
         self.nats_publisher.configure_sharded_servers(
             initialize_lower,
@@ -102,8 +109,8 @@ class Backend:
 
 
 def init_backend(
-    worker_size: int = 20,
-    replica_info: PyPersiaReplicaInfo = PyPersiaReplicaInfo(1, 0),
+    worker_size: int,
+    replica_info: PyPersiaReplicaInfo,
 ) -> Backend:
     """Initialize singleton Backend instance
 

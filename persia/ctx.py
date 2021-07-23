@@ -6,11 +6,11 @@ from typing import List, Tuple, Optional, NewType
 
 import torch
 
+import persia.env as env
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
-from persia.env import get_world_size, get_rank
 from persia.backend import init_backend
-from persia.prelude import PyPersiaReplicaInfo, PyPersiaBatchFlowNatsStubResponder
+from persia.prelude import PyPersiaReplicaInfo
 from persia.error import PersiaRuntimeException
 
 _CURRENT_CXT = None
@@ -43,32 +43,50 @@ class BaseCtx:
     r"""Base context to provide fundamental function # TODO: too vague, need more explanation about what this does and where to use
 
     Examples:
-        ...
-
-    Arguments:  # TODO: move this to __init__ doc string
-        block_when_exit: whether block the process when exit the context  # TODO: why?
-        catch_exception: catch the exception or not when occur the exception # TODO: why?
+        with BaseCtx() as ctx:
+            ...
     """
 
     def __init__(
         self,
-        backend_worker_size: int,
+        backend_worker_size: int = 10,
         block_when_exit: bool = True,
         catch_exception: bool = False,
     ):
+        """
+        Arguments:
+            backend_worker_size (int): Rpc ThreadPool worker size
+            block_when_exit (bool): whether block the process when exit the context  # TODO: why?
+            catch_exception (bool): catch the exception or not when occur the exception # TODO: why?
+
+        """
         self.block_when_exit = block_when_exit
         self.catch_exception = catch_exception
 
-        world_size, rank_id = get_world_size(), get_rank()
-        self.replica_info = PyPersiaReplicaInfo(world_size, rank_id)
-        _logger.info(f"world size: {world_size} rank_id: {rank_id} init backend...")
+        world_size = env.get_world_size()
+
+        if world_size == -1:
+            replica_size = env.get_replica_size()
+            replica_index = env.get_replica_index()
+            self.replica_info = PyPersiaReplicaInfo(replica_size, replica_index)
+            _logger.info(
+                f"init datacompose backend replica_size: {replica_size} replica_index: {replica_index}"
+            )
+        else:
+            rank_id = env.get_rank()
+            self.replica_info = PyPersiaReplicaInfo(world_size, rank_id)
+            _logger.info(
+                f"init trainer backend world size: {world_size} rank_id: {rank_id}"
+            )
 
         self.backend = init_backend(backend_worker_size, self.replica_info)
 
     def _enter(self):
+        """Hook when enter the context"""
         ...
 
     def _exit(self):
+        """Hook when exit the context"""
         ...
 
     def __enter__(self):
@@ -98,6 +116,15 @@ class BaseCtx:
 
 
 class EmbeddingCtx(BaseCtx):
+    r"""This class provide the embedding relative function compare to BaseCtx.It can provide the basic offline test or inference
+    according to different preprocess_mode.The simple way to use this context is call ``persia.ctx.eval_ctx()`` or ``persia.ctx.inference_ctx``
+    to get the context
+
+    Examples:
+        ...
+
+    """
+
     def __init__(
         self,
         preprocess_mode: PreprocessMode,
@@ -105,35 +132,56 @@ class EmbeddingCtx(BaseCtx):
         admit_probability: float = 1.0,
         weight_bound: float = 10,
         embedding_checkpoint: Optional[str] = None,
-        backend_worker_size: int = 10,
-        block_when_exit: bool = True,
-        catch_exception: bool = False,
+        *args,
+        **kwargs,
     ):
-        super(EmbeddingCtx, self).__init__(
-            backend_worker_size, block_when_exit, catch_exception
-        )
+
+        """
+        Arguments:
+            preprocess_mode (PreprocessMode): Preprcess mode of current ctx
+            emb_initialization (Tuple[float, float], optional): embedding uniform initialization arguments # TODO: need explanation
+            admit_probability (float, optional): The probability (0<=, <=1) of admitting a new embedding.
+            weight_bound (float, optional): Restrict each element value of an embedding in [-weight_bound, weight_bound].
+            backend_worker_size (int, optional): PersiaML background thread pool size.
+            recv_buffer_size (int, optional): buffer size that recv data from data compose
+            grad_queue_slot_num (int, optional): the slot size of queue that cache the torch gradient tensor to ensure
+                the garbage collector collect the device memory after update_sparse_gradient_batched finished # TODO: need user understandable explanation and name
+            embedding_checkpoint(str, optional): pretrained embedding directory, load checkpoint in this dir when enter TrainCtx. # TODO: rename to checkpoint_dir, and save both dense and embedding to the same location
+        """
+        super(EmbeddingCtx, self).__init__(*args, **kwarg)
         self.preprocess_mode = preprocess_mode
         self.emb_initialization = emb_initialization
         self.admit_probability = admit_probability
         self.weight_bound = weight_bound
         self.embedding_checkpoint = embedding_checkpoint
 
-        self.responder = PyPersiaBatchFlowNatsStubResponder(self.replica_info)
-
         self.current_batch = None
         self.pretrained_loaded = False
 
+    def _enter(self):
+        self.backend.set_configuration(
+            self.emb_initialization[0],
+            self.emb_initialization[1],
+            self.admit_probability,
+            self.weight_bound > 0,
+            self.weight_bound,
+        )
+
+        if not self.pretrained_loaded and self.embedding_checkpoint is not None:
+            self.load_embedding(self.embedding_checkpoint)
+            self.pretrained_loaded = True
+
     def prepare_features(
         self, batch: PythonTrainBatch
-    ) -> Tuple[Tuple[torch.Tensor, List[torch.Tensor]], Optional[torch.Tensor]]:
+    ) -> Tuple[torch.Tensor, List[torch.Tensor], Optional[torch.Tensor]]:
         """Preprocess the PythonTrainBatch to PyTorch tensor.
 
         Arguments: batch (PythonTrainBatch): Training data provided by PersiaML
             upstream including dense, target, sparse data and meta info.
 
         Returns:
+            return the Tuple,
             # TODO: fill this
-
         """
         import persia_torch_ext as pte  # pytype: disable=import-error
 
@@ -163,6 +211,7 @@ class EmbeddingCtx(BaseCtx):
         # pytype: disable=attribute-error
         batch.emb = batch.consume_all_sparse_features()
         # pytype: enable=attribute-error
+
         batch.emb_slot = []
         # sparse embedding processing
         emb_tensors, forward_tensors = [], []
@@ -238,20 +287,7 @@ class EmbeddingCtx(BaseCtx):
         batch.emb_tensors = emb_tensors
         self.current_batch = batch
 
-        return (batch.dense_tensor, batch.forward_tensors), batch.target_tensor
-
-    def _enter(self):
-        self.backend.set_configuration(
-            self.emb_initialization[0],
-            self.emb_initialization[1],
-            self.admit_probability,
-            self.weight_bound > 0,
-            self.weight_bound,
-        )
-
-        if not self.pretrained_loaded and self.embedding_checkpoint is not None:
-            self.load_embedding(self.embedding_checkpoint)
-            self.pretrained_loaded = True
+        return batch.dense_tensor, batch.forward_tensors, batch.target_tensor
 
     def dump_cpk(
         self,
@@ -261,6 +297,15 @@ class EmbeddingCtx(BaseCtx):
         default_filename: str = "dense.pt",
         blocking: bool = True,
     ):
+        """Dump the dense and sparse ckp to destination directory.
+
+        Arguments:
+            dst_dir (str): Destination directory.
+            model (torch.nn.Module, optional): Pytorch model instance.
+            optimizer (torch.optim.Optimizer, optional): Pytorch optimizer instance.
+            default_filename (str, optional): Dense checkpoint filename.
+            blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
+        """
         os.makedirs(dst_dir, exist_ok=True)
 
         cpk_dict = {}
@@ -283,8 +328,18 @@ class EmbeddingCtx(BaseCtx):
         optimizer: Optional[torch.optim.Optimizer] = None,
         map_location: Optional[str] = None,
         default_filename: str = "dense.pt",
-        blocking=True,
+        blocking: bool = True,
     ):
+        """Load the dense and sparse ckp from source directory.
+
+        Arguments:
+            src_dir (str): Source directory.
+            model (torch.nn.Module, optional): Pytorch model instance.
+            optimizer (torch.optim.Optimizer, optional): Pytorch optimizer instance.
+            map_location (str, optional): Load the dense checkpoint to specific device.
+            default_filename (str, optional): Dense checkpoint filename.
+            blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
+        """
         if not os.path.exists(src_dir):
             _logger.warn(f"src_dir: {src_dir} not exists")
             return
@@ -337,45 +392,31 @@ class TrainCtx(EmbeddingCtx):
     Example:
         # TODO: fill me
 
-    # TODO: move arguments to __init__ doc string
-    Arguments:
-        device_id (int, optional): The CUDA device to use for this process.
-        mixed_precision (bool, optional): whether to enable mixed precision training
-        grad_scalar_update_factor (float, optional): Update factor of Gradscalar to ensure loss scale finitely if set ``mixed_precision=True``
-        emb_initialization (Tuple[float, float], optional): embedding uniform initialization arguments # TODO: need explanation
-        admit_probability (float, optional): The probability (0<=, <=1) of admitting a new embedding.
-        sparse_optimizer (persia.sparse.optim.Optimizer, optional): Optimizer for the embeddings.
-        weight_bound (float, optional): Restrict each element value of an embedding in [-weight_bound, weight_bound].
-        backend_worker_size (int, optional): PersiaML background thread pool size.
-        backward_buffer_size (int, optional): Max number of not updated gradients queued.
-        recv_buffer_size (int, optional): buffer size that recv data from data compose
-        grad_queue_slot_num (int, optional): the slot size of queue that cache the torch gradient tensor to ensure
-            the garbage collector collect the device memory after update_sparse_gradient_batched finished # TODO: need user understandable explanation and name
-        num_backward_workers (int, optional): Number of workers sending embedding gradients in parallel.
-        embedding_checkpoint(str, optional): pretrained embedding directory, load checkpoint in this dir when enter TrainCtx. # TODO: rename to checkpoint_dir, and save both dense and embedding to the same location
     """
 
     def __init__(
         self,
         sparse_optimizer: Optimizer,
         device_id: int = 0,
-        emb_initialization: Tuple[float, float] = (-0.01, 0.01),
-        admit_probability: float = 1.0,
-        weight_bound: float = 10,
-        embedding_checkpoint: Optional[str] = None,
         dense_optimizer: Optional[torch.optim.Optimizer] = None,
-        backend_worker_size: int = 20,
-        enable_backward: bool = True,
         mixed_precision: bool = True,
         grad_scalar_update_factor: float = 4,
         backward_buffer_size: int = 10,
         num_backward_workers: int = 8,
         grad_queue_slot_num: int = 60,
-        block_when_exit: bool = True,
-        catch_exception: bool = False,
         *args,
         **kwargs,
     ):
+        """
+        Arguments:
+            sparse_optimizer (persia.sparse.optim.Optimizer, optional): Optimizer for the embeddings.
+            device_id (int, optional): The CUDA device to use for this process.
+            dense_optimizer (torch.optim.Optimizer, optional): Optimizer for dense parameters
+            mixed_precision (bool, optional): whether to enable mixed precision training
+            grad_scalar_update_factor (float, optional): Update factor of Gradscalar to ensure loss scale finitely if set ``mixed_precision=True``
+            backward_buffer_size (int, optional): Max number of not updated gradients queued.
+            num_backward_workers (int, optional): Number of workers sending embedding gradients in parallel.
+        """
         super(TrainCtx, self).__init__(PreprocessMode.TRAIN, *args, **kwargs)
 
         assert (
@@ -388,12 +429,8 @@ class TrainCtx(EmbeddingCtx):
         torch.cuda.set_device(device_id)
 
         self.device_id = device_id
-        self.admit_probability = admit_probability
-        self.weight_bound = weight_bound
-        self.emb_initialization = emb_initialization
 
         self.batch_idx = 0
-        self.enable_backward = enable_backward
         self.mixed_precision = mixed_precision
         self.grad_scalar_update_factor = grad_scalar_update_factor
         self.grad_scaler = torch.cuda.amp.GradScaler() if self.mixed_precision else None
@@ -411,16 +448,15 @@ class TrainCtx(EmbeddingCtx):
         super()._enter()
 
         self.sparse_optimizer.apply()
-
         self.backward_engine.launch(self.device_id, self.num_backward_workers)
 
     def backward(
-        self, loss: torch.Tensor, emb_grad_check_interval: int
+        self, loss: torch.Tensor, emb_grad_check_interval: int = 20
     ) -> torch.Tensor:
-        """...
+        """Update the dense and sparse states by current loss
 
         Arguments:
-            loss (torch.Tensor): ...
+            loss (torch.Tensor): Loss of current batch
             emb_grad_check_interval (int, optional): Gradient check interval to control the GradScalar update frequency # TODO: cannot understand
         """
         assert (
@@ -446,13 +482,11 @@ class TrainCtx(EmbeddingCtx):
         self.grad_scaler.step(self.dense_optimizer)
         return loss
 
-    def on_after_backward(self, loss_scale: float, emb_grad_check_interval: int = 20):
-        """Sparse embedding gradient update step that process the raw embedding and summation embedding
-        gradient from raw format to standard format # TODO: cannot understand
+    def on_after_backward(self, emb_grad_check_interval: int = 20):
+        """Update the embeddings gradients
 
         Arguments:
-            loss_scale (float): half training loss scale to scale the gradient # TODO: this can be done without user explicitly pass in?
-            batch_idx (int): index of batch data to decide the GradScalar update # TODO: cannot understand
+            emb_grad_check_interval (int): Interval to check the embedding gradient finite or not.
         """
         if self.grad_queue.full():
             self.grad_queue.get()
@@ -464,8 +498,8 @@ class TrainCtx(EmbeddingCtx):
                 [emb[-1].grad for emb in self.current_batch.emb_tensors]
             )
 
-        grad_slot = []
-        empty_grad = []
+        grad_slots, empty_grads = [], []
+        loss_scale = self.grad_scaler.get_scale()
         gradient_batch = self.current_batch.create_gradient_batch()
 
         for (
@@ -477,7 +511,7 @@ class TrainCtx(EmbeddingCtx):
         ) in self.current_batch.emb_tensors:
             if emb_tensor.grad is None:
                 gradient_batch.add_skipped_gradient(emb_name)
-                empty_grad.append(emb_name)
+                empty_grads.append(emb_name)
             else:
                 if distinct_id_tensor is not None:
                     if distinct_id_tensor.shape[0] > 1:
@@ -496,7 +530,7 @@ class TrainCtx(EmbeddingCtx):
                     is_f16_gradient = True
 
                 if grad is not None:
-                    grad_slot.append(grad)
+                    grad_slots.append(grad)
                     gradient_batch.add_gradient(
                         emb_name,
                         grad.data_ptr(),
@@ -507,14 +541,27 @@ class TrainCtx(EmbeddingCtx):
 
         torch.cuda.synchronize()
         self.backward_engine.update_sparse_gradient_batched(gradient_batch)
-        self.grad_queue.put(grad_slot)
+        self.grad_queue.put(grad_slots)
 
-        if len(empty_grad) > 0:
+        if len(empty_grads) > 0:
             _logger.warning(
-                f"Current batch exists empty gradient tensors, num: {len(empty_grad)}, {empty_grad}"
+                f"Current batch exists empty gradient tensors, num: {len(empty_grad)}, {empty_grads}"
             )
         return finite
 
 
 def cnt_ctx() -> Optional[BaseCtx]:
+    """Get the BaseCtx recently entered"""
     return _CURRENT_CXT
+
+
+def base_ctx(*args, **kwargs) -> BaseCtx:
+    return BaseCtx(*args, **kwargs)
+
+
+def eval_ctx(*args, **kwargs) -> EmbeddingCtx:
+    return EmbeddingCtx(PreprocessMode.EVAL, *args, **kwargs)
+
+
+def inference_ctx(*args, **kwargs) -> EmbeddingCtx:
+    return EmbeddingCtx(PreprocessMode.INFERENCE, *args, **kwargs)

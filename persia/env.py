@@ -2,7 +2,7 @@ import os
 import torch
 
 
-_WORLD_SIZE = int(os.environ.get("WORLD_SIZE", 1))
+_WORLD_SIZE = int(os.environ.get("WORLD_SIZE", -1))
 _REPLICA_SIZE = int(os.environ.get("REPLICA_SIZE", 1))
 _REPLICA_INDEX = int(os.environ.get("REPLICA_INDEX", 0))
 
