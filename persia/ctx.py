@@ -118,9 +118,9 @@ class EmbeddingCtx(BaseCtx):
     to get the ``EmbeddingCtx``
 
     Examples::
-        >> from persia.prelude import
-        >> model = get_dnn_model()
-        >> loader = make_dataloader()
+        from persia.prelude import
+        model = get_dnn_model()
+        loader = make_dataloader()
 
         >> with EmbeddingCtx(
         ...     PreprocessMode.EVAL
