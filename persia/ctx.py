@@ -17,7 +17,7 @@ _CURRENT_CXT = None
 
 _logger = get_default_logger()
 
-PythonTrainBatch = NewType("PythonTrainBatch", object)  # type: ignore
+PythonTrainBatch = NewType("PythonTrainBatch", object)
 
 
 def _check_finite(tensors: List[torch.Tensor]) -> bool:
@@ -148,7 +148,7 @@ class EmbeddingCtx(BaseCtx):
                 the garbage collector collect the device memory after update_sparse_gradient_batched finished # TODO: need user understandable explanation and name
             embedding_checkpoint(str, optional): pretrained embedding directory, load checkpoint in this dir when enter TrainCtx. # TODO: rename to checkpoint_dir, and save both dense and embedding to the same location
         """
-        super(EmbeddingCtx, self).__init__(*args, **kwarg)
+        super(EmbeddingCtx, self).__init__(*args, **kwargs)
         self.preprocess_mode = preprocess_mode
         self.emb_initialization = emb_initialization
         self.admit_probability = admit_probability
@@ -176,8 +176,9 @@ class EmbeddingCtx(BaseCtx):
     ) -> Tuple[torch.Tensor, List[torch.Tensor], Optional[torch.Tensor]]:
         """Preprocess the PythonTrainBatch to PyTorch tensor.
 
-        Arguments: batch (PythonTrainBatch): Training data provided by PersiaML
-            upstream including dense, target, sparse data and meta info.
+        Arguments:
+            batch (PythonTrainBatch): Training data provided by PersiaML upstream including
+                dense, target, sparse data and meta info.
 
         Returns:
             return the Tuple,
@@ -397,9 +398,9 @@ class TrainCtx(EmbeddingCtx):
     def __init__(
         self,
         sparse_optimizer: Optimizer,
+        dense_optimizer: torch.optim.Optimizer,
         device_id: int = 0,
-        dense_optimizer: Optional[torch.optim.Optimizer] = None,
-        mixed_precision: bool = True,
+        mixed_precision: bool = False,
         grad_scalar_update_factor: float = 4,
         backward_buffer_size: int = 10,
         num_backward_workers: int = 8,
@@ -409,9 +410,9 @@ class TrainCtx(EmbeddingCtx):
     ):
         """
         Arguments:
-            sparse_optimizer (persia.sparse.optim.Optimizer, optional): Optimizer for the embeddings.
+            sparse_optimizer (persia.sparse.optim.Optimizer): Optimizer for the embeddings.
+            dense_optimizer (torch.optim.Optimizer): Optimizer for dense parameters
             device_id (int, optional): The CUDA device to use for this process.
-            dense_optimizer (torch.optim.Optimizer, optional): Optimizer for dense parameters
             mixed_precision (bool, optional): whether to enable mixed precision training
             grad_scalar_update_factor (float, optional): Update factor of Gradscalar to ensure loss scale finitely if set ``mixed_precision=True``
             backward_buffer_size (int, optional): Max number of not updated gradients queued.
@@ -471,7 +472,7 @@ class TrainCtx(EmbeddingCtx):
 
         loss.backward()
 
-        finite = self.on_after_backward(scale)
+        finite = self._on_after_backward(scale)
 
         if self.mixed_precision:
             if finite:
@@ -479,10 +480,13 @@ class TrainCtx(EmbeddingCtx):
             else:
                 self.grad_scaler.update(scale / self.grad_scalar_update_factor)
 
-        self.grad_scaler.step(self.dense_optimizer)
+            self.grad_scaler.step(self.dense_optimizer)
+
+        self.dense_optimizer.zero_grad()
+
         return loss
 
-    def on_after_backward(self, emb_grad_check_interval: int = 20):
+    def _on_after_backward(self, loss_scale: float, emb_grad_check_interval: int = 20):
         """Update the embeddings gradients
 
         Arguments:
@@ -499,7 +503,6 @@ class TrainCtx(EmbeddingCtx):
             )
 
         grad_slots, empty_grads = [], []
-        loss_scale = self.grad_scaler.get_scale()
         gradient_batch = self.current_batch.create_gradient_batch()
 
         for (
@@ -545,7 +548,7 @@ class TrainCtx(EmbeddingCtx):
 
         if len(empty_grads) > 0:
             _logger.warning(
-                f"Current batch exists empty gradient tensors, num: {len(empty_grad)}, {empty_grads}"
+                f"Current batch exists empty gradient tensors, num: {len(empty_grads)}, {empty_grads}"
             )
         return finite
 

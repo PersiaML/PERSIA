@@ -56,7 +56,9 @@ class StreamingDataset(IterableDataset):
 
     def __iter__(self):
         if not self.initialized:
-            replica_info = cnt_ctx().replica_info
+            current_ctx = cnt_ctx()
+            assert current_ctx is not None, "Current conext is None!"
+            replica_info = current_ctx.replica_info
             init_responder(replica_info, self.sender)
 
             _logger.info("initialize the responder")
