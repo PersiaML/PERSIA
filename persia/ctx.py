@@ -47,15 +47,15 @@ class BaseCtx:
     to the trainer and embedding middleware.
 
     Examples::
-        >> from persia.prelude import PyPersiaBatchData
-        >> loader = make_simple_loader()
-        >> with BaseCtx() as ctx:
-        >>     for (dense, batch_sparse_ids, target) in loader:
-        >>         batch_data = PyPersiaBatchData()
-        >>         batch_data.add_dense([dense])
-        >>         batch_data.add_sparse(batch_sparse_ids)
-        >>         batch_data.add_target(target)
-        >>         ctx.backend.send_data(batch_data)
+        >>> from persia.prelude import PyPersiaBatchData
+        >>> loader = make_simple_loader()
+        >>> with BaseCtx() as ctx:
+        >>>     for (dense, batch_sparse_ids, target) in loader:
+        >>>         batch_data = PyPersiaBatchData()
+        >>>         batch_data.add_dense([dense])
+        >>>         batch_data.add_sparse(batch_sparse_ids)
+        >>>         batch_data.add_target(target)
+        >>>         ctx.backend.send_data(batch_data)
     """
 
     def __init__(
@@ -118,21 +118,20 @@ class EmbeddingCtx(BaseCtx):
     to get the ``EmbeddingCtx``
 
     Examples::
-        from persia.prelude import
-        model = get_dnn_model()
-        loader = make_dataloader()
-
-        >> with EmbeddingCtx(
+        >>> from persia.prelude import
+        >>> model = get_dnn_model()
+        >>> loader = make_dataloader()
+        >>> with EmbeddingCtx(
         ...     PreprocessMode.EVAL
         ... ) as ctx:
-        >>     for (dense, batch_sparse_ids, target) in loader:
-        >>         batch_data = PyPersiaBatchData()
-        >>         batch_data.add_dense([dense])
-        >>         batch_data.add_sparse(batch_sparse_ids)
-        >>         batch_data.add_target(target)
-        >>         python_train_batch = forward_directly_from_data(batch_data)
-        >>         dense_tensor, sparse_tensors, target_tensor = ctx.prepare_feature(python_train_batch)
-        >>         output = model(dense_tensor, sparse_tensors)
+        >>>     for (dense, batch_sparse_ids, target) in loader:
+        >>>         batch_data = PyPersiaBatchData()
+        >>>         batch_data.add_dense([dense])
+        >>>         batch_data.add_sparse(batch_sparse_ids)
+        >>>         batch_data.add_target(target)
+        >>>         python_train_batch = forward_directly_from_data(batch_data)
+        >>>         dense_tensor, sparse_tensors, target_tensor = ctx.prepare_feature(python_train_batch)
+        >>>         output = model(dense_tensor, sparse_tensors)
     """
 
     def __init__(
@@ -396,24 +395,21 @@ class TrainCtx(EmbeddingCtx):
     r"""Subclass of ``EmbeddingCtx`` that provide the backward ability to update the sparse embedding.
 
     Example::
-        >> import torch
-
-        >> model = get_dnn_model()
-        >> sparse_optimizer = persia.sparse.optim.SGD(lr=1e-3)
-        >> dense_optimizer = torch.optim.SGD(lr=1e-3)
-
-        >> loss_fn = torch.nn.BCELoss(reduction="mean")
-
-        >> with TrainCtx(
-        >>     sparse_optimizer,
-        >>     dense_optimizer,
-        >>     mixed_precision=True
-        >> ) as ctx:
-        >>     for batch_data in dataloder:
-        >>         dense, sparse, target = ctx.prepare_features(data)
-        >>         output = model(dense, sparse)
-        >>         loss = loss_fn(output, target)
-        >>         scaled_loss = ctx.backward(loss)
+        >>> import torch
+        >>> model = get_dnn_model()
+        >>> sparse_optimizer = persia.sparse.optim.SGD(lr=1e-3)
+        >>> dense_optimizer = torch.optim.SGD(lr=1e-3)
+        >>> loss_fn = torch.nn.BCELoss(reduction="mean")
+        >>> with TrainCtx(
+        >>>     sparse_optimizer,
+        >>>     dense_optimizer,
+        >>>     mixed_precision=True
+        >>> ) as ctx:
+        >>>     for batch_data in dataloder:
+        >>>         dense, sparse, target = ctx.prepare_features(data)
+        >>>         output = model(dense, sparse)
+        >>>         loss = loss_fn(output, target)
+        >>>         scaled_loss = ctx.backward(loss)
     """
 
     def __init__(
@@ -521,8 +517,8 @@ class TrainCtx(EmbeddingCtx):
 
         finite = True
         if (
-            self.mixed_precision and 
-            self.update_times % embedding_gradient_check_frequency == 0
+            self.mixed_precision
+            and self.update_times % embedding_gradient_check_frequency == 0
         ):
             finite = _check_finite(
                 [emb[-1].grad for emb in self.current_batch.emb_tensors]
