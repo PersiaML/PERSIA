@@ -24,15 +24,18 @@ def _check_finite(tensors: List[torch.Tensor]) -> bool:
     """Check all tensors in the input list contain only finite elements.
 
     Arguments:
-        tensors: tensor list that need to check finite or not
+        tensors (List[torch.Tensor]): tensor list that need to check finite or not.
+
+    Returns: Whether all the tensors is finite or is None.
     """
     return all([torch.isfinite(t).all() if t is not None else True for t in tensors])
 
 
 class PreprocessMode(Enum):
-    r"""Enum struct to identify which status current context is.
-    Context will preprocess the batch input data according to different status.
-    # TODO: need more explanation about each status
+    r"""Different preprocess mode will effect the ``EmbeddingCtx.prepare_feature`` return result. ``PreprocessMode.TRAIN`` will return
+    the torch tensor that the flag of ``requires_grad`` is set to ``True``. ``EmbeddingCtx.EVAL`` will return the torch tensor
+    that the flag of ``requires_grad`` is set to ``False``. ``EmbeddingCtx.INFERENCE``  almost behave like ``EmbeddingCtx.EVAL``, the only difference
+    is that it allows `EmbeddingCxt.prepare_feature`` function to process the ``PythonTrainBatch`` that without target tensor.
     """
     TRAIN = 1
     EVAL = 2
@@ -40,25 +43,30 @@ class PreprocessMode(Enum):
 
 
 class BaseCtx:
-    r"""Base context to provide fundamental function # TODO: too vague, need more explanation about what this does and where to use
+    r"""It provide the communicate ability for data generator component to send the PersiaBatchData
+    to the trainer and embedding middleware.
 
-    Examples:
-        with BaseCtx() as ctx:
-            ...
+    Examples::
+        >> from persia.prelude import PyPersiaBatchData
+
+        >> loader = make_simple_loader()
+
+        >> with BaseCtx() as ctx:
+        >>     for (dense, batch_sparse_ids, target) in loader:
+        >>         batch_data = PyPersiaBatchData()
+        >>         batch_data.add_dense([dense])
+        >>         batch_data.add_sparse(batch_sparse_ids)
+        >>         batch_data.add_target(target)
+        >>         ctx.backend.send_data(batch_data)
     """
 
     def __init__(
         self,
-        backend_worker_size: int = 10,
-        block_when_exit: bool = True,
-        catch_exception: bool = False,
+        threadpool_worker_size: int = 10,
     ):
         """
         Arguments:
-            backend_worker_size (int): Rpc ThreadPool worker size
-            block_when_exit (bool): whether block the process when exit the context  # TODO: why?
-            catch_exception (bool): catch the exception or not when occur the exception # TODO: why?
-
+            threadpool_worker_size (int): Rpc threadpool worker size.
         """
         self.block_when_exit = block_when_exit
         self.catch_exception = catch_exception
@@ -79,7 +87,7 @@ class BaseCtx:
                 f"init trainer backend world size: {world_size} rank_id: {rank_id}"
             )
 
-        self.backend = init_backend(backend_worker_size, self.replica_info)
+        self.backend = init_backend(threadpool_worker_size, self.replica_info)
 
     def _enter(self):
         """Hook when enter the context"""
@@ -108,21 +116,29 @@ class BaseCtx:
 
             _logger.error("\n" + traceback.format_exc())
 
-        if self.block_when_exit:
-            from persia.utils import block
-
-            block()
-        return PersiaRuntimeException(value)
-
 
 class EmbeddingCtx(BaseCtx):
-    r"""This class provide the embedding relative function compare to BaseCtx.It can provide the basic offline test or inference
-    according to different preprocess_mode.The simple way to use this context is call ``persia.ctx.eval_ctx()`` or ``persia.ctx.inference_ctx``
-    to get the context
+    r"""EmbeddingCtx provide the embedding relative function compare to BaseCtx.It can run the offline test or inference
+    according to different preprocess_mode.The simple way to use this context is invoke ``persia.ctx.eval_ctx()`` or ``persia.ctx.inference_ctx``
+    to get the ``EmbeddingCtx``
 
     Examples:
-        ...
+        >> from persia.prelude import
+        >> model = get_dnn_model()
+        >> loader = make_dataloader()
 
+        >> with EmbeddingCtx(
+        >>     PreprocessMode.EVAL
+        >> ) as ctx:
+        >>     for (dense, batch_sparse_ids, target) in loader:
+        >>         batch_data = PyPersiaBatchData()
+        >>         batch_data.add_dense([dense])
+        >>         batch_data.add_sparse(batch_sparse_ids)
+        >>         batch_data.add_target(target)
+
+        >>         python_train_batch = forward_directly_from_data(batch_data)
+        >>         dense_tensor, sparse_tensors, target_tensor = ctx.prepare_feature(python_train_batch)
+        >>         output = model(dense_tensor, sparse_tensors)
     """
 
     def __init__(
@@ -131,29 +147,24 @@ class EmbeddingCtx(BaseCtx):
         emb_initialization: Tuple[float, float] = (-0.01, 0.01),
         admit_probability: float = 1.0,
         weight_bound: float = 10,
-        embedding_checkpoint: Optional[str] = None,
+        checkpoint_dir: Optional[str] = None,
         *args,
         **kwargs,
     ):
-
         """
         Arguments:
-            preprocess_mode (PreprocessMode): Preprcess mode of current ctx
-            emb_initialization (Tuple[float, float], optional): embedding uniform initialization arguments # TODO: need explanation
+            preprocess_mode (PreprocessMode): Different preprocess mode effect the behave of ``prepare_feature``.
+            emb_initialization (Tuple[float, float], optional): Embedding uniform initialization arguments that corresponding to low and high.
             admit_probability (float, optional): The probability (0<=, <=1) of admitting a new embedding.
             weight_bound (float, optional): Restrict each element value of an embedding in [-weight_bound, weight_bound].
-            backend_worker_size (int, optional): PersiaML background thread pool size.
-            recv_buffer_size (int, optional): buffer size that recv data from data compose
-            grad_queue_slot_num (int, optional): the slot size of queue that cache the torch gradient tensor to ensure
-                the garbage collector collect the device memory after update_sparse_gradient_batched finished # TODO: need user understandable explanation and name
-            embedding_checkpoint(str, optional): pretrained embedding directory, load checkpoint in this dir when enter TrainCtx. # TODO: rename to checkpoint_dir, and save both dense and embedding to the same location
+            checkpoint_dir(str, optional): Pretrained checkpoint directory, load the dense and sparse checkpoint in this dir when enter the context.
         """
         super(EmbeddingCtx, self).__init__(*args, **kwargs)
         self.preprocess_mode = preprocess_mode
         self.emb_initialization = emb_initialization
         self.admit_probability = admit_probability
         self.weight_bound = weight_bound
-        self.embedding_checkpoint = embedding_checkpoint
+        self.checkpoint_dir = checkpoint_dir
 
         self.current_batch = None
         self.pretrained_loaded = False
@@ -167,22 +178,23 @@ class EmbeddingCtx(BaseCtx):
             self.weight_bound,
         )
 
-        if not self.pretrained_loaded and self.embedding_checkpoint is not None:
-            self.load_embedding(self.embedding_checkpoint)
+        if not self.pretrained_loaded and self.checkpoint_dir is not None:
+            self.load_embedding(self.checkpoint_dir)
             self.pretrained_loaded = True
 
     def prepare_features(
         self, batch: PythonTrainBatch
     ) -> Tuple[torch.Tensor, List[torch.Tensor], Optional[torch.Tensor]]:
-        """Preprocess the PythonTrainBatch to PyTorch tensor.
+        """Converted dense, sparse and target raw data in ``PythonTrainBatch`` to `torch.Tensor``.
 
         Arguments:
             batch (PythonTrainBatch): Training data provided by PersiaML upstream including
                 dense, target, sparse data and meta info.
 
         Returns:
-            return the Tuple,
-            # TODO: fill this
+            torch.Tensor: dense data
+            List[torch.Tensor]: sparse data
+            torch.Tensor: target data
         """
         import persia_torch_ext as pte  # pytype: disable=import-error
 
@@ -298,7 +310,7 @@ class EmbeddingCtx(BaseCtx):
         default_filename: str = "dense.pt",
         blocking: bool = True,
     ):
-        """Dump the dense and sparse ckp to destination directory.
+        """Dump the dense and sparse checkpoint to destination directory.
 
         Arguments:
             dst_dir (str): Destination directory.
@@ -331,7 +343,7 @@ class EmbeddingCtx(BaseCtx):
         default_filename: str = "dense.pt",
         blocking: bool = True,
     ):
-        """Load the dense and sparse ckp from source directory.
+        """Load the dense and sparse checkpoint from source directory.
 
         Arguments:
             src_dir (str): Source directory.
@@ -342,7 +354,7 @@ class EmbeddingCtx(BaseCtx):
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
         """
         if not os.path.exists(src_dir):
-            _logger.warn(f"src_dir: {src_dir} not exists")
+            _logger.warn(f"source directory: {src_dir} not exists")
             return
 
         dense_model_filepath = os.path.join(src_dir, default_filename)
@@ -387,12 +399,27 @@ class EmbeddingCtx(BaseCtx):
 
 
 class TrainCtx(EmbeddingCtx):
-    r"""Training context that provides full hybrid training support, including embedding
-    optimizer registration, embedding lookup and update, and checkpointing.
+    r"""Subclass of ``EmbeddingCtx`` that provide the backward ability to update the sparse embedding.
 
-    Example:
-        # TODO: fill me
+    Example::
+        >> import torch
 
+        >> model = get_dnn_model()
+        >> sparse_optimizer = persia.sparse.optim.SGD(lr=1e-3)
+        >> dense_optimizer = torch.optim.SGD(lr=1e-3)
+
+        >> loss_fn = torch.nn.BCELoss(reduction="mean")
+
+        >> with TrainCtx(
+        >>     sparse_optimizer,
+        >>     dense_optimizer,
+        >>     mixed_precision=True
+        >> ) as ctx:
+        >>     for batch_data in dataloder:
+        >>         dense, sparse, target = ctx.prepare_features(data)
+        >>         output = model(dense, sparse)
+        >>         loss = loss_fn(output, target)
+        >>         scaled_loss = ctx.backward(loss)
     """
 
     def __init__(
@@ -403,20 +430,22 @@ class TrainCtx(EmbeddingCtx):
         mixed_precision: bool = False,
         grad_scalar_update_factor: float = 4,
         backward_buffer_size: int = 10,
-        num_backward_workers: int = 8,
-        grad_queue_slot_num: int = 60,
+        backward_workers_size: int = 8,
+        grad_update_buffer_size: int = 60,
         *args,
         **kwargs,
     ):
         """
         Arguments:
             sparse_optimizer (persia.sparse.optim.Optimizer): Optimizer for the embeddings.
-            dense_optimizer (torch.optim.Optimizer): Optimizer for dense parameters
+            dense_optimizer (torch.optim.Optimizer): Optimizer for dense parameters.
             device_id (int, optional): The CUDA device to use for this process.
-            mixed_precision (bool, optional): whether to enable mixed precision training
-            grad_scalar_update_factor (float, optional): Update factor of Gradscalar to ensure loss scale finitely if set ``mixed_precision=True``
+            mixed_precision (bool, optional): Whether to enable mixed precision training.
+            grad_scalar_update_factor (float, optional): Update factor of ``Gradscalar`` to ensure loss scale finitely if set ``mixed_precision=True``.
             backward_buffer_size (int, optional): Max number of not updated gradients queued.
-            num_backward_workers (int, optional): Number of workers sending embedding gradients in parallel.
+            backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
+            grad_tensor_cache_size(int, optional): Number of cache of ``torch.tensor``, hold the gradient reference to avoid
+                meet dangle data appear in backward phase.
         """
         super(TrainCtx, self).__init__(PreprocessMode.TRAIN, *args, **kwargs)
 
@@ -426,43 +455,44 @@ class TrainCtx(EmbeddingCtx):
         assert (
             0 <= device_id < torch.cuda.device_count()
         ), f"device_id: {device_id} invalid!"
+        assert grad_scalar_update_factor > 0, "grad scalar should greater than zero"
 
         torch.cuda.set_device(device_id)
 
         self.device_id = device_id
 
-        self.batch_idx = 0
+        self.update_times = 0
         self.mixed_precision = mixed_precision
         self.grad_scalar_update_factor = grad_scalar_update_factor
         self.grad_scaler = torch.cuda.amp.GradScaler() if self.mixed_precision else None
         self.sparse_optimizer = sparse_optimizer
         self.dense_optimizer = dense_optimizer
-        self.num_backward_workers = num_backward_workers
+        self.backward_workers_size = backward_workers_size
 
         from persia.prelude import PyBackward
 
         # dynamic import the PyForward due to conditional compilation
-        self.grad_queue = Queue(grad_queue_slot_num)
+        self.grad_queue = Queue(grad_update_buffer_size)
         self.backward_engine = PyBackward(backward_buffer_size)
 
     def _enter(self):
         super()._enter()
 
         self.sparse_optimizer.apply()
-        self.backward_engine.launch(self.device_id, self.num_backward_workers)
+        self.backward_engine.launch(self.device_id, self.backward_workers_size)
 
     def backward(
-        self, loss: torch.Tensor, emb_grad_check_interval: int = 20
+        self, loss: torch.Tensor, embedding_gradient_check_frequency: int = 20
     ) -> torch.Tensor:
-        """Update the dense and sparse states by current loss
+        """Compute the gradient of current dense and sparse tensors.
+
+        The backward support mixed precision training.According to current embedding gradient is finite or not, ``GradScalar``
+        can update the scale automatic to restrict to parameters in finite range.
 
         Arguments:
-            loss (torch.Tensor): Loss of current batch
-            emb_grad_check_interval (int, optional): Gradient check interval to control the GradScalar update frequency # TODO: cannot understand
+            loss (torch.Tensor): Loss of current batch.
+            embedding_gradient_check_frequency (int, optional): The frequency to check gradient finite or not for current embedding.
         """
-        assert (
-            self.dense_optimizer is not None
-        ), "dense_optimizer not exists in TrainCtx"
 
         if self.mixed_precision:
             loss = self.grad_scaler.scale(loss)
@@ -472,7 +502,7 @@ class TrainCtx(EmbeddingCtx):
 
         loss.backward()
 
-        finite = self._on_after_backward(scale)
+        finite = self._on_backward(scale, embedding_gradient_check_frequency)
 
         if self.mixed_precision:
             if finite:
@@ -486,21 +516,24 @@ class TrainCtx(EmbeddingCtx):
 
         return loss
 
-    def _on_after_backward(self, loss_scale: float, emb_grad_check_interval: int = 20):
+    def _on_backward(self, loss_scale: float, embedding_gradient_check_frequency: int):
         """Update the embeddings gradients
 
         Arguments:
-            emb_grad_check_interval (int): Interval to check the embedding gradient finite or not.
+            embedding_gradient_check_frequency (int): The frequency to check gradient finite or not for current embedding.
         """
         if self.grad_queue.full():
             self.grad_queue.get()
 
         finite = True
-        if self.batch_idx % emb_grad_check_interval == 0:
-            self.batch_idx += 1
+        if (
+            self.mixed_precision
+            and self.update_times % embedding_gradient_check_frequency == 0
+        ):
             finite = _check_finite(
                 [emb[-1].grad for emb in self.current_batch.emb_tensors]
             )
+            self.update_times += 1
 
         grad_slots, empty_grads = [], []
         gradient_batch = self.current_batch.create_gradient_batch()
@@ -558,13 +591,11 @@ def cnt_ctx() -> Optional[BaseCtx]:
     return _CURRENT_CXT
 
 
-def base_ctx(*args, **kwargs) -> BaseCtx:
-    return BaseCtx(*args, **kwargs)
-
-
 def eval_ctx(*args, **kwargs) -> EmbeddingCtx:
+    """Get the ``EmbeddingCtx`` with the ``PreprocessMode.EVAL`` mode"""
     return EmbeddingCtx(PreprocessMode.EVAL, *args, **kwargs)
 
 
 def inference_ctx(*args, **kwargs) -> EmbeddingCtx:
+    """Get the ``EmbeddingCtx`` with the ``PreprocessMode.INFERENCE`` mode"""
     return EmbeddingCtx(PreprocessMode.INFERENCE, *args, **kwargs)

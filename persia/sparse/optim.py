@@ -6,53 +6,44 @@ from persia.backend import get_backend
 
 
 class Optimizer(ABC):
-    r"""Base Optimizer to initialize the rust base optimizer."""
+    r"""Base optimizer to configurate the sparse embedding update behavior."""
 
     def __init__(self):
         self.optimizer_base = PyOptimizerBase()
 
     @abstractmethod
     def apply(self):
-        r"""abstraction method for optimizer that support different optimizer register
-        function
-        """
+        r"""Abstraction method for optimizer that support register different type of optimizer."""
         ...
 
     def register_optimizer(self):
-        """register current optimizer to embedding server"""
+        """Register sparse optimizer to embedding server."""
         get_backend().register_optimizer(self.optimizer_base)
 
 
 class SGD(Optimizer):
-    r"""A wrapper to config the embedding-server SGD optimizer
-
-    Arguments:
-        params(float): learning rate
-        momentum(float, optional): momentum factor
-        weight_decay(float, optional): parameters L2 penalty factor
-    """
+    r"""A wrapper to config the embedding-server SGD optimizer."""
 
     def __init__(self, lr: float, momentum: float = 0.0, weight_decay: float = 0.0):
+        """
+        Arguments:
+            params(float): learning rate.
+            momentum(float, optional): momentum factor.
+            weight_decay(float, optional): parameters L2 penalty factor.
+        """
         super(SGD, self).__init__()
         self.lr = lr
         self.momentum = momentum
         self.weight_decay = weight_decay
 
     def apply(self):
-        """Initialize optimizer and register to embedding server"""
+        """Initialize optimizer and register to embedding server."""
         self.optimizer_base.init_sgd(self.lr, self.weight_decay)
         self.register_optimizer()
 
 
 class Adam(Optimizer):
-    r"""A wrapper to config the embedding-server Adam optimizer
-
-    Arguments:
-        lr(float): learning rate
-        betas(tuple[float,float], optional): caculate the running averages of gradient and its square
-        weight_decay(float, optional): parameters L2 penalty factor
-        eps(float, optional): epsilon to avoid div zero
-    """
+    r"""A wrapper to config the embedding-server Adam optimizer."""
 
     def __init__(
         self,
@@ -61,6 +52,13 @@ class Adam(Optimizer):
         weight_decay: float = 0,
         eps: float = 1e-8,
     ):
+        """
+        Arguments:
+            lr(float): learning rate.
+            betas(tuple[float,float], optional): caculate the running averages of gradient and its square.
+            weight_decay(float, optional): parameters L2 penalty factor.
+            eps(float, optional): epsilon to avoid div zero.
+        """
         super(Adam, self).__init__()
         self.lr = lr
         self.betas = betas
@@ -68,7 +66,7 @@ class Adam(Optimizer):
         self.eps = eps
 
     def apply(self):
-        """Initialize Adam optimizer and register to embedding server"""
+        """Initialize Adam optimizer and register to embedding server."""
         self.optimizer_base.register_adam(
             self.lr, self.betas, self.weight_decay, self.eps
         )
@@ -76,15 +74,7 @@ class Adam(Optimizer):
 
 
 class Adagrad(Optimizer):
-    r"""A wrapper to config the embedding-server Adagrad optimizer
-
-    Arguments:
-        lr (float): learning rate
-        initial_accumulator_value (float, optional): initialization accumulator value for adagrad optimzer
-        weight_decay (float, optional): parameters L2 penalty factor
-        g_square_momentum (float, optional): factor of accumulator incremental
-        eps(float, optional): epsilon term to avoid divide zero
-    """
+    r"""A wrapper to config the embedding-server Adagrad optimizer."""
 
     def __init__(
         self,
@@ -94,6 +84,15 @@ class Adagrad(Optimizer):
         g_square_momentum: float = 1,
         eps: float = 1e-10,
     ):
+        """
+        Arguments:
+            lr (float): learning rate.
+            initial_accumulator_value (float, optional): initialization accumulator value for adagrad optimizer.
+            weight_decay (float, optional): parameters L2 penalty factor.
+            g_square_momentum (float, optional): factor of accumulator incremental.
+            eps(float, optional): epsilon term to avoid divide zero.
+
+        """
         super(Adagrad, self).__init__()
         self.lr = lr
         self.weight_decay = weight_decay
@@ -102,7 +101,7 @@ class Adagrad(Optimizer):
         self.eps = eps
 
     def apply(self):
-        """Initialize Adagrad optimizer and register to embedding server"""
+        """Initialize Adagrad optimizer and register to embedding server."""
         self.optimizer_base.init_adagrad(
             self.lr,
             self.weight_decay,

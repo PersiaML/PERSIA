@@ -106,7 +106,6 @@ class PersiaDataset(IterableDataset):
             handler = Thread(target=self.fetch_data, args=(self.sender,), daemon=True)
             handler.start()
 
-        # TODO: process the forward engine error to prevent blocking
         for _val in range(len(self)):
             yield _val
 
