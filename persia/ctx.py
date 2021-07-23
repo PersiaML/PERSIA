@@ -32,7 +32,7 @@ def _check_finite(tensors: List[torch.Tensor]) -> bool:
 
 
 class PreprocessMode(Enum):
-    r"""Different preprocess mode will effect the ``EmbeddingCtx.prepare_feature`` return result. ``PreprocessMode.TRAIN`` will return
+    r"""Different preprocess mode will effect the ``EmbeddingCtx.prepare_features`` return result. ``PreprocessMode.TRAIN`` will return
     the torch tensor that the ``requires_grad`` attribute is set to ``True``. ``EmbeddingCtx.EVAL`` will return the torch tensor
     that the ``requires_grad`` attribute is set to ``False``. ``EmbeddingCtx.INFERENCE``  almost behave like ``EmbeddingCtx.EVAL``, the only difference
     is that ``PreprocessMode.INFERENCE`` allows ""EmbeddingCtx`` to process the ``PythonTrainBatch`` without target tensor.
@@ -130,7 +130,7 @@ class EmbeddingCtx(BaseCtx):
         >>>         batch_data.add_sparse(batch_sparse_ids)
         >>>         batch_data.add_target(target)
         >>>         python_train_batch = forward_directly_from_data(batch_data)
-        >>>         dense_tensor, sparse_tensors, target_tensor = ctx.prepare_feature(python_train_batch)
+        >>>         dense_tensor, sparse_tensors, target_tensor = ctx.prepare_features(python_train_batch)
         >>>         output = model(dense_tensor, sparse_tensors)
     """
 
@@ -146,7 +146,7 @@ class EmbeddingCtx(BaseCtx):
     ):
         """
         Arguments:
-            preprocess_mode (PreprocessMode): Different preprocess mode effect the behave of ``prepare_feature``.
+            preprocess_mode (PreprocessMode): Different preprocess mode effect the behave of ``prepare_features``.
             emb_initialization (Tuple[float, float], optional): Embedding uniform initialization arguments that corresponding to low and high.
             admit_probability (float, optional): The probability (0<=, <=1) of admitting a new embedding.
             weight_bound (float, optional): Restrict each element value of an embedding in [-weight_bound, weight_bound].
@@ -184,13 +184,7 @@ class EmbeddingCtx(BaseCtx):
             batch (PythonTrainBatch): Training data provided by PersiaML upstream including
                 dense, target, sparse data and meta info.
 
-        Returns:
-            - torch.Tensor:
-              dense data
-            - List[torch.Tensor]: 
-              sparse data
-            - torch.Tensor:
-              target data
+        Returns: the tuple of dense data, list of sparse data and target data.
         """
         import persia_torch_ext as pte  # pytype: disable=import-error
 
