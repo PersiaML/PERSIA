@@ -178,13 +178,14 @@ class EmbeddingCtx(BaseCtx):
     def prepare_features(
         self, batch: PythonTrainBatch
     ) -> Tuple[torch.Tensor, List[torch.Tensor], Optional[torch.Tensor]]:
-        """Converted dense, sparse and target raw data in ``PythonTrainBatch`` to `torch.Tensor``.
+        """Converted the dense, sparse and target raw data in``PythonTrainBatch`` to `torch.Tensor``.
 
         Arguments:
             batch (PythonTrainBatch): Training data provided by PersiaML upstream including
                 dense, target, sparse data and meta info.
 
-        Returns: the tuple of dense data, list of sparse data and target data.
+        Returns: 
+            the tuple of dense data, list of sparse data and target data.
         """
         import persia_torch_ext as pte  # pytype: disable=import-error
 
@@ -431,8 +432,8 @@ class TrainCtx(EmbeddingCtx):
             grad_scalar_update_factor (float, optional): Update factor of ``Gradscalar`` to ensure loss scale finitely if set ``mixed_precision=True``.
             backward_buffer_size (int, optional): Max number of not updated gradients queued.
             backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
-            grad_tensor_cache_size(int, optional): Number of cache of ``torch.tensor``, hold the gradient reference to avoid
-                meet dangle data appear in backward phase.
+            grad_tensor_cache_size(int, optional): Number of reference cache , hold the gradient tensor reference to avoid
+                meet dangle data in gradient backward phase.
         """
         super(TrainCtx, self).__init__(PreprocessMode.TRAIN, *args, **kwargs)
 
@@ -574,15 +575,15 @@ class TrainCtx(EmbeddingCtx):
 
 
 def cnt_ctx() -> Optional[BaseCtx]:
-    """Get the BaseCtx recently entered"""
+    """Get the BaseCtx recently entered."""
     return _CURRENT_CXT
 
 
 def eval_ctx(*args, **kwargs) -> EmbeddingCtx:
-    """Get the ``EmbeddingCtx`` with the ``PreprocessMode.EVAL`` mode"""
+    """Get the ``EmbeddingCtx`` with the ``PreprocessMode.EVAL`` mode."""
     return EmbeddingCtx(PreprocessMode.EVAL, *args, **kwargs)
 
 
 def inference_ctx(*args, **kwargs) -> EmbeddingCtx:
-    """Get the ``EmbeddingCtx`` with the ``PreprocessMode.INFERENCE`` mode"""
+    """Get the ``EmbeddingCtx`` with the ``PreprocessMode.INFERENCE`` mode."""
     return EmbeddingCtx(PreprocessMode.INFERENCE, *args, **kwargs)
