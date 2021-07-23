@@ -7,11 +7,11 @@ from typing import List, Tuple, Optional, NewType
 import torch
 
 import persia.env as env
+
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
 from persia.backend import init_backend
 from persia.prelude import PyPersiaReplicaInfo
-from persia.error import PersiaRuntimeException
 
 _CURRENT_CXT = None
 
@@ -33,9 +33,9 @@ def _check_finite(tensors: List[torch.Tensor]) -> bool:
 
 class PreprocessMode(Enum):
     r"""Different preprocess mode will effect the ``EmbeddingCtx.prepare_feature`` return result. ``PreprocessMode.TRAIN`` will return
-    the torch tensor that the flag of ``requires_grad`` is set to ``True``. ``EmbeddingCtx.EVAL`` will return the torch tensor
-    that the flag of ``requires_grad`` is set to ``False``. ``EmbeddingCtx.INFERENCE``  almost behave like ``EmbeddingCtx.EVAL``, the only difference
-    is that it allows `EmbeddingCxt.prepare_feature`` function to process the ``PythonTrainBatch`` that without target tensor.
+    the torch tensor that the ``requires_grad`` attribute is set to ``True``. ``EmbeddingCtx.EVAL`` will return the torch tensor
+    that the ``requires_grad`` attribute is set to ``False``. ``EmbeddingCtx.INFERENCE``  almost behave like ``EmbeddingCtx.EVAL``, the only difference
+    is that ``PreprocessMode.INFERENCE`` allows ""EmbeddingCtx`` to process the ``PythonTrainBatch`` without target tensor.
     """
     TRAIN = 1
     EVAL = 2
@@ -48,9 +48,7 @@ class BaseCtx:
 
     Examples::
         >> from persia.prelude import PyPersiaBatchData
-
         >> loader = make_simple_loader()
-
         >> with BaseCtx() as ctx:
         >>     for (dense, batch_sparse_ids, target) in loader:
         >>         batch_data = PyPersiaBatchData()
@@ -68,9 +66,6 @@ class BaseCtx:
         Arguments:
             threadpool_worker_size (int): Rpc threadpool worker size.
         """
-        self.block_when_exit = block_when_exit
-        self.catch_exception = catch_exception
-
         world_size = env.get_world_size()
 
         if world_size == -1:
@@ -122,20 +117,19 @@ class EmbeddingCtx(BaseCtx):
     according to different preprocess_mode.The simple way to use this context is invoke ``persia.ctx.eval_ctx()`` or ``persia.ctx.inference_ctx``
     to get the ``EmbeddingCtx``
 
-    Examples:
+    Examples::
         >> from persia.prelude import
         >> model = get_dnn_model()
         >> loader = make_dataloader()
 
         >> with EmbeddingCtx(
-        >>     PreprocessMode.EVAL
-        >> ) as ctx:
+        ...     PreprocessMode.EVAL
+        ... ) as ctx:
         >>     for (dense, batch_sparse_ids, target) in loader:
         >>         batch_data = PyPersiaBatchData()
         >>         batch_data.add_dense([dense])
         >>         batch_data.add_sparse(batch_sparse_ids)
         >>         batch_data.add_target(target)
-
         >>         python_train_batch = forward_directly_from_data(batch_data)
         >>         dense_tensor, sparse_tensors, target_tensor = ctx.prepare_feature(python_train_batch)
         >>         output = model(dense_tensor, sparse_tensors)
