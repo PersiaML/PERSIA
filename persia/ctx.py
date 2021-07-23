@@ -114,11 +114,11 @@ class BaseCtx:
 
 class EmbeddingCtx(BaseCtx):
     r"""EmbeddingCtx provide the embedding relative function compare to BaseCtx.It can run the offline test or inference
-    according to different preprocess_mode.The simple way to use this context is invoke ``persia.ctx.eval_ctx()`` or ``persia.ctx.inference_ctx``
-    to get the ``EmbeddingCtx``
+    according to different preprocess_mode.The most simple way to get this context is use ``persia.ctx.eval_ctx()`` or
+    ``persia.ctx.inference_ctx`` to get the ``EmbeddingCtx`` instance.
 
     Examples::
-        >>> from persia.prelude import
+        >>> from persia.prelude import PyPersiaBatchData
         >>> model = get_dnn_model()
         >>> loader = make_dataloader()
         >>> with EmbeddingCtx(
@@ -295,7 +295,7 @@ class EmbeddingCtx(BaseCtx):
 
         return batch.dense_tensor, batch.forward_tensors, batch.target_tensor
 
-    def dump_cpk(
+    def dump_checkpoint(
         self,
         dst_dir: str,
         model: Optional[torch.nn.Module] = None,
@@ -327,7 +327,7 @@ class EmbeddingCtx(BaseCtx):
 
         self.dump_embedding(dst_dir, blocking=blocking)
 
-    def load_cpk(
+    def load_checkpoint(
         self,
         src_dir: str,
         model: Optional[torch.nn.Module] = None,
