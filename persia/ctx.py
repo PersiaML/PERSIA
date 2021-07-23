@@ -521,8 +521,8 @@ class TrainCtx(EmbeddingCtx):
 
         finite = True
         if (
-            self.mixed_precision
-            and self.update_times % embedding_gradient_check_frequency == 0
+            self.mixed_precision and 
+            self.update_times % embedding_gradient_check_frequency == 0
         ):
             finite = _check_finite(
                 [emb[-1].grad for emb in self.current_batch.emb_tensors]
