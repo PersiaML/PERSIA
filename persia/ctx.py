@@ -113,7 +113,7 @@ class BaseCtx:
 
 
 class EmbeddingCtx(BaseCtx):
-    r"""EmbeddingCtx provide the embedding relative function compare to BaseCtx.It can run the offline test or inference
+    r"""EmbeddingCtx provide the embedding relative function compare to BaseCtx.It can run the offline test or online inference
     according to different preprocess_mode.The most simple way to get this context is use ``persia.ctx.eval_ctx()`` or
     ``persia.ctx.inference_ctx`` to get the ``EmbeddingCtx`` instance.
 
@@ -185,9 +185,12 @@ class EmbeddingCtx(BaseCtx):
                 dense, target, sparse data and meta info.
 
         Returns:
-            torch.Tensor: dense data
-            List[torch.Tensor]: sparse data
-            torch.Tensor: target data
+            - torch.Tensor:
+              dense data
+            - List[torch.Tensor]: 
+              sparse data
+            - torch.Tensor:
+              target data
         """
         import persia_torch_ext as pte  # pytype: disable=import-error
 
