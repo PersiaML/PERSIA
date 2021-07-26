@@ -21,7 +21,7 @@ class Backend:
     """
 
     def __init__(self, threadpool_worker_size: int, replica_info: PyPersiaReplicaInfo):
-        self.rpc_client = PyPersiaRpcClient(threadpool_worker_size)
+        self.rpc_client = PyPersiaRpcClient(threadpool_worker_size, replica_info)
 
         world_size = get_world_size()
         self.nats_publisher = PyPersiaBatchFlowNatsStubPublisher(
