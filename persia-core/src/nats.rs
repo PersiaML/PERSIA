@@ -53,20 +53,26 @@ pub struct PyPersiaBatchFlowNatsStubPublisher {
 #[pymethods]
 impl PyPersiaBatchFlowNatsStubPublisher {
     #[new]
-    fn new(replica_info: &PyPersiaReplicaInfo) -> Self {
+    fn new(replica_info: &PyPersiaReplicaInfo, world_size: Option<usize>) -> Self {
         let replica_info = replica_info.get_replica_info();
         let nats_client = NatsClient::new(replica_info.clone());
         let to_trainer = PersiaBatchFlowNatsStubPublisher {
             nats_client: nats_client.clone(),
         };
-        let world_size: Result<usize, _> = retry(Fixed::from_millis(5000), || {
-            let resp = block_on(to_trainer.publish_get_world_size(&(), None));
-            if resp.is_err() {
-                tracing::warn!("failed to get world size of trainer, due to {:?}", resp);
-            }
-            resp
-        });
-        let world_size = world_size.expect("failed to get world_size of trainer");
+
+        let world_size = if world_size.is_none() {
+            let world_size: Result<usize, _> = retry(Fixed::from_millis(5000), || {
+                let resp = block_on(to_trainer.publish_get_world_size(&(), None));
+                if resp.is_err() {
+                    tracing::warn!("failed to get world size of trainer, due to {:?}", resp);
+                }
+                resp
+            });
+            world_size.expect("failed to get world_size of trainer")
+        } else {
+            world_size.unwrap()
+        };
+
         Self {
             to_trainer,
             to_middleware: MiddlewareNatsStubPublisher { nats_client },
