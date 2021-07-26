@@ -3,6 +3,15 @@ use crate::optim::PyOptimizerBase;
 use crate::utils::{PyPersiaBatchDataSender, PyPersiaReplicaInfo};
 use crate::PersiaRpcClient;
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
+use once_cell::sync::OnceCell;
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
+use pyo3::wrap_pyfunction;
+use retry::{delay::Fixed, retry};
+
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
@@ -16,22 +25,16 @@ use persia_futures::{flume, smol::block_on, tokio};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::Writable;
 
-use pyo3::exceptions::PyRuntimeError;
-use pyo3::prelude::*;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-
-use retry::{delay::Fixed, retry};
 #[derive(Clone)]
 pub struct PersiaBatchFlowNatsStub {
-    pub nats_channel_s: flume::Sender<PersiaBatchData>,
+    pub output_channel: flume::Sender<PersiaBatchData>,
     pub world_size: usize,
 }
 
 #[persia_nats_marcos::stub]
 impl PersiaBatchFlowNatsStub {
     pub async fn batch(&self, batch: PersiaBatchData) -> bool {
-        let result = self.nats_channel_s.try_send(batch);
+        let result = self.output_channel.try_send(batch);
         result.is_ok()
     }
 
@@ -40,14 +43,17 @@ impl PersiaBatchFlowNatsStub {
     }
 }
 
+static RESPONDER: OnceCell<(Arc<PersiaBatchFlowNatsStubResponder>, Arc<Runtime>)> =
+    once_cell::sync::OnceCell::new();
+
 #[pyclass]
 pub struct PyPersiaBatchFlowNatsStubPublisher {
-    to_trainer: PersiaBatchFlowNatsStubPublisher,
     to_middleware: MiddlewareNatsStubPublisher,
     runtime: Runtime,
-    world_size: usize,
     cur_batch_id: AtomicUsize,
     replica_info: PersiaReplicaInfo,
+    to_trainer: PersiaBatchFlowNatsStubPublisher,
+    world_size: usize,
 }
 
 #[pymethods]
@@ -56,6 +62,7 @@ impl PyPersiaBatchFlowNatsStubPublisher {
     fn new(replica_info: &PyPersiaReplicaInfo, world_size: Option<usize>) -> Self {
         let replica_info = replica_info.get_replica_info();
         let nats_client = NatsClient::new(replica_info.clone());
+
         let to_trainer = PersiaBatchFlowNatsStubPublisher {
             nats_client: nats_client.clone(),
         };
@@ -261,25 +268,22 @@ impl PyPersiaBatchFlowNatsStubPublisher {
     }
 }
 
-#[pyclass]
-pub struct PyPersiaBatchFlowNatsStubResponder {
-    _inner: PersiaBatchFlowNatsStubResponder,
-    _runtime: Arc<Runtime>,
-}
+#[pyfunction]
+pub fn init_responder(
+    replica_info: &PyPersiaReplicaInfo,
+    channel: &PyPersiaBatchDataSender,
+) -> PyResult<()> {
+    let replica_info = replica_info.get_replica_info();
 
-#[pymethods]
-impl PyPersiaBatchFlowNatsStubResponder {
-    #[new]
-    fn new(repilca_info: &PyPersiaReplicaInfo, py_channel_s: &PyPersiaBatchDataSender) -> Self {
-        let replica_info = repilca_info.get_replica_info();
+    RESPONDER.get_or_init(|| {
         let nats_stub = PersiaBatchFlowNatsStub {
-            nats_channel_s: py_channel_s.inner.clone(),
+            output_channel: channel.inner.clone(),
             world_size: replica_info.replica_size,
         };
-        let nats_responder = PersiaBatchFlowNatsStubResponder {
+        let nats_responder = Arc::new(PersiaBatchFlowNatsStubResponder {
             inner: nats_stub,
             nats_client: NatsClient::new(replica_info.clone()),
-        };
+        });
 
         let runtime = Arc::new(
             persia_futures::tokio::runtime::Builder::new_multi_thread()
@@ -294,17 +298,16 @@ impl PyPersiaBatchFlowNatsStubResponder {
             .spawn_subscriptions()
             .expect("failed to spawn nats subscriptions");
 
-        Self {
-            _inner: nats_responder,
-            _runtime: runtime,
-        }
-    }
+        (nats_responder, runtime)
+    });
+
+    Ok(())
 }
 
 pub fn init_module(super_module: &PyModule, py: Python) -> PyResult<()> {
     let module = PyModule::new(py, "nats")?;
-    module.add_class::<PyPersiaBatchFlowNatsStubResponder>()?;
     module.add_class::<PyPersiaBatchFlowNatsStubPublisher>()?;
+    module.add_function(wrap_pyfunction!(init_responder, module)?)?;
     super_module.add_submodule(module)?;
     Ok(())
 }
