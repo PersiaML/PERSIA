@@ -184,7 +184,7 @@ class EmbeddingCtx(BaseCtx):
             batch (PythonTrainBatch): Training data provided by PersiaML upstream including
                 dense, target, sparse data and meta info.
 
-        Returns: 
+        Returns:
             the tuple of dense data, list of sparse data and target data.
         """
         import persia_torch_ext as pte  # pytype: disable=import-error
@@ -508,15 +508,15 @@ class TrainCtx(EmbeddingCtx):
         """Update the embeddings gradients
 
         Arguments:
+            loss_scale (float): The loss that scaled by GradScalar.
             embedding_gradient_check_frequency (int): The frequency to check gradient finite or not for current embedding.
         """
         if self.grad_queue.full():
             self.grad_queue.get()
 
         finite = True
-        if (
-            self.mixed_precision
-            and self.update_times % embedding_gradient_check_frequency == 0
+        if self.mixed_precision and (
+            self.update_times % embedding_gradient_check_frequency == 0
         ):
             finite = _check_finite(
                 [emb[-1].grad for emb in self.current_batch.emb_tensors]
