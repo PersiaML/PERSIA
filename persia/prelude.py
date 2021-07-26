@@ -9,11 +9,11 @@ import persia_core
 
 
 def register_submodule(module: ModuleType, root_module_path: str):
-    """register the persia core module to sys module path
+    """register the persia core module to sys module path.
 
     Arguments:
-        module (ModuleType): root module
-        root_module_path (str): root module path
+        module (ModuleType): Root module.
+        root_module_path (str): Root module path.
     """
     for attr in dir(module):
         if attr.startswith("__"):
@@ -50,10 +50,7 @@ from persia_core.utils import (
     PyPersiaBatchDataReceiver,
     PyPersiaReplicaInfo,
 )
-from persia_core.nats import (
-    PyPersiaBatchFlowNatsStubPublisher,
-    PyPersiaBatchFlowNatsStubResponder,
-)
+from persia_core.nats import PyPersiaBatchFlowNatsStubPublisher, init_responder
 
 if is_cuda_feature_available():
     from persia_core.backward import PyBackward

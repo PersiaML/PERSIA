@@ -1,31 +1,33 @@
-from abc import ABC, abstractmethod
 from threading import Thread
-from typing import Optional
 
 import torch
+from torch.utils.data.dataset import IterableDataset as TorchIterableDataset
 
-
+from persia.ctx import cnt_ctx
+from persia.logger import get_default_logger
 from persia.prelude import (
     PyPersiaBatchDataChannel,
     PyPersiaReplicaInfo,
     PyPersiaBatchDataReceiver,
     PyPersiaBatchDataSender,
-    PyPersiaBatchFlowNatsStubResponder,
+    init_responder,
 )
 
+_logger = get_default_logger()
 
-class IterableChannelBase(ABC):
+
+class IterableDataset(
+    TorchIterableDataset
+):  # TODO: cannot understand the whole doc string
     r"""IterableChannelBase wrap the PyPersiaBatchDataChannel that provide the channel sender and
     receiver.
 
     Arguments:
         buffer_size (int): PyPersiaBatchDataChannel buffer size
-        replica_info (PyPersiaReplicaInfo): replica info of current process to enable the data reorder ability
     """
 
-    def __init__(self, buffer_size: int, replica_info: PyPersiaReplicaInfo):
+    def __init__(self, buffer_size: int):
         self.persia_batch_channel = PyPersiaBatchDataChannel(buffer_size)
-        self.replica_info = replica_info
 
     @property
     def receiver(self) -> PyPersiaBatchDataReceiver:
@@ -37,58 +39,52 @@ class IterableChannelBase(ABC):
         """Get PyPersiaBatchDataSender python wrapper"""
         return self.persia_batch_channel.get_sender()
 
-    @abstractmethod
-    def __iter__(self):
-        """Implement this function to iterate data from PyForward"""
-        ...
 
-    @abstractmethod
-    def __len__(self):
-        """Fixed size dataset should implement this function"""
-        ...
-
-
-class NatsStreamingChannel(IterableChannelBase):
-    r"""NatsStreamingChannel  recive data from nats publisher
+class StreamingDataset(IterableDataset):
+    r"""NatsStreamingChannel receive data from nats publisher
 
     Arguments:
         buffer_size (int): PyPersiaBatchDataChannel buffer size
-        replica_info (PyPersiaReplicaInfo): replica info of current process to enable the data reorder ability
     """
 
     def __init__(
         self,
         buffer_size: int,
-        replica_info: PyPersiaReplicaInfo,
     ):
-        super(NatsStreamingChannel, self).__init__(buffer_size, replica_info)
-        self._responder = PyPersiaBatchFlowNatsStubResponder(replica_info, self.sender)
+        super(StreamingDataset, self).__init__(buffer_size)
+        self.initialized = False
 
     def __iter__(self):
+        if not self.initialized:
+            current_ctx = cnt_ctx()
+            assert current_ctx is not None, "Current conext is None!"
+            replica_info = current_ctx.replica_info
+            init_responder(replica_info, self.sender)
+
+            _logger.info("initialize the responder")
+            self.initialized = True
+
         while True:
             yield None
 
-    def __len__(self) -> int:
-        raise NotImplementedError("StreamingChannel do not implement __len__ function")
 
-
-class PersiaChannel(IterableChannelBase):
+class PersiaDataset(IterableDataset):
     r"""Persia data channel that provide asynchronous data handler feature to improve the performance of data preprocess.
     Not support synchronous data handler temporary.
 
     Arguments:
         buffer_size (int): PyPersiaBatchDataChannel buffer size
-        replica_info (PyPersiaReplicaInfo, optional): replica info of current process to enable the data reorder ability
         async_iterator (bool, optional): launch the thread to generate the data asynchronous
     """
 
     def __init__(
         self,
         buffer_size: int,
-        replica_info: Optional[PyPersiaReplicaInfo] = None,
         async_iterator: bool = True,
     ):
-        super(PersiaChannel, self).__init__(buffer_size, replica_info)
+        super(PersiaDataset, self).__init__(
+            buffer_size,
+        )
         self.async_iterator = async_iterator
 
     def fetch_data(self, sender: PyPersiaBatchDataSender):
@@ -110,7 +106,6 @@ class PersiaChannel(IterableChannelBase):
             handler = Thread(target=self.fetch_data, args=(self.sender,), daemon=True)
             handler.start()
 
-        # TODO: process the forward engine error to prevent blocking
         for _val in range(len(self)):
             yield _val
 
@@ -123,37 +118,40 @@ class Dataloder(object):
     wrapper.
 
     Arguments:
-        channel (IterableChannelBase): data channel for Dataloder to retrive replica info and sender channel
+        dataset (IterableChannelBase): dataset for Dataloder to retrive replica info and sender channel
         forward_buffer_size: (int, optional): gpu forward channel buffer size, this args effect the gpu memory cost
-        is_training (bool, optional): wheter current forward status is training or not
-        timeout (int, optional): timeout for PyFoward to fetch data, millisecond unit
+        is_training (bool, optional): whether current forward status is training or not
+        timeout (int, optional): timeout for PyForward to fetch data, millisecond unit
         num_workers (int, optional): spawn thread worker number for  PyForward to lookup embedding and PythonBatchData prefetch
         reproducible (bool, optional): iterate the data in fixed order, make the dataflow deterministic
     """
 
     def __init__(
         self,
-        channel: IterableChannelBase,
+        dataset: IterableDataset,
         forward_buffer_size: int = 10,
         is_training: bool = True,
         timeout: int = 1000 * 60 * 10,
         num_workers: int = 10,
+        replica_info: PyPersiaReplicaInfo = None,
         reproducible: bool = False,
     ):
         # dynamic import the PyForward due to conditional compilation
         from persia.prelude import PyForward
 
-        self.channel = channel
+        self.dataset = dataset
         self.timeout = timeout
         self.num_workers = num_workers
 
+        if not replica_info:
+            current_ctx = cnt_ctx()
+            assert current_ctx is not None, "Current conext is None!"
+            replica_info = current_ctx.replica_info
+
         self.forward_engine = PyForward(
-            forward_buffer_size,
-            is_training,
-            reproducible,
-            channel.replica_info,
+            forward_buffer_size, is_training, reproducible, replica_info
         )
-        self.forward_engine.set_input_channel(channel.receiver)
+        self.forward_engine.set_input_channel(dataset.receiver)
         self.forward_engine.launch(
             torch.cuda.current_device(),
             self.num_workers,
@@ -161,8 +159,8 @@ class Dataloder(object):
 
     def __iter__(self):
 
-        for _ in self.channel:
+        for _ in self.dataset:
             yield self.forward_engine.get_batch(self.timeout)
 
     def __len__(self):
-        return len(self.channel)
+        return len(self.dataset)
