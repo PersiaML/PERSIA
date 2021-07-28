@@ -10,6 +10,7 @@ use numpy::PyArray1;
 use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use std::u64;
 
 use persia_embedding_config::InitializationMethod;
 use persia_speedy::{Readable, Writable};
@@ -236,6 +237,8 @@ pub struct SparseBatch {
     pub enter_forward_id_buffer_time: Option<std::time::SystemTime>,
     #[serde(skip)]
     pub enter_post_forward_buffer_time: Option<std::time::SystemTime>,
+    #[serde(skip)]
+    pub batcher_idx: Option<usize>,
 }
 
 impl From<Vec<(String, Vec<&PyArray1<u64>>)>> for SparseBatch {
@@ -258,6 +261,7 @@ impl From<Vec<(String, Vec<&PyArray1<u64>>)>> for SparseBatch {
                 .collect(),
             enter_forward_id_buffer_time: None,
             enter_post_forward_buffer_time: None,
+            batcher_idx: None,
         }
     }
 }
@@ -277,6 +281,23 @@ impl BaseTensor {
             BaseTensor::F64(_) => std::mem::size_of::<f64>(),
             BaseTensor::I32(_) => std::mem::size_of::<i32>(),
             BaseTensor::I64(_) => std::mem::size_of::<i64>(),
+        }
+    }
+}
+
+#[derive(Readable, Writable, Debug, Clone)]
+pub struct PreForwardStub {
+    pub middleware_addr: String,
+    pub forward_id: u64,
+    pub batcher_idx: usize,
+}
+
+impl Default for PreForwardStub {
+    fn default() -> Self {
+        Self {
+            middleware_addr: String::from(""),
+            forward_id: 0,
+            batcher_idx: 0,
         }
     }
 }
@@ -301,14 +322,14 @@ pub enum Tensor {
 #[derive(Readable, Writable, Debug)]
 pub enum EmbeddingTensor {
     Null,
-    ID((String, u64)),
+    PreForwardStub(PreForwardStub),
     SparseBatch(SparseBatch),
 }
 
 impl EmbeddingTensor {
     pub fn to_forward_id(&self) -> (&str, u64) {
         match &self {
-            EmbeddingTensor::ID((middleware_addr, forward_id)) => (middleware_addr, *forward_id),
+            EmbeddingTensor::PreForwardStub(stub) => (&stub.middleware_addr, stub.forward_id),
             EmbeddingTensor::SparseBatch(_) => ("", 0u64),
             _ => panic!("forward id not found on embedding tensor"),
         }

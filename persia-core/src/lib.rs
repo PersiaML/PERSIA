@@ -14,8 +14,6 @@ mod nats;
 mod optim;
 mod utils;
 
-use data::PyPersiaBatchData;
-
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -30,7 +28,6 @@ use pyo3::wrap_pyfunction;
 use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
 };
-use persia_embedding_datatypes::{EmbeddingTensor, SparseBatch};
 use persia_embedding_sharded_server::sharded_middleware_service::{
     ShardedMiddlewareError, ShardedMiddlewareServerClient,
 };
@@ -132,27 +129,6 @@ impl PersiaRpcClient {
                 .push(middleware_addr.to_string());
             tracing::info!("created client for middleware {}", middleware_addr);
             client
-        }
-    }
-
-    fn forward_sparse_batch(&self, batches: &SparseBatch) -> Result<(String, u64)> {
-        let runtime = self.runtime.clone();
-        {
-            let _guard = runtime.enter();
-            let (middleware_addr, middleware_client) = self.get_random_client_with_addr();
-
-            while !runtime
-                .block_on(middleware_client.can_forward_batched(&()))
-                .unwrap()
-            {
-                std::thread::sleep(Duration::from_secs(10));
-            }
-
-            let forward_id = runtime
-                .block_on(middleware_client.forward_batched(&batches))
-                .unwrap()?;
-
-            Ok((middleware_addr.to_string(), forward_id))
         }
     }
 
@@ -395,24 +371,6 @@ impl PyPersiaRpcClient {
         self.inner
             .load(dst_dir)
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(format!("{:?}", e)))
-    }
-
-    pub fn forward_id(&self, data: &mut PyPersiaBatchData) -> PyResult<()> {
-        let result = match &data.inner.sparse_data {
-            EmbeddingTensor::SparseBatch(val) => {
-                let resp = self.inner.forward_sparse_batch(&val);
-                match resp {
-                    Ok(forward_id) => {
-                        data.inner.sparse_data = EmbeddingTensor::ID(forward_id);
-                        Ok(())
-                    }
-                    Err(err) => Err(PyRuntimeError::new_err(err.to_string())),
-                }
-            }
-            _ => panic!("sparse data empty invalid! pass the sparse data even empty!"),
-        };
-
-        result
     }
 }
 

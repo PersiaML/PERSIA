@@ -2150,6 +2150,7 @@ dependencies = [
  "persia-embedding-config",
  "persia-futures",
  "persia-speedy",
+ "retry",
  "thiserror",
  "tracing",
  "tracing-subscriber",

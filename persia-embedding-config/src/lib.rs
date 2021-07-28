@@ -295,12 +295,15 @@ impl PersiaCommonConfig {
 pub struct PersiaMiddlewareConfig {
     #[serde(default = "get_thousand")]
     pub forward_buffer_size: usize,
+    #[serde(default = "get_thousand")]
+    pub buffered_data_expired_sec: usize,
 }
 
 impl Default for PersiaMiddlewareConfig {
     fn default() -> Self {
         Self {
             forward_buffer_size: 1000,
+            buffered_data_expired_sec: 1000,
         }
     }
 }

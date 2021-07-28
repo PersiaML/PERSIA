@@ -15,14 +15,15 @@ use snafu::ResultExt;
 use thiserror::Error;
 
 use persia_embedding_config::{
-    InstanceInfo, PersiaGlobalConfigError, PersiaReplicaInfo, PersiaSparseModelHyperparameters,
+    InstanceInfo, PersiaGlobalConfigError, PersiaMiddlewareConfig, PersiaReplicaInfo,
+    PersiaSparseModelHyperparameters,
 };
 use persia_embedding_datatypes::optim::Optimizer;
 use persia_embedding_datatypes::{
     ndarray_f16_to_f32, ndarray_f32_to_f16, EmbeddingBatch, EmbeddingGradientBatch,
     FeatureEmbeddingBatch, FeatureRawEmbeddingBatch, FeatureSumEmbeddingBatch, Gradients,
-    HashMapEmbeddingEntry, SingleSignInFeatureBatch, SkippableFeatureEmbeddingGradientBatch,
-    SparseBatch,
+    HashMapEmbeddingEntry, PreForwardStub, SingleSignInFeatureBatch,
+    SkippableFeatureEmbeddingGradientBatch, SparseBatch,
 };
 use persia_futures::async_lock::RwLock;
 use persia_futures::smol::block_on;
@@ -99,6 +100,10 @@ pub enum ShardedMiddlewareError {
     NatsError(#[from] NatsError),
     #[error("global config error: {0}")]
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
+    #[error("forward buffer full")]
+    ForwardBufferFull,
+    #[error("data src idx not set")]
+    DataSrcIdxNotSet,
 }
 
 pub struct AllShardsClient {
@@ -613,12 +618,13 @@ pub struct ShardedMiddlewareServerInner {
     pub num_shards: u64,
     pub forward_id: AtomicU64,
     pub cannot_forward_batched_time: crossbeam::atomic::AtomicCell<SystemTime>,
-    pub forward_id_buffer: persia_futures::async_lock::RwLock<HashMap<u64, SparseBatch>>,
+    pub forward_id_buffer:
+        persia_futures::async_lock::RwLock<HashMap<usize, HashMap<u64, SparseBatch>>>,
     pub post_forward_buffer: persia_futures::async_lock::RwLock<HashMap<u64, SparseBatch>>,
     pub staleness: AtomicUsize,
     pub embedding_config: EmbeddingConfig,
     pub feature2group: HashMap<String, FeatureGroup>,
-    pub forward_buffer_size: usize,
+    pub middleware_config: Arc<PersiaMiddlewareConfig>,
 }
 
 impl ShardedMiddlewareServerInner {
@@ -626,7 +632,11 @@ impl ShardedMiddlewareServerInner {
         self.forward_id.fetch_add(1, Ordering::AcqRel)
     }
 
-    async fn forward_batched(&self, indices: SparseBatch) -> Result<u64, ShardedMiddlewareError> {
+    async fn forward_batched(
+        &self,
+        indices: SparseBatch,
+        batcher_idx: usize,
+    ) -> Result<u64, ShardedMiddlewareError> {
         let id = self.get_id();
 
         if let Ok(m) = MetricsHolder::get() {
@@ -651,7 +661,20 @@ impl ShardedMiddlewareServerInner {
         {
             let mut indices = indices;
             indices.enter_forward_id_buffer_time = Some(SystemTime::now());
-            self.forward_id_buffer.write().await.insert(id, indices);
+
+            let mut forward_id_buffer = self.forward_id_buffer.write().await;
+            let sub_buffer = forward_id_buffer.get_mut(&batcher_idx);
+            match sub_buffer {
+                Some(b) => {
+                    b.insert(id, indices);
+                }
+                None => {
+                    let mut new_sub =
+                        HashMap::with_capacity(self.middleware_config.forward_buffer_size);
+                    new_sub.insert(id, indices);
+                    forward_id_buffer.insert(batcher_idx, new_sub);
+                }
+            }
         }
         Ok(id)
     }
@@ -942,21 +965,27 @@ impl ShardedMiddlewareServerInner {
             .map(|_| ())
     }
 
-    pub async fn can_forward_batched(&self) -> bool {
-        let result = self.forward_id_buffer.read().await.len() < self.forward_buffer_size;
+    pub async fn can_forward_batched(&self, batcher_idx: usize) -> bool {
+        let result = match self.forward_id_buffer.read().await.get(&batcher_idx) {
+            Some(buffer) => buffer.len() < self.middleware_config.forward_buffer_size,
+            None => true,
+        };
         let t = self.cannot_forward_batched_time.load();
         if !result {
             let current_time = SystemTime::now();
             if current_time.duration_since(t).unwrap() > Duration::from_secs(60) {
                 let mut forward_id_buffer = self.forward_id_buffer.write().await;
+                let sub_buffer = forward_id_buffer.get_mut(&batcher_idx).unwrap();
                 tokio::task::block_in_place(|| {
-                    let old_keys = forward_id_buffer
+                    let old_keys = sub_buffer
                         .iter()
                         .filter_map(|(k, v)| {
                             if current_time
                                 .duration_since(v.enter_forward_id_buffer_time.unwrap())
                                 .unwrap()
-                                > Duration::from_secs(6000000)
+                                > Duration::from_secs(
+                                    self.middleware_config.buffered_data_expired_sec as u64,
+                                )
                             {
                                 Some(*k)
                             } else {
@@ -965,7 +994,7 @@ impl ShardedMiddlewareServerInner {
                         })
                         .collect_vec();
                     for k in old_keys {
-                        forward_id_buffer.remove(&k);
+                        sub_buffer.remove(&k);
                     }
                     self.cannot_forward_batched_time.store(SystemTime::now());
                 });
@@ -978,15 +1007,17 @@ impl ShardedMiddlewareServerInner {
 
     pub async fn forward_batch_id(
         &self,
-        req: (u64, bool),
+        req: (PreForwardStub, bool),
     ) -> Result<EmbeddingBatch, ShardedMiddlewareError> {
-        let (forward_id, is_training) = req;
+        let (stub, is_training) = req;
+        let forward_id = stub.forward_id;
         let inner = self.clone();
         let mut indices = {
-            inner
-                .forward_id_buffer
-                .write()
-                .await
+            let mut forward_id_buffer = inner.forward_id_buffer.write().await;
+            let sub_buffer = forward_id_buffer
+                .get_mut(&stub.batcher_idx)
+                .ok_or_else(|| ShardedMiddlewareError::ForwardIdNotFound(forward_id))?;
+            sub_buffer
                 .remove(&forward_id)
                 .ok_or_else(|| ShardedMiddlewareError::ForwardIdNotFound(forward_id))?
         };
@@ -1141,6 +1172,11 @@ impl ShardedMiddlewareServerInner {
         Ok(address)
     }
 
+    pub async fn get_replica_size(&self) -> Result<usize, ShardedMiddlewareError> {
+        let repilca_info = PersiaReplicaInfo::get()?;
+        Ok(repilca_info.replica_size)
+    }
+
     pub async fn error_handle(
         &self,
         err: &ShardedMiddlewareError,
@@ -1177,20 +1213,9 @@ impl ShardedMiddlewareServer {
         self.inner.set_embedding(req).await
     }
 
-    pub async fn can_forward_batched(&self, _req: ()) -> bool {
-        self.inner.can_forward_batched().await
-    }
-
-    pub async fn forward_batched(
-        &self,
-        indices: SparseBatch,
-    ) -> Result<u64, ShardedMiddlewareError> {
-        self.inner.forward_batched(indices).await
-    }
-
     pub async fn forward_batch_id(
         &self,
-        req: (u64, bool),
+        req: (PreForwardStub, bool),
     ) -> Result<EmbeddingBatch, ShardedMiddlewareError> {
         let resp = self.inner.forward_batch_id(req).await;
         if resp.is_err() {
@@ -1255,17 +1280,28 @@ impl MiddlewareNatsStub {
         self.inner.model_manager_status().await
     }
 
-    pub async fn can_forward_batched(&self, _req: ()) -> bool {
-        self.inner.can_forward_batched().await
+    pub async fn can_forward_batched(&self, batcher_idx: usize) -> bool {
+        self.inner.can_forward_batched(batcher_idx).await
     }
 
     pub async fn forward_batched(
         &self,
         indices: SparseBatch,
-    ) -> Result<(String, u64), ShardedMiddlewareError> {
-        let forward_id = self.inner.forward_batched(indices).await?;
-        let addr = self.inner.get_address().await?;
-        Ok((addr, forward_id))
+    ) -> Result<PreForwardStub, ShardedMiddlewareError> {
+        let batcher_idx = indices
+            .batcher_idx
+            .ok_or_else(|| ShardedMiddlewareError::DataSrcIdxNotSet)?;
+        if !self.inner.can_forward_batched(batcher_idx).await {
+            return Err(ShardedMiddlewareError::ForwardBufferFull);
+        }
+        let forward_id = self.inner.forward_batched(indices, batcher_idx).await?;
+        let middleware_addr = self.inner.get_address().await?;
+        let stub = PreForwardStub {
+            middleware_addr,
+            forward_id,
+            batcher_idx,
+        };
+        Ok(stub)
     }
 
     pub async fn dump(&self, req: String) -> Result<(), ShardedMiddlewareError> {
@@ -1293,6 +1329,10 @@ impl MiddlewareNatsStub {
     pub async fn get_address(&self, _req: ()) -> Result<String, ShardedMiddlewareError> {
         self.inner.get_address().await
     }
+
+    pub async fn get_replica_size(&self, _req: ()) -> Result<usize, ShardedMiddlewareError> {
+        self.inner.get_replica_size().await
+    }
 }
 
 #[cfg(test)]
@@ -1314,6 +1354,7 @@ mod lookup_batched_all_slots_preprocess_tests {
             batches: vec![feature_batch],
             enter_forward_id_buffer_time: None,
             enter_post_forward_buffer_time: None,
+            batcher_idx: None,
         };
         indices_to_hashstack_indices(&mut sparse_batch, &config);
         let hashstack_feature_batch = sparse_batch.batches.first().unwrap();
@@ -1361,6 +1402,7 @@ mod lookup_batched_all_slots_preprocess_tests {
             batches: vec![feature_batch],
             enter_forward_id_buffer_time: None,
             enter_post_forward_buffer_time: None,
+            batcher_idx: None,
         };
         indices_add_prefix(&mut sparse_batch, &config, None);
         let result_feature_batch = sparse_batch.batches.first().unwrap();

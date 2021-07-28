@@ -102,7 +102,7 @@ async fn main() -> anyhow::Result<()> {
         embedding_config,
         staleness: Default::default(),
         feature2group,
-        forward_buffer_size: middleware_config.forward_buffer_size,
+        middleware_config: middleware_config,
     });
 
     let _responder = match intent {

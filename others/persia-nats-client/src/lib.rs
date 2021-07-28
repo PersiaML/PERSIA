@@ -2,6 +2,7 @@ use async_nats::{Connection, Subscription};
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_futures::smol;
 use persia_speedy::{Readable, Writable};
+use retry::{delay::Fixed, retry};
 use std::time::Duration;
 use thiserror::Error;
 
@@ -39,8 +40,14 @@ impl NatsClient {
     pub fn new(replica_info: PersiaReplicaInfo) -> Self {
         let nats_url = std::env::var("PERSIA_NATS_IP")
             .unwrap_or(String::from("nats://persia_nats_service:4222"));
-        let nc = smol::block_on(async_nats::connect(nats_url.as_str()))
-            .expect("failed to init nats connection");
+        let nc = retry(Fixed::from_millis(5000), || {
+            let res = smol::block_on(async_nats::connect(nats_url.as_str()));
+            if res.is_err() {
+                tracing::warn!("failed to connect nats server, {:?}", res);
+            }
+            res
+        })
+        .expect("failed to init nats connection");
 
         Self {
             nc,

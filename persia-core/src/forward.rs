@@ -406,10 +406,12 @@ impl Forward {
                             let result = client.forward_batched_direct(sparse_data).await;
                             (result, middleware_addr)
                         }
-                        EmbeddingTensor::ID((middleware_addr, forward_id)) => {
-                            let client = rpc_client.get_client_by_addr(middleware_addr);
-                            let result = client.forward_batch_id(&(*forward_id, is_training)).await;
-                            (result, middleware_addr.to_string())
+                        EmbeddingTensor::PreForwardStub(stub) => {
+                            let client =
+                                rpc_client.get_client_by_addr(stub.middleware_addr.as_str());
+                            let result =
+                                client.forward_batch_id(&(stub.clone(), is_training)).await;
+                            (result, stub.middleware_addr.clone())
                         }
                         EmbeddingTensor::Null => {
                             panic!("current sparse data not support null data",)
@@ -497,10 +499,16 @@ pub fn forward_directly(batch: PersiaBatchData, device_id: i32) -> PyResult<Pyth
         _ => Vec::new(),
     };
 
+    let target = batch
+        .target_data
+        .into_iter()
+        .map(|t| cuda_dense_tensor_h2d(t).expect("cannot move dense to gpu"))
+        .collect();
+
     let infer_batch = PersiaTrainingBatchShardedServerOnGpu {
         dense,
         embeddings,
-        target: Vec::new(),
+        target,
         meta_data: batch.meta_data,
         middleware_server_addr: String::new(),
         forward_id: 0,
@@ -557,12 +565,13 @@ impl PyForward {
     pub fn get_batch(&self, timeout_ms: u64, py: Python) -> PyResult<PythonTrainBatch> {
         let start_time = std::time::Instant::now();
         let receiver = self.inner.gpu_forwarded_channel_r.clone();
+        let rank_id = self.inner.replica_info.as_ref().unwrap().replica_index;
 
         py.allow_threads(move || {
             let batch = match receiver.try_recv() {
                 Ok(x) => Ok(PythonTrainBatch { inner: x }),
                 Err(_) => {
-                    tracing::warn!("local forwarded queue empty!");
+                    tracing::warn!("local forwarded queue empty for rank {}!", rank_id);
                     let result = receiver.recv_timeout(Duration::from_millis(timeout_ms));
                     if let Ok(batch) = result {
                         Ok(PythonTrainBatch { inner: batch })
@@ -578,7 +587,8 @@ impl PyForward {
             if elapsed > 1 {
                 tracing::warn!(
                     message = "get_train_batch takes more than 1 milli seconds",
-                    took_time = tracing::field::debug(&elapsed)
+                    took_time = tracing::field::debug(&elapsed),
+                    rank_id = rank_id,
                 );
                 if let Ok(m) = MetricsHolder::get() {
                     m.long_get_train_batch_time_cost

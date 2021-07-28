@@ -16,7 +16,7 @@ use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
 };
-use persia_embedding_datatypes::{EmbeddingTensor, PersiaBatchData};
+use persia_embedding_datatypes::{EmbeddingTensor, PersiaBatchData, PreForwardStub};
 use persia_embedding_sharded_server::sharded_middleware_service::{
     MiddlewareNatsStubPublisher, ShardedMiddlewareError,
 };
@@ -49,6 +49,8 @@ static RESPONDER: OnceCell<(Arc<PersiaBatchFlowNatsStubResponder>, Arc<Runtime>)
 #[pyclass]
 pub struct PyPersiaBatchFlowNatsStubPublisher {
     to_middleware: MiddlewareNatsStubPublisher,
+    num_middlewares: usize,
+    cur_middleware_id: AtomicUsize,
     runtime: Runtime,
     cur_batch_id: AtomicUsize,
     replica_info: PersiaReplicaInfo,
@@ -80,9 +82,25 @@ impl PyPersiaBatchFlowNatsStubPublisher {
             world_size.unwrap()
         };
 
+        let to_middleware = MiddlewareNatsStubPublisher { nats_client };
+        let num_middlewares = retry(Fixed::from_millis(5000), || {
+            let resp: Result<usize, _> =
+                block_on(to_middleware.publish_get_replica_size(&(), None))?;
+            if resp.is_err() {
+                tracing::warn!(
+                    "failed to get world replica of middleware, due to {:?}",
+                    resp
+                );
+            }
+            resp
+        });
+        let num_middlewares = num_middlewares.expect("failed to get replica size of middleware");
+
         Self {
             to_trainer,
-            to_middleware: MiddlewareNatsStubPublisher { nats_client },
+            to_middleware,
+            num_middlewares,
+            cur_middleware_id: AtomicUsize::new(0),
             runtime: persia_futures::tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .worker_threads(5)
@@ -99,35 +117,49 @@ impl PyPersiaBatchFlowNatsStubPublisher {
         batch: &mut PyPersiaBatchData,
         block: bool,
     ) -> PyResult<()> {
-        let sparse_data = &batch.inner.sparse_data;
-        match sparse_data {
-            EmbeddingTensor::ID(_) => {
+        let start = std::time::Instant::now();
+        match &mut batch.inner.sparse_data {
+            EmbeddingTensor::PreForwardStub(_) => {
                 tracing::error!("sparse data has already sent to middleware, you are calling sparse_to_middleware muti times");
                 return Err(PyRuntimeError::new_err(String::from(
                     "send batch to middleware muti times",
                 )));
             }
             EmbeddingTensor::SparseBatch(sparse_batch) => {
+                let replica_index = self.replica_info.replica_index;
+                sparse_batch.batcher_idx = Some(replica_index);
                 let op = || {
+                    let cur_middleware_id = self.cur_middleware_id.fetch_add(1, Ordering::AcqRel);
                     let _gurad = self.runtime.enter();
-                    let result: Result<(String, u64), ShardedMiddlewareError> = block_on(
-                        self.to_middleware
-                            .publish_forward_batched(sparse_batch, None),
-                    )?;
+                    let result: Result<PreForwardStub, ShardedMiddlewareError> =
+                        block_on(self.to_middleware.publish_forward_batched(
+                            sparse_batch,
+                            Some(cur_middleware_id % self.num_middlewares),
+                        ))?;
+                    if result.is_err() {
+                        tracing::warn!(
+                            "fail to send sparse data to middleware due to {:?}",
+                            result
+                        );
+                    }
                     result
                 };
-                let resp: Result<(String, u64), _> = if block {
+                let resp: Result<PreForwardStub, _> = if block {
                     retry(Fixed::from_millis(1000), op)
                 } else {
                     retry(Fixed::from_millis(1000).take(1), op)
                 };
                 match resp {
                     Ok(result) => {
-                        batch.inner.sparse_data = EmbeddingTensor::ID(result);
+                        batch.inner.sparse_data = EmbeddingTensor::PreForwardStub(result);
                         let local_batch_id = self.cur_batch_id.fetch_add(1, Ordering::AcqRel);
                         let batch_id = local_batch_id * self.replica_info.replica_size
                             + self.replica_info.replica_index;
                         batch.inner.batch_id = Some(batch_id);
+                        tracing::debug!(
+                            "send_sparse_to_middleware time cost {} ms",
+                            start.elapsed().as_millis()
+                        );
                         return Ok(());
                     }
                     Err(e) => {
@@ -146,6 +178,7 @@ impl PyPersiaBatchFlowNatsStubPublisher {
     }
 
     fn send_dense_to_trainer(&self, batch: &PyPersiaBatchData, block: bool) -> PyResult<()> {
+        let start = std::time::Instant::now();
         if batch.inner.batch_id.is_none() {
             tracing::warn!("batch id is null, please call send_sparse_to_middleware first");
             return Err(PyRuntimeError::new_err(String::from(
@@ -160,6 +193,7 @@ impl PyPersiaBatchFlowNatsStubPublisher {
             if result.is_ok() && result.unwrap() {
                 Ok(())
             } else {
+                tracing::warn!("failed to send dense to trainer {}, retrying...", rank_id);
                 Err(())
             }
         };
@@ -173,6 +207,11 @@ impl PyPersiaBatchFlowNatsStubPublisher {
             let err_msg = String::from("failed to send dense to trainer");
             return Err(PyRuntimeError::new_err(err_msg));
         }
+        tracing::debug!(
+            "send_dense_to_trainer {} time cost {} ms",
+            rank_id,
+            start.elapsed().as_millis()
+        );
         Ok(())
     }
 
