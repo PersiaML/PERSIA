@@ -9,6 +9,9 @@ if __name__ == "__main__":
     colorama.init(autoreset=True)
     cwd = os.path.dirname(os.path.abspath(__file__))
 
+    use_cuda = os.environ.get("USE_CUDA", False)
+    features = None if not use_cuda else ["cuda"]
+
     setup(
         name="persia-core",
         use_scm_version={"local_scheme": "no-local-version"},
@@ -24,6 +27,7 @@ if __name__ == "__main__":
                 path="persia-core/Cargo.toml",
                 binding=Binding.PyO3,
                 native=True,
+                features=features,
             )
         ],
         author="Kuaishou AI Platform",
