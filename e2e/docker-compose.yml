@@ -2,7 +2,7 @@ version: "3.3"
 services:
         data_compose:
             env_file:
-                - .env
+                - .adult_income/env
             environment:
                 JOB_ID: 0
             depends_on:
@@ -16,7 +16,7 @@ services:
 
         trainer:
             env_file:
-                - .env
+                - .adult_income/env
             environment:
                 JOB_ID: 0
                 NCCL_SOCKET_IFNAME: eth0
@@ -29,7 +29,7 @@ services:
 
         middleware:
             env_file:
-                - .env
+                - .adult_income/env
             environment:
                 JOB_ID: 0
             depends_on:
@@ -49,8 +49,3 @@ services:
             volumes:
                 - $PWD/adult_income:/workspace
         
-        download_data:
-            image: persiaml-test:latest
-            command: bash -c "/workspace/download_data.sh"
-            volumes:
-                - $PWD/adult_income:/workspace
