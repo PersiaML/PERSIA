@@ -12,6 +12,7 @@ services:
             command: /workspace/launch_compose.sh /workspace/data_compose.py
             volumes:
                 - $PWD/adult_income:/workspace
+                - /data/adult_income:/data/
 
         trainer:
             env_file:
@@ -24,6 +25,7 @@ services:
             command:  /workspace/launch_persia.sh /workspace/train.py
             volumes:
                 - $PWD/adult_income:/workspace
+                - /data/adult_income:/data/
 
         middleware:
             env_file:
@@ -52,5 +54,3 @@ services:
             command: bash -c "/workspace/download_data.sh"
             volumes:
                 - $PWD/adult_income:/workspace
-volumes:
-    - /data/adult_income:/data/
