@@ -7,7 +7,7 @@ RUN git clone https://github.com/PersiaML/PersiaML && \
     git clone https://${GITHUB_TOKEN}@github.com/PersiaML/PersiaML-server
 
 RUN cd PersiaML-server && \
-    pip3 install colorama && python3 setup.py install && \
+    /opt/conda/bin/pip3 && python3 setup.py install && \
     cargo build --release --package persia-embedding-sharded-server && \
     mv target/release/persia-embedding-sharded-middleware /bin && \
     mv target/release/persia-embedding-sharded-server /bin/ && \
