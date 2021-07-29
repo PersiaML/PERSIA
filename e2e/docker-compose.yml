@@ -2,7 +2,7 @@ version: "3.3"
 services:
         data_compose:
             env_file:
-                - adult_income/env
+                - adult_income/.env
             environment:
                 JOB_ID: 0
             depends_on:
@@ -16,7 +16,7 @@ services:
 
         trainer:
             env_file:
-                - adult_income/env
+                - adult_income/.env
             environment:
                 JOB_ID: 0
                 NCCL_SOCKET_IFNAME: eth0
@@ -29,7 +29,7 @@ services:
 
         middleware:
             env_file:
-                - adult_income/env
+                - adult_income/.env
             environment:
                 JOB_ID: 0
             depends_on:
@@ -41,7 +41,7 @@ services:
 
         server:
             env_file:
-                - adult_income/env
+                - adult_income/.env
             environment:
                 JOB_ID: 0
             image: persiaml-test:latest
