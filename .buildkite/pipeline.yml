@@ -1,3 +1,40 @@
 steps:
-  - label: "example step"
-    command: echo "Hello World!"
+  - label: "Build docker ci image for latest persiaml framework"
+    command: docker build e2e --build-arg $GITHUB_TOKEN -t persiaml-test:latest
+  - label: "Add executive permission to script"
+    command: chmod +x -R e2e/adult_income
+  - wait
+  - label: "Download dataset and preprocessed the corresponding data"
+    plugins:
+      - docker#v3.8.0:
+          run: download_data
+          config: "e2e/docker-compose.yml"
+  - wait
+  - label: "launch trainer"
+    plugins:
+      - docker#v3.8.0:
+          config: "e2e/docker-compose.yml"
+          network: "test-e2e"
+          run: trainer
+
+  - label: "launch compose"
+    plugins:
+      - docker#v3.8.0:
+          config: "e2e/docker-compose.yml"
+          network: "test-e2e"
+          run: data_compose
+
+  - label: "launch middleware"
+    plugins:
+      - docker#v3.8.0:
+          config: "e2e/docker-compose.yml"
+          network: "test-e2e"
+          run: middleware
+
+  - label: "launch embed-server"
+    plugins:
+      - docker#v3.8.0:
+          config: "e2e/docker-compose.yml"
+          network: "test-e2e"
+          run: server
+  - wait

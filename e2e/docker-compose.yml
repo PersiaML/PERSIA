@@ -1,0 +1,54 @@
+version: "3.3"
+services:
+        data_compose:
+            env_file:
+                - .env
+            environment:
+                JOB_ID: 0
+            depends_on:
+                - trainer
+                - middleware
+            image: persiaml-test:latest
+            command: /workspace/launch_compose.sh /workspace/data_compose.py
+            volumes:
+                - $PWD/adult_income:/workspace
+
+        trainer:
+            env_file:
+                - .env
+            environment:
+                JOB_ID: 0
+                NCCL_SOCKET_IFNAME: eth0
+                GPU_NUM: 1
+            image: persiaml-test:latest
+            command:  /workspace/launch_persia.sh /workspace/train.py
+            volumes:
+                - $PWD/adult_income:/workspace
+
+        middleware:
+            env_file:
+                - .env
+            environment:
+                JOB_ID: 0
+            depends_on:
+                - server
+            image: persiaml-test:latest
+            command: bash -c "/workspace/launch_middleware.sh"
+            volumes:
+                - $PWD/adult_income:/workspace
+
+        server:
+            env_file:
+                - .env
+            environment:
+                JOB_ID: 0
+            image: persiaml-test:latest
+            command: bash -c "/workspace/launch_server.sh"
+            volumes:
+                - $PWD/adult_income:/workspace
+        
+        download_data:
+            image: persiaml-test:latest
+            command: bash -c "/workspace/download_data.sh"
+            volumes:
+                - $PWD/adult_income:/workspace
