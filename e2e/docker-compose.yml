@@ -52,3 +52,5 @@ services:
             command: bash -c "/workspace/download_data.sh"
             volumes:
                 - $PWD/adult_income:/workspace
+volumes:
+    - /data/adult_income:/data/

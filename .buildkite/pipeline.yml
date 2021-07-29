@@ -5,15 +5,6 @@ steps:
   - label: "Add executive permission to script"
     command: chmod +x -R e2e/adult_income
 
-  - label: "Download dataset and preprocessed the corresponding data"
-    command: "chmod +x /workspace/download_data.sh && /workspace/download_data.sh"
-    plugins:
-      - docker#v3.8.0:
-          always-pull: true
-          run: download_data
-          image: "persiaml/persia-ci:latest"
-          volumes:
-            - "./e2e/adult_income:/workspace"
   - wait
   - label: "launch trainer"
     plugins:
