@@ -11,7 +11,7 @@ services:
             image: persiaml-test:latest
             command: /workspace/launch_compose.sh /workspace/data_compose.py
             volumes:
-                - $PWD/adult_income:/workspace
+                - ./adult_income:/workspace
                 - /data/adult_income:/data/
 
         trainer:
@@ -24,7 +24,7 @@ services:
             image: persiaml-test:latest
             command:  /workspace/launch_persia.sh /workspace/train.py
             volumes:
-                - $PWD/adult_income:/workspace
+                - ./adult_income:/workspace
                 - /data/adult_income:/data/
 
         middleware:
@@ -37,7 +37,7 @@ services:
             image: persiaml-test:latest
             command: bash -c "/workspace/launch_middleware.sh"
             volumes:
-                - $PWD/adult_income:/workspace
+                - ./adult_income:/workspace
 
         server:
             env_file:
@@ -47,5 +47,5 @@ services:
             image: persiaml-test:latest
             command: bash -c "/workspace/launch_server.sh"
             volumes:
-                - $PWD/adult_income:/workspace
+                - ./adult_income:/workspace
         
