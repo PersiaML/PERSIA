@@ -1,6 +1,6 @@
 steps:
   - label: "Build docker ci image for latest persiaml framework"
-    command: docker build e2e --build-arg $$GITHUB_TOKEN -t persiaml-test:latest
+    command: docker build e2e --build-arg GITHUB_TOKEN=$$GITHUB_TOKEN -t persiaml-test:latest
   - label: "Add executive permission to script"
     command: chmod +x -R e2e/adult_income
   - wait
