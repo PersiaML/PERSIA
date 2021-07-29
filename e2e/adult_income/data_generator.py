@@ -23,7 +23,6 @@ def generate_loader(
         for idx, categorical_column in enumerate(categorical_columns):
             tmp_sparse_batch = []
             categorical_batch_data = categorical_data[start:end]
-            # extend the categorical data to behave list
             for i in range(len(categorical_batch_data)):
                 tmp_sparse_batch.append(categorical_batch_data[i][idx : idx + 1])
             sparse_batch_data.append((categorical_column, tmp_sparse_batch))
@@ -44,7 +43,7 @@ def make_dataloader(
         categorical_columns = data["categorical_columns"]
 
     dataset_size = len(target)
-    loader_size = (dataset_size - 1) // 128 + 1
+    loader_size = (dataset_size - 1) // batch_size + 1
     if skip_last_batch:
         loader_size = loader_size - 1
 

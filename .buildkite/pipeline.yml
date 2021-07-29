@@ -13,7 +13,7 @@ steps:
           run: download_data
           image: "persiaml/persia-ci:latest"
           volumes:
-            - "e2e/adult_income:/workspace"
+            - "./e2e/adult_income:/workspace"
   - wait
   - label: "launch trainer"
     plugins:
