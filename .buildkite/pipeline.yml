@@ -6,7 +6,7 @@ steps:
     command: chmod +x -R e2e/adult_income
 
   - label: "Download dataset and preprocessed the corresponding data"
-    command: "chmod +x /workspace//workspace/download_data.sh && /workspace/download_data.sh"
+    command: "chmod +x /workspace/download_data.sh && /workspace/download_data.sh"
     plugins:
       - docker#v3.8.0:
           always-pull: true
