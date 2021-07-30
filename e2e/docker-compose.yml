@@ -16,7 +16,6 @@ services:
                 - adult_income/.test_env
             environment:
                 JOB_ID: 1
-                NCCL_SOCKET_IFNAME: eth0
                 GPU_NUM: 1
             image: persiaml-test:latest
             command:  bash -c "/workspace/launch_persia.sh /workspace/train.py"
