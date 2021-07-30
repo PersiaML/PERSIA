@@ -19,7 +19,7 @@ _logger = get_default_logger()
 class IterableDataset(
     TorchIterableDataset
 ):  # TODO: cannot understand the whole doc string
-    r"""IterableChannelBase wrap the PyPersiaBatchDataChannel that provide the channel sender and
+    r"""IterableChannelBase wrap the PyPersiaBatchDataChannel that provides the channel sender and
     receiver.
 
     Arguments:
@@ -69,8 +69,8 @@ class StreamingDataset(IterableDataset):
 
 
 class PersiaDataset(IterableDataset):
-    r"""Persia data channel that provide asynchronous data handler feature to improve the performance of data preprocess.
-    Not support synchronous data handler temporary.
+    r"""Persia data channel that provides asynchronous data handler to improve the performance of data preprocessing.
+    Temporarily does not support synchronous data handler.
 
     Arguments:
         buffer_size (int): PyPersiaBatchDataChannel buffer size
@@ -114,7 +114,7 @@ class PersiaDataset(IterableDataset):
 
 
 class Dataloder(object):
-    r"""Dataloder provide the interface to fetch the PythonBatchData from PyForward
+    r"""Dataloder provides the interface to fetch the PythonBatchData from PyForward
     wrapper.
 
     Arguments:

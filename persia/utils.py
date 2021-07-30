@@ -6,10 +6,10 @@ from persia.error import FileNotFoundException
 
 
 def setup_seed(seed: int):
-    """Set the seed for most used common library to ensure the experiment reproducible
+    """Set the random seed for commonly used Python library to ensure the experiment reproducibility.
 
     Arguments:
-        seed (int): Seed of common library.
+        seed (int): random seed.
     """
     import numpy as np
     import torch
@@ -27,7 +27,7 @@ def setup_seed(seed: int):
 
 
 def load_yaml(filepath: str) -> dict:
-    """load the yaml config by provided filepath
+    """load the yaml config provided by filepath
 
     Arguments:
         filepath (str): yaml config path
@@ -40,7 +40,7 @@ def load_yaml(filepath: str) -> dict:
 
 
 def block(interval: int = 120):
-    """block the process by sleep function
+    """block the process for ``interval`` seconds.
 
     Arguments:
         interval (int, optinal): sleep interval

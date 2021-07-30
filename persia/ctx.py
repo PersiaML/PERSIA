@@ -21,21 +21,23 @@ PythonTrainBatch = NewType("PythonTrainBatch", object)
 
 
 def _check_finite(tensors: List[torch.Tensor]) -> bool:
-    """Check all tensors in the input list contain only finite elements.
+    """Check if all tensors in the input list contain only finite elements.
 
     Arguments:
-        tensors (List[torch.Tensor]): tensor list that need to check finite or not.
+        tensors (List[torch.Tensor]): List of tensor to be checked.
 
-    Returns: Whether all the tensors is finite or is None.
+    Returns:
+        bool: ``True`` if all elements in ``tensors`` are finite or None.
     """
     return all([torch.isfinite(t).all() if t is not None else True for t in tensors])
 
 
 class PreprocessMode(Enum):
-    r"""Different preprocess mode will effect the ``EmbeddingCtx.prepare_features`` return result. ``PreprocessMode.TRAIN`` will return
-    the torch tensor that the ``requires_grad`` attribute is set to ``True``. ``EmbeddingCtx.EVAL`` will return the torch tensor
-    that the ``requires_grad`` attribute is set to ``False``. ``EmbeddingCtx.INFERENCE``  almost behave like ``EmbeddingCtx.EVAL``, the only difference
-    is that ``PreprocessMode.INFERENCE`` allows ""EmbeddingCtx`` to process the ``PythonTrainBatch`` without target tensor.
+    r"""Different preprocess mode will effect the ``EmbeddingCtx.prepare_features`` return result.
+    ``PreprocessMode.TRAIN`` will return a torch tensor with ``requires_grad`` attribute set to ``True``.
+    ``EmbeddingCtx.EVAL`` will return a torch tensor with ``requires_grad`` attribute set to ``False``.
+    ``EmbeddingCtx.INFERENCE`` behaves almost the same as ``EmbeddingCtx.EVAL``, except that
+         ``PreprocessMode.INFERENCE`` allows ""EmbeddingCtx`` to process the ``PythonTrainBatch`` without target tensor.
     """
     TRAIN = 1
     EVAL = 2
@@ -43,7 +45,7 @@ class PreprocessMode(Enum):
 
 
 class BaseCtx:
-    r"""It provide the communicate ability for data generator component to send the PersiaBatchData
+    r"""Provides the communication ability for data generator component to send the PersiaBatchData
     to the trainer and embedding middleware.
 
     Examples::
@@ -113,8 +115,8 @@ class BaseCtx:
 
 
 class EmbeddingCtx(BaseCtx):
-    r"""EmbeddingCtx provide the embedding relative function compare to BaseCtx.It can run the offline test or online inference
-    according to different preprocess_mode.The most simple way to get this context is use ``persia.ctx.eval_ctx()`` or
+    r"""Provides the embedding-related functionality. It can run offline test or online inference
+    according to different preprocess_mode. The simplest way to get this context is by using ``persia.ctx.eval_ctx()`` or
     ``persia.ctx.inference_ctx`` to get the ``EmbeddingCtx`` instance.
 
     Examples::
@@ -146,11 +148,11 @@ class EmbeddingCtx(BaseCtx):
     ):
         """
         Arguments:
-            preprocess_mode (PreprocessMode): Different preprocess mode effect the behave of ``prepare_features``.
-            emb_initialization (Tuple[float, float], optional): Embedding uniform initialization arguments that corresponding to low and high.
+            preprocess_mode (PreprocessMode): Different preprocess mode effect the behavior of ``prepare_features``.
+            emb_initialization (Tuple[float, float], optional): Lower and upper bound of embedding uniform initialization.
             admit_probability (float, optional): The probability (0<=, <=1) of admitting a new embedding.
             weight_bound (float, optional): Restrict each element value of an embedding in [-weight_bound, weight_bound].
-            checkpoint_dir(str, optional): Pretrained checkpoint directory, load the dense and sparse checkpoint in this dir when enter the context.
+            checkpoint_dir(str, optional): Pretrained checkpoint directory. When entering the context, the dense and sparse checkpoints in this directory are loaded.
         """
         super(EmbeddingCtx, self).__init__(*args, **kwargs)
         self.preprocess_mode = preprocess_mode
@@ -178,7 +180,7 @@ class EmbeddingCtx(BaseCtx):
     def prepare_features(
         self, batch: PythonTrainBatch
     ) -> Tuple[torch.Tensor, List[torch.Tensor], Optional[torch.Tensor]]:
-        """Converted the dense, sparse and target raw data in``PythonTrainBatch`` to `torch.Tensor``.
+        """Convert dense, sparse and target raw data in``PythonTrainBatch`` to `torch.Tensor``.
 
         Arguments:
             batch (PythonTrainBatch): Training data provided by PersiaML upstream including
@@ -361,7 +363,7 @@ class EmbeddingCtx(BaseCtx):
         self.load_embedding(src_dir, blocking=blocking)
 
     def dump_embedding(self, dst_dir: str, blocking: bool = False):
-        """Dump embeddings to ``dst_dir``. Use ``TrainCtx.wait_for_dump_embedding`` to wait until finished
+        """Dump embeddings to ``dst_dir``. Use ``TrainCtx.wait_for_dump_embedding`` to wait for dumping to finish
         if ``blocking=False``.
 
         Arguments:
@@ -371,7 +373,7 @@ class EmbeddingCtx(BaseCtx):
         self.backend.dump_embedding(dst_dir, blocking)
 
     def load_embedding(self, src_dir: str, blocking: bool = True):
-        """Load embeddings from ``src_dir``. Use ``TrainCtx.wait_for_load_embedding`` to wait until finished
+        """Load embeddings from ``src_dir``. Use ``TrainCtx.wait_for_load_embedding`` to wait for loading to finish
         if ``blocking=False``.
 
         Arguments:
@@ -390,7 +392,7 @@ class EmbeddingCtx(BaseCtx):
 
 
 class TrainCtx(EmbeddingCtx):
-    r"""Subclass of ``EmbeddingCtx`` that provide the backward ability to update the sparse embedding.
+    r"""Subclass of ``EmbeddingCtx`` that provides the backward ability to update the sparse embedding.
 
     Example::
         >>> import torch
@@ -474,8 +476,8 @@ class TrainCtx(EmbeddingCtx):
     ) -> torch.Tensor:
         """Compute the gradient of current dense and sparse tensors.
 
-        The backward support mixed precision training.According to current embedding gradient is finite or not, ``GradScalar``
-        can update the scale automatic to restrict to parameters in finite range.
+        The backward support mixed precision training. Depending on whether the current embedding gradient is finite, ``GradScalar``
+        can update the scale automatically to limit the parameters in finite range.
 
         Arguments:
             loss (torch.Tensor): Loss of current batch.
@@ -575,7 +577,7 @@ class TrainCtx(EmbeddingCtx):
 
 
 def cnt_ctx() -> Optional[BaseCtx]:
-    """Get the BaseCtx recently entered."""
+    """Get the most recently entered ctx."""
     return _CURRENT_CXT
 
 

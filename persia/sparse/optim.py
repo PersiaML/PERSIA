@@ -6,7 +6,7 @@ from persia.backend import get_backend
 
 
 class Optimizer(ABC):
-    r"""Base optimizer to configurate the sparse embedding update behavior."""
+    r"""Base optimizer to configure the sparse embedding update behavior."""
 
     def __init__(self):
         self.optimizer_base = PyOptimizerBase()

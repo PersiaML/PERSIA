@@ -6,10 +6,10 @@ from colorlog import ColoredFormatter
 
 
 class levelFilter(logging.Filter):
-    r"""log level filter to ensure log fileter
+    r"""log level filter
 
     Arguments:
-        level (int): filter log level, remain the log greater than the setting level
+        level (int): filter log level. Only keep logs with level higher than ``level``
     """
 
     def __init__(self, level: int):
@@ -61,8 +61,8 @@ def setLogger(
     enable_err_redirect: bool = False,
     err_redirect_level: int = logging.INFO,
 ) -> logging.Logger:
-    r"""this function make logger configuration simplify, provide the
-    log_level and log filename.It also make error log redirect available
+    r"""This function simplifies logger configuration, provides the
+    log_level and log filename. It also provides error log redirection.
 
     Arguments:
         name (str): logger name

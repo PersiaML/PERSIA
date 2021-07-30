@@ -12,8 +12,8 @@ _backend = None
 
 
 class Backend:
-    r"""Backend class is the python wrapper of PersiaRpcClient and NatsPublisher that provide the ability to
-    invoke rpc function to communicate with the trainer and middleware componenet.
+    r"""Python wrapper of PersiaRpcClient and NatsPublisher.
+    Provide the ability to invoke rpc communication between the trainer and the middleware component.
 
     Arguments:
         threadpool_worker_size (int): Rpc client threadpool size.
@@ -47,16 +47,16 @@ class Backend:
         enable_weight_bound: bool,
         weight_bound: float,
     ):
-        """Set the configuration of embedding initialization and embedding update rule to embedding server.
+        """Configure the embedding initialization and embedding update rule of the embedding server.
 
         Arguments:
-            initialize_lower (float): embedding uniform initialization lower bound args.
-            initialize_upper (float): embedding uniform initialization upper bound args.
-            admit_probability (float): probability of embedding generation. value in [0, 1]. Generate a random value(range in [0, 1]) for each sparse embedding,
-                    generate the new embedding once the value is small than the admit_probability. Always generate the new embedding when the admit_probability set
-                    to 1.
-            enable_weight_bound (bool): Enable weight bound or not.
-            weight_bound (float): Restrict each element value of an embedding in [-weight_bound, weight_bound].
+            initialize_lower (float): lower bound of the embedding uniform initialization.
+            initialize_upper (float): upper bound of the embedding uniform initialization.
+            admit_probability (float): probability of embedding generation. Should be in the range [0, 1].
+                    Each sparse embedding is admitted to the embedding server at the probability admit_probability.
+                    Set admit_probability to 1 to admit all new embeddings.
+            enable_weight_bound (bool): if ``True``, enables weight bound, where each element of the embedding is bounded by weight_bound.
+            weight_bound (float): restrict each element value of an embedding in [-weight_bound, weight_bound].
         """
         self.nats_publisher.configure_sharded_servers(
             initialize_lower,
@@ -75,8 +75,8 @@ class Backend:
         self.nats_publisher.register_optimizer(optimizer)
 
     def dump_embedding(self, dst_dir: str, blocking: bool = False):
-        """Dump the sparse embedding to destination directory.This method provide not blocking
-        mode, invoke the TrainCtx.wait_for_dump_embedding once set blocking to False.
+        """Dump the sparse embedding to destination directory. This method provides non-blocking
+        mode, by invoking ``TrainCtx.wait_for_dump_embedding`` once ``blocking`` is set to False.
 
         Arguments:
             dst_dir (str): Destination directory.
@@ -87,8 +87,8 @@ class Backend:
             self.rpc_client.wait_for_dump_embedding()
 
     def load_embedding(self, src_dir: str, blocking: bool = True):
-        """Load the sparse embedding from source directory by invoke rpc client.This method provide
-        not blocking mode,invoke the TrainCtx.wait_for_load_embedding once set the blocking to False.
+        """Load the sparse embedding from source directory by invoke rpc client. This method provides
+        non-blocking mode, by invoking ``TrainCtx.wait_for_dump_embedding`` once ``blocking`` is set to False.
 
         Arguments:
             src_dir (str): Source directory.
@@ -111,7 +111,7 @@ def init_backend(
     threadpool_worker_size: int,
     replica_info: PyPersiaReplicaInfo,
 ) -> Backend:
-    """Initialized the singleton Backend instance.
+    """Initialize the singleton Backend instance.
 
     Arguments:
         threadpool_worker_size (int, optional): Rpc client threadpool size.
@@ -124,7 +124,7 @@ def init_backend(
 
 
 def get_backend() -> Backend:
-    """Get singleton Backend instance, raise PersiaRuntimeException once uninitialized the backend."""
+    """Get a singleton Backend instance. Raise PersiaRuntimeException if the backend is not initialized."""
     if not _backend:
         raise PersiaRuntimeException("init persia backend first")
     return _backend
