@@ -5,13 +5,8 @@ services:
                 - adult_income/.test_env
             environment:
                 JOB_ID: 1
-            depends_on:
-                - trainer
-                - middleware
             image: persiaml-test:latest
             command: bash -c "/workspace/launch_compose.sh /workspace/data_compose.py"
-            networks:
-                - e2e-test
             volumes:
                 - ./adult_income:/workspace
                 - /data/adult_income:/data/
@@ -25,8 +20,10 @@ services:
                 GPU_NUM: 1
             image: persiaml-test:latest
             command:  bash -c "/workspace/launch_persia.sh /workspace/train.py"
-            networks:
-                - e2e-test
+            depends_on:
+                - data_compose
+                - middleware
+                - server
             volumes:
                 - ./adult_income:/workspace
                 - /data/adult_income:/data/
@@ -36,12 +33,8 @@ services:
                 - adult_income/.test_env
             environment:
                 JOB_ID: 1
-            depends_on:
-                - server
             image: persiaml-test:latest
             command: bash -c "/workspace/launch_middleware.sh"
-            networks:
-                - e2e-test
             volumes:
                 - ./adult_income:/workspace
 
@@ -52,9 +45,5 @@ services:
                 JOB_ID: 1
             image: persiaml-test:latest
             command: bash -c "/workspace/launch_server.sh"
-            networks:
-                - e2e-test
             volumes:
                 - ./adult_income:/workspace
-networks:
-    e2e-test:

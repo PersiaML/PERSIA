@@ -114,4 +114,6 @@ if __name__ == "__main__":
             )
 
             if batch_idx % test_interval == 0 and batch_idx != 0:
-                test(model, test_loader)
+                test_auc = test(model, test_loader)
+                assert test_auc > 0.8, f"test_auc error, expect greater than 0.8 but got {test_auc}"
+                break

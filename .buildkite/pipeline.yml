@@ -6,27 +6,11 @@ steps:
     command: chmod +x -R e2e/adult_income
 
   - wait
-  - label: "launch middleware"
-    plugins:
-      - docker-compose#v3.8.0::
-          config: "e2e/docker-compose.yml"
-          run: middleware
 
-  - label: "launch embed-server"
-    plugins:
-      - docker-compose#v3.8.0::
-          config: "e2e/docker-compose.yml"
-          run: server
   - label: "launch trainer"
     plugins:
       - docker-compose#v3.8.0::
           config: "e2e/docker-compose.yml"
           run: trainer
+          graceful-shutdown: true
 
-  - label: "launch compose"
-    plugins:
-      - docker-compose#v3.8.0::
-          config: "e2e/docker-compose.yml"
-          run: data_compose
-
-  - wait
