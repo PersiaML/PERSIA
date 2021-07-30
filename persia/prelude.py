@@ -33,7 +33,10 @@ register_submodule(
 
 
 # pytype: disable=import-error
-from persia_core import is_cuda_feature_available
+from persia_core import (
+    is_cuda_feature_available,
+    init_persia_embedding_staleness_manager,
+)
 
 from persia_core import (
     PyPersiaRpcClient,
