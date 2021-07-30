@@ -61,7 +61,7 @@ def test(model: torch.nn.Module, data_laoder: Dataloder):
             all_target.append(target.cpu().detach().numpy())
             accuracy = (torch.round(output) == target).sum() / target.shape[0]
             accuracies.append(accuracy)
-            losses.append(loss)
+            losses.append(float(loss))
 
         all_pred, all_target = np.concatenate(all_pred), np.concatenate(all_target)
 
@@ -76,6 +76,8 @@ def test(model: torch.nn.Module, data_laoder: Dataloder):
 
     model.train()
 
+    return test_auc, test_acc
+
 
 if __name__ == "__main__":
     model = DNN()
@@ -86,7 +88,7 @@ if __name__ == "__main__":
     model.cuda(device_id)
 
     dense_optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-    sparse_optimizer = Adagrad(lr=1e-3)
+    sparse_optimizer = Adagrad(lr=1e-2)
     loss_fn = torch.nn.BCELoss(reduction="mean")
     logger.info("finish genreate dense ctx")
 
@@ -114,6 +116,6 @@ if __name__ == "__main__":
             )
 
             if batch_idx % test_interval == 0 and batch_idx != 0:
-                test_auc = test(model, test_loader)
+                test_auc, test_acc = test(model, test_loader)
                 assert test_auc > 0.8, f"test_auc error, expect greater than 0.8 but got {test_auc}"
                 break

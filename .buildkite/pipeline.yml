@@ -7,7 +7,7 @@ steps:
 
   - wait
 
-  - label: "launch trainer"
+  - label: "launch e2e test"
     plugins:
       - docker-compose#v3.8.0::
           config: "e2e/docker-compose.yml"
