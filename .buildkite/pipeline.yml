@@ -10,27 +10,23 @@ steps:
     plugins:
       - docker-compose#v3.8.0::
           config: "e2e/docker-compose.yml"
-          network: "test-e2e"
           run: middleware
 
   - label: "launch embed-server"
     plugins:
       - docker-compose#v3.8.0::
           config: "e2e/docker-compose.yml"
-          network: "test-e2e"
           run: server
   - label: "launch trainer"
     plugins:
       - docker-compose#v3.8.0::
           config: "e2e/docker-compose.yml"
-          network: "test-e2e"
           run: trainer
 
   - label: "launch compose"
     plugins:
       - docker-compose#v3.8.0::
           config: "e2e/docker-compose.yml"
-          network: "test-e2e"
           run: data_compose
 
   - wait
