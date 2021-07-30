@@ -56,5 +56,5 @@ services:
                 - e2e-test
             volumes:
                 - ./adult_income:/workspace
-netowrks:
+networks:
     e2e-test:
