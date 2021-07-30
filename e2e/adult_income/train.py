@@ -68,15 +68,15 @@ def test(model: torch.nn.Module, data_laoder: Dataloder):
         fpr, tpr, th = metrics.roc_curve(all_target, all_pred)
         test_auc = metrics.auc(fpr, tpr)
 
-        test_accuracies = torch.mean(torch.tensor(accuracies))
+        test_accuracy = torch.mean(torch.tensor(accuracies))
         test_loss = torch.mean(torch.tensor(losses))
         logger.info(
-            f"test auc is {test_auc} accuracy is {test_accuracies}, loss is {test_loss}"
+            f"test auc is {test_auc} accuracy is {test_accuracy}, loss is {test_loss}"
         )
 
     model.train()
 
-    return test_auc, test_acc
+    return test_auc, test_accuracy
 
 
 if __name__ == "__main__":
