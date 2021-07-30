@@ -28,4 +28,4 @@ jobs:
         # uses: theahura/pytype-action@38cf548b60f6da64118a1d74e3277efcf533e1a2
         uses: NOBLES5E/pytype-action@main
         with:
-          args: -d import-error persia
+          args: -d import-error persia/persia
