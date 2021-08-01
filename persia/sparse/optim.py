@@ -67,8 +67,8 @@ class Adam(Optimizer):
 
     def apply(self):
         """Initialize Adam optimizer and register to embedding server."""
-        self.optimizer_base.register_adam(
-            self.lr, self.betas, self.weight_decay, self.eps
+        self.optimizer_base.init_adam(
+            self.lr, self.betas, self.eps
         )
         self.register_optimizer()
 
