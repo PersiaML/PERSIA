@@ -36,8 +36,8 @@ class PreprocessMode(Enum):
     r"""Different preprocess mode will effect the ``EmbeddingCtx.prepare_features`` return result.
     ``PreprocessMode.TRAIN`` will return a torch tensor with ``requires_grad`` attribute set to ``True``.
     ``EmbeddingCtx.EVAL`` will return a torch tensor with ``requires_grad`` attribute set to ``False``.
-    ``EmbeddingCtx.INFERENCE`` behaves almost the same as ``EmbeddingCtx.EVAL``, except that
-         ``PreprocessMode.INFERENCE`` allows ""EmbeddingCtx`` to process the ``PythonTrainBatch`` without target tensor.
+    ``EmbeddingCtx.INFERENCE`` behaves almost identical to ``EmbeddingCtx.EVAL``, except that
+         ``PreprocessMode.INFERENCE`` allows ""EmbeddingCtx`` to process the ``PythonTrainBatch`` without a target tensor.
     """
     TRAIN = 1
     EVAL = 2
@@ -115,8 +115,8 @@ class BaseCtx:
 
 
 class EmbeddingCtx(BaseCtx):
-    r"""Provides the embedding-related functionality. It can run offline test or online inference
-    according to different preprocess_mode. The simplest way to get this context is by using ``persia.ctx.eval_ctx()`` or
+    r"""Provides the embedding-related functionality. EmbeddingCtx can run offline test or online inference
+    depending on different preprocess_mode. The simplest way to get this context is by using ``persia.ctx.eval_ctx()`` or
     ``persia.ctx.inference_ctx`` to get the ``EmbeddingCtx`` instance.
 
     Examples::

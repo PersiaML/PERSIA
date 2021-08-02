@@ -87,7 +87,7 @@ class Backend:
             self.rpc_client.wait_for_dump_embedding()
 
     def load_embedding(self, src_dir: str, blocking: bool = True):
-        """Load the sparse embedding from source directory by invoke rpc client. This method provides
+        """Load the sparse embedding from source directory by invoking the rpc client. This method provides
         non-blocking mode, by invoking ``TrainCtx.wait_for_dump_embedding`` once ``blocking`` is set to False.
 
         Arguments:
