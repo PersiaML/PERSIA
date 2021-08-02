@@ -415,7 +415,6 @@ class TrainCtx(EmbeddingCtx):
         sparse_optimizer: Optimizer,
         dense_optimizer: torch.optim.Optimizer,
         device_id: int = 0,
-        mixed_precision: bool = False,
         grad_scalar_update_factor: float = 4,
         backward_buffer_size: int = 10,
         backward_workers_size: int = 8,
@@ -428,7 +427,6 @@ class TrainCtx(EmbeddingCtx):
             sparse_optimizer (persia.sparse.optim.Optimizer): Optimizer for the embeddings.
             dense_optimizer (torch.optim.Optimizer): Optimizer for dense parameters.
             device_id (int, optional): The CUDA device to use for this process.
-            mixed_precision (bool, optional): Whether to enable mixed precision training.
             grad_scalar_update_factor (float, optional): Update factor of ``Gradscalar`` to ensure loss scale finitely if set ``mixed_precision=True``.
             backward_buffer_size (int, optional): Max number of not updated gradients queued.
             backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
@@ -450,9 +448,8 @@ class TrainCtx(EmbeddingCtx):
         self.device_id = device_id
 
         self.update_times = 0
-        self.mixed_precision = mixed_precision
         self.grad_scalar_update_factor = grad_scalar_update_factor
-        self.grad_scaler = torch.cuda.amp.GradScaler() if self.mixed_precision else None
+        self.grad_scaler = torch.cuda.amp.GradScaler()
         self.sparse_optimizer = sparse_optimizer
         self.dense_optimizer = dense_optimizer
         self.backward_workers_size = backward_workers_size
@@ -482,23 +479,19 @@ class TrainCtx(EmbeddingCtx):
             embedding_gradient_check_frequency (int, optional): The frequency to check gradient finite or not for current embedding.
         """
 
-        if self.mixed_precision:
-            loss = self.grad_scaler.scale(loss)
-            scale = self.grad_scaler.get_scale()
-        else:
-            scale = 1
+        loss = self.grad_scaler.scale(loss)
+        scale = self.grad_scaler.get_scale()
 
         loss.backward()
 
         finite = self._on_backward(scale, embedding_gradient_check_frequency)
 
-        if self.mixed_precision:
-            if finite:
-                self.grad_scaler.update()
-            else:
-                self.grad_scaler.update(scale / self.grad_scalar_update_factor)
+        self.grad_scaler.step(self.dense_optimizer)
 
-            self.grad_scaler.step(self.dense_optimizer)
+        if finite:
+            self.grad_scaler.update()
+        else:
+            self.grad_scaler.update(scale / self.grad_scalar_update_factor)
 
         self.dense_optimizer.zero_grad()
 
