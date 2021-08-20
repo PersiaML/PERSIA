@@ -1,0 +1,16 @@
+PersiaShardedServerConfig:
+  intent: train
+  capacity: 100000000
+  num_hashmap_internal_shards: 128
+  full_amount_manager_buffer_size: 1000
+  num_persistence_workers: 4
+  num_signs_per_file: 5000000
+  storage: hdfs
+  enable_incremental_update: false
+  local_buffer_dir: /tmp/
+  incremental_buffer_size: 5000000
+  incremental_dir: /tmp/persia_inc/
+  incremental_channel_capacity: 1000
+PersiaMetricsConfig:
+  enable_metrics: false
+  push_interval: 10

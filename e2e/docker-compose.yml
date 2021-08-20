@@ -1,0 +1,48 @@
+version: "3.3"
+services:
+        data_compose:
+            env_file:
+                - adult_income/.test_env
+            environment:
+                JOB_ID: 1
+            image: persiaml-test:latest
+            command: bash -c "/workspace/launch_compose.sh /workspace/data_compose.py"
+            volumes:
+                - ./adult_income:/workspace
+                - /data/adult_income:/data/
+
+        trainer:
+            env_file:
+                - adult_income/.test_env
+            environment:
+                JOB_ID: 1
+                GPU_NUM: 1
+            image: persiaml-test:latest
+            command:  bash -c "/workspace/launch_persia.sh /workspace/train.py"
+            depends_on:
+                - data_compose
+                - middleware
+                - server
+            volumes:
+                - ./adult_income:/workspace
+                - /data/adult_income:/data/
+
+        middleware:
+            env_file:
+                - adult_income/.test_env
+            environment:
+                JOB_ID: 1
+            image: persiaml-test:latest
+            command: bash -c "/workspace/launch_middleware.sh"
+            volumes:
+                - ./adult_income:/workspace
+
+        server:
+            env_file:
+                - adult_income/.test_env
+            environment:
+                JOB_ID: 1
+            image: persiaml-test:latest
+            command: bash -c "/workspace/launch_server.sh"
+            volumes:
+                - ./adult_income:/workspace

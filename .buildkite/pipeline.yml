@@ -1,3 +1,17 @@
 steps:
-  - label: "example step"
-    command: echo "Hello World!"
+  - label: "Build docker ci image for latest persiaml framework"
+    command: docker build e2e --build-arg GITHUB_TOKEN=$$GITHUB_TOKEN --build-arg USE_CUDA=1 -t persiaml-test:latest
+
+  - label: "Add executive permission to script"
+    command: chmod +x -R e2e/adult_income
+
+  - wait
+
+  - label: "launch e2e test"
+    key: "e2e-test"
+    plugins:
+      - docker-compose#v3.8.0::
+          config: "e2e/docker-compose.yml"
+          run: trainer
+          graceful-shutdown: true
+
