@@ -10,6 +10,7 @@ from persia.ctx import TrainCtx, eval_ctx
 from persia.sparse.optim import Adagrad
 from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
+from persia.utils import setup_seed
 from persia.data import Dataloder, PersiaDataset, StreamingDataset
 from persia.prelude import PyPersiaBatchData, PyPersiaBatchDataSender
 
@@ -21,6 +22,7 @@ logger = get_default_logger("trainer")
 
 device_id = get_local_rank()
 
+setup_seed(3)
 
 class TestDataset(PersiaDataset):
     def __init__(self, test_dir: str, batch_size: int = 128):
