@@ -24,6 +24,7 @@ device_id = get_local_rank()
 
 setup_seed(3)
 
+
 class TestDataset(PersiaDataset):
     def __init__(self, test_dir: str, batch_size: int = 128):
         super(TestDataset, self).__init__(buffer_size=10)
