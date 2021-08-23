@@ -92,8 +92,12 @@ pub enum ShardedMiddlewareError {
     ForwardFailed(String),
     #[error("backward failed")]
     BackwardFailed(String),
-    #[error("shutdown failed")]
-    ShutdownError,
+    #[error("connection failed")]
+    ConnectionError,
+    #[error("lookup server ip address error")]
+    LookupIpAddressError,
+    #[error("server shard idx not match error")]
+    ShardIdxNotMatchError,
     #[error("gradient contains nan")]
     NanGradient,
     #[error("nats error: {0}")]
@@ -258,7 +262,7 @@ impl AllShardsClient {
             .collect();
 
         if servers.iter().any(|x| x.is_err()) {
-            return Err(ShardedMiddlewareError::ShutdownError);
+            return Err(ShardedMiddlewareError::LookupIpAddressError);
         }
         let servers = servers.into_iter().map(|x| x.unwrap()).collect();
         Ok(servers)
@@ -285,12 +289,12 @@ impl AllShardsClient {
                 Ok(idx) => {
                     if idx != i {
                         tracing::error!("shard index wrong");
-                        return Err(ShardedMiddlewareError::ShutdownError);
+                        return Err(ShardedMiddlewareError::ShardIdxNotMatchError);
                     }
                 }
                 Err(e) => {
                     tracing::error!("failed to call shard_idx due to {:?}", e);
-                    return Err(ShardedMiddlewareError::ShutdownError);
+                    return Err(ShardedMiddlewareError::ConnectionError);
                 }
             }
         }
@@ -1194,6 +1198,8 @@ impl ShardedMiddlewareServerInner {
 #[derive(Clone)]
 pub struct ShardedMiddlewareServer {
     pub inner: Arc<ShardedMiddlewareServerInner>,
+    pub shutdown_channel:
+        Arc<persia_futures::async_lock::RwLock<Option<tokio::sync::oneshot::Sender<()>>>>,
 }
 
 #[persia_rpc::service]
@@ -1211,6 +1217,38 @@ impl ShardedMiddlewareServer {
         req: Vec<(u64, HashMapEmbeddingEntry)>,
     ) -> Result<(), ShardedMiddlewareError> {
         self.inner.set_embedding(req).await
+    }
+
+    pub async fn shutdown_server(&self, _req: ()) -> Result<(), ShardEmbeddingError> {
+        let clients = self.inner.all_shards_client.clients.read().await;
+
+        let futs = clients
+            .iter()
+            .map(|client| async move { client.shutdown(&()).await });
+
+        let result = persia_futures::futures::future::try_join_all(futs).await;
+
+        if result.is_ok() {
+            Ok(())
+        } else {
+            Err(ShardEmbeddingError::ShutdownError)
+        }
+    }
+
+    pub async fn shutdown(&self, _req: ()) -> Result<(), ShardedMiddlewareError> {
+        let mut shutdown_channel = self.shutdown_channel.write().await;
+        let shutdown_channel = shutdown_channel.take();
+
+        match shutdown_channel {
+            Some(sender) => {
+                sender.send(()).unwrap();
+                Ok(())
+            }
+            None => {
+                tracing::debug!("shutdown channel already been taken, wait server shutdown.");
+                Ok(())
+            }
+        }
     }
 
     pub async fn forward_batch_id(

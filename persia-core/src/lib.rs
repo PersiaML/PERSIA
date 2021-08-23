@@ -232,6 +232,39 @@ impl PersiaRpcClient {
         }
     }
 
+    pub fn shutdown(&self) -> PyResult<()> {
+        let handler = self.runtime.clone();
+        let _guard = handler.enter();
+
+        let client = self.get_random_client();
+
+        match handler.block_on(client.shutdown_server(&())) {
+            Ok(response) => match response {
+                Ok(_) => {
+                    let clients = self.clients.read();
+                    let mut futs = clients
+                        .iter()
+                        .map(|client| handler.block_on(client.1.shutdown(&())));
+
+                    let middleware_shutdown_status = futs.all(|x| x.is_ok());
+                    if middleware_shutdown_status {
+                        Ok(())
+                    } else {
+                        Err(PyRuntimeError::new_err("shutdown middleware failed"))
+                    }
+                }
+                Err(err) => {
+                    tracing::error!("shutdown server failed, Rpc error: {:?}", err);
+                    Err(PyRuntimeError::new_err(err.to_string()))
+                }
+            },
+            Err(err) => {
+                tracing::error!("shutdown server failed, Rpc error: {:?}", err);
+                Err(PyRuntimeError::new_err(err.to_string()))
+            }
+        }
+    }
+
     fn wait_for_emb_dumping(&self) -> PyResult<()> {
         let handler = self.runtime.clone();
         let _guard = handler.enter();
@@ -351,6 +384,10 @@ impl PyPersiaRpcClient {
         self.inner
             .submit_configuration(config)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    pub fn shutdown_service(&self) -> PyResult<()> {
+        self.inner.shutdown()
     }
 
     pub fn wait_for_load_embedding(&self) -> PyResult<()> {

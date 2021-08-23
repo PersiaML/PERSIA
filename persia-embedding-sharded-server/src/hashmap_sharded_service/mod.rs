@@ -1,5 +1,13 @@
+use std::collections::LinkedList;
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use bytes::Bytes;
 use hashbrown::HashMap;
+use rand::Rng;
+use snafu::ResultExt;
+use thiserror::Error;
+
 use persia_embedding_config::{
     InstanceInfo, PerisaIntent, PersiaCommonConfig, PersiaGlobalConfigError, PersiaReplicaInfo,
     PersiaShardedServerConfig, PersiaSparseModelHyperparameters,
@@ -18,12 +26,6 @@ use persia_model_manager::{
 };
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::{Readable, Writable};
-use rand::Rng;
-use snafu::ResultExt;
-use std::collections::LinkedList;
-use std::path::PathBuf;
-use std::sync::Arc;
-use thiserror::Error;
 
 static SET_EMBEDDING_POOL: once_cell::sync::OnceCell<EmbeddingPool> =
     once_cell::sync::OnceCell::new();
@@ -161,7 +163,7 @@ impl MetricsHolder {
 pub enum ShardEmbeddingError {
     #[error("rpc error")]
     RpcError(String),
-    #[error("shutdown error")]
+    #[error("shutdown error: shutdown channel send signal failed")]
     ShutdownError,
     #[error("service not yet ready error")]
     NotReadyError,
@@ -654,6 +656,8 @@ impl HashMapShardedServiceInner {
 #[derive(Clone)]
 pub struct HashMapShardedService {
     pub inner: Arc<HashMapShardedServiceInner>,
+    pub shutdown_channel:
+        Arc<persia_futures::async_lock::RwLock<Option<tokio::sync::oneshot::Sender<()>>>>,
 }
 
 #[persia_rpc::service]
@@ -715,6 +719,27 @@ impl HashMapShardedService {
         optimizer: Optimizer,
     ) -> Result<(), ShardEmbeddingError> {
         self.inner.register_optimizer(optimizer).await
+    }
+
+    pub async fn shutdown(&self, _req: ()) -> Result<(), ShardEmbeddingError> {
+        let mut shutdown_channel = self.shutdown_channel.write().await;
+        let shutdown_channel = shutdown_channel.take();
+        match shutdown_channel {
+            Some(sender) => match sender.send(()) {
+                Ok(_) => {
+                    tracing::info!("receive shutdown signal, shutdown the server after processed the remain requests.");
+                    Ok(())
+                }
+                Err(_) => {
+                    tracing::warn!("Send the shutdown singal failed corresponding receiver has already been deallocated");
+                    Err(ShardEmbeddingError::ShutdownError)
+                }
+            },
+            None => {
+                tracing::debug!("shutdown channel already been taken, wait server shutdown.");
+                Ok(())
+            }
+        }
     }
 }
 

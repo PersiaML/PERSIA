@@ -85,6 +85,7 @@ async fn main() -> anyhow::Result<()> {
     .expect("cannot parse config file");
 
     let feature2group = convert_middleware_config(&mut embedding_config);
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
 
     tracing::info!("embedding config: {:#?}", embedding_config);
 
@@ -127,11 +128,12 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let service = ShardedMiddlewareServer { inner: inner };
+    let service = ShardedMiddlewareServer {
+        inner: inner,
+        shutdown_channel: Arc::new(persia_futures::async_lock::RwLock::new(Some(tx))),
+    };
 
     let server = hyper::server::Server::bind(&([0, 0, 0, 0], args.port).into())
-        // .http2_only(true)
-        // .http2_adaptive_window(true)
         .tcp_nodelay(true)
         .serve(hyper::service::make_service_fn(|_| {
             let service = service.clone();
@@ -140,7 +142,15 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("middleware rpc server started");
 
-    server.await?;
+    let graceful = server.with_graceful_shutdown(async {
+        rx.await.ok();
+    });
+
+    if let Err(err) = graceful.await {
+        tracing::error!("middleware exited with error: {:?}!", err);
+    } else {
+        tracing::info!("middleware exited successfully");
+    }
 
     Ok(())
 }

@@ -65,6 +65,7 @@ async fn main() -> Result<()> {
     let full_amount_manager = FullAmountManager::get()?;
     let inc_update_manager = PerisaIncrementalUpdateManager::get()?;
     let model_persistence_manager = PersiaPersistenceManager::get()?;
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
 
     let inner = Arc::new(HashMapShardedServiceInner::new(
         embedding_holder,
@@ -78,11 +79,10 @@ async fn main() -> Result<()> {
 
     let service = HashMapShardedService {
         inner: inner.clone(),
+        shutdown_channel: Arc::new(persia_futures::async_lock::RwLock::new(Some(tx))),
     };
 
     let server = hyper::Server::bind(&([0, 0, 0, 0], args.port).into())
-        // .http2_only(true)
-        // .http2_adaptive_window(true)
         .tcp_nodelay(true)
         .serve(hyper::service::make_service_fn(|_| {
             let service = service.clone();
@@ -115,7 +115,14 @@ async fn main() -> Result<()> {
         }
         _ => {}
     }
+    let graceful = server.with_graceful_shutdown(async {
+        rx.await.ok();
+    });
 
-    server.await?;
+    if let Err(err) = graceful.await {
+        tracing::error!("embedding server exited with error: {:?}!", err);
+    } else {
+        tracing::info!("embedding server exited successfully");
+    }
     Ok(())
 }
