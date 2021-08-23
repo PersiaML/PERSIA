@@ -5,7 +5,7 @@ extern crate shadow_rs;
 
 use anyhow::Result;
 use persia_embedding_config::{
-    PerisaIntent, PersiaCommonConfig, PersiaGlobalConfig, PersiaReplicaInfo,
+    EmbeddingConfig, PerisaIntent, PersiaCommonConfig, PersiaGlobalConfig, PersiaReplicaInfo,
     PersiaShardedServerConfig,
 };
 use persia_embedding_holder::PersiaEmbeddingHolder;
@@ -32,6 +32,8 @@ struct Cli {
     num_shards: usize,
     #[structopt(long)]
     global_config: PathBuf,
+    #[structopt(long)]
+    embedding_config: PathBuf,
 }
 
 #[tokio::main]
@@ -59,6 +61,9 @@ async fn main() -> Result<()> {
         args.num_shards,
     )?;
 
+    EmbeddingConfig::set(&args.embedding_config)?;
+
+    let embedding_config = EmbeddingConfig::get()?;
     let common_config = PersiaCommonConfig::get()?;
     let server_config = PersiaShardedServerConfig::get()?;
     let embedding_holder = PersiaEmbeddingHolder::get()?;
@@ -71,6 +76,7 @@ async fn main() -> Result<()> {
         embedding_holder,
         server_config,
         common_config,
+        embedding_config,
         inc_update_manager,
         model_persistence_manager,
         full_amount_manager,

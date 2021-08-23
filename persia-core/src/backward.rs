@@ -8,10 +8,11 @@ use persia_embedding_datatypes::{
     EmbeddingGradientBatch, FeatureEmbeddingGradientBatch, Gradients,
     SkippableFeatureEmbeddingGradientBatch, SkippedGradientBatch,
 };
-use persia_futures::flume;
+use persia_futures::{flume, tokio::sync::OwnedSemaphorePermit};
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct SingleSlotGradient {
@@ -38,6 +39,7 @@ pub struct GradientBatch {
     pub gradients: Vec<SkippableSingleSlotGradient>,
     pub forward_id: u64,
     pub middleware_addr: String,
+    pub embedding_staleness_permit: Arc<Option<OwnedSemaphorePermit>>,
 }
 
 #[pyclass]
@@ -45,19 +47,25 @@ pub struct PythonGradientBatch {
     pub inner: Option<GradientBatch>,
 }
 
-#[pymethods]
 impl PythonGradientBatch {
-    #[new]
-    pub fn new(forward_id: u64, middleware_addr: &str) -> Self {
+    pub fn new(
+        forward_id: u64,
+        middleware_addr: &str,
+        embedding_staleness_permit: Option<OwnedSemaphorePermit>,
+    ) -> Self {
         Self {
             inner: Some(GradientBatch {
                 gradients: vec![],
                 forward_id,
                 middleware_addr: middleware_addr.to_string(),
+                embedding_staleness_permit: Arc::new(embedding_staleness_permit),
             }),
         }
     }
+}
 
+#[pymethods]
+impl PythonGradientBatch {
     pub fn add_skipped_gradient(&mut self, slot_name: String) {
         self.inner
             .as_mut()
@@ -90,11 +98,18 @@ impl PythonGradientBatch {
     }
 }
 
+struct EmbeddingBackwardStub {
+    pub forward_id: u64,
+    pub middleware_addr: String,
+    pub embedding_staleness_permit: Option<OwnedSemaphorePermit>,
+    pub embedding_gradient_batch: EmbeddingGradientBatch,
+}
+
 struct Backward {
     pub backward_channel_s: flume::Sender<GradientBatch>,
     pub backward_channel_r: flume::Receiver<GradientBatch>,
-    pub cpu_backward_channel_s: flume::Sender<(u64, String, EmbeddingGradientBatch)>,
-    pub cpu_backward_channel_r: flume::Receiver<(u64, String, EmbeddingGradientBatch)>,
+    pub cpu_backward_channel_s: flume::Sender<EmbeddingBackwardStub>,
+    pub cpu_backward_channel_r: flume::Receiver<EmbeddingBackwardStub>,
     pub launch: bool,
     pub threaded_workers: Vec<std::thread::JoinHandle<()>>,
 }
@@ -188,9 +203,16 @@ impl Backward {
                 let req = EmbeddingGradientBatch {
                     gradients: grads.collect(),
                 };
+                let embedding_staleness_permit =
+                    Arc::try_unwrap(gradients.embedding_staleness_permit).unwrap();
 
                 channel_s
-                    .send((gradients.forward_id, gradients.middleware_addr, req))
+                    .send(EmbeddingBackwardStub {
+                        forward_id: gradients.forward_id,
+                        middleware_addr: gradients.middleware_addr,
+                        embedding_staleness_permit,
+                        embedding_gradient_batch: req,
+                    })
                     .unwrap();
             }
         });
@@ -208,7 +230,14 @@ impl Backward {
             persia_futures::tokio::spawn(async move {
                 loop {
                     let start_time = std::time::Instant::now();
-                    let (forward_id, middleware_addr, req) = channel_r.recv_async().await.unwrap();
+
+                    let embedding_backward_stub = channel_r.recv_async().await.unwrap();
+                    let forward_id = embedding_backward_stub.forward_id;
+                    let middleware_addr = embedding_backward_stub.middleware_addr;
+                    let embedding_staleness_permit =
+                        embedding_backward_stub.embedding_staleness_permit;
+                    let req = embedding_backward_stub.embedding_gradient_batch;
+
                     tracing::debug!(
                         "get cpu backward message time cost {:?}",
                         start_time.elapsed()
@@ -224,6 +253,10 @@ impl Backward {
                         if result.is_err() {
                             tracing::error!("backward error {:?}", result.unwrap_err());
                         }
+                    }
+
+                    if let Some(permit) = embedding_staleness_permit {
+                        drop(permit)
                     }
 
                     if let Ok(m) = MetricsHolder::get() {

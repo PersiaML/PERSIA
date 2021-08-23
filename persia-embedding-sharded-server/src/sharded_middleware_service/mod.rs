@@ -1,7 +1,6 @@
 use crate::hashmap_sharded_service::{
     EmbeddingServerNatsStubPublisher, HashMapShardedServiceClient, ShardEmbeddingError,
 };
-use crate::middleware_config_parser::{EmbeddingConfig, FeatureGroup, SlotConfig};
 
 use std::ops::MulAssign;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -15,10 +14,10 @@ use snafu::ResultExt;
 use thiserror::Error;
 
 use persia_embedding_config::{
-    InstanceInfo, PersiaGlobalConfigError, PersiaMiddlewareConfig, PersiaReplicaInfo,
-    PersiaSparseModelHyperparameters,
+    EmbeddingConfig, InstanceInfo, PersiaGlobalConfigError, PersiaMiddlewareConfig,
+    PersiaReplicaInfo, PersiaSparseModelHyperparameters, SlotConfig,
 };
-use persia_embedding_datatypes::optim::Optimizer;
+use persia_embedding_datatypes::optim::OptimizerConfig;
 use persia_embedding_datatypes::{
     ndarray_f16_to_f32, ndarray_f32_to_f16, EmbeddingBatch, EmbeddingGradientBatch,
     FeatureEmbeddingBatch, FeatureRawEmbeddingBatch, FeatureSumEmbeddingBatch, Gradients,
@@ -313,7 +312,7 @@ pub fn sign_to_shard_modulo(sign: u64, num_shards: u64) -> u64 {
 pub fn indices_to_hashstack_indices(indices: &mut SparseBatch, config: &EmbeddingConfig) -> () {
     for feature_batch in indices.batches.iter_mut() {
         let slot_conf = config
-            .slot_config
+            .slot_configs
             .get(&feature_batch.feature_name)
             .expect("slot not found");
 
@@ -365,11 +364,7 @@ pub fn indices_to_hashstack_indices(indices: &mut SparseBatch, config: &Embeddin
 }
 
 #[inline]
-pub fn indices_add_prefix(
-    indices: &mut SparseBatch,
-    config: &EmbeddingConfig,
-    feature2group: Option<&HashMap<String, FeatureGroup>>,
-) -> () {
+pub fn indices_add_prefix(indices: &mut SparseBatch, config: &EmbeddingConfig) -> () {
     let feature_spacing = if config.feature_index_prefix_bit > 0 {
         (1u64 << (u64::BITS - config.feature_index_prefix_bit as u32)) - 1
     } else {
@@ -377,7 +372,7 @@ pub fn indices_add_prefix(
     };
     for feature_batch in indices.batches.iter_mut() {
         let slot_conf = config
-            .slot_config
+            .slot_configs
             .get(&feature_batch.feature_name)
             .expect("slot not found");
         if slot_conf.index_prefix > 0 {
@@ -396,15 +391,6 @@ pub fn indices_add_prefix(
                         .insert(id % feature_spacing + slot_conf.index_prefix, *batch_idx);
                 });
             feature_batch.hashed2index_batch_idx = index_prefix_mapping;
-        }
-
-        if let Some(f2g) = feature2group {
-            let group = f2g
-                .get(&feature_batch.feature_name)
-                .expect("slot not found");
-            if let Some(monitor) = &group.monitor {
-                monitor.monitor_index_batch(&feature_batch.index_batch);
-            }
         }
     }
 }
@@ -429,7 +415,6 @@ impl SignWithConfig {
 pub fn lookup_batched_all_slots_preprocess(
     indices: &mut SparseBatch,
     config: &EmbeddingConfig,
-    feature2group: Option<&HashMap<String, FeatureGroup>>,
     num_shards: u64,
 ) -> Vec<Vec<SignWithConfig>> {
     #[inline]
@@ -443,7 +428,7 @@ pub fn lookup_batched_all_slots_preprocess(
         let mut results = vec![Vec::new(); num_shards as usize];
         for (feature_idx, feature_batch) in indices.batches.iter().enumerate() {
             let slot_conf = config
-                .slot_config
+                .slot_configs
                 .get(&feature_batch.feature_name)
                 .expect("slot not found");
             for (sign_idx, single_sign) in feature_batch.index_batch.iter().enumerate() {
@@ -464,7 +449,7 @@ pub fn lookup_batched_all_slots_preprocess(
     }
 
     indices_to_hashstack_indices(indices, config);
-    indices_add_prefix(indices, config, feature2group);
+    indices_add_prefix(indices, config);
     indices_to_sharded_indices(&indices, config, num_shards)
 }
 
@@ -484,7 +469,7 @@ pub fn lookup_batched_all_slots_postprocess<'a>(
         .iter()
         .map(|x| {
             let slot_conf = config
-                .slot_config
+                .slot_configs
                 .get(x.feature_name.as_str())
                 .expect("slot not found");
             let (feature_len, sign2idx) = if slot_conf.embedding_summation {
@@ -626,8 +611,7 @@ pub struct ShardedMiddlewareServerInner {
         persia_futures::async_lock::RwLock<HashMap<usize, HashMap<u64, SparseBatch>>>,
     pub post_forward_buffer: persia_futures::async_lock::RwLock<HashMap<u64, SparseBatch>>,
     pub staleness: AtomicUsize,
-    pub embedding_config: EmbeddingConfig,
-    pub feature2group: HashMap<String, FeatureGroup>,
+    pub embedding_config: Arc<EmbeddingConfig>,
     pub middleware_config: Arc<PersiaMiddlewareConfig>,
 }
 
@@ -685,7 +669,7 @@ impl ShardedMiddlewareServerInner {
 
     fn get_slot_conf(&self, slot_name: &str) -> &SlotConfig {
         self.embedding_config
-            .slot_config
+            .slot_configs
             .get(slot_name)
             .expect("slot not found")
     }
@@ -864,12 +848,7 @@ impl ShardedMiddlewareServerInner {
         let start_time = std::time::Instant::now();
 
         let all_shards_ids = tokio::task::block_in_place(|| {
-            lookup_batched_all_slots_preprocess(
-                indices,
-                &self.embedding_config,
-                Some(&self.feature2group),
-                self.num_shards,
-            )
+            lookup_batched_all_slots_preprocess(indices, &self.embedding_config, self.num_shards)
         });
 
         let futs = all_shards_ids
@@ -1147,7 +1126,7 @@ impl ShardedMiddlewareServerInner {
 
     pub async fn register_optimizer(
         &self,
-        optimizer: Optimizer,
+        optimizer: OptimizerConfig,
     ) -> Result<(), ShardedMiddlewareError> {
         let inner = self.clone();
         let futs = (0..inner.all_shards_client.num_shards()).map(|client_idx| {
@@ -1217,6 +1196,23 @@ impl ShardedMiddlewareServer {
         req: Vec<(u64, HashMapEmbeddingEntry)>,
     ) -> Result<(), ShardedMiddlewareError> {
         self.inner.set_embedding(req).await
+    }
+
+    pub async fn get_embedding_size(&self, _req: ()) -> Result<Vec<usize>, ShardedMiddlewareError> {
+        let clients = self.inner.all_shards_client.clients.read().await;
+        let futs = clients.iter().map(|client| {
+            let client = client.clone();
+            async move {
+                let result = client
+                    .get_embedding_size(&())
+                    .await
+                    .map_err(|e| ShardedMiddlewareError::RpcError(format!("{:?}", e)))??;
+                Ok(result)
+            }
+        });
+
+        let result = persia_futures::futures::future::try_join_all(futs).await;
+        result
     }
 
     pub async fn shutdown_server(&self, _req: ()) -> Result<(), ShardEmbeddingError> {
@@ -1297,7 +1293,7 @@ impl ShardedMiddlewareServer {
 
     pub async fn register_optimizer(
         &self,
-        optimizer: Optimizer,
+        optimizer: OptimizerConfig,
     ) -> Result<(), ShardedMiddlewareError> {
         self.inner.register_optimizer(optimizer).await
     }
@@ -1359,7 +1355,7 @@ impl MiddlewareNatsStub {
 
     pub async fn register_optimizer(
         &self,
-        optimizer: Optimizer,
+        optimizer: OptimizerConfig,
     ) -> Result<(), ShardedMiddlewareError> {
         self.inner.register_optimizer(optimizer).await
     }
@@ -1381,7 +1377,7 @@ mod lookup_batched_all_slots_preprocess_tests {
 
     #[test]
     fn test_indices_to_hashstack_indices() {
-        let config = "forward_buffer_size: 1000\nfeature_index_prefix_bit: 12\nslot_config:\n  Test:\n    dim: 32\n    hash_stack_config:\n      hash_stack_rounds: 2\n      embedding_size: 10\nfeature_groups: {}\ntarget_config:\n  - name: unused\n    negative: [unused]\n    positive: [unused]\n";
+        let config = "feature_index_prefix_bit: 12\nslot_configs:\n  Test:\n    dim: 32\n    hash_stack_config:\n      hash_stack_rounds: 2\n      embedding_size: 10\nfeature_groups: {}\n";
 
         let config: EmbeddingConfig = serde_yaml::from_str(config).expect("failed to parse config");
 
@@ -1425,49 +1421,47 @@ mod lookup_batched_all_slots_preprocess_tests {
 
     #[test]
     fn test_indices_add_prefix() {
-        let config = "forward_buffer_size: 1000\nfeature_index_prefix_bit: 12\nslot_config:\n  feature1:\n    dim: 64\n    index_prefix: 450359962737049600\nfeature_groups:\n  100:\n    - feature1\ntarget_config:\n  - name: unused\n    negative: [unused]\n    positive: [unused]\n";
+        let config = "feature_index_prefix_bit: 12\nslot_configs:\n  feature1:\n    dim: 64\n    index_prefix: 450359962737049600\n";
 
         let config: EmbeddingConfig = serde_yaml::from_str(config).expect("failed to parse config");
 
-        let raw_batch: Vec<Vec<u64>> = vec![
+        let mut raw_batch: Vec<Vec<u64>> = vec![
             vec![12, 23, 34],
             vec![56, 78, 90],
             vec![16000000000000000, 56],
         ];
         let feature_name = "feature1".to_string();
-        let feature_batch = FeatureBatch::new(feature_name.clone(), raw_batch);
+        let feature_batch = FeatureBatch::new(feature_name.clone(), raw_batch.clone());
         let mut sparse_batch = SparseBatch {
             batches: vec![feature_batch],
             enter_forward_id_buffer_time: None,
             enter_post_forward_buffer_time: None,
             batcher_idx: None,
         };
-        indices_add_prefix(&mut sparse_batch, &config, None);
+        indices_add_prefix(&mut sparse_batch, &config);
         let result_feature_batch = sparse_batch.batches.first().unwrap();
+
+        result_feature_batch.index_batch.iter().for_each(|x| {
+            x.in_which_batch_samples
+                .iter()
+                .for_each(|(batch_idx, col_idx)| {
+                    raw_batch[*batch_idx as usize][*col_idx as usize] = x.sign;
+                })
+        });
 
         let target_raw_batch: Vec<Vec<u64>> = vec![
             vec![450359962737049612, 450359962737049623, 450359962737049634],
             vec![450359962737049656, 450359962737049678, 450359962737049690],
             vec![452849163854938115, 450359962737049656],
         ];
-        let target_feature_batch = FeatureBatch::new(feature_name, target_raw_batch);
 
-        for single_sign in result_feature_batch.index_batch.iter() {
-            for target_single_sign in target_feature_batch.index_batch.iter() {
-                if single_sign.sign == target_single_sign.sign {
-                    let mut result = single_sign.in_which_batch_samples.clone();
-                    let mut target = target_single_sign.in_which_batch_samples.clone();
-                    assert_eq!(result.len(), target.len());
-                    result.sort();
-                    target.sort();
-                    let matching = result
-                        .iter()
-                        .zip(&target)
-                        .filter(|&((r, _), (t, _))| r == t)
-                        .count();
-                    assert_eq!(matching, target.len());
-                }
-            }
-        }
+        raw_batch
+            .iter()
+            .zip(target_raw_batch.iter())
+            .for_each(|(result, target)| {
+                result.iter().zip(target.iter()).for_each(|(r, t)| {
+                    assert_eq!(r, t);
+                })
+            });
     }
 }

@@ -3,7 +3,7 @@ use crate::cuda::utils::{cuda_dense_tensor_h2d, embedding2cuda_tensor};
 use crate::cuda::{set_device, AsyncEmbeddingOnCuda, AsyncTensorOnCuda};
 use crate::data::PyPersiaBatchData;
 use crate::utils::{PyPersiaBatchDataReceiver, PyPersiaReplicaInfo};
-use crate::{MetricsHolder, PersiaRpcClient};
+use crate::{EmbeddingStalenessSemaphore, MetricsHolder, PersiaRpcClient};
 
 use std::collections::BinaryHeap;
 use std::thread::JoinHandle;
@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_datatypes::{EmbeddingBatch, EmbeddingTensor, PersiaBatchData};
 use persia_embedding_sharded_server::sharded_middleware_service::ShardedMiddlewareError;
-use persia_futures::flume;
+use persia_futures::{flume, tokio::sync::OwnedSemaphorePermit};
 use persia_speedy::Readable;
 
 use pyo3::exceptions::PyRuntimeError;
@@ -158,10 +158,11 @@ impl PythonTrainBatch {
         };
     }
 
-    pub fn create_gradient_batch(&self) -> PythonGradientBatch {
+    pub fn create_gradient_batch(&mut self) -> PythonGradientBatch {
         PythonGradientBatch::new(
             self.inner.forward_id,
             self.inner.middleware_server_addr.as_str(),
+            self.inner.embedding_staleness_permit.take(),
         )
     }
 }
@@ -174,6 +175,7 @@ pub struct PersiaTrainingBatchShardedServerOnGpu {
     pub meta_data: Option<Vec<u8>>,
     pub middleware_server_addr: String,
     pub forward_id: u64,
+    pub embedding_staleness_permit: Option<OwnedSemaphorePermit>,
 }
 
 struct PerisaDataOrderManager {
@@ -247,8 +249,16 @@ struct Forward {
     pub input_channel: Option<flume::Receiver<PersiaBatchData>>,
     pub reorder_buffer_channel_s: Option<flume::Sender<PersiaBatchData>>,
     pub reorder_buffer_channel_r: Option<flume::Receiver<PersiaBatchData>>,
-    pub forwarded_channel_s: flume::Sender<(PersiaBatchData, EmbeddingBatch)>,
-    pub forwarded_channel_r: flume::Receiver<(PersiaBatchData, EmbeddingBatch)>,
+    pub forwarded_channel_s: flume::Sender<(
+        PersiaBatchData,
+        EmbeddingBatch,
+        Option<OwnedSemaphorePermit>,
+    )>,
+    pub forwarded_channel_r: flume::Receiver<(
+        PersiaBatchData,
+        EmbeddingBatch,
+        Option<OwnedSemaphorePermit>,
+    )>,
     pub gpu_forwarded_channel_s: flume::Sender<PersiaTrainingBatchShardedServerOnGpu>,
     pub gpu_forwarded_channel_r: flume::Receiver<PersiaTrainingBatchShardedServerOnGpu>,
     pub is_training: bool,
@@ -335,7 +345,7 @@ impl Forward {
             set_device(device_id);
             loop {
                 let start_time = std::time::Instant::now();
-                let (batch, embeddings) = channel_r.recv().unwrap();
+                let (batch, embeddings, embedding_staleness_permit) = channel_r.recv().unwrap();
                 tracing::debug!("get forwarded batch time cost {:?}", start_time.elapsed());
                 let embeddings: Vec<_> = embeddings
                     .batches
@@ -362,7 +372,8 @@ impl Forward {
                     target: target_tensors,
                     meta_data: batch.meta_data,
                     middleware_server_addr: middleware_addr.to_string(),
-                    forward_id: forward_id,
+                    forward_id,
+                    embedding_staleness_permit,
                 };
                 channel_s.send(training_batch).unwrap();
 
@@ -398,25 +409,32 @@ impl Forward {
                         start_time.elapsed()
                     );
 
-                    let (embeddings_result, middleware_addr) = match &batch.sparse_data {
-                        EmbeddingTensor::SparseBatch(sparse_data) => {
-                            let (middleware_addr, client) =
-                                rpc_client.get_random_client_with_addr();
+                    let (embeddings_result, middleware_addr, embedding_staleness_permit) =
+                        match &batch.sparse_data {
+                            EmbeddingTensor::SparseBatch(sparse_data) => {
+                                let (middleware_addr, client) =
+                                    rpc_client.get_random_client_with_addr();
 
-                            let result = client.forward_batched_direct(sparse_data).await;
-                            (result, middleware_addr)
-                        }
-                        EmbeddingTensor::PreForwardStub(stub) => {
-                            let client =
-                                rpc_client.get_client_by_addr(stub.middleware_addr.as_str());
-                            let result =
-                                client.forward_batch_id(&(stub.clone(), is_training)).await;
-                            (result, stub.middleware_addr.clone())
-                        }
-                        EmbeddingTensor::Null => {
-                            panic!("current sparse data not support null data",)
-                        }
-                    };
+                                let result = client.forward_batched_direct(sparse_data).await;
+                                (result, middleware_addr, None)
+                            }
+                            EmbeddingTensor::PreForwardStub(stub) => {
+                                let permit = match EmbeddingStalenessSemaphore::get_instance() {
+                                    Ok(embedding_staleness_semaphore) => {
+                                        Some(embedding_staleness_semaphore.get_permit().await)
+                                    }
+                                    Err(_) => None,
+                                };
+                                let client =
+                                    rpc_client.get_client_by_addr(stub.middleware_addr.as_str());
+                                let result =
+                                    client.forward_batch_id(&(stub.clone(), is_training)).await;
+                                (result, stub.middleware_addr.clone(), permit)
+                            }
+                            EmbeddingTensor::Null => {
+                                panic!("current sparse data not support null data",)
+                            }
+                        };
 
                     if embeddings_result.is_err() {
                         tracing::error!(
@@ -436,7 +454,10 @@ impl Forward {
                     }
                     match embeddings {
                         Ok(embeddings) => {
-                            channel_s.send_async((batch, embeddings)).await.unwrap();
+                            channel_s
+                                .send_async((batch, embeddings, embedding_staleness_permit))
+                                .await
+                                .unwrap();
                         }
                         Err(ShardedMiddlewareError::ShardServerError(_))
                         | Err(ShardedMiddlewareError::RpcError(_)) => {
@@ -512,6 +533,7 @@ pub fn forward_directly(batch: PersiaBatchData, device_id: i32) -> PyResult<Pyth
         meta_data: batch.meta_data,
         middleware_server_addr: String::new(),
         forward_id: 0,
+        embedding_staleness_permit: None,
     };
 
     let infer_batch = PythonTrainBatch { inner: infer_batch };

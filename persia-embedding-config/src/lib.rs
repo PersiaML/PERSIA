@@ -4,7 +4,7 @@ pub mod feature_config;
 use once_cell::sync::OnceCell;
 use persia_speedy::{Readable, Writable};
 use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use thiserror::Error;
 
 #[derive(Readable, Writable, Error, Debug, Clone)]
@@ -103,6 +103,8 @@ static PERSIA_REPLICA_INFO: OnceCell<Arc<PersiaReplicaInfo>> = OnceCell::new();
 
 static PERSIA_INSTANCE_INFO: OnceCell<Arc<InstanceInfo>> = OnceCell::new();
 
+static PERSIA_EMBEDDING_CONFIG: OnceCell<Arc<EmbeddingConfig>> = OnceCell::new();
+
 fn get_local_ip() -> String {
     let if_addrs = get_if_addrs::get_if_addrs().expect("failed to get local ip address");
 
@@ -180,12 +182,24 @@ impl InstanceInfo {
     }
 }
 
+fn get_true() -> bool {
+    true
+}
+
 fn get_false() -> bool {
     false
 }
 
 fn get_four() -> usize {
     4
+}
+
+fn get_eight() -> usize {
+    8
+}
+
+fn get_zero() -> u64 {
+    0
 }
 
 fn get_ten() -> usize {
@@ -242,6 +256,17 @@ fn get_default_metrics_config() -> PersiaMetricsConfig {
 
 fn get_default_intent() -> PerisaIntent {
     PerisaIntent::Train
+}
+
+fn get_default_hashstack_config() -> HashStackConfig {
+    HashStackConfig {
+        hash_stack_rounds: 0,
+        embedding_size: 0,
+    }
+}
+
+fn get_default_feature_groups() -> indexmap::IndexMap<String, Vec<String>> {
+    indexmap::IndexMap::new()
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
@@ -327,6 +352,8 @@ pub struct PersiaShardedServerConfig {
     pub num_hashmap_internal_shards: usize,
     #[serde(default = "get_thousand")]
     pub full_amount_manager_buffer_size: usize,
+    #[serde(default = "get_million")]
+    pub embedding_recycle_pool_capacity: usize,
 
     // model persistence config
     #[serde(default = "get_four")]
@@ -356,6 +383,7 @@ impl Default for PersiaShardedServerConfig {
             capacity: 1_000_000_000,
             num_hashmap_internal_shards: 1000,
             full_amount_manager_buffer_size: 1000,
+            embedding_recycle_pool_capacity: 1_000_000,
             num_persistence_workers: 4,
             num_signs_per_file: 1_000_000,
             storage: get_default_storage(),
@@ -395,9 +423,10 @@ impl PersiaGlobalConfig {
         replica_index: usize,
         replica_size: usize,
     ) -> Result<(), PersiaGlobalConfigError> {
-        while !file_path.is_file() {
-            tracing::warn!("waiting for global config yaml file...");
-            std::thread::sleep(std::time::Duration::from_secs(10));
+        if !file_path.is_file() {
+            tracing::error!("global config yaml file NOT found");
+            std::thread::sleep(std::time::Duration::from_secs(120));
+            panic!("global config yaml file NOT found")
         }
 
         let global_config: PersiaGlobalConfig = serde_yaml::from_reader(
@@ -443,4 +472,119 @@ impl PersiaGlobalConfig {
 
         Ok(())
     }
+}
+
+#[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+pub struct HashStackConfig {
+    pub hash_stack_rounds: usize,
+    pub embedding_size: usize,
+}
+
+#[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+pub struct SlotConfig {
+    pub dim: usize,
+    #[serde(default = "get_ten")]
+    pub sample_fixed_size: usize, // raw embedding placeholder size to fill 3d tensor -> (bs, sample_fix_sized, dim)
+    #[serde(default = "get_true")]
+    pub embedding_summation: bool,
+    #[serde(default = "get_false")]
+    pub sqrt_scaling: bool,
+    #[serde(default = "get_default_hashstack_config")]
+    pub hash_stack_config: HashStackConfig,
+    // index_prefix: different prefix add to index of different features, to prevent bucket conflict for each feature embedding.
+    #[serde(default = "get_zero")]
+    pub index_prefix: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Readable, Writable, Clone)]
+pub struct EmbeddingConfig {
+    #[serde(default = "get_eight")]
+    pub feature_index_prefix_bit: usize,
+    pub slot_configs: indexmap::IndexMap<String, SlotConfig>,
+    #[serde(default = "get_default_feature_groups")]
+    pub feature_groups: indexmap::IndexMap<String, Vec<String>>,
+}
+
+impl EmbeddingConfig {
+    pub fn set(file_path: &PathBuf) -> Result<(), PersiaGlobalConfigError> {
+        if !file_path.is_file() {
+            tracing::error!("embedding config yaml file NOT found");
+            std::thread::sleep(std::time::Duration::from_secs(120));
+            panic!("embedding config yaml file NOT found")
+        }
+
+        let embedding_config: EmbeddingConfig = serde_yaml::from_reader(
+            std::fs::File::open(file_path).expect("cannot read config file"),
+        )
+        .expect("cannot parse config file");
+
+        let embedding_config = parse_embedding_config(embedding_config);
+
+        tracing::info!("setting embedding_config {:?}", embedding_config,);
+        PERSIA_EMBEDDING_CONFIG
+            .set(Arc::new(embedding_config))
+            .map_err(|_| PersiaGlobalConfigError::SetError)?;
+
+        Ok(())
+    }
+
+    pub fn get() -> Result<Arc<Self>, PersiaGlobalConfigError> {
+        let singleton = PERSIA_EMBEDDING_CONFIG.get();
+        match singleton {
+            Some(s) => Ok(s.clone()),
+            None => Err(PersiaGlobalConfigError::NotReadyError),
+        }
+    }
+}
+
+pub fn parse_embedding_config(config: EmbeddingConfig) -> EmbeddingConfig {
+    let mut config = config;
+    let slot_configs = &mut config.slot_configs;
+    let feature_groups = &mut config.feature_groups;
+    let mut slot_name_to_feature_froup = HashMap::new();
+
+    feature_groups
+        .iter()
+        .for_each(|(feature_group_name, slot_names)| {
+            slot_names.iter().for_each(|slot_name| {
+                slot_name_to_feature_froup.insert(slot_name.clone(), feature_group_name.clone());
+            })
+        });
+
+    slot_configs.iter().for_each(|(slot_name, _)| {
+        if !slot_name_to_feature_froup.contains_key(slot_name) {
+            let res = feature_groups.insert(slot_name.clone(), vec![slot_name.clone()]);
+            if res.is_some() {
+                panic!("a slot name can not same with feature group name");
+            }
+            slot_name_to_feature_froup.insert(slot_name.clone(), slot_name.clone());
+        }
+    });
+
+    assert_ne!(
+        config.feature_index_prefix_bit, 0,
+        "feature_index_prefix_bit must > 0"
+    );
+    let feature_prefix_bias = u64::BITS - config.feature_index_prefix_bit as u32;
+    slot_configs
+        .iter_mut()
+        .for_each(|(slot_name, slot_config)| {
+            assert_eq!(
+                slot_config.index_prefix, 0,
+                "please do not set index_prefix manually"
+            );
+            let feature_group_name = slot_name_to_feature_froup
+                .get(slot_name)
+                .expect("feature group not found");
+            let feature_froup_index = feature_groups
+                .get_index_of(feature_group_name)
+                .expect("feature group not found");
+            slot_config.index_prefix = num_traits::CheckedShl::checked_shl(
+                &(feature_froup_index as u64 + 1),
+                feature_prefix_bias,
+            )
+            .expect("slot index_prefix overflow, please try a bigger feature_index_prefix_bit");
+        });
+
+    config
 }

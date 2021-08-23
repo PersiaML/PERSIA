@@ -2,12 +2,11 @@
 extern crate shadow_rs;
 use hashbrown::HashMap;
 use persia_embedding_config::{
-    PerisaIntent, PersiaCommonConfig, PersiaGlobalConfig, PersiaMiddlewareConfig, PersiaReplicaInfo,
+    EmbeddingConfig, PerisaIntent, PersiaCommonConfig, PersiaGlobalConfig, PersiaMiddlewareConfig,
+    PersiaReplicaInfo,
 };
 use persia_embedding_sharded_server::hashmap_sharded_service::EmbeddingServerNatsStubPublisher;
-use persia_embedding_sharded_server::middleware_config_parser::{
-    convert_middleware_config, EmbeddingConfig,
-};
+
 use persia_embedding_sharded_server::sharded_middleware_service::{
     AllShardsClient, MiddlewareNatsStub, MiddlewareNatsStubResponder, ShardedMiddlewareServer,
     ShardedMiddlewareServerInner,
@@ -57,6 +56,8 @@ async fn main() -> anyhow::Result<()> {
         args.replica_size,
     )?;
 
+    EmbeddingConfig::set(&args.embedding_config)?;
+
     let intent = &PersiaCommonConfig::get()?.intent;
     let all_shards_client = match intent {
         PerisaIntent::Infer(ref conf) => {
@@ -74,22 +75,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let num_shards = all_shards_client.num_shards() as u64;
-
-    while !args.embedding_config.is_file() {
-        tracing::warn!("waiting for embedding config yaml file...");
-        std::thread::sleep(std::time::Duration::from_secs(10));
-    }
-    let mut embedding_config: EmbeddingConfig = serde_yaml::from_reader(
-        std::fs::File::open(args.embedding_config).expect("cannot read config file"),
-    )
-    .expect("cannot parse config file");
-
-    let feature2group = convert_middleware_config(&mut embedding_config);
-    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-
-    tracing::info!("embedding config: {:#?}", embedding_config);
-
     let middleware_config = PersiaMiddlewareConfig::get()?;
+    let embedding_config = EmbeddingConfig::get()?;
 
     let inner = Arc::new(ShardedMiddlewareServerInner {
         all_shards_client,
@@ -102,8 +89,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         embedding_config,
         staleness: Default::default(),
-        feature2group,
-        middleware_config: middleware_config,
+        middleware_config,
     });
 
     let _responder = match intent {
@@ -128,6 +114,7 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
     let service = ShardedMiddlewareServer {
         inner: inner,
         shutdown_channel: Arc::new(persia_futures::async_lock::RwLock::new(Some(tx))),

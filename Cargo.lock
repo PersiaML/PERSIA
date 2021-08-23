@@ -1915,6 +1915,8 @@ name = "persia-embedding-config"
 version = "0.1.0"
 dependencies = [
  "get_if_addrs",
+ "indexmap",
+ "num-traits",
  "once_cell",
  "persia-speedy",
  "serde",
@@ -1942,12 +1944,14 @@ dependencies = [
  "persia-speedy",
  "rand 0.8.4",
  "serde",
+ "tracing",
 ]
 
 [[package]]
 name = "persia-embedding-holder"
 version = "0.1.0"
 dependencies = [
+ "hashbrown 0.9.1",
  "once_cell",
  "parking_lot",
  "persia-embedding-config",

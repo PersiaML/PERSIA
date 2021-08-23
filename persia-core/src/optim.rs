@@ -3,15 +3,17 @@ use crate::PersiaRpcClient;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
-use persia_embedding_datatypes::optim::Optimizer;
+use persia_embedding_datatypes::optim::{
+    AdagradConfig, AdamConfig, NaiveSGDConfig, OptimizerConfig,
+};
 
 #[pyclass]
 pub struct PyOptimizerBase {
-    inner: Option<Optimizer>,
+    inner: Option<OptimizerConfig>,
 }
 
 impl PyOptimizerBase {
-    pub fn get_inner(&self) -> Option<Optimizer> {
+    pub fn get_inner(&self) -> Option<OptimizerConfig> {
         self.inner.clone()
     }
 }
@@ -31,17 +33,29 @@ impl PyOptimizerBase {
         initialization: f32,
         eps: f32,
     ) -> () {
-        self.inner = Some(Optimizer::new_adagrad(
+        let config = AdagradConfig {
             lr,
             wd,
             g_square_momentum,
             initialization,
             eps,
-        ));
+        };
+        self.inner = Some(OptimizerConfig::Adagrad(config));
     }
 
     pub fn init_sgd(&mut self, lr: f32, wd: f32) -> () {
-        self.inner = Some(Optimizer::new_sgd(lr, wd));
+        let config = NaiveSGDConfig { lr, wd };
+        self.inner = Some(OptimizerConfig::SGD(config));
+    }
+
+    pub fn init_adam(&mut self, lr: f32, betas: (f32, f32), eps: f32) -> () {
+        let config = AdamConfig {
+            lr,
+            beta1: betas.0,
+            beta2: betas.1,
+            eps,
+        };
+        self.inner = Some(OptimizerConfig::Adam(config));
     }
 
     fn register_optimizer2middleware(&self) -> PyResult<()> {

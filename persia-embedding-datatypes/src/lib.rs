@@ -20,10 +20,11 @@ pub mod optim;
 #[derive(Serialize, Deserialize, Readable, Writable, Clone, Debug)]
 pub struct HashMapEmbeddingEntry {
     inner: Vec<f32>, // TODO option1: consider using smallvec and slab allocator, and reference that smallvec with &[f32] here to avoid const generics
-                     // TODO option2: consider wrap BufferPool (see crates.io) or modify sharded slab to allocate &[f32] here
-                     // TODO option3: consider using a object pool of &[f32] with predefined length and all these &[f32] comes from a large continuous Vec. When the object pool is exhausted, create a new large continuous Vec and split it to &[f32]s and add them to the object pool
-                     // TODO option4: allocate slices and put them in the slice_arena (see crates.io), then put the slice in the arena into a reusable object pool for consumption
-                     // TODO option5: allocate slices in bumpalo_herd allocator with alloc_slice_fill_default, and unsafely converts it to Vec, then put the Vec in a reusable object pool for consumption. In this case we can actually put the whole entry in the pool
+    // TODO option2: consider wrap BufferPool (see crates.io) or modify sharded slab to allocate &[f32] here
+    // TODO option3: consider using a object pool of &[f32] with predefined length and all these &[f32] comes from a large continuous Vec. When the object pool is exhausted, create a new large continuous Vec and split it to &[f32]s and add them to the object pool
+    // TODO option4: allocate slices and put them in the slice_arena (see crates.io), then put the slice in the arena into a reusable object pool for consumption
+    // TODO option5: allocate slices in bumpalo_herd allocator with alloc_slice_fill_default, and unsafely converts it to Vec, then put the Vec in a reusable object pool for consumption. In this case we can actually put the whole entry in the pool
+    embedding_dim: usize,
 }
 
 impl HashMapEmbeddingEntry {
@@ -59,32 +60,43 @@ impl HashMapEmbeddingEntry {
             }
         };
 
-        let mut emb = emb.into_raw_vec();
+        let mut inner = emb.into_raw_vec();
         if require_space > 0 {
-            emb.extend(vec![0f32; require_space]);
+            inner.resize(inner.len() + require_space, 0.0_f32);
         }
-        Self { inner: emb }
-    }
-
-    pub fn new_empty(len: usize) -> Self {
         Self {
-            inner: vec![0f32; len],
+            inner,
+            embedding_dim: dim,
         }
     }
 
-    pub fn from_emb_and_opt(mut emb: Vec<f32>, opt: &[f32]) -> Self {
-        assert_eq!(emb.len(), opt.len());
-        emb.extend_from_slice(opt);
-        Self { inner: emb }
+    pub fn new_empty(dim: usize, require_space: usize) -> Self {
+        Self {
+            inner: vec![0f32; dim + require_space],
+            embedding_dim: dim,
+        }
     }
 
-    pub fn from_other(&mut self, other: Self) -> bool {
-        self.inner = other.inner;
-        true
+    pub fn from_emb(emb: Vec<f32>) -> Self {
+        let embedding_dim = emb.len();
+        Self {
+            inner: emb,
+            embedding_dim,
+        }
+    }
+
+    pub fn from_emb_and_opt(emb: Vec<f32>, opt: &[f32]) -> Self {
+        let embedding_dim = emb.len();
+        let mut inner = emb;
+        inner.extend_from_slice(opt);
+        Self {
+            inner,
+            embedding_dim,
+        }
     }
 
     pub fn copy_from_other(&mut self, other: &Self) -> bool {
-        if self.dim_infer() != other.dim_infer() {
+        if self.embedding_dim() != other.embedding_dim() {
             return false;
         }
         for (dst, src) in self.inner.iter_mut().zip(other.inner.iter()) {
@@ -101,20 +113,24 @@ impl HashMapEmbeddingEntry {
         self.inner.as_slice()
     }
 
-    pub fn len(&self) -> usize {
+    pub fn inner_size(&self) -> usize {
         self.inner.len()
     }
 
     pub fn dim(&self) -> usize {
-        self.inner.len() / 2
+        self.embedding_dim
+    }
+
+    pub fn embedding_dim(&self) -> usize {
+        self.embedding_dim
     }
 
     pub fn emb(&self) -> &[f32] {
-        &self.inner[..self.dim()]
+        &self.inner[..self.embedding_dim()]
     }
 
     pub fn emb_mut(&mut self) -> &mut [f32] {
-        let dim = self.dim();
+        let dim = self.embedding_dim();
         &mut self.inner[..dim]
     }
 
@@ -123,29 +139,17 @@ impl HashMapEmbeddingEntry {
     }
 
     pub fn opt(&self) -> &[f32] {
-        &self.inner[self.dim()..]
+        &self.inner[self.embedding_dim()..]
     }
 
     pub fn opt_mut(&mut self) -> &mut [f32] {
-        let dim = self.dim();
+        let dim = self.embedding_dim();
         &mut self.inner[dim..]
     }
 
     pub fn emb_and_opt_mut(&mut self) -> (&mut [f32], &mut [f32]) {
-        let dim = self.dim();
+        let dim = self.embedding_dim();
         self.inner.split_at_mut(dim)
-    }
-
-    pub fn emb_infer(&self) -> &[f32] {
-        &self.inner.as_slice()
-    }
-
-    pub fn dim_infer(&self) -> usize {
-        self.inner.len()
-    }
-
-    pub fn from_emb_infer(emb: Vec<f32>) -> Self {
-        Self { inner: emb }
     }
 }
 

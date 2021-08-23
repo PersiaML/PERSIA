@@ -21,6 +21,7 @@ use anyhow::Result;
 use hashbrown::HashMap;
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
+use persia_futures::tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -36,6 +37,7 @@ use persia_model_manager::PersiaPersistenceStatus;
 
 static METRICS_HOLDER: once_cell::sync::OnceCell<MetricsHolder> = once_cell::sync::OnceCell::new();
 static RPC_CLIENT: OnceCell<Arc<PersiaRpcClient>> = OnceCell::new();
+static EMBEDDING_STALENESS_SEMAPHORE: OnceCell<Arc<EmbeddingStalenessSemaphore>> = OnceCell::new();
 
 struct MetricsHolder {
     pub forward_client_to_gpu_time_cost: Histogram,
@@ -65,6 +67,45 @@ impl MetricsHolder {
             Ok(holder)
         })
     }
+}
+
+struct EmbeddingStalenessSemaphore {
+    pub semaphore: Arc<Semaphore>,
+}
+
+impl EmbeddingStalenessSemaphore {
+    pub fn get_instance() -> PyResult<Arc<EmbeddingStalenessSemaphore>> {
+        match EMBEDDING_STALENESS_SEMAPHORE.get() {
+            Some(val) => Ok(val.clone()),
+            None => Err(PyRuntimeError::new_err(
+                "init the persia embedding staleness manager first",
+            )),
+        }
+    }
+
+    fn new(staleness: usize) -> Arc<Self> {
+        EMBEDDING_STALENESS_SEMAPHORE
+            .get_or_init(|| {
+                let semaphore = Arc::new(Semaphore::new(staleness));
+
+                tracing::info!(
+                    "init persia embedding staleness semaphore with staleness {}",
+                    staleness
+                );
+                Arc::new(Self { semaphore })
+            })
+            .clone()
+    }
+
+    pub async fn get_permit(&self) -> OwnedSemaphorePermit {
+        self.semaphore.clone().acquire_owned().await.unwrap()
+    }
+}
+
+#[pyfunction]
+pub fn init_persia_embedding_staleness_semaphore(staleness: usize) -> PyResult<()> {
+    EmbeddingStalenessSemaphore::new(staleness);
+    Ok(())
 }
 
 struct PersiaRpcClient {
@@ -130,6 +171,14 @@ impl PersiaRpcClient {
             tracing::info!("created client for middleware {}", middleware_addr);
             client
         }
+    }
+
+    pub fn get_embedding_size(&self) -> Result<Vec<usize>, ShardedMiddlewareError> {
+        let runtime = self.runtime.clone();
+        let _gurad = runtime.enter();
+        runtime
+            .block_on(self.get_random_client().get_embedding_size(&()))
+            .map_err(|e| ShardedMiddlewareError::RpcError(format!("{:?}", e)))?
     }
 
     pub fn submit_configuration(&self, config: PersiaSparseModelHyperparameters) -> Result<()> {
@@ -386,6 +435,12 @@ impl PyPersiaRpcClient {
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
+    pub fn get_embedding_size(&self) -> PyResult<Vec<usize>> {
+        self.inner
+            .get_embedding_size()
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
     pub fn shutdown_service(&self) -> PyResult<()> {
         self.inner.shutdown()
     }
@@ -443,6 +498,10 @@ fn persia_core(py: Python, m: &PyModule) -> PyResult<()> {
     optim::init_module(m, py)?;
     nats::init_module(m, py)?;
     m.add_function(wrap_pyfunction!(is_cuda_feature_available, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        init_persia_embedding_staleness_semaphore,
+        m
+    )?)?;
 
     #[cfg(feature = "cuda")]
     {

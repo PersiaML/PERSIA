@@ -425,7 +425,7 @@ impl PersiaPersistenceManager {
                                 .collect();
                             if let Ok(_) = manager.full_amount_manager.commit_weak_ptrs(weak_ptrs) {
                                 for (id, entry) in embeddings.into_iter() {
-                                    manager.embedding_holder.inner.insert(id, entry);
+                                    manager.embedding_holder.insert(id, entry);
                                 }
 
                                 let cur_loaded_files =
@@ -476,7 +476,7 @@ impl PersiaPersistenceManager {
             let emb: Vec<(u64, HashMapEmbeddingEntry)> = content
                 .into_iter()
                 .map(|(id, entry)| {
-                    let emb_entry = HashMapEmbeddingEntry::from_emb_infer(entry.emb().to_vec());
+                    let emb_entry = HashMapEmbeddingEntry::from_emb(entry.emb().to_vec());
                     (id, emb_entry)
                 })
                 .collect();

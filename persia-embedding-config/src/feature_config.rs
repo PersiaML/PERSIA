@@ -32,10 +32,3 @@ pub struct FeatureGroupConfig {
     pub targets: TargetConfig,
     pub children: Vec<SingleFeatureConfig>,
 }
-
-#[derive(Debug)]
-pub struct FeatureInfo {
-    pub embedding_names: Vec<String>,
-    pub is_uid: bool,
-    pub is_pid: bool,
-}
