@@ -11,7 +11,10 @@ import persia.env as env
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
 from persia.backend import init_backend
-from persia.prelude import PyPersiaReplicaInfo, init_persia_embedding_staleness_semaphore
+from persia.prelude import (
+    PyPersiaReplicaInfo,
+    init_persia_embedding_staleness_semaphore,
+)
 
 _CURRENT_CXT = None
 
