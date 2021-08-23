@@ -432,7 +432,7 @@ class TrainCtx(EmbeddingCtx):
             dense_optimizer (torch.optim.Optimizer): Optimizer for dense parameters.
             device_id (int, optional): The CUDA device to use for this process.
             grad_scalar_update_factor (float, optional): Update factor of ``Gradscalar`` to ensure loss scale finitely if set ``mixed_precision=True``.
-            embedding_staleness (int, optional): Max number of batched stalenes embedding each rank. A staleness embedding means it prefetched from embedding server before gradient updated.
+            embedding_staleness (int, optional): Max number of batched staleness embedding each rank. A staleness embedding means it prefetched from embedding server before gradient updated.
             backward_buffer_size (int, optional): Max number of not updated gradients queued.
             backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
             grad_tensor_cache_size(int, optional): Number of reference cache , hold the gradient tensor reference to avoid
