@@ -1,3 +1,5 @@
+from typing import List
+
 from persia.prelude import (
     PyPersiaRpcClient,
     PyPersiaBatchData,
@@ -38,6 +40,11 @@ class Backend:
         """
         self.nats_publisher.send_sparse_to_middleware(data, blocking)
         self.nats_publisher.send_dense_to_trainer(data, blocking)
+
+    def get_embedding_size(self) -> List[int]:
+        """Get current embedding server embedding size"""
+
+        return self.rpc_client.get_embedding_size()
 
     def set_configuration(
         self,
