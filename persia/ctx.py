@@ -11,7 +11,7 @@ import persia.env as env
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
 from persia.backend import init_backend
-from persia.prelude import PyPersiaReplicaInfo, init_persia_embedding_staleness_manager
+from persia.prelude import PyPersiaReplicaInfo, init_persia_embedding_staleness_pool
 
 _CURRENT_CXT = None
 
@@ -469,7 +469,7 @@ class TrainCtx(EmbeddingCtx):
         super()._enter()
 
         if self.embedding_staleness > 0:
-            init_persia_embedding_staleness_manager(self.embedding_staleness)
+            init_persia_embedding_staleness_pool(self.embedding_staleness)
         self.sparse_optimizer.apply()
         self.backward_engine.launch(self.device_id, self.backward_workers_size)
 
