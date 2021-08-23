@@ -1,0 +1,18 @@
+on: push
+
+name: Rustfmt
+
+jobs:
+  format:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+            toolchain: stable
+            components: rustfmt
+            override: true
+      - name: rust-rustfmt-check
+        uses: mbrobbel/rustfmt-check@0.3.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

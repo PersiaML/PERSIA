@@ -1,0 +1,17 @@
+[package]
+authors = ["Kuaishou AI Platform PersiaML Team <zhuxuefeng@kuaishou.com>"]
+edition = "2018"
+name = "persia-nats-client"
+publish = false
+version = "0.1.0"
+license = "MIT"
+
+[dependencies]
+persia-embedding-config = { path = "../../persia-embedding-config" }
+persia-futures = {path = "../../persia-futures"}
+persia-speedy = "0.9"
+async-nats = "0.9.18"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.2"
+retry = "1.2.1"

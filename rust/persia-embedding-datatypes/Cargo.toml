@@ -1,0 +1,25 @@
+[package]
+authors = ["Kuaishou AI Platform PersiaML Team <admin@mail.xrlian.com>"]
+edition = "2018"
+name = "persia-embedding-datatypes"
+publish = false
+version = "0.1.0"
+license = "MIT"
+
+[dependencies]
+persia-embedding-config = {path = "../persia-embedding-config"}
+persia-simd = {path = "../persia-simd"}
+bytes = {version = "1.0", features = ["serde"]}
+half = {version = "1.6", features = ["alloc", "std", "serde"]}
+hashbrown = {version = "0.9", features = ["serde"]}
+http = "0.2"
+itertools = "0.10"
+ndarray = {version = "0.14", features = ["serde"]}
+ndarray-rand = "0.13"
+numpy = "0.13"
+parking_lot = { version = "0.11" }
+paste = "1.0"
+persia-speedy = "0.9"
+rand = {version = "0.8", features = ["small_rng"]}
+serde = "1.0"
+tracing = "0.1"

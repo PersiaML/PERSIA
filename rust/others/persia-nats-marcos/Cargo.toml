@@ -1,0 +1,16 @@
+[package]
+authors = ["Kuaishou AI Platform PersiaML Team <zhuxuefeng@kuaishou.com>"]
+edition = "2018"
+name = "persia-nats-marcos"
+publish = false
+version = "0.1.0"
+license = "MIT"
+
+[dependencies]
+syn = "1.0.73"
+proc-macro-crate= "0.1"
+proc-macro2 = "1.0"
+quote = "1.0"
+
+[lib]
+proc-macro = true

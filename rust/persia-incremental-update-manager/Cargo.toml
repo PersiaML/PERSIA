@@ -1,0 +1,25 @@
+[package]
+authors = ["Kuaishou AI Platform PersiaML Team <zhuxuefeng@kuaishou.com>"]
+edition = "2018"
+name = "persia-incremental-update-manager"
+publish = false
+version = "0.1.0"
+license = "MIT"
+
+[dependencies]
+persia-embedding-config = {path = "../persia-embedding-config"}
+persia-embedding-datatypes = {path = "../persia-embedding-datatypes"}
+persia-embedding-holder = {path = "../persia-embedding-holder"}
+persia-futures = {path = "../persia-futures"}
+persia-metrics = {path = "../persia-metrics"}
+persia-storage-visitor = {path = "../persia-storage-visitor"}
+arc-swap = "1.1"
+bincode = "1.3"
+bytes = {version = "1.0", features = ["serde"]}
+chrono = "0.4"
+griddle = "0.4"
+once_cell = "1.3"
+parking_lot = { version = "0.11" }
+rayon = "1.5.1"
+thiserror = "1.0"
+tracing = "0.1"

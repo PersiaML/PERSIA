@@ -1,0 +1,21 @@
+[workspace]
+exclude = []
+members = [
+    "persia-embedding-config",
+    "persia-embedding-datatypes",
+    "persia-scheduled-thread-pool",
+    "persia-simd",
+    "persia-resource-pool",
+    "persia-embedding-sharded-server", #"persia-embedding-c-client-sharded-server",
+    "persia-core",
+    "persia-message-queue",
+    "persia-eviction-map",
+    "others/persia-common-benchmark", #"persia-inference-serde",
+    "persia-model-manager",
+    "persia-full-amount-manager",
+    "persia-storage-visitor",
+    "persia-embedding-holder",
+    "persia-metrics",
+    "others/persia-nats-client",
+    "others/persia-nats-marcos",
+]
