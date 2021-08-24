@@ -10,7 +10,7 @@ license = "MIT"
 persia-embedding-config = { path = "../../persia-embedding-config" }
 persia-futures = {path = "../../persia-futures"}
 persia-speedy = "0.9"
-async-nats = "0.9.18"
+async-nats = "0.10.1"
 thiserror = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.2"
