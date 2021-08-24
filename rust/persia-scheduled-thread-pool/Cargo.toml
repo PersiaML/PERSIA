@@ -1,0 +1,11 @@
+[package]
+name = "persia-scheduled-thread-pool"
+version = "0.1.0"
+authors = ["Kuaishou AI Platform PersiaML Team <admin@mail.xrlian.com>"]
+edition = "2018"
+publish = false
+license = "MIT"
+
+[dependencies]
+scheduled-thread-pool = "0.2"
+once_cell = "1.4"

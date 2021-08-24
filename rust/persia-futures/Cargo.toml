@@ -1,0 +1,20 @@
+[package]
+name = "persia-futures"
+version = "0.1.0"
+authors = ["Kuaishou AI Platform PersiaML Team <admin@mail.xrlian.com>"]
+edition = "2018"
+description = "commonly used future related things"
+license = "MIT"
+
+[dependencies]
+smol = "1.0"
+async-channel = "1.1"
+async-executor = "1.0"
+easy-parallel = "3.1"
+futures = "0.3"
+async-oneshot = "0.4"
+smol-timeout = "0.6"
+async-lock = "2.1"
+tokio = { version = "1.1", features = ["full"] }
+async-compat = "0.2"
+flume = "0.10"

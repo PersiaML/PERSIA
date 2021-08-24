@@ -1,0 +1,25 @@
+[package]
+name = "persia-common-benchmark"
+version = "0.1.0"
+authors = ["Kuaishou AI Platform PersiaML Team <admin@mail.xrlian.com>"]
+edition = "2018"
+
+#[lib]
+#bench = false
+
+[dev-dependencies]
+criterion = "0.3"
+criterion-macro = "0.3"
+smallvec = "1"
+tinystr = "0.4"
+persia-speedy = "0.9"
+serde = { version = "1", features = ["derive"] }
+bincode = "1"
+
+[[bench]]
+name = "memcpy"
+#harness = false
+
+[[bench]]
+name = "serialize_inf_request"
+#harness = false

@@ -11,7 +11,10 @@ import persia.env as env
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
 from persia.backend import init_backend
-from persia.prelude import PyPersiaReplicaInfo
+from persia.prelude import (
+    PyPersiaReplicaInfo,
+    init_persia_embedding_staleness_semaphore,
+)
 
 _CURRENT_CXT = None
 
@@ -416,6 +419,7 @@ class TrainCtx(EmbeddingCtx):
         dense_optimizer: torch.optim.Optimizer,
         device_id: int = 0,
         grad_scalar_update_factor: float = 4,
+        embedding_staleness: int = -1,
         backward_buffer_size: int = 10,
         backward_workers_size: int = 8,
         grad_update_buffer_size: int = 60,
@@ -428,6 +432,7 @@ class TrainCtx(EmbeddingCtx):
             dense_optimizer (torch.optim.Optimizer): Optimizer for dense parameters.
             device_id (int, optional): The CUDA device to use for this process.
             grad_scalar_update_factor (float, optional): Update factor of ``Gradscalar`` to ensure loss scale finitely if set ``mixed_precision=True``.
+            embedding_staleness (int, optional): Max number of batched staleness embedding each rank. A staleness embedding means it prefetched from embedding server before gradient updated.
             backward_buffer_size (int, optional): Max number of not updated gradients queued.
             backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
             grad_tensor_cache_size(int, optional): Number of reference cache , hold the gradient tensor reference to avoid
@@ -453,6 +458,9 @@ class TrainCtx(EmbeddingCtx):
         self.sparse_optimizer = sparse_optimizer
         self.dense_optimizer = dense_optimizer
         self.backward_workers_size = backward_workers_size
+        self.embedding_staleness = (
+            embedding_staleness if embedding_staleness is not None else -1
+        )
 
         from persia.prelude import PyBackward
 
@@ -463,6 +471,8 @@ class TrainCtx(EmbeddingCtx):
     def _enter(self):
         super()._enter()
 
+        if self.embedding_staleness > 0:
+            init_persia_embedding_staleness_semaphore(self.embedding_staleness)
         self.sparse_optimizer.apply()
         self.backward_engine.launch(self.device_id, self.backward_workers_size)
 
