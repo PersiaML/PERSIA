@@ -18,7 +18,10 @@ if __name__ == "__main__":
             "local_scheme": "no-local-version",
             "root": "..",
             "write_to_template": '__version__ = "{version}"',
-            "write_to": os.path.join(os.path.dirname(os.path.abspath(__file__)), "python/persia_core/version.py")
+            "write_to": os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), 
+                "python/persia_core/version.py"
+            )
         },
         setup_requires=["setuptools_scm"],
         url="https://github.com/PersiaML/PersiaML/rust",
