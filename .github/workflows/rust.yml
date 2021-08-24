@@ -20,15 +20,15 @@ jobs:
           toolchain: nightly
           override: true
     - name: Check
-      run: cargo check
+      run: cd rust && cargo check
     - name: Run tests
-      run: cargo test --verbose
+      run: cd rust && cargo test --verbose
     - name: Build
-      run: cargo build --bin persia-embedding-sharded-server --bin persia-embedding-sharded-middleware --verbose --release
+      run: cd rust && cargo build --bin persia-embedding-sharded-server --bin persia-embedding-sharded-middleware --verbose --release
     - name: Archive package artifacts
       uses: actions/upload-artifact@v2
       with:
         name: persia-binaries
         path: |
-          target/release/persia-embedding-sharded-server
-          target/release/persia-embedding-sharded-middleware
+          rust/target/release/persia-embedding-sharded-server
+          rust/target/release/persia-embedding-sharded-middleware
