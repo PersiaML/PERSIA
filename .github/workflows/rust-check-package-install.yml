@@ -1,0 +1,23 @@
+on: push
+
+name: rust check package install
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: self-hosted
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: recursive
+    - name: Install latest nightly
+      uses: actions-rs/toolchain@v1
+      with:
+          toolchain: stable
+          override: true
+    # link to this issue https://github.com/pypa/setuptools_scm/issues/357#issuecomment-846476165
+    # another workaround 
+    # SETUPTOOLS_SCM_PRETEND_VERSION="$(python3 setup.py --version)" pip install .
+    - run: cd rust && python3 -m pip install . --use-feature=in-tree-build 

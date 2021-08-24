@@ -1,0 +1,12 @@
+[package]
+name = "resource_pool"
+version = "0.1.0"
+authors = ["Kuaishou AI Platform PersiaML Team <admin@mail.xrlian.com>"]
+edition = "2018"
+publish = false
+license = "MIT"
+
+[dependencies]
+persia-futures = { path = "../persia-futures" }
+arr_macro = "0.1"
+tracing = "0.1"

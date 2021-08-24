@@ -1,0 +1,8 @@
+[package]
+name = "persia-simd"
+version = "0.1.0"
+authors = ["Kuaishou AI Platform PersiaML Team <admin@mail.xrlian.com>"]
+license = "MIT"
+edition = "2018"
+
+[dependencies]

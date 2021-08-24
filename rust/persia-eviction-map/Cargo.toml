@@ -1,0 +1,27 @@
+[package]
+authors = ["Kuaishou AI Platform PersiaML Team <admin@mail.xrlian.com>"]
+edition = "2018"
+name = "persia-eviction-map"
+version = "0.1.0"
+license = "MIT"
+
+[dependencies]
+persia-embedding-config = {path = "../persia-embedding-config"}
+persia-embedding-datatypes = {path = "../persia-embedding-datatypes", default-features = false}
+persia-futures = {path = "../persia-futures"}
+ahash = "0.7"
+hashbrown = "0.9"
+hashlink = "0.7"
+parking_lot = "0.11"
+
+[dev-dependencies]
+griddle = "0.5.1"
+linked-hash-map = "0.5"
+lru-cache = "0.1"
+rand = "0.8"
+rand_distr = "0.4"
+random-fast-rng = "0.1"
+structopt = "0.3"
+thread_local = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.2"
