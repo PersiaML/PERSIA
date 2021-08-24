@@ -11,7 +11,7 @@ if __name__ == "__main__":
     extensions = []
     cmdclass = {}
 
-    install_requires = ["pyyaml", "colorlog"],
+    install_requires = ["pyyaml", "colorlog"]
 
     if use_cuda:
         import torch
@@ -20,7 +20,9 @@ if __name__ == "__main__":
 
         from torch.cuda import is_available
 
-        assert is_available(), "install cuda environment before install the persiaml-python lib"
+        assert (
+            is_available()
+        ), "install cuda environment before install the persiaml-python lib"
 
         extensions.append(
             CUDAExtension(
@@ -58,7 +60,6 @@ if __name__ == "__main__":
         flags = subprocess.check_output("mpicxx -show", shell=True).decode().split()[1:]
         print(flags)
         return flags
-
 
     setup(
         name="persia",
