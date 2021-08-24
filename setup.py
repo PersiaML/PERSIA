@@ -46,7 +46,14 @@ setup(
     author_email="admin@mail.xrlian.com",
     description="PersiaML Python Library",
     packages=find_packages(exclude=("tests",)),
-    scripts=["bin/launch_middleware", "bin/launch_server"],
+    entry_points={
+        "console_scripts": [
+            "launch_compose = persia.launcher:launch_compose",
+            "launch_trainer = persia.launcher:launch_trainer",
+            "launch_middleware = persia.launcher:launch_middleware",
+            "launch_server = persia.launcher:launch_server",
+        ]
+    },
     ext_modules=extensions,
     cmdclass=cmdclass,
     python_requires=">=3.7",
