@@ -1,6 +1,6 @@
 on: push
 
-name: pypi publish
+name: rust pypi publish
 
 jobs:
   publish:

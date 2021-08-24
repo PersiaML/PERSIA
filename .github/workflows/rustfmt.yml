@@ -16,3 +16,4 @@ jobs:
         uses: mbrobbel/rustfmt-check@0.3.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          args: --manifest-path rust

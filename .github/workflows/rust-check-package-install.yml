@@ -1,6 +1,6 @@
 on: push
 
-name: check package install
+name: rust check package install
 
 env:
   CARGO_TERM_COLOR: always
@@ -17,4 +17,4 @@ jobs:
       with:
           toolchain: stable
           override: true
-    - run: python3 -m pip install .
+    - run: cd rust && python3 -m pip install .
