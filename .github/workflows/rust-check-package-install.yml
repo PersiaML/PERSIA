@@ -17,4 +17,4 @@ jobs:
       with:
           toolchain: stable
           override: true
-    - run: cd rust && python3 -m pip install .
+    - run: cd rust && python3 -m pip install . --use-feature=in-tree-build
