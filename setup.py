@@ -11,10 +11,16 @@ if __name__ == "__main__":
     extensions = []
     cmdclass = {}
 
+    install_requires = ["pyyaml", "colorlog"],
+
     if use_cuda:
         import torch
         from torch.utils.cpp_extension import BuildExtension
         from torch.utils.cpp_extension import CUDAExtension
+
+        from torch.cuda import is_available
+
+        assert is_available(), "install cuda environment before install the persiaml-python lib"
 
         extensions.append(
             CUDAExtension(
@@ -45,7 +51,8 @@ if __name__ == "__main__":
                 features=features,
             )
         )
-        
+    else:
+        install_requires.append("persia-core")
 
     def get_mpi_flags():
         flags = subprocess.check_output("mpicxx -show", shell=True).decode().split()[1:]
@@ -57,7 +64,7 @@ if __name__ == "__main__":
         name="persia",
         use_scm_version={"local_scheme": "no-local-version"},
         setup_requires=["setuptools_scm"],
-        install_requires=["pyyaml", "persia-core", "colorlog"],
+        install_requires=install_requires,
         url="https://github.com/PersiaML/PersiaML",
         author="Kuaishou AI Platform Persia Team",
         author_email="admin@mail.xrlian.com",
