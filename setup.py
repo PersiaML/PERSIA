@@ -45,13 +45,11 @@ if __name__ == "__main__":
                 features=features,
             )
         )
-        
 
     def get_mpi_flags():
         flags = subprocess.check_output("mpicxx -show", shell=True).decode().split()[1:]
         print(flags)
         return flags
-
 
     setup(
         name="persia",
@@ -63,9 +61,17 @@ if __name__ == "__main__":
         author_email="admin@mail.xrlian.com",
         description="PersiaML Python Library",
         packages=find_packages(exclude=("tests",)),
-        scripts=["bin/launch_middleware", "bin/launch_server"],
         ext_modules=extensions,
         cmdclass=cmdclass,
         rust_extensions=rust_extensions,
+        entry_points={
+            "console_scripts": [
+                "launch_trainer = persia.launcher:launch_trainer",
+                "launch_compose = persia.launcher:launch_trainer",
+                "launch_middleware = persia.launcher:launch_middleware",
+                "launch_server = persia.launcher:launch_server",
+                "launch_local = persia.launcher:launch_trainer",
+            ]
+        },
         python_requires=">=3.7",
     )

@@ -7,6 +7,7 @@ from setuptools_rust import Binding, RustExtension
 
 if __name__ == "__main__":
     import colorama
+
     colorama.init(autoreset=True)
 
     use_cuda = os.environ.get("USE_CUDA", False)
@@ -19,9 +20,9 @@ if __name__ == "__main__":
             "root": "..",
             "write_to_template": '__version__ = "{version}"',
             "write_to": os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), 
-                "python/persia_core/version.py"
-            )
+                os.path.dirname(os.path.abspath(__file__)),
+                "python/persia_core/version.py",
+            ),
         },
         setup_requires=["setuptools_scm"],
         url="https://github.com/PersiaML/PersiaML/rust",
