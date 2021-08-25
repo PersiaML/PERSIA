@@ -1,5 +1,4 @@
 import os
-import subprocess
 
 from setuptools import setup, find_packages
 from setuptools_rust import Binding, RustExtension
@@ -8,11 +7,14 @@ use_cuda = os.environ.get("USE_CUDA", False)
 integration_core = os.environ.get("INTEGRATION_CORE", True)
 
 if __name__ == "__main__":
+    import colorama
+
+    colorama.init(autoreset=True)
+
     extensions = []
     cmdclass = {}
 
     if use_cuda:
-        import torch
         from torch.utils.cpp_extension import BuildExtension
         from torch.utils.cpp_extension import CUDAExtension
 
@@ -34,6 +36,23 @@ if __name__ == "__main__":
 
     rust_extensions = []
 
+    rust_extensions.append(
+        RustExtension(
+            # {
+            #     "persia_ps.middleware": "persia-embedding-sharded-middleware",
+            #     "persia_ps.server": "persia-embedding-sharded-server"
+            # },
+            {
+                "persia-embedding-sharded-middleware": "persia_ps.middleware",
+                "persia-embedding-sharded-server": "persia_ps.server"
+            },
+            path="rust/persia-embedding-sharded-server/Cargo.toml",
+            binding=Binding.Exec,
+            script=True,
+            native=True,
+        )
+    )
+
     if integration_core:
         features = None if not use_cuda else ["cuda"]
         rust_extensions.append(
@@ -45,11 +64,6 @@ if __name__ == "__main__":
                 features=features,
             )
         )
-
-    def get_mpi_flags():
-        flags = subprocess.check_output("mpicxx -show", shell=True).decode().split()[1:]
-        print(flags)
-        return flags
 
     setup(
         name="persia",
