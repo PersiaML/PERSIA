@@ -11,7 +11,7 @@ persia-embedding-config = {path = "../persia-embedding-config"}
 persia-simd = {path = "../persia-simd"}
 bytes = {version = "1.0", features = ["serde"]}
 half = {version = "1.6", features = ["alloc", "std", "serde"]}
-hashbrown = {version = "0.9", features = ["serde"]}
+hashbrown = {version = "0.11", features = ["serde"]}
 http = "0.2"
 itertools = "0.10"
 ndarray = {version = "0.14", features = ["serde"]}

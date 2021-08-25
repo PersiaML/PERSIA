@@ -10,7 +10,7 @@ persia-embedding-config = {path = "../persia-embedding-config"}
 persia-embedding-datatypes = {path = "../persia-embedding-datatypes", default-features = false}
 persia-futures = {path = "../persia-futures"}
 ahash = "0.7"
-hashbrown = "0.9"
+hashbrown = "0.11"
 hashlink = "0.7"
 parking_lot = "0.11"
 

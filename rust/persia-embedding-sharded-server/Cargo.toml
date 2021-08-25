@@ -25,7 +25,7 @@ crossbeam = "0.8"
 farmhash = "1"
 futures = "0.3"
 half = "1.6"
-hashbrown = "0.9"
+hashbrown = "0.11"
 hyper = "0.14.2"
 hyperloglogplus = "0.4"
 indexmap = {version = "1.5", features = ["serde-1"]}
