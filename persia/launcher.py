@@ -7,6 +7,7 @@ from typing import List, Dict
 REPLICA_INDEX = int(os.environ.get("JOB_ID", -1))
 DEBUG = int(os.environ.get("DEBUG", False))
 
+
 def generate_dev_env() -> Dict[str, str]:
     env = {}
 
@@ -17,13 +18,14 @@ def generate_dev_env() -> Dict[str, str]:
     # add thirdparty_path into PYTHONPATH
     python_path = os.environ.get("PYTHONPATH", "")
     origin_pythonpath = os.environ.get("PYTHONPATH")
-    env["PYTHONPATH"] = f"{python_path}:{origin_path}"
+    env["PYTHONPATH"] = f"{python_path}:{origin_pythonpath}"
     return env
+
 
 def run_command(cmd: List[str], verb: bool = True):
     if verb:
         cmd_str = " ".join(cmd)
-        print("execute command: {cmd_str}")
+        print(f"execute command: {cmd_str}")
 
     if DEBUG:
         env = generate_dev_env()
@@ -129,3 +131,4 @@ def launch_server(port: int, replica_index: int, replica_size: int, global_confi
 def launch_local():
     # TODO: launch the trainer, middleware server, embedding server
     cmd = "launch the trainer locally with middleware and embedding server"
+    print(cmd)
