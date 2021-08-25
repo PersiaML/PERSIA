@@ -19,7 +19,7 @@ tracing = "0.1"
 parking_lot = { version = "0.11" }
 chrono = "0.4"
 thiserror = "1.0"
-hashbrown = "0.9"
+hashbrown = "0.11"
 anyhow = "1"
 rayon = "1.5.1"
 once_cell = "1.3"
