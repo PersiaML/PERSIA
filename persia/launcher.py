@@ -33,7 +33,7 @@ def run_command(cmd: List[str], verb: bool = True):
 
 
 @click.command()
-@click.argument("filepath", type=str, help="Trainer execute python filepath")
+@click.argument("filepath", type=str)
 @click.option(
     "--gpu-num", type=int, default=1, help="Number of gpu at current replica node"
 )
