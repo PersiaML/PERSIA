@@ -1194,9 +1194,9 @@ dependencies = [
 
 [[package]]
 name = "hyperloglogplus"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "262a2639ffa14c6edabe4519528e76a72407e7ce1263e0ebe391f8262c8351e1"
+checksum = "b0057555a2b26a61cdeb209970b30d268878d172d7d59d113c8768b4a2b8b16c"
 dependencies = [
  "serde",
 ]
