@@ -101,7 +101,7 @@ impl PersiaCommonContext {
             async_runtime: runtime.clone(),
         });
 
-        PersiaReplicaInfo::set(replica_index, replica_size)?;
+        PersiaReplicaInfo::set(replica_size, replica_index)?;
         let nats_publisher = Arc::new(nats::PersiaBatchFlowNatsStubPublisherWrapper::new(
             world_size,
             runtime.clone(),
@@ -187,8 +187,8 @@ impl PersiaCommonContext {
     }
 
     pub fn exit(&self) -> Result<(), PersiaError> {
-        self.running.store(false, Ordering::AcqRel);
-        self.shutdown()?;
+        self.running.store(false, Ordering::Relaxed);
+        // self.shutdown()?;
 
         let mut std_handles = self.std_handles.lock();
         std_handles.drain(..).for_each(|h| {
@@ -231,53 +231,45 @@ impl PyPersiaCommonContext {
     }
 
     pub fn get_embedding_size(&self) -> PyResult<Vec<usize>> {
-        let result = self
-            .inner
+        self.inner
             .get_embedding_size()
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(result)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn dump(&self, dst_dir: String) -> PyResult<()> {
         self.inner
             .dump(dst_dir)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn load(&self, dst_dir: String) -> PyResult<()> {
         self.inner
             .load(dst_dir)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn wait_for_serving(&self) -> PyResult<()> {
         self.inner
             .wait_for_serving()
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn wait_for_emb_dumping(&self) -> PyResult<()> {
         self.inner
             .wait_for_emb_dumping()
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn shutdown_servers(&self) -> PyResult<()> {
         self.inner
             .shutdown()
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn exit(&self) -> PyResult<()> {
         self.inner
             .exit()
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn send_sparse_to_middleware(
@@ -287,15 +279,13 @@ impl PyPersiaCommonContext {
     ) -> PyResult<()> {
         self.inner
             .send_sparse_to_middleware(batch, block)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn send_dense_to_trainer(&self, batch: &PyPersiaBatchData, block: bool) -> PyResult<()> {
         self.inner
             .send_dense_to_trainer(batch, block)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn configure_sharded_servers(
@@ -314,22 +304,19 @@ impl PyPersiaCommonContext {
                 enable_weight_bound,
                 weight_bound,
             )
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn register_optimizer(&self, opt: &PyOptimizerBase) -> PyResult<()> {
         self.inner
             .register_optimizer(opt)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn wait_servers_ready(&self) -> PyResult<()> {
         self.inner
             .wait_servers_ready()
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn forward_directly_from_data(

@@ -175,7 +175,7 @@ class EmbeddingCtx(BaseCtx):
         self.pretrained_loaded = False
 
     def _enter(self):
-        self.common_context.set_configuration(
+        self.common_context.configure_sharded_servers(
             self.emb_initialization[0],
             self.emb_initialization[1],
             self.admit_probability,
@@ -400,6 +400,10 @@ class EmbeddingCtx(BaseCtx):
         """Wait for the embedding load process."""
         self.common_context.wait_for_load_embedding()
 
+    def get_embedding_size(self):
+        """Get number of ids on all embedding servers."""
+        self.common_context.get_embedding_size()
+
 
 class TrainCtx(EmbeddingCtx):
     r"""Subclass of ``EmbeddingCtx`` that provide the backward ability to update the sparse embedding.
@@ -478,7 +482,7 @@ class TrainCtx(EmbeddingCtx):
     def _enter(self):
         super()._enter()
 
-        self.sparse_optimizer.apply()
+        self.sparse_optimizer.apply(self.common_context)
         self.backward_engine.launch(self.device_id, self.backward_workers_size)
 
     def backward(

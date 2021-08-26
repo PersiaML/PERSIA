@@ -146,7 +146,7 @@ impl Backward {
         let handler = std::thread::spawn(move || {
             set_device(device_id as i32);
             loop {
-                if !running.load(Ordering::AcqRel) {
+                if !running.load(Ordering::Acquire) {
                     break;
                 }
                 let start_time = std::time::Instant::now();
@@ -239,7 +239,7 @@ impl Backward {
             let _guard = runtime.enter();
             let handle = persia_futures::tokio::spawn(async move {
                 loop {
-                    if !running.load(Ordering::AcqRel) {
+                    if !running.load(Ordering::Acquire) {
                         break;
                     }
                     let start_time = std::time::Instant::now();

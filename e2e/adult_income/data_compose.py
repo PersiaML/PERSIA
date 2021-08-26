@@ -28,4 +28,4 @@ if __name__ == "__main__":
             batch_data.add_dense([dense])
             batch_data.add_sparse(batch_sparse_ids)
             batch_data.add_target(target)
-            ctx.backend.send_data(batch_data)
+            ctx.send_data(batch_data)

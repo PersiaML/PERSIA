@@ -214,7 +214,7 @@ impl PerisaDataOrderManager {
         std::thread::spawn(move || {
             let mut order_manager = Self::new(world_size, rank_id);
             loop {
-                if !running.load(Ordering::AcqRel) {
+                if !running.load(Ordering::Acquire) {
                     break;
                 }
                 if let Ok(batch) = channel_r.recv_timeout(Duration::from_millis(10)) {
@@ -360,7 +360,7 @@ impl Forward {
             set_device(device_id);
             let running = context.running.clone();
             loop {
-                if !running.load(Ordering::AcqRel) {
+                if !running.load(Ordering::Acquire) {
                     break;
                 }
                 let start_time = std::time::Instant::now();
@@ -433,7 +433,7 @@ impl Forward {
 
             let handle = persia_futures::tokio::spawn(async move {
                 loop {
-                    if !running.load(Ordering::AcqRel) {
+                    if !running.load(Ordering::Acquire) {
                         break;
                     }
                     let start_time = std::time::Instant::now();

@@ -1,9 +1,7 @@
 from abc import abstractmethod, ABC
 from typing import Tuple
 
-from persia.prelude import PyOptimizerBase
-from persia.ctx import cnt_ctx
-
+from persia.prelude import PyOptimizerBase, PyPersiaCommonContext
 
 class Optimizer(ABC):
     r"""Base optimizer to configurate the sparse embedding update behavior."""
@@ -16,11 +14,9 @@ class Optimizer(ABC):
         r"""Abstraction method for optimizer that support register different type of optimizer."""
         ...
 
-    def register_optimizer(self):
+    def register_optimizer(self, common_context: PyPersiaCommonContext):
         """Register sparse optimizer to embedding server."""
-        current_ctx = cnt_ctx()
-        assert current_ctx is not None, "Current conext is None!"
-        current_ctx.common_context.register_optimizer(self.optimizer_base)
+        common_context.register_optimizer(self.optimizer_base)
 
 
 class SGD(Optimizer):
@@ -38,10 +34,10 @@ class SGD(Optimizer):
         self.momentum = momentum
         self.weight_decay = weight_decay
 
-    def apply(self):
+    def apply(self, common_context: PyPersiaCommonContext):
         """Initialize optimizer and register to embedding server."""
         self.optimizer_base.init_sgd(self.lr, self.weight_decay)
-        self.register_optimizer()
+        self.register_optimizer(common_context)
 
 
 class Adam(Optimizer):
@@ -67,10 +63,10 @@ class Adam(Optimizer):
         self.weight_decay = weight_decay
         self.eps = eps
 
-    def apply(self):
+    def apply(self, common_context: PyPersiaCommonContext):
         """Initialize Adam optimizer and register to embedding server."""
         self.optimizer_base.init_adam(self.lr, self.betas, self.eps)
-        self.register_optimizer()
+        self.register_optimizer(common_context)
 
 
 class Adagrad(Optimizer):
@@ -100,7 +96,7 @@ class Adagrad(Optimizer):
         self.g_square_momentum = g_square_momentum
         self.eps = eps
 
-    def apply(self):
+    def apply(self, common_context: PyPersiaCommonContext):
         """Initialize Adagrad optimizer and register to embedding server."""
         self.optimizer_base.init_adagrad(
             self.lr,
@@ -109,4 +105,4 @@ class Adagrad(Optimizer):
             self.g_square_momentum,
             self.eps,
         )
-        self.register_optimizer()
+        self.register_optimizer(common_context)
