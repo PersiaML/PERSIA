@@ -2,6 +2,11 @@ import sys
 
 from types import ModuleType
 
+# pytype: disable=import-error
+import persia_core
+
+# pytype: enable=import-error
+
 
 def register_submodule(module: ModuleType, root_module_path: str):
     """register the persia core module to sys module path.
@@ -20,11 +25,6 @@ def register_submodule(module: ModuleType, root_module_path: str):
             sys.modules[full_path] = obj
             register_submodule(obj, full_path)
 
-
-# pytype: disable=import-error
-import persia_core
-
-# pytype: enable=import-error
 
 register_submodule(
     persia_core,

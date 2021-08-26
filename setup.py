@@ -47,7 +47,7 @@ if __name__ == "__main__":
             # script=True,
             {
                 "persia-embedding-sharded-middleware": "persia.persia-embedding-sharded-middleware",
-                "persia-embedding-sharded-server": "persia.persia-embedding-sharded-server"
+                "persia-embedding-sharded-server": "persia.persia-embedding-sharded-server",
             },
             path="rust/persia-embedding-sharded-server/Cargo.toml",
             binding=Binding.Exec,
@@ -88,5 +88,5 @@ if __name__ == "__main__":
                 "launch_server = persia.launcher:launch_server",
             ]
         },
-        python_requires=">=3.8",
+        python_requires=">=3.7",
     )
