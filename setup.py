@@ -1,4 +1,5 @@
 import os
+import colorama
 
 from setuptools import setup, find_packages
 from setuptools_rust import Binding, RustExtension
@@ -7,7 +8,6 @@ use_cuda = os.environ.get("USE_CUDA", False)
 integration_core = os.environ.get("INTEGRATION_CORE", True)
 
 if __name__ == "__main__":
-    import colorama
 
     colorama.init(autoreset=True)
 
@@ -88,5 +88,5 @@ if __name__ == "__main__":
                 "launch_server = persia.launcher:launch_server",
             ]
         },
-        python_requires=">=3.7",
+        python_requires=">=3.8",
     )
