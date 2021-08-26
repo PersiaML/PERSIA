@@ -12,7 +12,8 @@ steps:
           run: trainer
           graceful-shutdown: true
 
-  - label: "update"
+  - label: "upload the latest cuda-runtime image"
     command: 
+      - docker login -u $$DOCKER_USER -p $$DOCKER_TOKEN
       - docker tag persiaml-test:latest persiaml/persia-cuda-runtime:latest 
       - docker push persiaml/persia-cuda-runtime:latest 
