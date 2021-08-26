@@ -12,3 +12,7 @@ steps:
           run: trainer
           graceful-shutdown: true
 
+  - label: "update"
+    command: 
+      - docker tag persiaml-test:latest persiaml/persia-cuda-runtime:latest 
+      - docker push persiaml/persia-cuda-runtime:latest 

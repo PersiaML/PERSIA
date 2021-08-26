@@ -51,14 +51,18 @@ def run_command(cmd: List[str], verb: bool = True):
     subprocess.check_call(cmd, env=_ENV)
 
 
-@click.command()
+@click.group()
+def cli():
+    ...
+
+@cli.command()
 @click.argument("filepath", type=str)
 @click.option(
     "--gpu-num", type=int, default=1, help="Number of gpu at current replica node"
 )
 @click.option("--node-rank", type=int, default=0, help="Replica index of trainer")
 @click.option("--nnodes", type=int, default=1, help="Replica num of trainer")
-def launch_trainer(filepath, gpu_num: int, node_rank: int, nnodes: int):
+def trainer(filepath, gpu_num: int, node_rank: int, nnodes: int):
     cmd = [
         "python3",
         "-m",
@@ -74,25 +78,25 @@ def launch_trainer(filepath, gpu_num: int, node_rank: int, nnodes: int):
     run_command(cmd)
 
 
-@click.command()
+@cli.command()
 @click.argument("filepath", type=str)
 @click.option(
     "--replica-index", type=str, default=0, help="Replica index of data compose"
 )
 @click.option("--replica-size", type=str, default=1, help="Replica num of data compose")
-def launch_compose(filepath: str, replica_index: int, replica_size: int):
+def compose(filepath: str, replica_index: int, replica_size: int):
     cmd = [
         "python3",
+        filepath,
         "--replica-index",
         replica_index,
         "--replica-size",
-        replica_size,
-        filepath,
+        replica_size
     ]
     run_command(cmd)
 
 
-@click.command()
+@cli.command()
 @click.option("--port", type=int, default=8887, help="Middleware server listen port")
 @click.option("--embedding-config", type=str, help="Config of embedding definition")
 @click.option(
@@ -102,7 +106,7 @@ def launch_compose(filepath: str, replica_index: int, replica_size: int):
     "--replica-index", type=str, default=0, help="Replica index of middleware"
 )
 @click.option("--replica-size", type=str, default=1, help="Replica num of middleware")
-def launch_middleware(
+def middleware(
     port: int,
     embedding_config: str,
     global_config: str,
@@ -126,7 +130,7 @@ def launch_middleware(
     run_command(cmd)
 
 
-@click.command()
+@cli.command()
 @click.option("--port", type=int, default=8888, help="Embedding server listen port")
 @click.option("--embedding-config", type=str, help="Config of embedding definition")
 @click.option(
@@ -138,7 +142,7 @@ def launch_middleware(
 @click.option(
     "--replica-size", type=str, default=1, help="Replica num of embedding server"
 )
-def launch_server(
+def server(
     port: int,
     embedding_config: str,
     global_config: str,
@@ -162,8 +166,11 @@ def launch_server(
     run_command(cmd)
 
 
-@click.command()
-def launch_local():
+@cli.command()
+def trainer_local():
     # TODO: launch the trainer, middleware server, embedding server
     cmd = "launch the trainer locally with middleware and embedding server"
     print(cmd)
+
+if __name__ == "__main__":
+    cli()

@@ -82,10 +82,7 @@ if __name__ == "__main__":
         rust_extensions=rust_extensions,
         entry_points={
             "console_scripts": [
-                "launch_trainer = persia.launcher:launch_trainer",
-                "launch_compose = persia.launcher:launch_trainer",
-                "launch_middleware = persia.launcher:launch_middleware",
-                "launch_server = persia.launcher:launch_server",
+                "persia_launcher= persia.launcher:cli",
             ]
         },
         python_requires=">=3.7",
