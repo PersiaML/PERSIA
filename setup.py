@@ -59,7 +59,7 @@ if __name__ == "__main__":
         features = None if not use_cuda else ["cuda"]
         rust_extensions.append(
             RustExtension(
-                "persia.persia_core",
+                "persia_core",
                 path="rust/persia-core/Cargo.toml",
                 binding=Binding.PyO3,
                 native=True,

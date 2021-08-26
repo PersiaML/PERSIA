@@ -22,25 +22,14 @@ def register_submodule(module: ModuleType, root_module_path: str):
 
 
 # pytype: disable=import-error
-try:
-    from persia import persia_core
-
-    persia_core_root_path = "persia_core"
-    sys.modules["persia_core"] = persia_core
-except ImportError:
-    # import the global persia_core
-    import persia_core
-
-    persia_core_root_path = persia_core.__name__
+import persia_core
 
 # pytype: enable=import-error
 
-
 register_submodule(
     persia_core,
-    persia_core_root_path,
+    persia_core.__name__,
 )
-
 
 # pytype: disable=import-error
 from persia_core import (

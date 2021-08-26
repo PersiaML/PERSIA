@@ -167,6 +167,3 @@ def launch_local():
     # TODO: launch the trainer, middleware server, embedding server
     cmd = "launch the trainer locally with middleware and embedding server"
     print(cmd)
-
-if __name__ == "__main__":
-    main()
