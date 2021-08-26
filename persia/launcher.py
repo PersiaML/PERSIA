@@ -4,34 +4,45 @@ import subprocess
 
 from typing import List, Dict
 
+from persia.logger import get_logger
+
+_logger = get_logger("launcher")
+
 REPLICA_INDEX = int(os.environ.get("JOB_ID", -1))
 DEBUG = int(os.environ.get("DEBUG", False))
+_ENV = {}
 
-
-def generate_dev_env() -> Dict[str, str]:
-    env = {}
-
+if DEBUG:
     # add thirdparty_path into PATH
     thirdparty_path = os.environ.get("THIRDPARTY_PATH", "")
     origin_path = os.environ.get("PATH")
-    env["PATH"] = f"{thirdparty_path}:{origin_path}"
+    _ENV["PATH"] = f"{thirdparty_path}:{origin_path}"
     # add thirdparty_path into PYTHONPATH
     python_path = os.environ.get("PYTHONPATH", "")
     origin_pythonpath = os.environ.get("PYTHONPATH")
-    env["PYTHONPATH"] = f"{python_path}:{origin_pythonpath}"
-    return env
+    _ENV["PYTHONPATH"] = f"{python_path}:{origin_pythonpath}"
+    
+
+def resolve_binary_execute_path(binary_name: str) -> str:
+    if DEBUG:
+        thirdparty_path = os.environ.get("THIRDPARTY_PATH", None)
+        if not thirdparty_path:
+            raise KeyError("Launch program with debug mode but without THIRDPARTY_PATH env")
+
+        if os.access(os.path.join(thirdparty_path, binary_name), os.X_OK):
+            raise Exception(f"Can't not found executable {binary_name} in {thirdparty_path}")
+        
+        return binary_name
+    else:
+        return os.path.realpath(os.path.join(__file__, "../", binary_name))
 
 
 def run_command(cmd: List[str], verb: bool = True):
     if verb:
-        cmd_str = " ".join(cmd)
+        cmd_str = " ".join(map(str, cmd))
         print(f"execute command: {cmd_str}")
 
-    if DEBUG:
-        env = generate_dev_env()
-    else:
-        env = {}
-    subprocess.check_call(cmd, env=env)
+    subprocess.check_call(cmd, env=_ENV)
 
 
 @click.command()
@@ -54,7 +65,6 @@ def launch_trainer(filepath, gpu_num: int, node_rank: int, nnodes: int):
         node_rank,
         filepath,
     ]
-
     run_command(cmd)
 
 
@@ -75,13 +85,13 @@ def launch_compose(filepath: str, replica_index: int, replica_size: int):
 
 
 @click.command()
-@click.option("--port", type=int, help="Middleware server listen port")
+@click.option("--embedding-config", type=str, help="Config of embedding definition")
 @click.option(
     "--global-config", type=str, help="Config of embedding server and middleware"
 )
-@click.option("--embedding-config", type=str, help="Config of embedding definition")
-@click.option("--replica-index", type=str, help="Replica index of middleware")
-@click.option("--replica-size", type=str, help="Replica num of middleware")
+@click.option("--port", type=int, default=8887, help="Middleware server listen port")
+@click.option("--replica-index", type=str, default=0, help="Replica index of middleware")
+@click.option("--replica-size", type=str, default=1, help="Replica num of middleware")
 def launch_middleware(
     port: int,
     global_config: str,
@@ -89,13 +99,14 @@ def launch_middleware(
     replica_index: int,
     replica_size: int,
 ):
+    executable_path = resolve_binary_execute_path("persia-embedding-sharded-middleware")
     cmd = [
-        "persia-embedding-sharded-middleware",
+        executable_path,
         "--port",
         port,
         "--global-config",
         global_config,
-        "--embeding-config",
+        "--embedding-config",
         embedding_config,
         "--replica-index",
         replica_index,
@@ -106,15 +117,16 @@ def launch_middleware(
 
 
 @click.command()
-@click.option("--port", type=int, help="Embedding server listen port")
-@click.option("--replica-index", type=str, help="Replica index of embedding server")
-@click.option("--replica-size", type=str, help="Replica num of embedding server")
 @click.option(
     "--global-config", type=str, help="Config of embedding server and middleware"
 )
+@click.option("--port", type=int, default=8888, help="Embedding server listen port")
+@click.option("--replica-index", type=str, default=0, help="Replica index of embedding server")
+@click.option("--replica-size", type=str, default=1, help="Replica num of embedding server")
 def launch_server(port: int, replica_index: int, replica_size: int, global_config: str):
+    executable_path = resolve_binary_execute_path("persia-embedding-sharded-server")
     cmd = [
-        "persia-embedding-sharded-server",
+        executable_path,
         "--port",
         port,
         "--global-config",

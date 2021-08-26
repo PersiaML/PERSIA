@@ -38,17 +38,19 @@ if __name__ == "__main__":
 
     rust_extensions.append(
         RustExtension(
+            # TODO: Due to this issue https://github.com/PyO3/setuptools-rust/issues/153 still not release
+            # the new version of setuptool_rust, RustExtension can't enable the script feature
             # {
-            #     "persia_ps.middleware": "persia-embedding-sharded-middleware",
-            #     "persia_ps.server": "persia-embedding-sharded-server"
+            #     "persia-embedding-sharded-middleware": "persia.persia_middleware",
+            #     "persia-embedding-sharded-server": "persia.persia_server"
             # },
+            # script=True,
             {
-                "persia-embedding-sharded-middleware": "persia_ps.middleware",
-                "persia-embedding-sharded-server": "persia_ps.server"
+                "persia-embedding-sharded-middleware": "persia.persia-embedding-sharded-middleware",
+                "persia-embedding-sharded-server": "persia.persia-embedding-sharded-server"
             },
             path="rust/persia-embedding-sharded-server/Cargo.toml",
             binding=Binding.Exec,
-            script=True,
             native=True,
         )
     )
@@ -57,7 +59,7 @@ if __name__ == "__main__":
         features = None if not use_cuda else ["cuda"]
         rust_extensions.append(
             RustExtension(
-                "persia_core.persia_core",
+                "persia.persia_core",
                 path="rust/persia-core/Cargo.toml",
                 binding=Binding.PyO3,
                 native=True,
@@ -69,7 +71,7 @@ if __name__ == "__main__":
         name="persia",
         use_scm_version={"local_scheme": "no-local-version"},
         setup_requires=["setuptools_scm"],
-        install_requires=["pyyaml", "persia-core", "colorlog"],
+        install_requires=["pyyaml", "colorlog", "click"],
         url="https://github.com/PersiaML/PersiaML",
         author="Kuaishou AI Platform Persia Team",
         author_email="admin@mail.xrlian.com",
@@ -84,7 +86,6 @@ if __name__ == "__main__":
                 "launch_compose = persia.launcher:launch_trainer",
                 "launch_middleware = persia.launcher:launch_middleware",
                 "launch_server = persia.launcher:launch_server",
-                "launch_local = persia.launcher:launch_trainer",
             ]
         },
         python_requires=">=3.7",
