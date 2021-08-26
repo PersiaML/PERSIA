@@ -7,7 +7,6 @@ from persia.ctx import cnt_ctx
 from persia.logger import get_default_logger
 from persia.prelude import (
     PyPersiaBatchDataChannel,
-    PyPersiaReplicaInfo,
     PyPersiaBatchDataReceiver,
     PyPersiaBatchDataSender,
     init_responder,
@@ -58,8 +57,9 @@ class StreamingDataset(IterableDataset):
         if not self.initialized:
             current_ctx = cnt_ctx()
             assert current_ctx is not None, "Current conext is None!"
-            replica_info = current_ctx.replica_info
-            init_responder(replica_info, self.sender)
+            world_size = current_ctx.world_size
+            assert world_size != -1, "world size not set"
+            init_responder(world_size, self.sender, current_ctx.common_context)
 
             _logger.info("initialize the responder")
             self.initialized = True
@@ -133,7 +133,6 @@ class Dataloder(object):
         is_training: bool = True,
         timeout: int = 1000 * 60 * 10,
         num_workers: int = 10,
-        replica_info: PyPersiaReplicaInfo = None,
         reproducible: bool = False,
     ):
         # dynamic import the PyForward due to conditional compilation
@@ -143,13 +142,18 @@ class Dataloder(object):
         self.timeout = timeout
         self.num_workers = num_workers
 
-        if not replica_info:
-            current_ctx = cnt_ctx()
-            assert current_ctx is not None, "Current conext is None!"
-            replica_info = current_ctx.replica_info
+        current_ctx = cnt_ctx()
+        assert current_ctx is not None, "Current conext is None!"
+
+        embedding_staleness = current_ctx.embedding_staleness
+        assert current_ctx is not None, "Not in a train context"
 
         self.forward_engine = PyForward(
-            forward_buffer_size, is_training, reproducible, replica_info
+            forward_buffer_size,
+            is_training,
+            reproducible,
+            embedding_staleness,
+            current_ctx.common_context,
         )
         self.forward_engine.set_input_channel(dataset.receiver)
         self.forward_engine.launch(

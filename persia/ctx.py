@@ -10,11 +10,7 @@ import persia.env as env
 
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
-from persia.backend import init_backend
-from persia.prelude import (
-    PyPersiaReplicaInfo,
-    init_persia_embedding_staleness_semaphore,
-)
+from persia.prelude import PyPersiaCommonContext, PyPersiaBatchData
 
 _CURRENT_CXT = None
 
@@ -58,7 +54,7 @@ class BaseCtx:
         >>>         batch_data.add_dense([dense])
         >>>         batch_data.add_sparse(batch_sparse_ids)
         >>>         batch_data.add_target(target)
-        >>>         ctx.backend.send_data(batch_data)
+        >>>         ctx.send_data(batch_data)
     """
 
     def __init__(
@@ -74,18 +70,21 @@ class BaseCtx:
         if world_size == -1:
             replica_size = env.get_replica_size()
             replica_index = env.get_replica_index()
-            self.replica_info = PyPersiaReplicaInfo(replica_size, replica_index)
+            self.common_context = PyPersiaCommonContext(
+                threadpool_worker_size, replica_index, replica_size, None
+            )
             _logger.info(
-                f"init datacompose backend replica_size: {replica_size} replica_index: {replica_index}"
+                f"init datacompose, replica_size: {replica_size} replica_index: {replica_index}"
             )
         else:
             rank_id = env.get_rank()
-            self.replica_info = PyPersiaReplicaInfo(world_size, rank_id)
-            _logger.info(
-                f"init trainer backend world size: {world_size} rank_id: {rank_id}"
+            self.common_context = PyPersiaCommonContext(
+                threadpool_worker_size, rank_id, world_size, world_size
             )
+            _logger.info(f"init trainer, world size: {world_size} rank_id: {rank_id}")
 
-        self.backend = init_backend(threadpool_worker_size, self.replica_info)
+        self.embedding_staleness = None
+        self.world_size = world_size
 
     def _enter(self):
         """Hook when enter the context"""
@@ -93,7 +92,7 @@ class BaseCtx:
 
     def _exit(self):
         """Hook when exit the context"""
-        ...
+        self.common_context.exit()
 
     def __enter__(self):
         self._enter()
@@ -113,6 +112,16 @@ class BaseCtx:
             import traceback
 
             _logger.error("\n" + traceback.format_exc())
+
+    def send_data(self, data: PyPersiaBatchData, blocking: bool = True):
+        """Send PersiaBatchData from data compose to trainer and middleware side.
+
+        Arguments:
+            data (PyPersiaBatchData): PersiaBatchData that haven't been process.
+            blocking (bool, optional): Wait util the data send successfully.
+        """
+        self.common_context.send_sparse_to_middleware(data, blocking)
+        self.common_context.send_dense_to_trainer(data, blocking)
 
 
 class EmbeddingCtx(BaseCtx):
@@ -166,7 +175,7 @@ class EmbeddingCtx(BaseCtx):
         self.pretrained_loaded = False
 
     def _enter(self):
-        self.backend.set_configuration(
+        self.common_context.set_configuration(
             self.emb_initialization[0],
             self.emb_initialization[1],
             self.admit_probability,
@@ -371,7 +380,7 @@ class EmbeddingCtx(BaseCtx):
             dst_dir (str): Destination directory.
             blocking (bool, optional): Dump embedding in blocking mode or not.
         """
-        self.backend.dump_embedding(dst_dir, blocking)
+        self.common_context.dump_embedding(dst_dir, blocking)
 
     def load_embedding(self, src_dir: str, blocking: bool = True):
         """Load embeddings from ``src_dir``. Use ``TrainCtx.wait_for_load_embedding`` to wait until finished
@@ -381,15 +390,15 @@ class EmbeddingCtx(BaseCtx):
             src_dir (str): Directory to load embeddings.
             blocking (bool, optional): Dump embedding in blocking mode or not.
         """
-        self.backend.load_embedding(src_dir, blocking)
+        self.common_context.load_embedding(src_dir, blocking)
 
     def wait_for_dump_embedding(self):
         """Wait for the embedding dump process."""
-        self.backend.wait_for_dump_embedding()
+        self.common_context.wait_for_dump_embedding()
 
     def wait_for_load_embedding(self):
         """Wait for the embedding load process."""
-        self.backend.wait_for_load_embedding()
+        self.common_context.wait_for_load_embedding()
 
 
 class TrainCtx(EmbeddingCtx):
@@ -419,7 +428,7 @@ class TrainCtx(EmbeddingCtx):
         dense_optimizer: torch.optim.Optimizer,
         device_id: int = 0,
         grad_scalar_update_factor: float = 4,
-        embedding_staleness: int = -1,
+        embedding_staleness: int = 1000,
         backward_buffer_size: int = 10,
         backward_workers_size: int = 8,
         grad_update_buffer_size: int = 60,
@@ -458,21 +467,17 @@ class TrainCtx(EmbeddingCtx):
         self.sparse_optimizer = sparse_optimizer
         self.dense_optimizer = dense_optimizer
         self.backward_workers_size = backward_workers_size
-        self.embedding_staleness = (
-            embedding_staleness if embedding_staleness is not None else -1
-        )
+        self.embedding_staleness = embedding_staleness
 
         from persia.prelude import PyBackward
 
         # dynamic import the PyForward due to conditional compilation
         self.grad_queue = Queue(grad_update_buffer_size)
-        self.backward_engine = PyBackward(backward_buffer_size)
+        self.backward_engine = PyBackward(backward_buffer_size, self.common_context)
 
     def _enter(self):
         super()._enter()
 
-        if self.embedding_staleness > 0:
-            init_persia_embedding_staleness_semaphore(self.embedding_staleness)
         self.sparse_optimizer.apply()
         self.backward_engine.launch(self.device_id, self.backward_workers_size)
 

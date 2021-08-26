@@ -2,7 +2,7 @@ from abc import abstractmethod, ABC
 from typing import Tuple
 
 from persia.prelude import PyOptimizerBase
-from persia.backend import get_backend
+from persia.ctx import cnt_ctx
 
 
 class Optimizer(ABC):
@@ -18,7 +18,9 @@ class Optimizer(ABC):
 
     def register_optimizer(self):
         """Register sparse optimizer to embedding server."""
-        get_backend().register_optimizer(self.optimizer_base)
+        current_ctx = cnt_ctx()
+        assert current_ctx is not None, "Current conext is None!"
+        current_ctx.common_context.register_optimizer(self.optimizer_base)
 
 
 class SGD(Optimizer):

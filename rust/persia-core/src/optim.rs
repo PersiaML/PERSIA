@@ -1,6 +1,3 @@
-use crate::PersiaRpcClient;
-
-use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
 use persia_embedding_datatypes::optim::{
@@ -56,21 +53,6 @@ impl PyOptimizerBase {
             eps,
         };
         self.inner = Some(OptimizerConfig::Adam(config));
-    }
-
-    fn register_optimizer2middleware(&self) -> PyResult<()> {
-        let rpc_client = PersiaRpcClient::get_instance();
-        let runtime = rpc_client.runtime.clone();
-        let _guard = runtime.enter();
-
-        runtime
-            .block_on(
-                rpc_client
-                    .get_random_client()
-                    .register_optimizer(&self.inner.as_ref().unwrap()),
-            )
-            .unwrap()
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 }
 

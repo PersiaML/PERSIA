@@ -59,7 +59,7 @@ impl EmbeddingMonitorInner {
                     let indices = reveiver.recv().unwrap_or(vec![]);
                     let mut estimator = distinct_id_estimator.lock();
                     indices.iter().for_each(|id| {
-                        estimator.add(id);
+                        estimator.insert(id);
                     })
                 }
             })

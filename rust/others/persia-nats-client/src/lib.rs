@@ -1,5 +1,5 @@
 use async_nats::{Connection, Subscription};
-use persia_embedding_config::PersiaReplicaInfo;
+use once_cell::sync::OnceCell;
 use persia_futures::smol;
 use persia_speedy::{Readable, Writable};
 use retry::{delay::Fixed, retry};
@@ -23,21 +23,19 @@ impl From<std::io::Error> for NatsError {
     }
 }
 
-#[derive(Readable, Writable, Debug, Clone)]
-struct AddrPacket {
-    replica_info: PersiaReplicaInfo,
-    address: String,
-}
+static NATS_CLIRNT: OnceCell<NatsClient> = OnceCell::new();
 
 #[derive(Debug, Clone)]
 pub struct NatsClient {
     nc: Connection,
     timeout: Duration,
-    pub replica_info: PersiaReplicaInfo,
 }
 
 impl NatsClient {
-    pub fn new(replica_info: PersiaReplicaInfo) -> Self {
+    pub fn get() -> Self {
+        NATS_CLIRNT.get_or_init(|| NatsClient::new()).clone()
+    }
+    fn new() -> Self {
         let nats_url = std::env::var("PERSIA_NATS_IP")
             .unwrap_or(String::from("nats://persia_nats_service:4222"));
         let nc = retry(Fixed::from_millis(5000), || {
@@ -52,7 +50,6 @@ impl NatsClient {
         Self {
             nc,
             timeout: Duration::from_secs(10),
-            replica_info,
         }
     }
 

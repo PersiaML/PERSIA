@@ -157,6 +157,16 @@ impl PersiaReplicaInfo {
             None => Err(PersiaGlobalConfigError::NotReadyError),
         }
     }
+
+    pub fn set(replica_size: usize, replica_index: usize) -> Result<(), PersiaGlobalConfigError> {
+        let instance = Self {
+            replica_size,
+            replica_index,
+        };
+        PERSIA_REPLICA_INFO
+            .set(Arc::new(instance))
+            .map_err(|_| PersiaGlobalConfigError::SetError)
+    }
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]

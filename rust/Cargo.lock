@@ -2142,6 +2142,7 @@ name = "persia-nats-client"
 version = "0.1.0"
 dependencies = [
  "async-nats",
+ "once_cell",
  "persia-embedding-config",
  "persia-futures",
  "persia-speedy",
