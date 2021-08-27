@@ -7,7 +7,7 @@ use super::{AsyncEmbeddingOnCuda, AsyncRawEmbeddingOnCuda, AsyncTensorOnCuda};
 use cuda_runtime_sys as cuda;
 use persia_libs::{anyhow::Result, tracing};
 
-use persia_embedding_datatypes::{
+use persia_common::{
     BaseTensor, DenseTensor, FeatureEmbeddingBatch, PersiaDenseTensor, TensorDtype,
 };
 

@@ -11,7 +11,7 @@ use persia_libs::{
 use thiserror::Error;
 
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaShardedServerConfig};
-use persia_embedding_datatypes::HashMapEmbeddingEntry;
+use persia_common::HashMapEmbeddingEntry;
 use persia_eviction_map::Sharded;
 use persia_speedy::{Readable, Writable};
 

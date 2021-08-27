@@ -1,8 +1,5 @@
 #![allow(clippy::needless_return)]
 
-#[allow(dead_code)]
-pub mod feature_config;
-
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use persia_libs::{indexmap, once_cell::sync::OnceCell, serde_yaml, tracing};

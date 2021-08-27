@@ -24,7 +24,7 @@ use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
 };
-use persia_embedding_datatypes::{EmbeddingTensor, PersiaBatchData, PreForwardStub};
+use persia_common::{EmbeddingTensor, PersiaBatchData, PreForwardStub};
 use persia_embedding_sharded_server::sharded_middleware_service::{
     MiddlewareNatsStubPublisher, ShardedMiddlewareError,
 };

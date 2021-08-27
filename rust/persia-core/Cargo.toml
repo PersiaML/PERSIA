@@ -12,21 +12,20 @@ name = "persia_core"
 path = "src/lib.rs"
 
 [dependencies]
+arr_macro = "0.1"
 color-eyre = "0.5"
 cuda-runtime-sys = {version = "0.3.0-alpha.1", optional = true}
 paste = "1"
+persia-common = {path = "../persia-common"}
 persia-embedding-config = {path = "../persia-embedding-config"}
-persia-embedding-datatypes = {path = "../persia-embedding-datatypes"}
 persia-embedding-sharded-server = {path = "../persia-embedding-sharded-server"}
 persia-libs = {path = "../persia-libs"}
-persia-message-queue = {path = "../persia-message-queue"}
 persia-metrics = {path = "../persia-metrics"}
 persia-model-manager = {path = "../persia-model-manager"}
 persia-nats-client = {path = "../others/persia-nats-client"}
 persia-nats-marcos = {path = "../others/persia-nats-marcos"}
 persia-rpc = "0.6"
 persia-speedy = "0.9"
-resource_pool = {path = "../persia-resource-pool"}
 shadow-rs = "0.5"
 thiserror = "1.0"
 

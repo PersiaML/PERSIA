@@ -154,7 +154,7 @@ mod eviction_map_tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use persia_embedding_config::InitializationMethod;
-    use persia_embedding_datatypes::HashMapEmbeddingEntry;
+    use persia_common::HashMapEmbeddingEntry;
     use std::sync::Arc;
 
     type ArcEntry = Arc<parking_lot::RwLock<HashMapEmbeddingEntry>>;

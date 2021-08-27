@@ -19,7 +19,7 @@ use persia_embedding_config::{
     PerisaIntent, PersiaCommonConfig, PersiaGlobalConfigError, PersiaPersistenceStorage,
     PersiaReplicaInfo, PersiaShardedServerConfig,
 };
-use persia_embedding_datatypes::HashMapEmbeddingEntry;
+use persia_common::HashMapEmbeddingEntry;
 use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
 use persia_full_amount_manager::{FullAmountManager, PersiaFullAmountManagerError};
 use persia_speedy::{Readable, Writable};

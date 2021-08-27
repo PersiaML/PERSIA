@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 
 use persia_libs::anyhow::{anyhow, Result};
 
-use persia_embedding_datatypes::HashMapEmbeddingEntry;
+use persia_common::HashMapEmbeddingEntry;
 use persia_speedy::{Readable, Writable};
 
 #[derive(Readable, Writable, Debug)]

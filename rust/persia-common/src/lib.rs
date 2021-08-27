@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 use std::u64;
 
 use persia_libs::{
-    bytes,
+    bytes, half,
     half::prelude::*,
     hashbrown::HashMap,
     itertools::Itertools,
@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use persia_embedding_config::InitializationMethod;
 use persia_speedy::{Readable, Writable};
 
+pub mod message_queue;
 pub mod optim;
 
 #[derive(Serialize, Deserialize, Readable, Writable, Clone, Debug)]

@@ -4,7 +4,7 @@ use pyo3::types::PyBytes;
 
 use persia_libs::numpy::{PyArray1, PyArray2};
 
-use persia_embedding_datatypes::{
+use persia_common::{
     BaseTensor, DenseTensor, EmbeddingTensor, PersiaBatchData, SparseBatch, SparseTensor, Tensor,
 };
 use persia_speedy::Writable;

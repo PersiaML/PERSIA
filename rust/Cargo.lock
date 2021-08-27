@@ -1859,6 +1859,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
 
 [[package]]
+name = "persia-common"
+version = "0.1.0"
+dependencies = [
+ "hyper",
+ "paste 1.0.5",
+ "persia-embedding-config",
+ "persia-libs",
+ "persia-simd",
+ "persia-speedy",
+ "serde",
+ "thiserror",
+ "url",
+]
+
+[[package]]
 name = "persia-common-benchmark"
 version = "0.1.0"
 dependencies = [
@@ -1875,14 +1890,14 @@ dependencies = [
 name = "persia-core"
 version = "0.1.0"
 dependencies = [
+ "arr_macro",
  "color-eyre",
  "cuda-runtime-sys",
  "paste 1.0.5",
+ "persia-common",
  "persia-embedding-config",
- "persia-embedding-datatypes",
  "persia-embedding-sharded-server",
  "persia-libs",
- "persia-message-queue",
  "persia-metrics",
  "persia-model-manager",
  "persia-nats-client",
@@ -1890,7 +1905,6 @@ dependencies = [
  "persia-rpc",
  "persia-speedy",
  "pyo3",
- "resource_pool",
  "shadow-rs",
  "thiserror",
 ]
@@ -1908,24 +1922,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "persia-embedding-datatypes"
-version = "0.1.0"
-dependencies = [
- "half",
- "paste 1.0.5",
- "persia-embedding-config",
- "persia-libs",
- "persia-simd",
- "persia-speedy",
- "serde",
-]
-
-[[package]]
 name = "persia-embedding-holder"
 version = "0.1.0"
 dependencies = [
+ "persia-common",
  "persia-embedding-config",
- "persia-embedding-datatypes",
  "persia-eviction-map",
  "persia-libs",
  "persia-speedy",
@@ -1942,8 +1943,8 @@ dependencies = [
  "hyper",
  "hyperloglogplus",
  "lz4",
+ "persia-common",
  "persia-embedding-config",
- "persia-embedding-datatypes",
  "persia-embedding-holder",
  "persia-eviction-map",
  "persia-full-amount-manager",
@@ -1974,8 +1975,8 @@ dependencies = [
  "ahash 0.7.4",
  "hashlink",
  "linked-hash-map",
+ "persia-common",
  "persia-embedding-config",
- "persia-embedding-datatypes",
  "persia-libs",
  "rand 0.8.4",
  "rand_distr",
@@ -1986,8 +1987,8 @@ dependencies = [
 name = "persia-full-amount-manager"
 version = "0.1.0"
 dependencies = [
+ "persia-common",
  "persia-embedding-config",
- "persia-embedding-datatypes",
  "persia-eviction-map",
  "persia-libs",
  "persia-speedy",
@@ -2000,8 +2001,8 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "griddle",
+ "persia-common",
  "persia-embedding-config",
- "persia-embedding-datatypes",
  "persia-embedding-holder",
  "persia-libs",
  "persia-metrics",
@@ -2047,25 +2048,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "persia-message-queue"
-version = "0.1.0"
-dependencies = [
- "hyper",
- "persia-libs",
- "serde",
- "thiserror",
- "url",
-]
-
-[[package]]
 name = "persia-metrics"
 version = "0.1.0"
 dependencies = [
  "persia-embedding-config",
  "persia-libs",
- "persia-scheduled-thread-pool",
  "prometheus",
  "prometheus_exporter",
+ "scheduled-thread-pool",
  "thiserror",
 ]
 
@@ -2073,8 +2063,8 @@ dependencies = [
 name = "persia-model-manager"
 version = "0.1.0"
 dependencies = [
+ "persia-common",
  "persia-embedding-config",
- "persia-embedding-datatypes",
  "persia-embedding-holder",
  "persia-eviction-map",
  "persia-full-amount-manager",
@@ -2136,14 +2126,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "persia-scheduled-thread-pool"
-version = "0.1.0"
-dependencies = [
- "persia-libs",
- "scheduled-thread-pool",
-]
-
-[[package]]
 name = "persia-simd"
 version = "0.1.0"
 
@@ -2179,7 +2161,7 @@ dependencies = [
 name = "persia-storage-visitor"
 version = "0.1.0"
 dependencies = [
- "persia-embedding-datatypes",
+ "persia-common",
  "persia-libs",
  "persia-speedy",
 ]
@@ -2610,14 +2592,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "winreg",
-]
-
-[[package]]
-name = "resource_pool"
-version = "0.1.0"
-dependencies = [
- "arr_macro",
- "persia-libs",
 ]
 
 [[package]]

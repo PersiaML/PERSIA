@@ -24,8 +24,8 @@ use persia_embedding_config::{
     EmbeddingConfig, InstanceInfo, PersiaGlobalConfigError, PersiaMiddlewareConfig,
     PersiaReplicaInfo, PersiaSparseModelHyperparameters, SlotConfig,
 };
-use persia_embedding_datatypes::optim::OptimizerConfig;
-use persia_embedding_datatypes::{
+use persia_common::optim::OptimizerConfig;
+use persia_common::{
     ndarray_f16_to_f32, ndarray_f32_to_f16, EmbeddingBatch, EmbeddingGradientBatch,
     FeatureEmbeddingBatch, FeatureRawEmbeddingBatch, FeatureSumEmbeddingBatch, Gradients,
     HashMapEmbeddingEntry, PreForwardStub, SingleSignInFeatureBatch,
@@ -1377,9 +1377,9 @@ impl MiddlewareNatsStub {
 mod lookup_batched_all_slots_preprocess_tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use persia_embedding_datatypes::FeatureBatch;
+    use persia_common::FeatureBatch;
     use persia_libs::serde_yaml;
-    
+
     #[test]
     fn test_indices_to_hashstack_indices() {
         let config = "feature_index_prefix_bit: 12\nslots_config:\n  Test:\n    dim: 32\n    hash_stack_config:\n      hash_stack_rounds: 2\n      embedding_size: 10\nfeature_groups: {}\n";

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use hyperloglogplus::HyperLogLog;
 use persia_libs::{hashbrown, once_cell, parking_lot, tracing, ChannelPair};
 
-use persia_embedding_datatypes::SingleSignInFeatureBatch;
+use persia_common::SingleSignInFeatureBatch;
 use persia_metrics::{GaugeVec, PersiaMetricsManager, PersiaMetricsManagerError};
 
 const INDICES_CHANNEL_CAP: usize = 1000;

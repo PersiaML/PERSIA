@@ -3,10 +3,12 @@ use pyo3::types::PyBytes;
 
 use crate::data::PyPersiaBatchData;
 
+use persia_common::{
+    message_queue::{PersiaMessageQueueClient, PersiaMessageQueueServer},
+    PersiaBatchData,
+};
 use persia_embedding_config::PersiaReplicaInfo;
-use persia_embedding_datatypes::PersiaBatchData;
 use persia_libs::{flume, tokio::runtime::Runtime};
-use persia_message_queue::{PersiaMessageQueueClient, PersiaMessageQueueServer};
 
 #[pyclass]
 pub struct PyPersiaMessageQueueClient {

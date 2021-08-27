@@ -3,7 +3,7 @@ use crate::PersiaRpcClient;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
-use persia_embedding_datatypes::optim::{
+use persia_common::optim::{
     AdagradConfig, AdamConfig, NaiveSGDConfig, OptimizerConfig,
 };
 

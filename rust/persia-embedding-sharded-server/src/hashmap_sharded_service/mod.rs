@@ -10,7 +10,7 @@ use persia_embedding_config::{
     EmbeddingConfig, InstanceInfo, PerisaIntent, PersiaCommonConfig, PersiaGlobalConfigError,
     PersiaReplicaInfo, PersiaShardedServerConfig, PersiaSparseModelHyperparameters,
 };
-use persia_embedding_datatypes::{
+use persia_common::{
     optim::{Optimizable, Optimizer, OptimizerConfig},
     HashMapEmbeddingEntry,
 };
