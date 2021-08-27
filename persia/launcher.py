@@ -6,6 +6,7 @@ from typing import List
 
 from persia.logger import get_logger
 
+_logger = get_logger(__file__)
 
 _DEBUG = int(os.environ.get("DEBUG", False))
 _ENV = os.environ.copy()
@@ -16,12 +17,14 @@ if _DEBUG:
     if persia_dev_path is not None:
         origin_path = os.environ.get("PATH", "")
         _ENV["PATH"] = f"{persia_dev_path}:{origin_path}"
+        _logger.info(f"Use persia_dev_path: {persia_dev_path} to replace origin path")
 
     # add thirdparty_path into PYTHONPATH
     persia_dev_pythonpath = os.environ.get("PERSIA_DEV_PYTHONPATH", None)
     if persia_dev_pythonpath is not None:
         origin_pythonpath = os.environ.get("PYTHONPATH", "")
         _ENV["PYTHONPATH"] = f"{persia_dev_pythonpath}:{origin_pythonpath}"
+        _logger.info(f"Use persia_dev_pythonpath: {persia_dev_pythonpath} to replace origin path")
 
 
 def resolve_binary_execute_path(binary_name: str) -> str:
