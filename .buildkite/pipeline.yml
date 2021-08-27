@@ -13,6 +13,7 @@ steps:
           graceful-shutdown: true
 
   - label: "upload the latest cuda-runtime image"
+    branches: "main"
     command: 
       - docker login -u $$DOCKER_USER -p $$DOCKER_TOKEN
       - docker tag persiaml-test:latest persiaml/persia-cuda-runtime:latest 

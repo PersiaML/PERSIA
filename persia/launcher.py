@@ -55,6 +55,7 @@ def run_command(cmd: List[str], verb: bool = True):
 def cli():
     ...
 
+
 @cli.command()
 @click.argument("filepath", type=str)
 @click.option(
@@ -91,7 +92,7 @@ def compose(filepath: str, replica_index: int, replica_size: int):
         "--replica-index",
         replica_index,
         "--replica-size",
-        replica_size
+        replica_size,
     ]
     run_command(cmd)
 
@@ -171,6 +172,7 @@ def trainer_local():
     # TODO: launch the trainer, middleware server, embedding server
     cmd = "launch the trainer locally with middleware and embedding server"
     print(cmd)
+
 
 if __name__ == "__main__":
     cli()
