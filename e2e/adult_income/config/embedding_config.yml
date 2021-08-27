@@ -1,6 +1,6 @@
 forward_buffer_size: 1000
 feature_index_prefix_bit: 12
-slot_configs:
+slots_config:
   workclass:
     dim: 8
     embedding_summation: true

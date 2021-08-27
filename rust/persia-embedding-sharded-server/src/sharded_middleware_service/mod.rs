@@ -312,7 +312,7 @@ pub fn sign_to_shard_modulo(sign: u64, num_shards: u64) -> u64 {
 pub fn indices_to_hashstack_indices(indices: &mut SparseBatch, config: &EmbeddingConfig) -> () {
     for feature_batch in indices.batches.iter_mut() {
         let slot_conf = config
-            .slot_configs
+            .slots_config
             .get(&feature_batch.feature_name)
             .expect("slot not found");
 
@@ -372,7 +372,7 @@ pub fn indices_add_prefix(indices: &mut SparseBatch, config: &EmbeddingConfig) -
     };
     for feature_batch in indices.batches.iter_mut() {
         let slot_conf = config
-            .slot_configs
+            .slots_config
             .get(&feature_batch.feature_name)
             .expect("slot not found");
         if slot_conf.index_prefix > 0 {
@@ -428,7 +428,7 @@ pub fn lookup_batched_all_slots_preprocess(
         let mut results = vec![Vec::new(); num_shards as usize];
         for (feature_idx, feature_batch) in indices.batches.iter().enumerate() {
             let slot_conf = config
-                .slot_configs
+                .slots_config
                 .get(&feature_batch.feature_name)
                 .expect("slot not found");
             for (sign_idx, single_sign) in feature_batch.index_batch.iter().enumerate() {
@@ -469,7 +469,7 @@ pub fn lookup_batched_all_slots_postprocess<'a>(
         .iter()
         .map(|x| {
             let slot_conf = config
-                .slot_configs
+                .slots_config
                 .get(x.feature_name.as_str())
                 .expect("slot not found");
             let (feature_len, sign2idx) = if slot_conf.embedding_summation {
@@ -669,7 +669,7 @@ impl ShardedMiddlewareServerInner {
 
     fn get_slot_conf(&self, slot_name: &str) -> &SlotConfig {
         self.embedding_config
-            .slot_configs
+            .slots_config
             .get(slot_name)
             .expect("slot not found")
     }
@@ -1377,7 +1377,7 @@ mod lookup_batched_all_slots_preprocess_tests {
 
     #[test]
     fn test_indices_to_hashstack_indices() {
-        let config = "feature_index_prefix_bit: 12\nslot_configs:\n  Test:\n    dim: 32\n    hash_stack_config:\n      hash_stack_rounds: 2\n      embedding_size: 10\nfeature_groups: {}\n";
+        let config = "feature_index_prefix_bit: 12\nslots_config:\n  Test:\n    dim: 32\n    hash_stack_config:\n      hash_stack_rounds: 2\n      embedding_size: 10\nfeature_groups: {}\n";
 
         let config: EmbeddingConfig = serde_yaml::from_str(config).expect("failed to parse config");
 
@@ -1421,7 +1421,7 @@ mod lookup_batched_all_slots_preprocess_tests {
 
     #[test]
     fn test_indices_add_prefix() {
-        let config = "feature_index_prefix_bit: 12\nslot_configs:\n  feature1:\n    dim: 64\n    index_prefix: 450359962737049600\n";
+        let config = "feature_index_prefix_bit: 12\nslots_config:\n  feature1:\n    dim: 64\n    index_prefix: 450359962737049600\n";
 
         let config: EmbeddingConfig = serde_yaml::from_str(config).expect("failed to parse config");
 
