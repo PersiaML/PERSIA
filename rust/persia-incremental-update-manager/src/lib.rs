@@ -15,11 +15,11 @@ use persia_libs::{
 };
 use thiserror::Error;
 
+use persia_common::HashMapEmbeddingEntry;
 use persia_embedding_config::{
     PerisaIntent, PersiaCommonConfig, PersiaGlobalConfigError, PersiaPersistenceStorage,
     PersiaReplicaInfo, PersiaShardedServerConfig,
 };
-use persia_common::HashMapEmbeddingEntry;
 use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
 use persia_metrics::{Gauge, PersiaMetricsManager, PersiaMetricsManagerError};
 use persia_storage_visitor::{

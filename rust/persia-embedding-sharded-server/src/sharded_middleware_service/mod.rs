@@ -20,16 +20,16 @@ use persia_libs::{
 use snafu::ResultExt;
 use thiserror::Error;
 
-use persia_embedding_config::{
-    EmbeddingConfig, InstanceInfo, PersiaGlobalConfigError, PersiaMiddlewareConfig,
-    PersiaReplicaInfo, PersiaSparseModelHyperparameters, SlotConfig,
-};
 use persia_common::optim::OptimizerConfig;
 use persia_common::{
     ndarray_f16_to_f32, ndarray_f32_to_f16, EmbeddingBatch, EmbeddingGradientBatch,
     FeatureEmbeddingBatch, FeatureRawEmbeddingBatch, FeatureSumEmbeddingBatch, Gradients,
     HashMapEmbeddingEntry, PreForwardStub, SingleSignInFeatureBatch,
     SkippableFeatureEmbeddingGradientBatch, SparseBatch,
+};
+use persia_embedding_config::{
+    EmbeddingConfig, InstanceInfo, PersiaGlobalConfigError, PersiaMiddlewareConfig,
+    PersiaReplicaInfo, PersiaSparseModelHyperparameters, SlotConfig,
 };
 use persia_metrics::{
     Gauge, GaugeVec, Histogram, IntCounterVec, PersiaMetricsManager, PersiaMetricsManagerError,
