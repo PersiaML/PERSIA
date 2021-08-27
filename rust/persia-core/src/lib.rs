@@ -17,6 +17,7 @@ mod rpc;
 mod utils;
 
 use crate::data::PyPersiaBatchData;
+#[cfg(feature = "cuda")]
 use crate::forward::{forward_directly, PythonTrainBatch};
 use crate::optim::PyOptimizerBase;
 use crate::rpc::PersiaRpcClient;
@@ -319,6 +320,7 @@ impl PyPersiaCommonContext {
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
+    #[cfg(feature = "cuda")]
     pub fn forward_directly_from_data(
         &self,
         batch: &mut PyPersiaBatchData,
@@ -333,6 +335,7 @@ impl PyPersiaCommonContext {
         )
     }
 
+    #[cfg(feature = "cuda")]
     pub fn forward_directly_from_bytes(
         &self,
         batch: &PyBytes,
