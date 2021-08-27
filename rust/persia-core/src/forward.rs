@@ -278,7 +278,7 @@ struct Forward {
     pub is_training: bool,
     pub launch: bool,
     pub common_context: Arc<PersiaCommonContext>,
-    pub embedding_staleness_semaphore: Arc<Semaphore>,
+    pub embedding_staleness_semaphore: Option<Arc<Semaphore>>,
 }
 
 impl Forward {
@@ -287,7 +287,7 @@ impl Forward {
         is_training: bool,
         reproducible: bool,
         common_context: Arc<PersiaCommonContext>,
-        embedding_staleness: usize,
+        embedding_staleness: Option<usize>,
     ) -> Self {
         let (reorder_buffer_channel_s, reorder_buffer_channel_r) = if reproducible {
             let (s, r) = flume::bounded(1);
@@ -298,6 +298,11 @@ impl Forward {
         let (forwarded_channel_s, forwarded_channel_r) = flume::bounded(forward_buffer_size);
         let (gpu_forwarded_channel_s, gpu_forwarded_channel_r) =
             flume::bounded(forward_buffer_size);
+
+        let embedding_staleness_semaphore = match embedding_staleness {
+            Some(s) => Some(Arc::new(Semaphore::new(s))),
+            None => None,
+        };
 
         Self {
             input_channel: None,
@@ -310,7 +315,7 @@ impl Forward {
             is_training,
             launch: false,
             common_context,
-            embedding_staleness_semaphore: Arc::new(Semaphore::new(embedding_staleness)),
+            embedding_staleness_semaphore,
         }
     }
 
@@ -429,7 +434,10 @@ impl Forward {
             let is_training = self.is_training;
 
             let running = context.running.clone();
-            let embedding_staleness_semaphore = self.embedding_staleness_semaphore.clone();
+            let embedding_staleness_semaphore = match &self.embedding_staleness_semaphore {
+                Some(s) => Some(s.clone()),
+                None => None,
+            };
 
             let handle = persia_futures::tokio::spawn(async move {
                 loop {
@@ -453,17 +461,16 @@ impl Forward {
                                     (result, middleware_addr, None)
                                 }
                                 EmbeddingTensor::PreForwardStub(stub) => {
-                                    let permit = embedding_staleness_semaphore
-                                        .clone()
-                                        .acquire_owned()
-                                        .await
-                                        .unwrap();
+                                    let permit = match &embedding_staleness_semaphore {
+                                        Some(s) => Some(s.clone().acquire_owned().await.unwrap()),
+                                        None => None,
+                                    };
 
                                     let client = rpc_client
                                         .get_client_by_addr(stub.middleware_addr.as_str());
                                     let result =
                                         client.forward_batch_id(&(stub.clone(), is_training)).await;
-                                    (result, stub.middleware_addr.clone(), Some(permit))
+                                    (result, stub.middleware_addr.clone(), permit)
                                 }
                                 EmbeddingTensor::Null => {
                                     panic!("current sparse data not support null data",)
@@ -601,7 +608,7 @@ impl PyForward {
         forward_buffer_size: usize,
         is_training: bool,
         reproducible: bool,
-        embedding_staleness: usize,
+        embedding_staleness: Option<usize>,
         common_context: &PyPersiaCommonContext,
     ) -> PyResult<PyForward> {
         Ok(PyForward {

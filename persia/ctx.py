@@ -65,9 +65,9 @@ class BaseCtx:
         Arguments:
             threadpool_worker_size (int): Rpc threadpool worker size.
         """
-        world_size = env.get_world_size()
+        self.world_size = env.get_world_size()
 
-        if world_size == -1:
+        if self.world_size == -1:
             replica_size = env.get_replica_size()
             replica_index = env.get_replica_index()
             self.common_context = PyPersiaCommonContext(
@@ -79,12 +79,11 @@ class BaseCtx:
         else:
             rank_id = env.get_rank()
             self.common_context = PyPersiaCommonContext(
-                threadpool_worker_size, rank_id, world_size, world_size
+                threadpool_worker_size, rank_id, self.world_size, self.world_size
             )
-            _logger.info(f"init trainer, world size: {world_size} rank_id: {rank_id}")
-
-        self.embedding_staleness = None
-        self.world_size = world_size
+            _logger.info(
+                f"init trainer, world size: {self.world_size} rank_id: {rank_id}"
+            )
 
     def _enter(self):
         """Hook when enter the context"""
@@ -432,7 +431,6 @@ class TrainCtx(EmbeddingCtx):
         dense_optimizer: torch.optim.Optimizer,
         device_id: int = 0,
         grad_scalar_update_factor: float = 4,
-        embedding_staleness: int = 1000,
         backward_buffer_size: int = 10,
         backward_workers_size: int = 8,
         grad_update_buffer_size: int = 60,
@@ -445,7 +443,6 @@ class TrainCtx(EmbeddingCtx):
             dense_optimizer (torch.optim.Optimizer): Optimizer for dense parameters.
             device_id (int, optional): The CUDA device to use for this process.
             grad_scalar_update_factor (float, optional): Update factor of ``Gradscalar`` to ensure loss scale finitely if set ``mixed_precision=True``.
-            embedding_staleness (int, optional): Max number of batched staleness embedding each rank. A staleness embedding means it prefetched from embedding server before gradient updated.
             backward_buffer_size (int, optional): Max number of not updated gradients queued.
             backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
             grad_tensor_cache_size(int, optional): Number of reference cache , hold the gradient tensor reference to avoid
@@ -471,7 +468,6 @@ class TrainCtx(EmbeddingCtx):
         self.sparse_optimizer = sparse_optimizer
         self.dense_optimizer = dense_optimizer
         self.backward_workers_size = backward_workers_size
-        self.embedding_staleness = embedding_staleness
 
         from persia.prelude import PyBackward
 

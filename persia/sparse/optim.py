@@ -3,6 +3,7 @@ from typing import Tuple
 
 from persia.prelude import PyOptimizerBase, PyPersiaCommonContext
 
+
 class Optimizer(ABC):
     r"""Base optimizer to configurate the sparse embedding update behavior."""
 
