@@ -15,4 +15,4 @@ persia-embedding-holder = {path = "../persia-embedding-holder"}
 persia-libs = {path = "../persia-libs"}
 persia-metrics = {path = "../persia-metrics"}
 persia-storage-visitor = {path = "../persia-storage-visitor"}
-rayon = "1.5.1"
+thiserror = "1"

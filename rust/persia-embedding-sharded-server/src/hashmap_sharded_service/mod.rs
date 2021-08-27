@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use persia_libs::{bytes::Bytes, rand::Rng, thiserror::Error};
+use persia_libs::{bytes, bytes::Bytes, once_cell, parking_lot, rand, rand::Rng, tracing};
+use thiserror::Error;
+
 use snafu::ResultExt;
 
 use persia_embedding_config::{
@@ -10,12 +12,12 @@ use persia_embedding_config::{
 };
 use persia_embedding_datatypes::{
     optim::{Optimizable, Optimizer, OptimizerConfig},
-    persia_embedding_datatypes::HashMapEmbeddingEntry,
+    HashMapEmbeddingEntry,
 };
 use persia_embedding_holder::PersiaEmbeddingHolder;
 use persia_full_amount_manager::FullAmountManager;
-use persia_libs::tokio;
 use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
+
 use persia_metrics::{
     Gauge, Histogram, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError,
 };
@@ -86,8 +88,7 @@ pub enum ShardEmbeddingError {
 
 pub struct HashMapShardedServiceInner {
     pub embedding: PersiaEmbeddingHolder,
-    pub optimizer:
-        persia_libs::async_lock::RwLock<Option<Arc<Box<dyn Optimizable + Send + Sync>>>>,
+    pub optimizer: persia_libs::async_lock::RwLock<Option<Arc<Box<dyn Optimizable + Send + Sync>>>>,
     pub hyperparameter_config:
         persia_libs::async_lock::RwLock<Option<Arc<PersiaSparseModelHyperparameters>>>,
     pub hyperparameter_configured: persia_libs::async_lock::Mutex<bool>,
@@ -178,6 +179,7 @@ impl HashMapShardedServiceInner {
                         let e = self.embedding.get_value_refresh(sign);
                         match e {
                             None => {
+                                
                                 if rand::thread_rng().gen_range(0f32..1f32) < conf.admit_probability {
                                     let mut emb_entry = HashMapEmbeddingEntry::new(
                                         &conf.initialization_method,

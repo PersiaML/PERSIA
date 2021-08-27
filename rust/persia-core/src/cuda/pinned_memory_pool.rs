@@ -1,4 +1,6 @@
 use cuda_runtime_sys as cuda;
+use persia_libs::once_cell;
+
 use resource_pool::{Allocatable, Pool};
 
 pub static PINNED_MEMORY_POOL: once_cell::sync::Lazy<Pool<PinnedMemoryPtr>> =

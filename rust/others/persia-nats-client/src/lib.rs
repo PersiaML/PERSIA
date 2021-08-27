@@ -1,13 +1,13 @@
 use std::time::Duration;
 
 use async_nats::{Connection, Subscription};
-
-use persia_embedding_config::PersiaReplicaInfo;
 use persia_libs::{
     retry::{delay::Fixed, retry},
-    smol,
-    thiserror::Error,
+    smol, tracing,
 };
+use thiserror::Error;
+
+use persia_embedding_config::PersiaReplicaInfo;
 use persia_speedy::{Readable, Writable};
 
 #[derive(Readable, Writable, Error, Debug)]

@@ -3,17 +3,19 @@
 use std::cmp::Ordering;
 use std::u64;
 
+use persia_libs::rand::SeedableRng;
 use persia_libs::{
+    bytes,
     half::prelude::*,
+    hashbrown::HashMap,
     itertools::Itertools,
-    hashbrown::HashMap
-    ndarray::Array2,
+    ndarray::{Array1, Array2, ShapeError},
     ndarray_rand::rand_distr::{Gamma, Normal, Poisson, Uniform},
     ndarray_rand::RandomExt,
     numpy::PyArray1,
-    rand::SeedableRng,
-    serde::{Deserialize, Serialize}
+    rand::prelude::SmallRng,
 };
+use serde::{Deserialize, Serialize};
 
 use persia_embedding_config::InitializationMethod;
 use persia_speedy::{Readable, Writable};
@@ -38,20 +40,18 @@ impl HashMapEmbeddingEntry {
         seed: u64,
     ) -> Self {
         let emb = {
-            let mut rng = rand::prelude::SmallRng::seed_from_u64(seed);
+            let mut rng = SmallRng::seed_from_u64(seed);
             match initialization_method {
                 InitializationMethod::BoundedUniform(x) => {
-                    ndarray::Array1::random_using((dim,), Uniform::new(x.lower, x.upper), &mut rng)
+                    Array1::random_using((dim,), Uniform::new(x.lower, x.upper), &mut rng)
                 }
-                InitializationMethod::BoundedGamma(x) => ndarray::Array1::random_using(
-                    (dim,),
-                    Gamma::new(x.shape, x.scale).unwrap(),
-                    &mut rng,
-                ),
+                InitializationMethod::BoundedGamma(x) => {
+                    Array1::random_using((dim,), Gamma::new(x.shape, x.scale).unwrap(), &mut rng)
+                }
                 InitializationMethod::BoundedPoisson(x) => {
-                    ndarray::Array1::random_using((dim,), Poisson::new(x.lambda).unwrap(), &mut rng)
+                    Array1::random_using((dim,), Poisson::new(x.lambda).unwrap(), &mut rng)
                 }
-                InitializationMethod::BoundedNormal(x) => ndarray::Array1::random_using(
+                InitializationMethod::BoundedNormal(x) => Array1::random_using(
                     (dim,),
                     Normal::new(x.mean, x.standard_deviation).unwrap(),
                     &mut rng,
@@ -215,7 +215,7 @@ impl FeatureBatch {
 #[derive(Deserialize, Serialize, Readable, Writable, Debug)]
 pub struct FeatureRawEmbeddingBatch {
     pub feature_name: String,
-    pub embeddings: ndarray::Array2<half::f16>,
+    pub embeddings: Array2<half::f16>,
     pub index: Vec<usize>,
     pub sample_id_num: Vec<usize>,
 }
@@ -223,7 +223,7 @@ pub struct FeatureRawEmbeddingBatch {
 #[derive(Deserialize, Serialize, Readable, Writable, Debug)]
 pub struct FeatureSumEmbeddingBatch {
     pub feature_name: String,
-    pub embeddings: ndarray::Array2<half::f16>,
+    pub embeddings: Array2<half::f16>,
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug)]
@@ -390,8 +390,8 @@ impl Ord for PersiaBatchData {
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug)]
 pub enum Gradients {
-    F16(ndarray::Array2<half::f16>),
-    F32(ndarray::Array2<f32>),
+    F16(Array2<half::f16>),
+    F32(Array2<f32>),
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug)]
@@ -480,13 +480,13 @@ pub enum TensorDtype {
     F32,
 }
 
-pub fn ndarray_f32_to_f16(input: &ndarray::Array2<f32>) -> ndarray::Array2<f16> {
+pub fn ndarray_f32_to_f16(input: &Array2<f32>) -> Array2<f16> {
     let s = input.as_slice().unwrap();
     let f16v = Vec::from_f32_slice(s);
-    unsafe { ndarray::Array2::from_shape_vec_unchecked((input.shape()[0], input.shape()[1]), f16v) }
+    unsafe { Array2::from_shape_vec_unchecked((input.shape()[0], input.shape()[1]), f16v) }
 }
 
-pub fn ndarray_f16_to_f32(input: &ndarray::Array2<f16>) -> ndarray::Array2<f32> {
+pub fn ndarray_f16_to_f32(input: &Array2<f16>) -> Array2<f32> {
     let f32v = input
         .as_slice()
         .unwrap()
@@ -502,7 +502,7 @@ pub fn ndarray_f16_to_f32(input: &ndarray::Array2<f16>) -> ndarray::Array2<f32> 
             }
         })
         .collect_vec();
-    unsafe { ndarray::Array2::from_shape_vec_unchecked((input.shape()[0], input.shape()[1]), f32v) }
+    unsafe { Array2::from_shape_vec_unchecked((input.shape()[0], input.shape()[1]), f32v) }
 }
 
 #[derive(Serialize, Deserialize, Readable, Writable, Debug)]
@@ -544,14 +544,11 @@ impl<T> PersiaDenseTensor<T> {
     }
 }
 
-impl<T> std::convert::TryInto<ndarray::Array2<T>> for PersiaDenseTensor<T> {
-    type Error = ndarray::ShapeError;
+impl<T> std::convert::TryInto<Array2<T>> for PersiaDenseTensor<T> {
+    type Error = ShapeError;
 
     fn try_into(self) -> Result<Array2<T>, Self::Error> {
-        ndarray::Array2::<T>::from_shape_vec(
-            (self.content.len() / self.dim, self.dim),
-            self.content,
-        )
+        Array2::<T>::from_shape_vec((self.content.len() / self.dim, self.dim), self.content)
     }
 }
 

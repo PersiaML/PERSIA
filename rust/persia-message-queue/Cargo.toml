@@ -8,4 +8,6 @@ version = "0.1.0"
 [dependencies]
 hyper = {version = "0.14", features = ["full"]}
 persia-libs = {path = "../persia-libs"}
+serde = {version = "1.0", features = ["derive"]}
+thiserror = "1.0"
 url = "2.1"

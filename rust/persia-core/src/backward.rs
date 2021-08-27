@@ -11,7 +11,7 @@ use persia_embedding_datatypes::{
     EmbeddingGradientBatch, FeatureEmbeddingGradientBatch, Gradients,
     SkippableFeatureEmbeddingGradientBatch, SkippedGradientBatch,
 };
-use persia_libs::{flume, tokio::sync::OwnedSemaphorePermit};
+use persia_libs::{flume, half, ndarray, tokio::sync::OwnedSemaphorePermit, tracing};
 
 use crate::{MetricsHolder, PersiaRpcClient};
 

@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_datatypes::{EmbeddingBatch, EmbeddingTensor, PersiaBatchData};
 use persia_embedding_sharded_server::sharded_middleware_service::ShardedMiddlewareError;
-use persia_libs::{flume, tokio::sync::OwnedSemaphorePermit};
+use persia_libs::{flume, tokio::sync::OwnedSemaphorePermit, tracing};
 use persia_speedy::Readable;
 
 use pyo3::exceptions::PyRuntimeError;

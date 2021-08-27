@@ -19,9 +19,12 @@ use std::time::Duration;
 
 use persia_libs::{
     anyhow::Result,
+    hashbrown::HashMap,
     once_cell::sync::OnceCell,
     parking_lot::RwLock,
+    rand,
     tokio::sync::{OwnedSemaphorePermit, Semaphore},
+    tracing, tracing_subscriber,
 };
 
 use pyo3::exceptions::PyRuntimeError;
@@ -37,7 +40,7 @@ use persia_embedding_sharded_server::sharded_middleware_service::{
 use persia_metrics::{Histogram, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError};
 use persia_model_manager::PersiaPersistenceStatus;
 
-static METRICS_HOLDER: once_cell::sync::OnceCell<MetricsHolder> = once_cell::sync::OnceCell::new();
+static METRICS_HOLDER: OnceCell<MetricsHolder> = OnceCell::new();
 static RPC_CLIENT: OnceCell<Arc<PersiaRpcClient>> = OnceCell::new();
 static EMBEDDING_STALENESS_SEMAPHORE: OnceCell<Arc<EmbeddingStalenessSemaphore>> = OnceCell::new();
 

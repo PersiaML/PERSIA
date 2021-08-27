@@ -15,3 +15,4 @@ persia-full-amount-manager = {path = "../persia-full-amount-manager"}
 persia-libs = {path = "../persia-libs"}
 persia-speedy = "0.9"
 persia-storage-visitor = {path = "../persia-storage-visitor"}
+thiserror = "1"

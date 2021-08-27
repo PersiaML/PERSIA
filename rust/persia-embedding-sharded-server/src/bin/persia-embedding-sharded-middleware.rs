@@ -4,7 +4,7 @@ extern crate shadow_rs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use persia_libs::hashbrown::HashMap;
+use persia_libs::{anyhow, hashbrown::HashMap, rand, tracing, tracing_subscriber};
 use structopt::StructOpt;
 
 use persia_embedding_config::{

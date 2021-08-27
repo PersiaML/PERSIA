@@ -1,6 +1,7 @@
 use super::cuda_stream_pool::CudaStreamPtr;
 
 use cuda_runtime_sys as cuda;
+use persia_libs::once_cell;
 use resource_pool::{Allocatable, Pool};
 
 pub static CUDA_EVENT_POOL: once_cell::sync::Lazy<Pool<CudaEventPtr>> =

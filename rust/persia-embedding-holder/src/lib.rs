@@ -3,9 +3,10 @@ use std::{sync::Arc, sync::Weak};
 
 use persia_libs::{
     hashbrown::HashMap,
+    once_cell,
     parking_lot::{Mutex, RwLock},
-    thiserror::Error,
 };
+use thiserror::Error;
 
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaShardedServerConfig};
 use persia_embedding_datatypes::HashMapEmbeddingEntry;
@@ -102,7 +103,7 @@ impl RecyclePool {
             let mut map = self.inner.write();
             let list = map.get(&dim);
             if list.is_none() {
-                let empty_list = parking_lot::Mutex::new(LinkedList::new());
+                let empty_list = Mutex::new(LinkedList::new());
                 map.insert(dim, empty_list);
             }
         }

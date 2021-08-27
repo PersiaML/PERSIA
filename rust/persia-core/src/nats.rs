@@ -7,8 +7,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use persia_libs::{
+    flume,
     once_cell::sync::OnceCell,
     retry::{delay::Fixed, retry},
+    smol::block_on,
+    tokio,
+    tokio::runtime::Runtime,
+    tracing,
 };
 
 use pyo3::exceptions::PyRuntimeError;
@@ -23,8 +28,6 @@ use persia_embedding_datatypes::{EmbeddingTensor, PersiaBatchData, PreForwardStu
 use persia_embedding_sharded_server::sharded_middleware_service::{
     MiddlewareNatsStubPublisher, ShardedMiddlewareError,
 };
-use persia_libs::tokio::runtime::Runtime;
-use persia_libs::{flume, smol::block_on, tokio};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::Writable;
 
@@ -46,8 +49,7 @@ impl PersiaBatchFlowNatsStub {
     }
 }
 
-static RESPONDER: OnceCell<(Arc<PersiaBatchFlowNatsStubResponder>, Arc<Runtime>)> =
-    once_cell::sync::OnceCell::new();
+static RESPONDER: OnceCell<(Arc<PersiaBatchFlowNatsStubResponder>, Arc<Runtime>)> = OnceCell::new();
 
 #[pyclass]
 pub struct PyPersiaBatchFlowNatsStubPublisher {

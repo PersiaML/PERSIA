@@ -9,14 +9,16 @@ use std::time::{Duration, Instant, SystemTime};
 
 use persia_libs::{
     async_lock::RwLock,
+    bytes,
     hashbrown::HashMap,
     itertools::Itertools,
+    ndarray, once_cell,
     retry::{delay::Fixed, retry},
     smol::block_on,
-    thiserror::Error,
-    tokio,
+    tracing,
 };
 use snafu::ResultExt;
+use thiserror::Error;
 
 use persia_embedding_config::{
     EmbeddingConfig, InstanceInfo, PersiaGlobalConfigError, PersiaMiddlewareConfig,

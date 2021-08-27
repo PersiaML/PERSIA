@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use persia_libs::{once_cell::sync::OnceCell, thiserror::Error};
+use persia_libs::{once_cell::sync::OnceCell, tracing};
+use thiserror::Error;
 
 use persia_embedding_config::{
     InstanceInfo, PersiaCommonConfig, PersiaGlobalConfigError, PersiaReplicaInfo,

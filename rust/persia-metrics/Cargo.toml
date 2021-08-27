@@ -11,3 +11,4 @@ persia-libs = {path = "../persia-libs"}
 persia-scheduled-thread-pool = {path = "../persia-scheduled-thread-pool"}
 prometheus = {version = "0.12.0", features = ["push"]}
 prometheus_exporter = "0.8.2"
+thiserror = "1.0"

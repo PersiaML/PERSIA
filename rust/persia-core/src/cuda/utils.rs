@@ -5,7 +5,7 @@ use super::pinned_memory_pool::PINNED_MEMORY_POOL;
 use super::{AsyncEmbeddingOnCuda, AsyncRawEmbeddingOnCuda, AsyncTensorOnCuda};
 
 use cuda_runtime_sys as cuda;
-use persia_libs::anyhow::Result;
+use persia_libs::{anyhow::Result, tracing};
 
 use persia_embedding_datatypes::{
     BaseTensor, DenseTensor, FeatureEmbeddingBatch, PersiaDenseTensor, TensorDtype,

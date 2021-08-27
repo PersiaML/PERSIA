@@ -11,9 +11,9 @@ use persia_libs::{
     once_cell::sync::OnceCell,
     parking_lot::{Mutex, RwLock},
     rayon::{ThreadPool, ThreadPoolBuilder},
-    thiserror::Error,
-    ChannelPair,
+    tracing, ChannelPair,
 };
+use thiserror::Error;
 
 use persia_embedding_config::{
     PerisaIntent, PersiaCommonConfig, PersiaGlobalConfigError, PersiaPersistenceStorage,

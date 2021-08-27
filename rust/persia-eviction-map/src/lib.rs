@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 
 use hashlink::linked_hash_map::RawEntryMut;
 use hashlink::LinkedHashMap;
-use persia_libs::{async_lock, parking_lot};
+use persia_libs::{async_lock, hashbrown::HashMap, parking_lot};
 
 #[derive(Debug)]
 pub struct Sharded<T, K> {
@@ -46,7 +46,7 @@ impl<T, K> ShardedAsync<T, K> {
     }
 }
 
-pub type ShardedMap<K, V> = Sharded<hashbrown::HashMap<K, V>, K>;
+pub type ShardedMap<K, V> = Sharded<HashMap<K, V>, K>;
 
 impl<K, V> ShardedMap<K, V> {
     pub fn len(&self) -> usize {
@@ -54,7 +54,7 @@ impl<K, V> ShardedMap<K, V> {
     }
 }
 
-pub type ShardedAsyncMap<K, V> = ShardedAsync<hashbrown::HashMap<K, V>, K>;
+pub type ShardedAsyncMap<K, V> = ShardedAsync<HashMap<K, V>, K>;
 
 impl<K, V> ShardedAsyncMap<K, V> {
     pub async fn len(&self) -> usize {

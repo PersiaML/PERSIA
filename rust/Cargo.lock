@@ -1892,6 +1892,7 @@ dependencies = [
  "pyo3",
  "resource_pool",
  "shadow-rs",
+ "thiserror",
 ]
 
 [[package]]
@@ -1902,6 +1903,8 @@ dependencies = [
  "num-traits",
  "persia-libs",
  "persia-speedy",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]
@@ -1914,6 +1917,7 @@ dependencies = [
  "persia-libs",
  "persia-simd",
  "persia-speedy",
+ "serde",
 ]
 
 [[package]]
@@ -1925,6 +1929,7 @@ dependencies = [
  "persia-eviction-map",
  "persia-libs",
  "persia-speedy",
+ "thiserror",
 ]
 
 [[package]]
@@ -1952,11 +1957,14 @@ dependencies = [
  "persia-simd",
  "persia-speedy",
  "rand 0.8.4",
- "rand_distr",
+ "serde",
  "shadow-rs",
  "snafu",
  "structopt",
+ "thiserror",
  "thread_local",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -1983,6 +1991,7 @@ dependencies = [
  "persia-eviction-map",
  "persia-libs",
  "persia-speedy",
+ "thiserror",
 ]
 
 [[package]]
@@ -1997,7 +2006,7 @@ dependencies = [
  "persia-libs",
  "persia-metrics",
  "persia-storage-visitor",
- "rayon",
+ "thiserror",
 ]
 
 [[package]]
@@ -2045,6 +2054,8 @@ version = "0.1.0"
 dependencies = [
  "hyper",
  "persia-libs",
+ "serde",
+ "thiserror",
  "url",
 ]
 
@@ -2057,6 +2068,7 @@ dependencies = [
  "persia-scheduled-thread-pool",
  "prometheus",
  "prometheus_exporter",
+ "thiserror",
 ]
 
 [[package]]
@@ -2071,6 +2083,7 @@ dependencies = [
  "persia-libs",
  "persia-speedy",
  "persia-storage-visitor",
+ "thiserror",
 ]
 
 [[package]]
@@ -2081,6 +2094,7 @@ dependencies = [
  "persia-embedding-config",
  "persia-libs",
  "persia-speedy",
+ "thiserror",
 ]
 
 [[package]]

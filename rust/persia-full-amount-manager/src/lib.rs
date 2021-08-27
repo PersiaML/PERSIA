@@ -3,7 +3,12 @@ use std::{
     sync::{Arc, Weak},
 };
 
-use persia_libs::{hashbrown::HashMap, parking_lot::RwLock, thiserror::Error};
+use persia_libs::{
+    hashbrown::HashMap,
+    once_cell,
+    parking_lot::{Mutex, RwLock},
+};
+use thiserror::Error;
 
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaShardedServerConfig};
 use persia_embedding_datatypes::HashMapEmbeddingEntry;
@@ -28,14 +33,14 @@ pub struct FullAmountManager {
     weak_map: Sharded<HashMap<u64, Weak<RwLock<HashMapEmbeddingEntry>>>, u64>,
     weak_ptr_channel: persia_libs::ChannelPair<Vec<(u64, Weak<RwLock<HashMapEmbeddingEntry>>)>>,
     evicted_ids_channel: persia_libs::ChannelPair<Vec<u64>>,
-    _handles: Arc<parking_lot::Mutex<Vec<std::thread::JoinHandle<()>>>>,
+    _handles: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
 }
 
 impl FullAmountManager {
     pub fn get() -> Result<Arc<Self>, PersiaFullAmountManagerError> {
         let singleton = FULL_AMOUNT_MANAGER.get_or_try_init(|| {
             let config = PersiaShardedServerConfig::get()?;
-            let handles = Arc::new(parking_lot::Mutex::new(Vec::new()));
+            let handles = Arc::new(Mutex::new(Vec::new()));
             let full_amount_manager = Self::new(
                 config.capacity,
                 config.num_hashmap_internal_shards,
@@ -79,7 +84,7 @@ impl FullAmountManager {
         capacity: usize,
         bucket_size: usize,
         buffer_size: usize,
-        handles: Arc<parking_lot::Mutex<Vec<std::thread::JoinHandle<()>>>>,
+        handles: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
     ) -> Self {
         Self {
             weak_map: Sharded {
