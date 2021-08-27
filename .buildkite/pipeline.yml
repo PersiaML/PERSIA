@@ -1,9 +1,6 @@
 steps:
   - label: "Build docker ci image for latest persiaml framework"
-    command: docker build e2e --build-arg GITHUB_TOKEN=$$GITHUB_TOKEN --build-arg USE_CUDA=1 -t persiaml-test:latest
-
-  - label: "Add executive permission to script"
-    command: chmod +x -R e2e/adult_income
+    command: docker build --build-arg USE_CUDA=1 -t persiaml-test:latest .
 
   - wait
 
@@ -15,3 +12,9 @@ steps:
           run: trainer
           graceful-shutdown: true
 
+  - label: "upload the latest cuda-runtime image"
+    branches: "main"
+    command: 
+      - docker login -u $$DOCKER_USER -p $$DOCKER_TOKEN
+      - docker tag persiaml-test:latest persiaml/persia-cuda-runtime:latest 
+      - docker push persiaml/persia-cuda-runtime:latest 
