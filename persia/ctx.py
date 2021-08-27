@@ -42,19 +42,8 @@ class PreprocessMode(Enum):
 
 
 class BaseCtx:
-    r"""It provide the communicate ability for data generator component to send the PersiaBatchData
-    to the trainer and embedding middleware.
-
-    Examples::
-        >>> from persia.prelude import PyPersiaBatchData
-        >>> loader = make_simple_loader()
-        >>> with BaseCtx() as ctx:
-        >>>     for (dense, batch_sparse_ids, target) in loader:
-        >>>         batch_data = PyPersiaBatchData()
-        >>>         batch_data.add_dense([dense])
-        >>>         batch_data.add_sparse(batch_sparse_ids)
-        >>>         batch_data.add_target(target)
-        >>>         ctx.send_data(batch_data)
+    r"""It provide a common context for other persia context, e.g. `DataCtx`, `EmbeddingCtx` and `TrainCtx`.
+    This class should not be instantiated directly.
     """
 
     def __init__(
@@ -111,6 +100,25 @@ class BaseCtx:
             import traceback
 
             _logger.error("\n" + traceback.format_exc())
+
+class DataCtx(BaseCtx):
+    r"""It provide the communicate ability for data generator component to send the PersiaBatchData
+    to the trainer and embedding middleware.
+
+    Examples::
+        >>> from persia.prelude import PyPersiaBatchData
+        >>> loader = make_simple_loader()
+        >>> with DataCtx() as ctx:
+        >>>     for (dense, batch_sparse_ids, target) in loader:
+        >>>         batch_data = PyPersiaBatchData()
+        >>>         batch_data.add_dense([dense])
+        >>>         batch_data.add_sparse(batch_sparse_ids)
+        >>>         batch_data.add_target(target)
+        >>>         ctx.send_data(batch_data)
+    """
+    def __init__(self, *args, **kwargs,):
+        super(DataCtx, self).__init__(*args, **kwargs)
+
 
     def send_data(self, data: PyPersiaBatchData, blocking: bool = True):
         """Send PersiaBatchData from data compose to trainer and middleware side.
