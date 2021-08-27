@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 use std::u64;
 
 use persia_libs::{
-    bytes, half,
+    half,
     half::prelude::*,
     hashbrown::HashMap,
     itertools::Itertools,
@@ -504,19 +504,6 @@ pub fn ndarray_f16_to_f32(input: &Array2<f16>) -> Array2<f32> {
         })
         .collect_vec();
     unsafe { Array2::from_shape_vec_unchecked((input.shape()[0], input.shape()[1]), f32v) }
-}
-
-#[derive(Serialize, Deserialize, Readable, Writable, Debug)]
-pub struct PersiaBatchRecordedShardedServer {
-    pub dense: Vec<PersiaDenseTensor<f32>>,
-    pub target: Vec<PersiaDenseTensor<f32>>,
-    pub uids: Vec<u64>,
-    pub pids: Vec<u64>,
-    pub num_samples: usize,
-    pub middleware_server_addr: String,
-    pub forward_id: u64,
-    pub timestamps: Vec<i64>,
-    pub metadata: bytes::Bytes,
 }
 
 #[derive(Default, Serialize, Deserialize, Readable, Writable, Debug, Clone)]

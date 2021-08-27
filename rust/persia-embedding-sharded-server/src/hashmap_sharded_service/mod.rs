@@ -6,13 +6,13 @@ use thiserror::Error;
 
 use snafu::ResultExt;
 
-use persia_embedding_config::{
-    EmbeddingConfig, InstanceInfo, PerisaIntent, PersiaCommonConfig, PersiaGlobalConfigError,
-    PersiaReplicaInfo, PersiaShardedServerConfig, PersiaSparseModelHyperparameters,
-};
 use persia_common::{
     optim::{Optimizable, Optimizer, OptimizerConfig},
     HashMapEmbeddingEntry,
+};
+use persia_embedding_config::{
+    EmbeddingConfig, InstanceInfo, PerisaIntent, PersiaCommonConfig, PersiaGlobalConfigError,
+    PersiaReplicaInfo, PersiaShardedServerConfig, PersiaSparseModelHyperparameters,
 };
 use persia_embedding_holder::PersiaEmbeddingHolder;
 use persia_full_amount_manager::FullAmountManager;
@@ -179,7 +179,6 @@ impl HashMapShardedServiceInner {
                         let e = self.embedding.get_value_refresh(sign);
                         match e {
                             None => {
-                                
                                 if rand::thread_rng().gen_range(0f32..1f32) < conf.admit_probability {
                                     let mut emb_entry = HashMapEmbeddingEntry::new(
                                         &conf.initialization_method,
