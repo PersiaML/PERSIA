@@ -24,7 +24,9 @@ if _DEBUG:
     if persia_dev_pythonpath is not None:
         origin_pythonpath = os.environ.get("PYTHONPATH", "")
         _ENV["PYTHONPATH"] = f"{persia_dev_pythonpath}:{origin_pythonpath}"
-        _logger.info(f"Use persia_dev_pythonpath: {persia_dev_pythonpath} to replace origin path")
+        _logger.info(
+            f"Use persia_dev_pythonpath: {persia_dev_pythonpath} to replace origin path"
+        )
 
 
 def resolve_binary_execute_path(binary_name: str) -> str:
