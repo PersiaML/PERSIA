@@ -151,8 +151,8 @@ class Dataloder(object):
             forward_buffer_size,
             is_training,
             reproducible,
-            embedding_staleness,
             current_ctx.common_context,
+            embedding_staleness,
         )
         self.forward_engine.set_input_channel(dataset.receiver)
         self.forward_engine.launch(

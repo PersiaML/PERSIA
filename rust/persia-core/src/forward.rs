@@ -608,8 +608,8 @@ impl PyForward {
         forward_buffer_size: usize,
         is_training: bool,
         reproducible: bool,
-        embedding_staleness: Option<usize>,
         common_context: &PyPersiaCommonContext,
+        embedding_staleness: Option<usize>,
     ) -> PyResult<PyForward> {
         Ok(PyForward {
             inner: Forward::new(

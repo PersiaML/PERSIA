@@ -11,7 +11,7 @@ class Optimizer(ABC):
         self.optimizer_base = PyOptimizerBase()
 
     @abstractmethod
-    def apply(self):
+    def apply(self, common_context: PyPersiaCommonContext):
         r"""Abstraction method for optimizer that support register different type of optimizer."""
         ...
 
