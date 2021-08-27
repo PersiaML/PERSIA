@@ -6,26 +6,26 @@ from typing import List
 
 from persia.logger import get_logger
 
-_logger = get_logger("launcher")
 
-REPLICA_INDEX = int(os.environ.get("JOB_ID", -1))
-DEBUG = int(os.environ.get("DEBUG", False))
-
+_DEBUG = int(os.environ.get("DEBUG", False))
 _ENV = os.environ.copy()
 
-if DEBUG:
+if _DEBUG:
     # add thirdparty_path into PATH
-    thirdparty_path = os.environ.get("THIRDPARTY_PATH", "")
-    origin_path = os.environ.get("PATH")
-    _ENV["PATH"] = f"{thirdparty_path}:{origin_path}"
+    persia_dev_path = os.environ.get("PERSIA_DEV_PATH", None)
+    if persia_dev_path is not None:
+        origin_path = os.environ.get("PATH", "")
+        _ENV["PATH"] = f"{persia_dev_path}:{origin_path}"
+
     # add thirdparty_path into PYTHONPATH
-    python_path = os.environ.get("PYTHONPATH", "")
-    origin_pythonpath = os.environ.get("PYTHONPATH")
-    _ENV["PYTHONPATH"] = f"{python_path}:{origin_pythonpath}"
+    persia_dev_pythonpath = os.environ.get("PERSIA_DEV_PYTHONPATH", None)
+    if persia_dev_pythonpath is not None:
+        origin_pythonpath = os.environ.get("PYTHONPATH", "")
+        _ENV["PYTHONPATH"] = f"{persia_dev_pythonpath}:{origin_pythonpath}"
 
 
 def resolve_binary_execute_path(binary_name: str) -> str:
-    if DEBUG:
+    if _DEBUG:
         thirdparty_path = os.environ.get("THIRDPARTY_PATH", None)
         if not thirdparty_path:
             raise KeyError(
