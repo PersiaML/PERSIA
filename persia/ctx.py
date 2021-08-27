@@ -101,6 +101,7 @@ class BaseCtx:
 
             _logger.error("\n" + traceback.format_exc())
 
+
 class DataCtx(BaseCtx):
     r"""It provide the communicate ability for data generator component to send the PersiaBatchData
     to the trainer and embedding middleware.
@@ -116,9 +117,13 @@ class DataCtx(BaseCtx):
         >>>         batch_data.add_target(target)
         >>>         ctx.send_data(batch_data)
     """
-    def __init__(self, *args, **kwargs,):
-        super(DataCtx, self).__init__(*args, **kwargs)
 
+    def __init__(
+        self,
+        *args,
+        **kwargs,
+    ):
+        super(DataCtx, self).__init__(*args, **kwargs)
 
     def send_data(self, data: PyPersiaBatchData, blocking: bool = True):
         """Send PersiaBatchData from data compose to trainer and middleware side.
