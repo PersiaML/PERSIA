@@ -1,4 +1,5 @@
 from threading import Thread
+from typing import Optional
 
 import torch
 from torch.utils.data.dataset import IterableDataset as TorchIterableDataset
@@ -135,7 +136,7 @@ class Dataloder(object):
         timeout: int = 1000 * 60 * 10,
         num_workers: int = 10,
         reproducible: bool = False,
-        embedding_staleness: int = None,
+        embedding_staleness: Optional[int] = None,
     ):
         # dynamic import the PyForward due to conditional compilation
         from persia.prelude import PyForward
