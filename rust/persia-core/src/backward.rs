@@ -2,17 +2,18 @@ use crate::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
 use crate::cuda::set_device;
 use crate::cuda::utils::cuda_d2h;
 
-use crate::{MetricsHolder, PersiaRpcClient};
+use std::sync::Arc;
+
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
 
 use persia_embedding_datatypes::{
     EmbeddingGradientBatch, FeatureEmbeddingGradientBatch, Gradients,
     SkippableFeatureEmbeddingGradientBatch, SkippedGradientBatch,
 };
-use persia_futures::{flume, tokio::sync::OwnedSemaphorePermit};
+use persia_libs::{flume, tokio::sync::OwnedSemaphorePermit};
 
-use pyo3::exceptions::PyRuntimeError;
-use pyo3::prelude::*;
-use std::sync::Arc;
+use crate::{MetricsHolder, PersiaRpcClient};
 
 #[derive(Debug)]
 pub struct SingleSlotGradient {
@@ -227,7 +228,7 @@ impl Backward {
             let channel_r = self.cpu_backward_channel_r.clone();
             let rpc_client = rpc_client.clone();
             let _guard = runtime.enter();
-            persia_futures::tokio::spawn(async move {
+            persia_libs::tokio::spawn(async move {
                 loop {
                     let start_time = std::time::Instant::now();
 

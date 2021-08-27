@@ -1,13 +1,14 @@
-use once_cell::sync::OnceCell;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
+
+use persia_libs::{once_cell::sync::OnceCell, thiserror::Error};
+
 use persia_embedding_config::{
     InstanceInfo, PersiaCommonConfig, PersiaGlobalConfigError, PersiaReplicaInfo,
 };
 use persia_scheduled_thread_pool::SCHEDULED_THREAD_POOL;
 use prometheus::{Encoder, HistogramOpts, Opts, TextEncoder};
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
-use thiserror::Error;
 
 pub use prometheus::{Gauge, GaugeVec, Histogram, HistogramVec, IntCounter, IntCounterVec};
 

@@ -6,11 +6,14 @@ use crate::PersiaRpcClient;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use once_cell::sync::OnceCell;
+use persia_libs::{
+    once_cell::sync::OnceCell,
+    retry::{delay::Fixed, retry},
+};
+
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
-use retry::{delay::Fixed, retry};
 
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
@@ -20,8 +23,8 @@ use persia_embedding_datatypes::{EmbeddingTensor, PersiaBatchData, PreForwardStu
 use persia_embedding_sharded_server::sharded_middleware_service::{
     MiddlewareNatsStubPublisher, ShardedMiddlewareError,
 };
-use persia_futures::tokio::runtime::Runtime;
-use persia_futures::{flume, smol::block_on, tokio};
+use persia_libs::tokio::runtime::Runtime;
+use persia_libs::{flume, smol::block_on, tokio};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::Writable;
 
@@ -101,7 +104,7 @@ impl PyPersiaBatchFlowNatsStubPublisher {
             to_middleware,
             num_middlewares,
             cur_middleware_id: AtomicUsize::new(0),
-            runtime: persia_futures::tokio::runtime::Builder::new_multi_thread()
+            runtime: persia_libs::tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .worker_threads(5)
                 .build()
@@ -325,7 +328,7 @@ pub fn init_responder(
         });
 
         let runtime = Arc::new(
-            persia_futures::tokio::runtime::Builder::new_multi_thread()
+            persia_libs::tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .worker_threads(4)
                 .build()

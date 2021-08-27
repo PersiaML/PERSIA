@@ -50,8 +50,8 @@ impl NatsSubject {
         let req_type = self.req_type();
         let spawn_task = quote::quote! {
             let instance = self.inner.clone();
-            let subscription = persia_futures::smol::block_on(nats_client.subscribe(&subject))?;
-            persia_futures::tokio::spawn(async move {
+            let subscription = persia_libs::smol::block_on(nats_client.subscribe(&subject))?;
+            persia_libs::tokio::spawn(async move {
                 while let Some(msg) = subscription.next().await {
                     let arg: Result<#req_type, _> = tokio::task::block_in_place(|| {
                         ::persia_speedy::Readable::read_from_buffer(&msg.data)

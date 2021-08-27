@@ -7,11 +7,16 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
-use hashbrown::HashMap;
-use itertools::Itertools;
-use retry::{delay::Fixed, retry};
+use persia_libs::{
+    async_lock::RwLock,
+    hashbrown::HashMap,
+    itertools::Itertools,
+    retry::{delay::Fixed, retry},
+    smol::block_on,
+    thiserror::Error,
+    tokio,
+};
 use snafu::ResultExt;
-use thiserror::Error;
 
 use persia_embedding_config::{
     EmbeddingConfig, InstanceInfo, PersiaGlobalConfigError, PersiaMiddlewareConfig,
@@ -24,9 +29,6 @@ use persia_embedding_datatypes::{
     HashMapEmbeddingEntry, PreForwardStub, SingleSignInFeatureBatch,
     SkippableFeatureEmbeddingGradientBatch, SparseBatch,
 };
-use persia_futures::async_lock::RwLock;
-use persia_futures::smol::block_on;
-use persia_futures::tokio;
 use persia_metrics::{
     Gauge, GaugeVec, Histogram, IntCounterVec, PersiaMetricsManager, PersiaMetricsManagerError,
 };
@@ -181,7 +183,7 @@ impl AllShardsClient {
             return Err(());
         });
 
-        persia_futures::futures::future::try_join_all(futs)
+        persia_libs::futures::future::try_join_all(futs)
             .await
             .is_ok()
     }
@@ -192,7 +194,7 @@ impl AllShardsClient {
             .iter()
             .map(|client| async move { client.model_manager_status(&()).await });
 
-        let status: Vec<_> = persia_futures::futures::future::try_join_all(futs)
+        let status: Vec<_> = persia_libs::futures::future::try_join_all(futs)
             .await
             .unwrap_or(vec![
                 PersiaPersistenceStatus::Failed(String::from(
@@ -608,8 +610,8 @@ pub struct ShardedMiddlewareServerInner {
     pub forward_id: AtomicU64,
     pub cannot_forward_batched_time: crossbeam::atomic::AtomicCell<SystemTime>,
     pub forward_id_buffer:
-        persia_futures::async_lock::RwLock<HashMap<usize, HashMap<u64, SparseBatch>>>,
-    pub post_forward_buffer: persia_futures::async_lock::RwLock<HashMap<u64, SparseBatch>>,
+        persia_libs::async_lock::RwLock<HashMap<usize, HashMap<u64, SparseBatch>>>,
+    pub post_forward_buffer: persia_libs::async_lock::RwLock<HashMap<u64, SparseBatch>>,
     pub staleness: AtomicUsize,
     pub embedding_config: Arc<EmbeddingConfig>,
     pub middleware_config: Arc<PersiaMiddlewareConfig>,
@@ -825,7 +827,7 @@ impl ShardedMiddlewareServerInner {
             });
 
         let _updated_gradient_groups: Vec<_> =
-            persia_futures::futures::future::try_join_all(futs).await?;
+            persia_libs::futures::future::try_join_all(futs).await?;
 
         tracing::debug!(
             "update gradients all slots time cost {:?}",
@@ -878,7 +880,7 @@ impl ShardedMiddlewareServerInner {
         }
         let start_time = std::time::Instant::now();
 
-        let forwarded_groups: Vec<_> = persia_futures::futures::future::try_join_all(futs).await?;
+        let forwarded_groups: Vec<_> = persia_libs::futures::future::try_join_all(futs).await?;
 
         tracing::debug!("rpc time cost {:?}", start_time.elapsed());
         if let Ok(m) = MetricsHolder::get() {
@@ -943,7 +945,7 @@ impl ShardedMiddlewareServerInner {
                 })
                 .collect()
         });
-        persia_futures::futures::future::try_join_all(futs)
+        persia_libs::futures::future::try_join_all(futs)
             .await
             .map(|_| ())
     }
@@ -1070,7 +1072,7 @@ impl ShardedMiddlewareServerInner {
                 Ok(())
             }
         });
-        persia_futures::futures::future::try_join_all(futs)
+        persia_libs::futures::future::try_join_all(futs)
             .await
             .map(|_| ())
     }
@@ -1091,7 +1093,7 @@ impl ShardedMiddlewareServerInner {
                 Ok(())
             }
         });
-        let result = persia_futures::futures::future::try_join_all(futs)
+        let result = persia_libs::futures::future::try_join_all(futs)
             .await
             .map(|_| ());
         result
@@ -1117,7 +1119,7 @@ impl ShardedMiddlewareServerInner {
                 Ok(())
             }
         });
-        let result = persia_futures::futures::future::try_join_all(futs)
+        let result = persia_libs::futures::future::try_join_all(futs)
             .await
             .map(|_| ());
         tracing::info!("sharded servers configured: {:?}", result);
@@ -1144,7 +1146,7 @@ impl ShardedMiddlewareServerInner {
             }
         });
         tracing::info!("register optimizer: {:?}", &optimizer);
-        persia_futures::futures::future::try_join_all(futs)
+        persia_libs::futures::future::try_join_all(futs)
             .await
             .map(|_| ())
     }
@@ -1178,7 +1180,7 @@ impl ShardedMiddlewareServerInner {
 pub struct ShardedMiddlewareServer {
     pub inner: Arc<ShardedMiddlewareServerInner>,
     pub shutdown_channel:
-        Arc<persia_futures::async_lock::RwLock<Option<tokio::sync::oneshot::Sender<()>>>>,
+        Arc<persia_libs::async_lock::RwLock<Option<tokio::sync::oneshot::Sender<()>>>>,
 }
 
 #[persia_rpc::service]
@@ -1211,7 +1213,7 @@ impl ShardedMiddlewareServer {
             }
         });
 
-        let result = persia_futures::futures::future::try_join_all(futs).await;
+        let result = persia_libs::futures::future::try_join_all(futs).await;
         result
     }
 
@@ -1222,7 +1224,7 @@ impl ShardedMiddlewareServer {
             .iter()
             .map(|client| async move { client.shutdown(&()).await });
 
-        let result = persia_futures::futures::future::try_join_all(futs).await;
+        let result = persia_libs::futures::future::try_join_all(futs).await;
 
         if result.is_ok() {
             Ok(())

@@ -1,10 +1,14 @@
-use async_nats::{Connection, Subscription};
-use persia_embedding_config::PersiaReplicaInfo;
-use persia_futures::smol;
-use persia_speedy::{Readable, Writable};
-use retry::{delay::Fixed, retry};
 use std::time::Duration;
-use thiserror::Error;
+
+use async_nats::{Connection, Subscription};
+
+use persia_embedding_config::PersiaReplicaInfo;
+use persia_libs::{
+    retry::{delay::Fixed, retry},
+    smol,
+    thiserror::Error,
+};
+use persia_speedy::{Readable, Writable};
 
 #[derive(Readable, Writable, Error, Debug)]
 pub enum NatsError {

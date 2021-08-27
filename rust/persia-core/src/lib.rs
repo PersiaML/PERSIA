@@ -17,11 +17,13 @@ mod utils;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Result;
-use hashbrown::HashMap;
-use once_cell::sync::OnceCell;
-use parking_lot::RwLock;
-use persia_futures::tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use persia_libs::{
+    anyhow::Result,
+    once_cell::sync::OnceCell,
+    parking_lot::RwLock,
+    tokio::sync::{OwnedSemaphorePermit, Semaphore},
+};
+
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -111,7 +113,7 @@ pub fn init_persia_embedding_staleness_semaphore(staleness: usize) -> PyResult<(
 struct PersiaRpcClient {
     pub clients: RwLock<HashMap<String, Arc<ShardedMiddlewareServerClient>>>,
     pub middleware_addrs: RwLock<Vec<String>>,
-    pub runtime: Arc<persia_futures::tokio::runtime::Runtime>,
+    pub runtime: Arc<persia_libs::tokio::runtime::Runtime>,
 }
 
 impl PersiaRpcClient {
@@ -126,7 +128,7 @@ impl PersiaRpcClient {
         RPC_CLIENT
             .get_or_init(|| {
                 let runtime = Arc::new(
-                    persia_futures::tokio::runtime::Builder::new_multi_thread()
+                    persia_libs::tokio::runtime::Builder::new_multi_thread()
                         .enable_all()
                         .worker_threads(worker_size)
                         .build()
@@ -198,7 +200,7 @@ impl PersiaRpcClient {
     ) -> Result<(), ShardedMiddlewareError> {
         let handler = self.runtime.clone();
         let _guard = handler.enter();
-        let result = handler.block_on(persia_futures::tokio::time::timeout(
+        let result = handler.block_on(persia_libs::tokio::time::timeout(
             Duration::from_secs(10),
             self.clients
                 .read()

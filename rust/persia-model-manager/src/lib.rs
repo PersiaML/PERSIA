@@ -1,8 +1,14 @@
 #![allow(clippy::needless_return)]
-use anyhow::Error as AnyhowError;
-use once_cell::sync::OnceCell;
 
-use parking_lot::RwLock;
+use std::ffi::OsStr;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
+use perisa_libs::{
+    anyhow::Error as AnyhowError, once_cell::sync::OnceCell, parking_lot::RwLock, thiserror::Error,
+};
+
 use persia_embedding_config::{
     PerisaIntent, PersiaCommonConfig, PersiaGlobalConfigError, PersiaPersistenceStorage,
     PersiaReplicaInfo, PersiaShardedServerConfig,
@@ -14,11 +20,6 @@ use persia_speedy::{Readable, Writable};
 use persia_storage_visitor::{
     PersiaCephVisitor, PersiaHdfsVisitor, PersiaStorageVisitor, SpeedyObj,
 };
-use std::ffi::OsStr;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-use thiserror::Error;
 
 #[derive(Readable, Writable, Error, Debug)]
 pub enum PersistenceManagerError {

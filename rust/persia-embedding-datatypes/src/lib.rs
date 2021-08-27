@@ -1,16 +1,19 @@
 #![allow(clippy::needless_return)]
 
-use half::prelude::*;
-use hashbrown::HashMap;
-use itertools::Itertools;
-use ndarray::Array2;
-use ndarray_rand::rand_distr::{Gamma, Normal, Poisson, Uniform};
-use ndarray_rand::RandomExt;
-use numpy::PyArray1;
-use rand::SeedableRng;
-use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::u64;
+
+use persia_libs::{
+    half::prelude::*,
+    itertools::Itertools,
+    hashbrown::HashMap
+    ndarray::Array2,
+    ndarray_rand::rand_distr::{Gamma, Normal, Poisson, Uniform},
+    ndarray_rand::RandomExt,
+    numpy::PyArray1,
+    rand::SeedableRng,
+    serde::{Deserialize, Serialize}
+};
 
 use persia_embedding_config::InitializationMethod;
 use persia_speedy::{Readable, Writable};

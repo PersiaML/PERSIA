@@ -7,7 +7,5 @@ version = "0.1.0"
 
 [dependencies]
 hyper = {version = "0.14", features = ["full"]}
-persia-futures = {path = "../persia-futures"}
-thiserror = "1.0"
-tracing = "0.1"
+persia-libs = {path = "../persia-libs"}
 url = "2.1"

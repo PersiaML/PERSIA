@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use hyperloglogplus::HyperLogLog;
+
 use persia_embedding_datatypes::SingleSignInFeatureBatch;
 use persia_metrics::{GaugeVec, PersiaMetricsManager, PersiaMetricsManagerError};
-use std::sync::Arc;
 
 const INDICES_CHANNEL_CAP: usize = 1000;
 
@@ -30,13 +32,13 @@ pub struct EmbeddingMonitorInner {
             hyperloglogplus::HyperLogLogPlus<u64, hashbrown::hash_map::DefaultHashBuilder>,
         >,
     >,
-    indices_channel: persia_futures::ChannelPair<Vec<u64>>,
+    indices_channel: persia_libs::ChannelPair<Vec<u64>>,
     _handlers: Vec<std::thread::JoinHandle<()>>,
 }
 
 impl EmbeddingMonitorInner {
     pub fn new(feature_name: String) -> Self {
-        let indices_channel = persia_futures::ChannelPair::new(INDICES_CHANNEL_CAP);
+        let indices_channel = persia_libs::ChannelPair::new(INDICES_CHANNEL_CAP);
         let distinct_id_estimator = Arc::new(parking_lot::Mutex::new(
             hyperloglogplus::HyperLogLogPlus::new(
                 16,

@@ -2,9 +2,7 @@ use std::hash::{Hash, Hasher};
 
 use hashlink::linked_hash_map::RawEntryMut;
 use hashlink::LinkedHashMap;
-use parking_lot;
-
-use persia_futures::async_lock;
+use persia_libs::{async_lock, parking_lot};
 
 #[derive(Debug)]
 pub struct Sharded<T, K> {

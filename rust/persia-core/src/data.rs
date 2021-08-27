@@ -1,7 +1,8 @@
-use numpy::{PyArray1, PyArray2};
 use paste::paste;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+
+use persia_libs::numpy::{PyArray1, PyArray2};
 
 use persia_embedding_datatypes::{
     BaseTensor, DenseTensor, EmbeddingTensor, PersiaBatchData, SparseBatch, SparseTensor, Tensor,

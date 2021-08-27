@@ -5,7 +5,7 @@ use crate::data::PyPersiaBatchData;
 
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_datatypes::PersiaBatchData;
-use persia_futures::{flume, tokio::runtime::Runtime};
+use persia_libs::{flume, tokio::runtime::Runtime};
 use persia_message_queue::{PersiaMessageQueueClient, PersiaMessageQueueServer};
 
 #[pyclass]
@@ -18,7 +18,7 @@ pub struct PyPersiaMessageQueueClient {
 impl PyPersiaMessageQueueClient {
     #[new]
     fn new(server_addr: &str) -> Self {
-        let runtime = persia_futures::tokio::runtime::Builder::new_multi_thread()
+        let runtime = persia_libs::tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .worker_threads(5)
             .build()
@@ -54,7 +54,7 @@ pub struct PyPersiaMessageQueueServer {
 impl PyPersiaMessageQueueServer {
     #[new]
     fn new(port: u16, cap: usize) -> Self {
-        let runtime = persia_futures::tokio::runtime::Builder::new_multi_thread()
+        let runtime = persia_libs::tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .worker_threads(5)
             .build()

@@ -1,4 +1,4 @@
-use once_cell::sync::Lazy;
+use persia_libs::once_cell::sync::Lazy;
 use scheduled_thread_pool::ScheduledThreadPool;
 
 #[allow(dead_code)]

@@ -9,8 +9,5 @@ version = "0.1.0"
 [dependencies]
 async-nats = "0.9.18"
 persia-embedding-config = {path = "../../persia-embedding-config"}
-persia-futures = {path = "../../persia-futures"}
+persia-libs = {path = "../../persia-libs"}
 persia-speedy = "0.9"
-retry = "1.2.1"
-thiserror = "1.0"
-tracing = "0.1"

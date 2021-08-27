@@ -2,7 +2,7 @@ use std::ops::Add;
 use std::sync::Arc;
 
 use hyper::{self, Body, Request, Response};
-use thiserror::Error;
+use persia_libs::{thiserror::Error, tokio, tracing, ChannelPair};
 
 #[derive(Error, Debug)]
 pub enum PersiaMessageQueueError {
@@ -71,18 +71,18 @@ impl PersiaMessageQueueClient {
 
 #[derive(Clone)]
 pub struct PersiaMessageQueueService {
-    message_queue: persia_futures::ChannelPair<hyper::body::Bytes>,
+    message_queue: ChannelPair<hyper::body::Bytes>,
 }
 
 #[derive(Clone)]
 pub struct PersiaMessageQueueServer {
-    message_queue: persia_futures::ChannelPair<hyper::body::Bytes>,
-    server_handler: Arc<persia_futures::tokio::task::JoinHandle<hyper::Result<()>>>,
+    message_queue: ChannelPair<hyper::body::Bytes>,
+    server_handler: Arc<tokio::task::JoinHandle<hyper::Result<()>>>,
 }
 
 impl PersiaMessageQueueServer {
     pub fn new(port: u16, cap: usize) -> PersiaMessageQueueServer {
-        let message_queue = persia_futures::ChannelPair::new(cap);
+        let message_queue = ChannelPair::new(cap);
         let service = PersiaMessageQueueService {
             message_queue: message_queue.clone(),
         };
@@ -121,9 +121,7 @@ impl PersiaMessageQueueServer {
                 }
             }));
 
-        let server_handler = Arc::new(persia_futures::tokio::task::spawn(
-            async move { server.await },
-        ));
+        let server_handler = Arc::new(tokio::task::spawn(async move { server.await }));
 
         Self {
             server_handler,
@@ -148,7 +146,7 @@ impl PersiaMessageQueueServer {
             .to_vec()
     }
 
-    pub async fn handler(&self) -> Arc<persia_futures::tokio::task::JoinHandle<hyper::Result<()>>> {
+    pub async fn handler(&self) -> Arc<tokio::task::JoinHandle<hyper::Result<()>>> {
         self.server_handler.clone()
     }
 }

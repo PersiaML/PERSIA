@@ -7,10 +7,13 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use griddle::HashMap;
-use once_cell::sync::OnceCell;
-use parking_lot::{Mutex, RwLock};
-use rayon::{ThreadPool, ThreadPoolBuilder};
-use thiserror::Error;
+use persia_libs::{
+    once_cell::sync::OnceCell,
+    parking_lot::{Mutex, RwLock},
+    rayon::{ThreadPool, ThreadPoolBuilder},
+    thiserror::Error,
+    ChannelPair,
+};
 
 use persia_embedding_config::{
     PerisaIntent, PersiaCommonConfig, PersiaGlobalConfigError, PersiaPersistenceStorage,
@@ -18,7 +21,6 @@ use persia_embedding_config::{
 };
 use persia_embedding_datatypes::HashMapEmbeddingEntry;
 use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
-use persia_futures::ChannelPair;
 use persia_metrics::{Gauge, PersiaMetricsManager, PersiaMetricsManagerError};
 use persia_storage_visitor::{
     PerisaIncrementalPacket, PersiaCephVisitor, PersiaHdfsVisitor, PersiaStorageVisitor, SpeedyObj,

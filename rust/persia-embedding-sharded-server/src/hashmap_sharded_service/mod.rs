@@ -1,20 +1,20 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use bytes::Bytes;
-use rand::Rng;
+use persia_libs::{bytes::Bytes, rand::Rng, thiserror::Error};
 use snafu::ResultExt;
-use thiserror::Error;
 
 use persia_embedding_config::{
     EmbeddingConfig, InstanceInfo, PerisaIntent, PersiaCommonConfig, PersiaGlobalConfigError,
     PersiaReplicaInfo, PersiaShardedServerConfig, PersiaSparseModelHyperparameters,
 };
-use persia_embedding_datatypes::optim::{Optimizable, Optimizer, OptimizerConfig};
-use persia_embedding_datatypes::HashMapEmbeddingEntry;
+use persia_embedding_datatypes::{
+    optim::{Optimizable, Optimizer, OptimizerConfig},
+    persia_embedding_datatypes::HashMapEmbeddingEntry,
+};
 use persia_embedding_holder::PersiaEmbeddingHolder;
 use persia_full_amount_manager::FullAmountManager;
-use persia_futures::tokio;
+use persia_libs::tokio;
 use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
 use persia_metrics::{
     Gauge, Histogram, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError,
@@ -87,10 +87,10 @@ pub enum ShardEmbeddingError {
 pub struct HashMapShardedServiceInner {
     pub embedding: PersiaEmbeddingHolder,
     pub optimizer:
-        persia_futures::async_lock::RwLock<Option<Arc<Box<dyn Optimizable + Send + Sync>>>>,
+        persia_libs::async_lock::RwLock<Option<Arc<Box<dyn Optimizable + Send + Sync>>>>,
     pub hyperparameter_config:
-        persia_futures::async_lock::RwLock<Option<Arc<PersiaSparseModelHyperparameters>>>,
-    pub hyperparameter_configured: persia_futures::async_lock::Mutex<bool>,
+        persia_libs::async_lock::RwLock<Option<Arc<PersiaSparseModelHyperparameters>>>,
+    pub hyperparameter_configured: persia_libs::async_lock::Mutex<bool>,
     pub server_config: Arc<PersiaShardedServerConfig>,
     pub common_config: Arc<PersiaCommonConfig>,
     pub embedding_config: Arc<EmbeddingConfig>,
@@ -113,9 +113,9 @@ impl HashMapShardedServiceInner {
     ) -> Self {
         Self {
             embedding,
-            optimizer: persia_futures::async_lock::RwLock::new(None),
-            hyperparameter_config: persia_futures::async_lock::RwLock::new(None),
-            hyperparameter_configured: persia_futures::async_lock::Mutex::new(false),
+            optimizer: persia_libs::async_lock::RwLock::new(None),
+            hyperparameter_config: persia_libs::async_lock::RwLock::new(None),
+            hyperparameter_configured: persia_libs::async_lock::Mutex::new(false),
             server_config,
             common_config,
             embedding_config,
@@ -509,7 +509,7 @@ impl HashMapShardedServiceInner {
 pub struct HashMapShardedService {
     pub inner: Arc<HashMapShardedServiceInner>,
     pub shutdown_channel:
-        Arc<persia_futures::async_lock::RwLock<Option<tokio::sync::oneshot::Sender<()>>>>,
+        Arc<persia_libs::async_lock::RwLock<Option<tokio::sync::oneshot::Sender<()>>>>,
 }
 
 #[persia_rpc::service]

@@ -1,5 +1,6 @@
+use persia_libs::serde::{Deserialize, Serialize};
+
 use persia_speedy::{Readable, Writable};
-use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SingleFeatureConfig {
