@@ -3,7 +3,6 @@
 use std::cmp::Ordering;
 use std::u64;
 
-use persia_libs::rand::SeedableRng;
 use persia_libs::{
     bytes,
     half::prelude::*,
@@ -14,6 +13,7 @@ use persia_libs::{
     ndarray_rand::RandomExt,
     numpy::PyArray1,
     rand::prelude::SmallRng,
+    rand::SeedableRng,
 };
 use serde::{Deserialize, Serialize};
 
