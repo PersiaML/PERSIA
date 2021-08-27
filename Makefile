@@ -11,3 +11,6 @@ pytest:
 	pytest
 
 all: lint flake8 format pytest
+
+build_dev_image:
+	docker build --build-arg USE_CUDA=1 --no-cache -t persiaml/persia-cuda-runtime:dev .
