@@ -1,5 +1,4 @@
 import os
-import sys
 
 from enum import Enum
 from queue import Queue
