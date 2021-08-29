@@ -1,5 +1,7 @@
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
+use crate::PersiaCommonContext;
 use persia_embedding_datatypes::optim::{
     AdagradConfig, AdamConfig, NaiveSGDConfig, OptimizerConfig,
 };
@@ -53,6 +55,13 @@ impl PyOptimizerBase {
             eps,
         };
         self.inner = Some(OptimizerConfig::Adam(config));
+    }
+
+    pub fn apply(&self) -> PyResult<()> {
+        let context = PersiaCommonContext::get();
+        context
+            .register_optimizer(self)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 }
 

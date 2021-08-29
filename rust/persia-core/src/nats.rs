@@ -1,7 +1,7 @@
 use crate::data::PyPersiaBatchData;
 use crate::optim::PyOptimizerBase;
 use crate::utils::PyPersiaBatchDataSender;
-use crate::{PersiaError, PyPersiaCommonContext};
+use crate::{PersiaCommonContext, PersiaError};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -258,17 +258,14 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
 }
 
 #[pyfunction]
-pub fn init_responder(
-    world_size: usize,
-    channel: &PyPersiaBatchDataSender,
-    common_context: &PyPersiaCommonContext,
-) -> PyResult<()> {
+pub fn init_responder(world_size: usize, channel: &PyPersiaBatchDataSender) -> PyResult<()> {
+    let common_context = PersiaCommonContext::get();
     RESPONDER.get_or_init(|| {
         let nats_stub = PersiaBatchFlowNatsStub {
             output_channel: channel.inner.clone(),
             world_size,
         };
-        let _guard = common_context.inner.async_runtime.enter();
+        let _guard = common_context.async_runtime.enter();
         Arc::new(PersiaBatchFlowNatsStubResponder::new(nats_stub))
     });
 

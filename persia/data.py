@@ -60,7 +60,7 @@ class StreamingDataset(IterableDataset):
             assert current_ctx is not None, "Current conext is None!"
             world_size = current_ctx.world_size
             assert world_size != -1, "world size not set"
-            init_responder(world_size, self.sender, current_ctx.common_context)
+            init_responder(world_size, self.sender)
 
             _logger.info("initialize the responder")
             self.initialized = True
@@ -122,7 +122,7 @@ class Dataloder(object):
         dataset (IterableChannelBase): dataset for Dataloder to retrive replica info and sender channel
         forward_buffer_size: (int, optional): gpu forward channel buffer size, this args effect the gpu memory cost
         is_training (bool, optional): whether current forward status is training or not
-        timeout (int, optional): timeout for PyForward to fetch data, millisecond unit
+        timeout_ms (int, optional): timeout for PyForward to fetch data, millisecond unit
         num_workers (int, optional): spawn thread worker number for  PyForward to lookup embedding and PythonBatchData prefetch
         reproducible (bool, optional): iterate the data in fixed order, make the dataflow deterministic
         embedding_staleness (int, optional): Max number of batched staleness embedding each rank. A staleness embedding means it prefetched from embedding server before gradient updated.
@@ -133,7 +133,7 @@ class Dataloder(object):
         dataset: IterableDataset,
         forward_buffer_size: int = 10,
         is_training: bool = True,
-        timeout: int = 1000 * 60 * 10,
+        timeout_ms: int = 1000 * 60 * 10,
         num_workers: int = 10,
         reproducible: bool = False,
         embedding_staleness: Optional[int] = None,
@@ -142,7 +142,7 @@ class Dataloder(object):
         from persia.prelude import PyForward
 
         self.dataset = dataset
-        self.timeout = timeout
+        self.timeout_ms = timeout_ms
         self.num_workers = num_workers
 
         current_ctx = cnt_ctx()
@@ -152,7 +152,6 @@ class Dataloder(object):
             forward_buffer_size,
             is_training,
             reproducible,
-            current_ctx.common_context,
             embedding_staleness,
         )
         self.forward_engine.set_input_channel(dataset.receiver)
@@ -164,7 +163,10 @@ class Dataloder(object):
     def __iter__(self):
 
         for _ in self.dataset:
-            yield self.forward_engine.get_batch(self.timeout)
+            yield self.forward_engine.get_batch(self.timeout_ms)
 
     def __len__(self):
         return len(self.dataset)
+
+    def __del__(self):
+        self.forward_engine.stop()

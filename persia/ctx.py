@@ -96,8 +96,6 @@ class BaseCtx:
     def __exit__(self, exc_type, value, trace):
         self._exit()
 
-        self.common_context.exit()
-
         global _CURRENT_CXT
         _CURRENT_CXT = self.origin_context
 
@@ -507,13 +505,18 @@ class TrainCtx(EmbeddingCtx):
 
         # dynamic import the PyForward due to conditional compilation
         self.grad_queue = Queue(grad_update_buffer_size)
-        self.backward_engine = PyBackward(backward_buffer_size, self.common_context)
+        self.backward_engine = PyBackward(backward_buffer_size)
 
     def _enter(self):
         super()._enter()
 
-        self.sparse_optimizer.apply(self.common_context)
+        self.sparse_optimizer.apply()
         self.backward_engine.launch(self.device_id, self.backward_workers_size)
+
+    def _exit(self):
+        super()._exit()
+
+        self.backward_engine.stop()
 
     def backward(
         self, loss: torch.Tensor, embedding_gradient_check_frequency: int = 20

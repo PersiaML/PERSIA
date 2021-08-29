@@ -1,7 +1,7 @@
 from abc import abstractmethod, ABC
 from typing import Tuple
 
-from persia.prelude import PyOptimizerBase, PyPersiaCommonContext
+from persia.prelude import PyOptimizerBase
 
 
 class Optimizer(ABC):
@@ -10,14 +10,9 @@ class Optimizer(ABC):
     def __init__(self):
         self.optimizer_base = PyOptimizerBase()
 
-    @abstractmethod
-    def apply(self, common_context: PyPersiaCommonContext):
-        r"""Abstraction method for optimizer that support register different type of optimizer."""
-        ...
-
-    def register_optimizer(self, common_context: PyPersiaCommonContext):
+    def apply(self):
         """Register sparse optimizer to embedding server."""
-        common_context.register_optimizer(self.optimizer_base)
+        self.optimizer_base.apply()
 
 
 class SGD(Optimizer):
@@ -34,12 +29,7 @@ class SGD(Optimizer):
         self.lr = lr
         self.momentum = momentum
         self.weight_decay = weight_decay
-
-    def apply(self, common_context: PyPersiaCommonContext):
-        """Initialize optimizer and register to embedding server."""
         self.optimizer_base.init_sgd(self.lr, self.weight_decay)
-        self.register_optimizer(common_context)
-
 
 class Adam(Optimizer):
     r"""A wrapper to config the embedding-server Adam optimizer."""
@@ -63,11 +53,7 @@ class Adam(Optimizer):
         self.betas = betas
         self.weight_decay = weight_decay
         self.eps = eps
-
-    def apply(self, common_context: PyPersiaCommonContext):
-        """Initialize Adam optimizer and register to embedding server."""
         self.optimizer_base.init_adam(self.lr, self.betas, self.eps)
-        self.register_optimizer(common_context)
 
 
 class Adagrad(Optimizer):
@@ -96,9 +82,6 @@ class Adagrad(Optimizer):
         self.initial_accumulator_value = initial_accumulator_value
         self.g_square_momentum = g_square_momentum
         self.eps = eps
-
-    def apply(self, common_context: PyPersiaCommonContext):
-        """Initialize Adagrad optimizer and register to embedding server."""
         self.optimizer_base.init_adagrad(
             self.lr,
             self.weight_decay,
@@ -106,4 +89,3 @@ class Adagrad(Optimizer):
             self.g_square_momentum,
             self.eps,
         )
-        self.register_optimizer(common_context)

@@ -2,7 +2,7 @@ use crate::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
 use crate::cuda::set_device;
 use crate::cuda::utils::cuda_d2h;
 use crate::metrics::MetricsHolder;
-use crate::{PersiaCommonContext, PyPersiaCommonContext};
+use crate::PersiaCommonContext;
 
 use persia_embedding_datatypes::{
     EmbeddingGradientBatch, FeatureEmbeddingGradientBatch, Gradients,
@@ -12,7 +12,7 @@ use persia_futures::{flume, tokio::sync::OwnedSemaphorePermit};
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -112,11 +112,13 @@ struct Backward {
     pub cpu_backward_channel_s: flume::Sender<EmbeddingBackwardStub>,
     pub cpu_backward_channel_r: flume::Receiver<EmbeddingBackwardStub>,
     pub launch: bool,
-    pub common_context: Arc<PersiaCommonContext>,
+    pub std_handles: Vec<std::thread::JoinHandle<()>>,
+    pub tokio_handles: Vec<persia_futures::tokio::task::JoinHandle<()>>,
+    pub running: Arc<AtomicBool>,
 }
 
 impl Backward {
-    fn new(queue_size: usize, common_context: Arc<PersiaCommonContext>) -> Self {
+    fn new(queue_size: usize) -> Self {
         let (backward_channel_s, backward_channel_r) = flume::bounded(queue_size);
         let (cpu_backward_channel_s, cpu_backward_channel_r) = flume::bounded(queue_size);
         Self {
@@ -125,24 +127,42 @@ impl Backward {
             cpu_backward_channel_s,
             cpu_backward_channel_r,
             launch: false,
-            common_context,
+            std_handles: Vec::new(),
+            tokio_handles: Vec::new(),
+            running: Arc::new(AtomicBool::new(false)),
         }
     }
 
     fn launch(&mut self, device_id: i32, num_backward_worker: usize) {
         if !self.launch {
+            self.running.store(true, Ordering::Relaxed);
             self.spawn_backward_to_cpu_worker(device_id);
             self.spawn_backward_worker(num_backward_worker);
             self.launch = true;
         }
     }
 
+    fn stop(&mut self) {
+        tracing::info!("exiting persia backward context");
+        self.running.store(false, Ordering::Relaxed);
+
+        tracing::info!("waiting for all backward threads join");
+        self.std_handles.drain(..).for_each(|h| {
+            h.join().expect("failed to join");
+        });
+
+        tracing::info!("waiting for all backward tokio task join");
+        let async_runtime = PersiaCommonContext::get().async_runtime.clone();
+        self.tokio_handles.drain(..).for_each(|h| {
+            async_runtime.block_on(h).expect("failed to join");
+        });
+    }
+
     fn spawn_backward_to_cpu_worker(&mut self, device_id: i32) {
         let channel_r = self.backward_channel_r.clone();
         let channel_s = self.cpu_backward_channel_s.clone();
 
-        let context = self.common_context.clone();
-        let running = context.running.clone();
+        let running = self.running.clone();
         let handler = std::thread::spawn(move || {
             set_device(device_id as i32);
             loop {
@@ -224,18 +244,17 @@ impl Backward {
             }
         });
 
-        let mut std_handles = context.std_handles.lock();
-        std_handles.push(handler);
+        self.std_handles.push(handler);
     }
 
     fn spawn_backward_worker(&mut self, num_backward_worker: usize) {
-        let context = self.common_context.clone();
+        let context = PersiaCommonContext::get();
         let runtime = context.async_runtime.clone();
 
         for _ in 0..num_backward_worker {
             let channel_r = self.cpu_backward_channel_r.clone();
             let rpc_client = context.rpc_client.clone();
-            let running = context.running.clone();
+            let running = self.running.clone();
             let _guard = runtime.enter();
             let handle = persia_futures::tokio::spawn(async move {
                 loop {
@@ -278,8 +297,7 @@ impl Backward {
                     }
                 }
             });
-            let mut tokio_handles = context.tokio_handles.lock();
-            tokio_handles.push(handle);
+            self.tokio_handles.push(handle);
         }
     }
 }
@@ -292,14 +310,18 @@ struct PyBackward {
 #[pymethods]
 impl PyBackward {
     #[new]
-    pub fn new(queue_size: usize, common_context: &PyPersiaCommonContext) -> PyBackward {
+    pub fn new(queue_size: usize) -> PyBackward {
         PyBackward {
-            inner: Backward::new(queue_size, common_context.inner.clone()),
+            inner: Backward::new(queue_size),
         }
     }
 
     pub fn launch(&mut self, device_id: i32, num_backward_worker: usize) {
         self.inner.launch(device_id, num_backward_worker);
+    }
+
+    pub fn stop(&mut self) {
+        self.inner.stop()
     }
 
     pub fn update_sparse_gradient_batched(

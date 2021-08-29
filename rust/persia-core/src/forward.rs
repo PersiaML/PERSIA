@@ -4,10 +4,10 @@ use crate::cuda::{set_device, AsyncEmbeddingOnCuda, AsyncTensorOnCuda};
 use crate::metrics::MetricsHolder;
 use crate::rpc::PersiaRpcClient;
 use crate::utils::PyPersiaBatchDataReceiver;
-use crate::{PersiaCommonContext, PyPersiaCommonContext};
+use crate::PersiaCommonContext;
 
 use std::collections::BinaryHeap;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -207,9 +207,8 @@ impl PerisaDataOrderManager {
         rank_id: usize,
         channel_r: flume::Receiver<PersiaBatchData>,
         channel_s: flume::Sender<PersiaBatchData>,
-        common_context: Arc<PersiaCommonContext>,
+        running: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
-        let running = common_context.running.clone();
         std::thread::spawn(move || {
             let mut order_manager = Self::new(world_size, rank_id);
             loop {
@@ -276,8 +275,10 @@ struct Forward {
     pub gpu_forwarded_channel_r: flume::Receiver<PersiaTrainingBatchShardedServerOnGpu>,
     pub is_training: bool,
     pub launch: bool,
-    pub common_context: Arc<PersiaCommonContext>,
     pub embedding_staleness_semaphore: Option<Arc<Semaphore>>,
+    pub std_handles: Vec<std::thread::JoinHandle<()>>,
+    pub tokio_handles: Vec<persia_futures::tokio::task::JoinHandle<()>>,
+    pub running: Arc<AtomicBool>,
 }
 
 impl Forward {
@@ -285,7 +286,6 @@ impl Forward {
         forward_buffer_size: usize,
         is_training: bool,
         reproducible: bool,
-        common_context: Arc<PersiaCommonContext>,
         embedding_staleness: Option<usize>,
     ) -> Self {
         let (reorder_buffer_channel_s, reorder_buffer_channel_r) = if reproducible {
@@ -313,8 +313,10 @@ impl Forward {
             gpu_forwarded_channel_s,
             is_training,
             launch: false,
-            common_context,
             embedding_staleness_semaphore,
+            std_handles: Vec::new(),
+            tokio_handles: Vec::new(),
+            running: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -322,6 +324,7 @@ impl Forward {
         if !self.launch {
             match &self.input_channel {
                 Some(_) => {
+                    self.running.store(true, Ordering::Relaxed);
                     if self.reorder_buffer_channel_r.is_some() {
                         self.spawn_reorder_buffer_worker()?;
                     }
@@ -340,6 +343,23 @@ impl Forward {
         }
     }
 
+    pub fn stop(&mut self) -> PyResult<()> {
+        tracing::info!("exiting persia forward context");
+        self.running.store(false, Ordering::Relaxed);
+
+        tracing::info!("waiting for all forward threads join");
+        self.std_handles.drain(..).for_each(|h| {
+            h.join().expect("failed to join");
+        });
+
+        tracing::info!("waiting for all forward tokio task join");
+        let async_runtime = PersiaCommonContext::get().async_runtime.clone();
+        self.tokio_handles.drain(..).for_each(|h| {
+            async_runtime.block_on(h).expect("failed to join");
+        });
+        Ok(())
+    }
+
     fn spawn_reorder_buffer_worker(&mut self) -> PyResult<()> {
         let replica_info = PersiaReplicaInfo::get().expect("not in persia context");
         let handler = PerisaDataOrderManager::spawn_reorder_worker(
@@ -347,11 +367,9 @@ impl Forward {
             replica_info.replica_index,
             self.input_channel.as_ref().unwrap().clone(),
             self.reorder_buffer_channel_s.as_ref().unwrap().clone(),
-            self.common_context.clone(),
+            self.running.clone(),
         );
-        let context = self.common_context.clone();
-        let mut std_handles = context.std_handles.lock();
-        std_handles.push(handler);
+        self.std_handles.push(handler);
         Ok(())
     }
 
@@ -359,10 +377,9 @@ impl Forward {
         let channel_r = self.forwarded_channel_r.clone();
         let channel_s = self.gpu_forwarded_channel_s.clone();
 
-        let context = self.common_context.clone();
+        let running = self.running.clone();
         let handler = std::thread::spawn(move || {
             set_device(device_id);
-            let running = context.running.clone();
             loop {
                 if !running.load(Ordering::Acquire) {
                     break;
@@ -412,9 +429,7 @@ impl Forward {
             }
         });
 
-        let context = self.common_context.clone();
-        let mut std_handles = context.std_handles.lock();
-        std_handles.push(handler);
+        self.std_handles.push(handler);
     }
 
     fn spawn_forward_worker(&mut self, num_workers: usize) {
@@ -426,13 +441,13 @@ impl Forward {
                 self.input_channel.as_ref().unwrap().clone()
             };
 
-            let context = self.common_context.clone();
+            let context = PersiaCommonContext::get();
 
             let rpc_client = context.rpc_client.clone();
             let _guard = context.async_runtime.enter();
             let is_training = self.is_training;
 
-            let running = context.running.clone();
+            let running = self.running.clone();
             let embedding_staleness_semaphore = match &self.embedding_staleness_semaphore {
                 Some(s) => Some(s.clone()),
                 None => None,
@@ -533,9 +548,7 @@ impl Forward {
                 }
             });
 
-            let context = self.common_context.clone();
-            let mut tokio_handles = context.tokio_handles.lock();
-            tokio_handles.push(handle);
+            self.tokio_handles.push(handle);
         }
     }
 }
@@ -608,7 +621,6 @@ impl PyForward {
         forward_buffer_size: usize,
         is_training: bool,
         reproducible: bool,
-        common_context: &PyPersiaCommonContext,
         embedding_staleness: Option<usize>,
     ) -> PyResult<PyForward> {
         Ok(PyForward {
@@ -616,14 +628,18 @@ impl PyForward {
                 forward_buffer_size,
                 is_training,
                 reproducible,
-                common_context.inner.clone(),
                 embedding_staleness,
             ),
         })
     }
 
     fn launch(&mut self, device_id: i32, num_workers: usize) -> PyResult<()> {
-        self.inner.launch(device_id, num_workers)
+        self.inner.launch(device_id, num_workers)?;
+        Ok(())
+    }
+
+    fn stop(&mut self) -> PyResult<()> {
+        self.inner.stop()
     }
 
     pub fn get_batch(&self, timeout_ms: u64, py: Python) -> PyResult<PythonTrainBatch> {

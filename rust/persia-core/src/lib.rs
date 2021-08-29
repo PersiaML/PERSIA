@@ -22,12 +22,9 @@ use crate::forward::{forward_directly, PythonTrainBatch};
 use crate::optim::PyOptimizerBase;
 use crate::rpc::PersiaRpcClient;
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-
 use anyhow::Result;
-use hashbrown::HashMap;
-use parking_lot::{Mutex, RwLock};
+use once_cell::sync::OnceCell;
+use std::sync::Arc;
 
 use persia_futures::tokio::runtime::Runtime;
 use persia_speedy::Readable;
@@ -71,22 +68,31 @@ pub enum PersiaError {
     SendDataError,
 }
 
+static PERSIA_COMMON_CONTEXT: OnceCell<Arc<PersiaCommonContext>> = OnceCell::new();
+
 struct PersiaCommonContext {
     rpc_client: Arc<PersiaRpcClient>,
     nats_publisher: Arc<nats::PersiaBatchFlowNatsStubPublisherWrapper>,
     async_runtime: Arc<Runtime>,
-    std_handles: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
-    tokio_handles: Arc<Mutex<Vec<persia_futures::tokio::task::JoinHandle<()>>>>,
-    running: Arc<AtomicBool>,
 }
 
 impl PersiaCommonContext {
+    pub fn get() -> Arc<Self> {
+        PERSIA_COMMON_CONTEXT
+            .get()
+            .expect("not in persia context")
+            .clone()
+    }
+
     pub fn init(
         num_coroutines_worker: usize,
         replica_index: usize,
         replica_size: usize,
         world_size: Option<usize>,
-    ) -> Result<Self, PersiaError> {
+    ) -> Result<(), PersiaError> {
+        if PERSIA_COMMON_CONTEXT.get().is_some() {
+            return Ok(());
+        }
         let runtime = Arc::new(
             persia_futures::tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
@@ -95,11 +101,7 @@ impl PersiaCommonContext {
                 .unwrap(),
         );
 
-        let rpc_client = Arc::new(PersiaRpcClient {
-            clients: RwLock::new(HashMap::new()),
-            middleware_addrs: RwLock::new(vec![]),
-            async_runtime: runtime.clone(),
-        });
+        let rpc_client = Arc::new(PersiaRpcClient::new(runtime.clone()));
 
         let _ = PersiaReplicaInfo::set(replica_size, replica_index);
         let nats_publisher = Arc::new(nats::PersiaBatchFlowNatsStubPublisherWrapper::new(
@@ -111,14 +113,17 @@ impl PersiaCommonContext {
             rpc_client,
             nats_publisher,
             async_runtime: runtime,
-            std_handles: Arc::new(Mutex::new(vec![])),
-            tokio_handles: Arc::new(Mutex::new(vec![])),
-            running: Arc::new(AtomicBool::new(true)),
         };
 
         common_context.wait_servers_ready()?;
 
-        Ok(common_context)
+        let result = PERSIA_COMMON_CONTEXT.set(Arc::new(common_context));
+
+        if result.is_err() {
+            tracing::warn!("calling init persia common context multiple times");
+        }
+
+        Ok(())
     }
 
     pub fn get_embedding_size(&self) -> Result<Vec<usize>, PersiaError> {
@@ -187,30 +192,12 @@ impl PersiaCommonContext {
         let _ = self.rpc_client.get_client_by_addr(&addr);
         Ok(())
     }
-
-    pub fn exit(&self) -> Result<(), PersiaError> {
-        tracing::info!("exiting persia common context");
-        self.running.store(false, Ordering::Relaxed);
-
-        tracing::info!("waiting for all threads join");
-        let mut std_handles = self.std_handles.lock();
-        std_handles.drain(..).for_each(|h| {
-            h.join().expect("failed to join");
-        });
-
-        tracing::info!("waiting for all tokio task join");
-        let mut tokio_handles = self.tokio_handles.lock();
-        tokio_handles.drain(..).for_each(|h| {
-            self.async_runtime.block_on(h).expect("failed to join");
-        });
-
-        Ok(())
-    }
 }
 
 #[pyclass]
 pub struct PyPersiaCommonContext {
-    inner: Arc<PersiaCommonContext>,
+    replica_index: usize,
+    replica_size: usize,
 }
 
 #[pymethods]
@@ -221,58 +208,61 @@ impl PyPersiaCommonContext {
         replica_index: usize,
         replica_size: usize,
         world_size: Option<usize>,
-    ) -> PyResult<PyPersiaCommonContext> {
-        let instance = PersiaCommonContext::init(
+    ) -> PyResult<Self> {
+        PersiaCommonContext::init(
             num_coroutines_worker,
             replica_index,
             replica_size,
             world_size,
         )
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(PyPersiaCommonContext {
-            inner: Arc::new(instance),
+        Ok(Self {
+            replica_index,
+            replica_size,
         })
     }
 
+    pub fn replica_index(&self) -> PyResult<usize> {
+        Ok(self.replica_index)
+    }
+
+    pub fn replica_size(&self) -> PyResult<usize> {
+        Ok(self.replica_size)
+    }
+
     pub fn get_embedding_size(&self) -> PyResult<Vec<usize>> {
-        self.inner
+        PersiaCommonContext::get()
             .get_embedding_size()
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn dump(&self, dst_dir: String) -> PyResult<()> {
-        self.inner
+        PersiaCommonContext::get()
             .dump(dst_dir)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn load(&self, dst_dir: String) -> PyResult<()> {
-        self.inner
+        PersiaCommonContext::get()
             .load(dst_dir)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn wait_for_serving(&self) -> PyResult<()> {
-        self.inner
+        PersiaCommonContext::get()
             .wait_for_serving()
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn wait_for_emb_dumping(&self) -> PyResult<()> {
-        self.inner
+        PersiaCommonContext::get()
             .wait_for_emb_dumping()
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn shutdown_servers(&self) -> PyResult<()> {
-        self.inner
+        PersiaCommonContext::get()
             .shutdown()
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
-    }
-
-    pub fn exit(&self) -> PyResult<()> {
-        self.inner
-            .exit()
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
@@ -281,13 +271,13 @@ impl PyPersiaCommonContext {
         batch: &mut PyPersiaBatchData,
         block: bool,
     ) -> PyResult<()> {
-        self.inner
+        PersiaCommonContext::get()
             .send_sparse_to_middleware(batch, block)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     pub fn send_dense_to_trainer(&self, batch: &PyPersiaBatchData, block: bool) -> PyResult<()> {
-        self.inner
+        PersiaCommonContext::get()
             .send_dense_to_trainer(batch, block)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
@@ -300,7 +290,7 @@ impl PyPersiaCommonContext {
         enable_weight_bound: bool,
         weight_bound: f32,
     ) -> PyResult<()> {
-        self.inner
+        PersiaCommonContext::get()
             .configure_sharded_servers(
                 initialize_lower,
                 initialize_upper,
@@ -311,14 +301,8 @@ impl PyPersiaCommonContext {
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
-    pub fn register_optimizer(&self, opt: &PyOptimizerBase) -> PyResult<()> {
-        self.inner
-            .register_optimizer(opt)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
-    }
-
     pub fn wait_servers_ready(&self) -> PyResult<()> {
-        self.inner
+        PersiaCommonContext::get()
             .wait_servers_ready()
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
@@ -333,8 +317,8 @@ impl PyPersiaCommonContext {
         forward_directly(
             batch,
             device_id,
-            self.inner.rpc_client.clone(),
-            self.inner.async_runtime.clone(),
+            PersiaCommonContext::get().rpc_client.clone(),
+            PersiaCommonContext::get().async_runtime.clone(),
         )
     }
 
@@ -348,8 +332,8 @@ impl PyPersiaCommonContext {
         forward_directly(
             batch,
             device_id,
-            self.inner.rpc_client.clone(),
-            self.inner.async_runtime.clone(),
+            PersiaCommonContext::get().rpc_client.clone(),
+            PersiaCommonContext::get().async_runtime.clone(),
         )
     }
 }

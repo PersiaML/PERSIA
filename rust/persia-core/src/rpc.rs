@@ -18,6 +18,14 @@ pub struct PersiaRpcClient {
 }
 
 impl PersiaRpcClient {
+    pub fn new(async_runtime: Arc<Runtime>) -> Self {
+        Self {
+            clients: RwLock::new(HashMap::new()),
+            middleware_addrs: RwLock::new(vec![]),
+            async_runtime,
+        }
+    }
+
     pub fn get_random_client_with_addr(&self) -> (String, Arc<ShardedMiddlewareServerClient>) {
         let middleware_addrs = self.middleware_addrs.read();
         let addr = middleware_addrs[rand::random::<usize>() % middleware_addrs.len()].as_str();
