@@ -29,7 +29,6 @@ use anyhow::Result;
 use hashbrown::HashMap;
 use parking_lot::{Mutex, RwLock};
 
-use persia_futures::smol::block_on;
 use persia_futures::tokio::runtime::Runtime;
 use persia_speedy::Readable;
 use pyo3::exceptions::PyRuntimeError;
@@ -102,7 +101,7 @@ impl PersiaCommonContext {
             async_runtime: runtime.clone(),
         });
 
-        PersiaReplicaInfo::set(replica_size, replica_index)?;
+        let _ = PersiaReplicaInfo::set(replica_size, replica_index);
         let nats_publisher = Arc::new(nats::PersiaBatchFlowNatsStubPublisherWrapper::new(
             world_size,
             runtime.clone(),
@@ -116,6 +115,8 @@ impl PersiaCommonContext {
             tokio_handles: Arc::new(Mutex::new(vec![])),
             running: Arc::new(AtomicBool::new(true)),
         };
+
+        common_context.wait_servers_ready()?;
 
         Ok(common_context)
     }
@@ -188,17 +189,19 @@ impl PersiaCommonContext {
     }
 
     pub fn exit(&self) -> Result<(), PersiaError> {
+        tracing::info!("exiting persia common context");
         self.running.store(false, Ordering::Relaxed);
-        // self.shutdown()?;
 
+        tracing::info!("waiting for all threads join");
         let mut std_handles = self.std_handles.lock();
         std_handles.drain(..).for_each(|h| {
             h.join().expect("failed to join");
         });
 
+        tracing::info!("waiting for all tokio task join");
         let mut tokio_handles = self.tokio_handles.lock();
         tokio_handles.drain(..).for_each(|h| {
-            block_on(h).expect("failed to join");
+            self.async_runtime.block_on(h).expect("failed to join");
         });
 
         Ok(())

@@ -20,7 +20,7 @@ use persia_embedding_sharded_server::sharded_middleware_service::{
     MiddlewareNatsStubPublisher, ShardedMiddlewareError,
 };
 use persia_futures::tokio::runtime::Runtime;
-use persia_futures::{flume, smol::block_on, tokio};
+use persia_futures::{flume, tokio};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::Writable;
 
@@ -61,7 +61,7 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
         let to_trainer = PersiaBatchFlowNatsStubPublisher::new();
         let world_size = world_size.unwrap_or_else(|| {
             retry(Fixed::from_millis(5000), || {
-                let resp = block_on(to_trainer.publish_get_world_size(&(), None));
+                let resp = async_runtime.block_on(to_trainer.publish_get_world_size(&(), None));
                 if resp.is_err() {
                     tracing::warn!("failed to get world size of trainer, due to {:?}", resp);
                 }
@@ -73,7 +73,7 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
         let to_middleware = MiddlewareNatsStubPublisher::new();
         let num_middlewares = retry(Fixed::from_millis(5000), || {
             let resp: Result<usize, _> =
-                block_on(to_middleware.publish_get_replica_size(&(), None))?;
+                async_runtime.block_on(to_middleware.publish_get_replica_size(&(), None))?;
             if resp.is_err() {
                 tracing::warn!(
                     "failed to get world replica of middleware, due to {:?}",
@@ -115,8 +115,9 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
                 let op = || {
                     let cur_middleware_id = self.cur_middleware_id.fetch_add(1, Ordering::AcqRel);
                     let _gurad = self.async_runtime.enter();
-                    let result: Result<PreForwardStub, ShardedMiddlewareError> =
-                        block_on(self.to_middleware.publish_forward_batched(
+                    let result: Result<PreForwardStub, ShardedMiddlewareError> = self
+                        .async_runtime
+                        .block_on(self.to_middleware.publish_forward_batched(
                             sparse_batch,
                             Some(cur_middleware_id % self.num_middlewares),
                         ))?;
@@ -167,8 +168,9 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
         let rank_id = batch.inner.batch_id.unwrap() % self.world_size;
         let op = || {
             let _gurad = self.async_runtime.enter();
-            let result: Result<bool, _> =
-                block_on(self.to_trainer.publish_batch(&batch.inner, Some(rank_id)));
+            let result: Result<bool, _> = self
+                .async_runtime
+                .block_on(self.to_trainer.publish_batch(&batch.inner, Some(rank_id)));
             if result.is_ok() && result.unwrap() {
                 Ok(())
             } else {
@@ -217,7 +219,7 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
         };
 
         let _gurad = self.async_runtime.enter();
-        block_on(
+        self.async_runtime.block_on(
             self.to_middleware
                 .publish_configure_sharded_servers(&config, None),
         )??;
@@ -232,7 +234,7 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
         }
         let optimizer = optimizer.unwrap();
         let _gurad = self.async_runtime.enter();
-        block_on(
+        self.async_runtime.block_on(
             self.to_middleware
                 .publish_register_optimizer(&optimizer, None),
         )??;
@@ -242,7 +244,9 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
 
     pub fn wait_servers_ready(&self) -> Result<String, PersiaError> {
         let addr: Result<String, _> = retry(Fixed::from_millis(5000), || {
-            let resp = block_on(self.to_middleware.publish_get_address(&(), None))?;
+            let resp = self
+                .async_runtime
+                .block_on(self.to_middleware.publish_get_address(&(), None))?;
             if resp.is_err() {
                 tracing::warn!("waiting for servers ready...")
             }

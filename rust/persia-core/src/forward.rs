@@ -17,7 +17,6 @@ use persia_embedding_datatypes::{EmbeddingBatch, EmbeddingTensor, PersiaBatchDat
 use persia_embedding_sharded_server::sharded_middleware_service::ShardedMiddlewareError;
 use persia_futures::{
     flume,
-    smol::block_on,
     tokio::runtime::Runtime,
     tokio::sync::{OwnedSemaphorePermit, Semaphore},
 };
@@ -560,7 +559,8 @@ pub fn forward_directly(
         EmbeddingTensor::SparseBatch(sparse_batch) => {
             let _guard = async_runtime.enter();
             let (_middleware_addr, client) = rpc_client.get_random_client_with_addr();
-            let embeddings: EmbeddingBatch = block_on(client.forward_batched_direct(sparse_batch))
+            let embeddings: EmbeddingBatch = async_runtime
+                .block_on(client.forward_batched_direct(sparse_batch))
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 

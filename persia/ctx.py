@@ -1,4 +1,5 @@
 import os
+import sys
 
 from enum import Enum
 from queue import Queue
@@ -42,7 +43,7 @@ class PreprocessMode(Enum):
 
 
 class BaseCtx:
-    r"""It provide a common context for other persia context, e.g. `DataCtx`, `EmbeddingCtx` and `TrainCtx`.
+    r"""It initialize a common context for other persia context, e.g. `DataCtx`, `EmbeddingCtx` and `TrainCtx`.
     This class should not be instantiated directly.
     """
 
@@ -54,6 +55,7 @@ class BaseCtx:
         Arguments:
             threadpool_worker_size (int): Rpc threadpool worker size.
         """
+        self.origin_context = None
         self.world_size = env.get_world_size()
 
         if self.world_size == -1:
@@ -80,12 +82,13 @@ class BaseCtx:
 
     def _exit(self):
         """Hook when exit the context"""
-        self.common_context.exit()
+        ...
 
     def __enter__(self):
         self._enter()
 
         global _CURRENT_CXT
+        self.origin_context = _CURRENT_CXT
         _CURRENT_CXT = self
 
         return self
@@ -93,8 +96,10 @@ class BaseCtx:
     def __exit__(self, exc_type, value, trace):
         self._exit()
 
+        self.common_context.exit()
+
         global _CURRENT_CXT
-        _CURRENT_CXT = None
+        _CURRENT_CXT = self.origin_context
 
         if exc_type:
             import traceback
@@ -135,6 +140,25 @@ class DataCtx(BaseCtx):
         self.common_context.send_sparse_to_middleware(data, blocking)
         self.common_context.send_dense_to_trainer(data, blocking)
 
+class EmbeddingConfig:
+    r"""Embedding hyperparameters, argument of ``EmbeddingCtx``.
+    """
+    def __init__(
+        self,
+        emb_initialization: Tuple[float, float] = (-0.01, 0.01),
+        admit_probability: float = 1.0,
+        weight_bound: float = 10,
+    ):
+        """
+        Arguments:
+            emb_initialization (Tuple[float, float], optional): Embedding uniform initialization arguments that corresponding to low and high.
+            admit_probability (float, optional): The probability (0<=, <=1) of admitting a new embedding.
+            weight_bound (float, optional): Restrict each element value of an embedding in [-weight_bound, weight_bound].
+        """
+        self.emb_initialization = emb_initialization
+        self.admit_probability = admit_probability
+        self.weight_bound = weight_bound
+
 
 class EmbeddingCtx(BaseCtx):
     r"""EmbeddingCtx provide the embedding relative function compare to BaseCtx.It can run the offline test or online inference
@@ -145,8 +169,10 @@ class EmbeddingCtx(BaseCtx):
         >>> from persia.prelude import PyPersiaBatchData
         >>> model = get_dnn_model()
         >>> loader = make_dataloader()
+        >>> embedding_config = EmbeddingConfig()
         >>> with EmbeddingCtx(
-        ...     PreprocessMode.EVAL
+        ...     PreprocessMode.EVAL,
+        ...     embedding_config
         ... ) as ctx:
         >>>     for (dense, batch_sparse_ids, target) in loader:
         >>>         batch_data = PyPersiaBatchData()
@@ -161,9 +187,7 @@ class EmbeddingCtx(BaseCtx):
     def __init__(
         self,
         preprocess_mode: PreprocessMode,
-        emb_initialization: Tuple[float, float] = (-0.01, 0.01),
-        admit_probability: float = 1.0,
-        weight_bound: float = 10,
+        embedding_config: Optional[EmbeddingConfig] = None,
         checkpoint_dir: Optional[str] = None,
         *args,
         **kwargs,
@@ -171,29 +195,26 @@ class EmbeddingCtx(BaseCtx):
         """
         Arguments:
             preprocess_mode (PreprocessMode): Different preprocess mode effect the behave of ``prepare_features``.
-            emb_initialization (Tuple[float, float], optional): Embedding uniform initialization arguments that corresponding to low and high.
-            admit_probability (float, optional): The probability (0<=, <=1) of admitting a new embedding.
-            weight_bound (float, optional): Restrict each element value of an embedding in [-weight_bound, weight_bound].
+            embedding_config (EmbeddingConfig, optional): The configuration about embedding that will be sent to the embedding server.
             checkpoint_dir(str, optional): Pretrained checkpoint directory, load the dense and sparse checkpoint in this dir when enter the context.
         """
         super(EmbeddingCtx, self).__init__(*args, **kwargs)
         self.preprocess_mode = preprocess_mode
-        self.emb_initialization = emb_initialization
-        self.admit_probability = admit_probability
-        self.weight_bound = weight_bound
+        self.embedding_config = embedding_config
         self.checkpoint_dir = checkpoint_dir
 
         self.current_batch = None
         self.pretrained_loaded = False
 
     def _enter(self):
-        self.common_context.configure_sharded_servers(
-            self.emb_initialization[0],
-            self.emb_initialization[1],
-            self.admit_probability,
-            self.weight_bound > 0,
-            self.weight_bound,
-        )
+        if self.embedding_config is not None:
+            self.common_context.configure_sharded_servers(
+                self.embedding_config.emb_initialization[0],
+                self.embedding_config.emb_initialization[1],
+                self.embedding_config.admit_probability,
+                self.embedding_config.weight_bound > 0,
+                self.embedding_config.weight_bound,
+            )
 
         if not self.pretrained_loaded and self.checkpoint_dir is not None:
             self.load_embedding(self.checkpoint_dir)
