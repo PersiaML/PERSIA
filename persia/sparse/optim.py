@@ -31,6 +31,7 @@ class SGD(Optimizer):
         self.weight_decay = weight_decay
         self.optimizer_base.init_sgd(self.lr, self.weight_decay)
 
+
 class Adam(Optimizer):
     r"""A wrapper to config the embedding-server Adam optimizer."""
 

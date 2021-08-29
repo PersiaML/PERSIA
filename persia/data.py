@@ -166,7 +166,7 @@ class Dataloder(object):
             try:
                 yield self.forward_engine.get_batch(self.timeout_ms)
             except TimeoutError:
-                _logger.warn('get_batch time out, stop iter stream data')
+                _logger.warn("get_batch time out, stop iter stream data")
                 break
 
     def __len__(self):

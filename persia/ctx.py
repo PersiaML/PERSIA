@@ -138,9 +138,10 @@ class DataCtx(BaseCtx):
         self.common_context.send_sparse_to_middleware(data, blocking)
         self.common_context.send_dense_to_trainer(data, blocking)
 
+
 class EmbeddingConfig:
-    r"""Embedding hyperparameters, argument of ``EmbeddingCtx``.
-    """
+    r"""Embedding hyperparameters, argument of ``EmbeddingCtx``."""
+
     def __init__(
         self,
         emb_initialization: Tuple[float, float] = (-0.01, 0.01),
