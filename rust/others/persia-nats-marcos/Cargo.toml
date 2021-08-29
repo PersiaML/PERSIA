@@ -7,7 +7,7 @@ version = "0.1.0"
 license = "MIT"
 
 [dependencies]
-syn = "1.0.73"
+syn = "1.0.75"
 proc-macro-crate= "1.0"
 proc-macro2 = "1.0"
 quote = "1.0"

@@ -31,7 +31,6 @@ register_submodule(
     persia_core.__name__,
 )
 
-
 # pytype: disable=import-error
 from persia_core import PyPersiaCommonContext, is_cuda_feature_available
 

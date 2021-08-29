@@ -510,7 +510,7 @@ pub struct SlotConfig {
 pub struct EmbeddingConfig {
     #[serde(default = "get_eight")]
     pub feature_index_prefix_bit: usize,
-    pub slot_configs: indexmap::IndexMap<String, SlotConfig>,
+    pub slots_config: indexmap::IndexMap<String, SlotConfig>,
     #[serde(default = "get_default_feature_groups")]
     pub feature_groups: indexmap::IndexMap<String, Vec<String>>,
 }
@@ -549,7 +549,7 @@ impl EmbeddingConfig {
 
 pub fn parse_embedding_config(config: EmbeddingConfig) -> EmbeddingConfig {
     let mut config = config;
-    let slot_configs = &mut config.slot_configs;
+    let slots_config = &mut config.slots_config;
     let feature_groups = &mut config.feature_groups;
     let mut slot_name_to_feature_froup = HashMap::new();
 
@@ -561,7 +561,7 @@ pub fn parse_embedding_config(config: EmbeddingConfig) -> EmbeddingConfig {
             })
         });
 
-    slot_configs.iter().for_each(|(slot_name, _)| {
+    slots_config.iter().for_each(|(slot_name, _)| {
         if !slot_name_to_feature_froup.contains_key(slot_name) {
             let res = feature_groups.insert(slot_name.clone(), vec![slot_name.clone()]);
             if res.is_some() {
@@ -576,7 +576,7 @@ pub fn parse_embedding_config(config: EmbeddingConfig) -> EmbeddingConfig {
         "feature_index_prefix_bit must > 0"
     );
     let feature_prefix_bias = u64::BITS - config.feature_index_prefix_bit as u32;
-    slot_configs
+    slots_config
         .iter_mut()
         .for_each(|(slot_name, slot_config)| {
             assert_eq!(

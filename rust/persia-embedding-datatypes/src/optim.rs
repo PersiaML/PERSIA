@@ -106,7 +106,7 @@ impl Adam {
             .iter()
             .for_each(|(_group_name, slots_name)| {
                 let prefix = embedding_config
-                    .slot_configs
+                    .slots_config
                     .get(slots_name.first().expect("slot not found"))
                     .expect("slot not found")
                     .index_prefix;
