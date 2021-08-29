@@ -346,17 +346,6 @@ impl Forward {
     pub fn stop(&mut self) -> PyResult<()> {
         tracing::info!("exiting persia forward context");
         self.running.store(false, Ordering::Relaxed);
-
-        tracing::info!("waiting for all forward threads join");
-        self.std_handles.drain(..).for_each(|h| {
-            h.join().expect("failed to join");
-        });
-
-        tracing::info!("waiting for all forward tokio task join");
-        let async_runtime = PersiaCommonContext::get().async_runtime.clone();
-        self.tokio_handles.drain(..).for_each(|h| {
-            async_runtime.block_on(h).expect("failed to join");
-        });
         Ok(())
     }
 

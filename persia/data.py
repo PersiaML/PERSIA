@@ -163,7 +163,11 @@ class Dataloder(object):
     def __iter__(self):
 
         for _ in self.dataset:
-            yield self.forward_engine.get_batch(self.timeout_ms)
+            try:
+                yield self.forward_engine.get_batch(self.timeout_ms)
+            except TimeoutError:
+                _logger.warn('get_batch time out, stop iter stream data')
+                break
 
     def __len__(self):
         return len(self.dataset)

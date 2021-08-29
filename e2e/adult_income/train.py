@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 from sklearn import metrics
 
-from persia.ctx import TrainCtx, eval_ctx
+from persia.ctx import TrainCtx, eval_ctx, EmbeddingConfig
 from persia.sparse.optim import Adagrad
 from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
@@ -100,10 +100,12 @@ if __name__ == "__main__":
     test_interval = 254
     buffer_size = 10
 
+    embedding_config = EmbeddingConfig()
     with TrainCtx(
         sparse_optimizer=sparse_optimizer,
         dense_optimizer=dense_optimizer,
         device_id=device_id,
+        embedding_config=embedding_config,
     ) as ctx:
         train_dataloader = Dataloder(StreamingDataset(buffer_size))
         test_loader = Dataloder(test_dataset, is_training=False)

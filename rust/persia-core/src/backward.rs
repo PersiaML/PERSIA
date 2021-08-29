@@ -145,17 +145,6 @@ impl Backward {
     fn stop(&mut self) {
         tracing::info!("exiting persia backward context");
         self.running.store(false, Ordering::Relaxed);
-
-        tracing::info!("waiting for all backward threads join");
-        self.std_handles.drain(..).for_each(|h| {
-            h.join().expect("failed to join");
-        });
-
-        tracing::info!("waiting for all backward tokio task join");
-        let async_runtime = PersiaCommonContext::get().async_runtime.clone();
-        self.tokio_handles.drain(..).for_each(|h| {
-            async_runtime.block_on(h).expect("failed to join");
-        });
     }
 
     fn spawn_backward_to_cpu_worker(&mut self, device_id: i32) {
