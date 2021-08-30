@@ -8,8 +8,8 @@ use persia_libs::{
 };
 use thiserror::Error;
 
-use persia_embedding_config::{PersiaGlobalConfigError, PersiaShardedServerConfig};
 use persia_common::HashMapEmbeddingEntry;
+use persia_embedding_config::{PersiaGlobalConfigError, PersiaShardedServerConfig};
 use persia_eviction_map::PersiaEvictionMap;
 use persia_speedy::{Readable, Writable};
 

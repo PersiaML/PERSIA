@@ -20,11 +20,11 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
+use persia_common::{EmbeddingTensor, PersiaBatchData, PreForwardStub};
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
 };
-use persia_common::{EmbeddingTensor, PersiaBatchData, PreForwardStub};
 use persia_embedding_sharded_server::sharded_middleware_service::{
     MiddlewareNatsStubPublisher, ShardedMiddlewareError,
 };
