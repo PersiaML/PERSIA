@@ -1889,7 +1889,6 @@ name = "persia-core"
 version = "0.1.0"
 dependencies = [
  "arr_macro",
- "color-eyre",
  "cuda-runtime-sys",
  "paste 1.0.5",
  "persia-common",

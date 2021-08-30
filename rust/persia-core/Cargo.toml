@@ -13,7 +13,6 @@ path = "src/lib.rs"
 
 [dependencies]
 arr_macro = "0.1"
-color-eyre = "0.5"
 cuda-runtime-sys = {version = "0.3.0-alpha.1", optional = true}
 paste = "1"
 persia-common = {path = "../persia-common"}
