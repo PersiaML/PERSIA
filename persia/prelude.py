@@ -32,7 +32,7 @@ register_submodule(
 )
 
 # pytype: disable=import-error
-from persia_core import PyPersiaCommonContext, is_cuda_feature_available
+from persia_core import PyPersiaCommonContext, is_cuda_feature_available # noqa
 
 from persia_core.optim import PyOptimizerBase
 from persia_core.data import (
@@ -45,10 +45,10 @@ from persia_core.utils import (
     PyPersiaBatchDataSender,
     PyPersiaBatchDataReceiver,
 )
-from persia_core.nats import init_responder
+from persia_core.nats import init_responder # noqa
 
 if is_cuda_feature_available():
     from persia_core.backward import PyBackward
-    from persia_core.forward import PyForward
+    from persia_core.forward import PyForward # noqa
 
 # pytype: enable=import-error
