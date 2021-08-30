@@ -4,7 +4,9 @@ extern crate shadow_rs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use persia_libs::{anyhow, hashbrown::HashMap, rand, tracing, tracing_subscriber};
+use persia_libs::{
+    anyhow::Result, color_eyre, hashbrown::HashMap, rand, tracing, tracing_subscriber,
+};
 use structopt::StructOpt;
 
 use persia_embedding_config::{
@@ -34,7 +36,7 @@ struct Cli {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<()> {
     color_eyre::install().unwrap();
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_env("LOG_LEVEL"))

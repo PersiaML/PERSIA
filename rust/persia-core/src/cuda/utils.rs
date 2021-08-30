@@ -8,7 +8,8 @@ use cuda_runtime_sys as cuda;
 use persia_libs::{anyhow::Result, tracing};
 
 use persia_common::{
-    BaseTensor, DenseTensor, FeatureEmbeddingBatch, PersiaDenseTensor, TensorDtype,
+    tensor::{BaseTensor, DenseTensor, PersiaDenseTensor, TensorDtype},
+    FeatureEmbeddingBatch,
 };
 
 pub(crate) fn cuda_d2h(

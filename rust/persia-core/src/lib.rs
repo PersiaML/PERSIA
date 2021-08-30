@@ -19,6 +19,7 @@ use std::time::Duration;
 
 use persia_libs::{
     anyhow::Result,
+    color_eyre,
     hashbrown::HashMap,
     once_cell::sync::OnceCell,
     parking_lot::RwLock,

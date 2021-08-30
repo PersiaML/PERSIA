@@ -1,14 +1,22 @@
 #![allow(clippy::needless_return)]
 
+pub mod grad;
+pub mod message_queue;
+pub mod optim;
+pub mod tensor;
+pub mod utils;
+
 use std::cmp::Ordering;
 use std::u64;
+
+use tensor::{DenseTensor, Tensor};
 
 use persia_libs::{
     half,
     half::prelude::*,
     hashbrown::HashMap,
     itertools::Itertools,
-    ndarray::{Array1, Array2, ShapeError},
+    ndarray::{Array1, Array2},
     ndarray_rand::rand_distr::{Gamma, Normal, Poisson, Uniform},
     ndarray_rand::RandomExt,
     numpy::PyArray1,
@@ -19,9 +27,6 @@ use serde::{Deserialize, Serialize};
 
 use persia_embedding_config::InitializationMethod;
 use persia_speedy::{Readable, Writable};
-
-pub mod message_queue;
-pub mod optim;
 
 #[derive(Serialize, Deserialize, Readable, Writable, Clone, Debug)]
 pub struct HashMapEmbeddingEntry {
@@ -274,25 +279,6 @@ impl From<Vec<(String, Vec<&PyArray1<u64>>)>> for SparseBatch {
     }
 }
 
-#[derive(Readable, Writable, Debug)]
-pub enum BaseTensor {
-    F32(Vec<f32>),
-    F64(Vec<f64>),
-    I32(Vec<i32>),
-    I64(Vec<i64>),
-}
-
-impl BaseTensor {
-    pub fn type_size(&self) -> usize {
-        match &self {
-            BaseTensor::F32(_) => std::mem::size_of::<f32>(),
-            BaseTensor::F64(_) => std::mem::size_of::<f64>(),
-            BaseTensor::I32(_) => std::mem::size_of::<i32>(),
-            BaseTensor::I64(_) => std::mem::size_of::<i64>(),
-        }
-    }
-}
-
 #[derive(Readable, Writable, Debug, Clone)]
 pub struct PreForwardStub {
     pub middleware_addr: String,
@@ -308,23 +294,6 @@ impl Default for PreForwardStub {
             batcher_idx: 0,
         }
     }
-}
-
-#[derive(Readable, Writable, Debug)]
-pub struct DenseTensor {
-    pub data: BaseTensor,
-    pub shape: Vec<usize>,
-}
-
-#[derive(Readable, Writable, Debug)]
-pub struct SparseTensor {
-    pub data: BaseTensor,
-    pub offset: Vec<u64>,
-}
-#[derive(Readable, Writable, Debug)]
-pub enum Tensor {
-    Dense(DenseTensor),
-    Sparse(SparseTensor),
 }
 
 #[derive(Readable, Writable, Debug)]
@@ -389,98 +358,6 @@ impl Ord for PersiaBatchData {
     }
 }
 
-#[derive(Deserialize, Serialize, Readable, Writable, Debug)]
-pub enum Gradients {
-    F16(Array2<half::f16>),
-    F32(Array2<f32>),
-}
-
-#[derive(Deserialize, Serialize, Readable, Writable, Debug)]
-pub struct FeatureEmbeddingGradientBatch {
-    pub feature_name: String,
-    pub gradients: Gradients,
-    /// true gradient = gradients / scale_factor
-    pub scale_factor: f32,
-}
-
-#[derive(Deserialize, Serialize, Readable, Writable, Debug)]
-pub struct SkippedGradientBatch {
-    pub feature_name: String,
-}
-
-#[derive(Deserialize, Serialize, Readable, Writable, Debug)]
-pub enum SkippableFeatureEmbeddingGradientBatch {
-    GradientBatch(FeatureEmbeddingGradientBatch),
-    Skipped(SkippedGradientBatch),
-}
-
-#[derive(Deserialize, Serialize, Readable, Writable, Debug)]
-pub struct EmbeddingGradientBatch {
-    pub gradients: Vec<SkippableFeatureEmbeddingGradientBatch>,
-}
-
-#[derive(Deserialize, Serialize, Readable, Writable, Debug, Default)]
-pub struct EmbeddingMeta {
-    pub embedding_name: String,
-    pub embedding_dim: usize,
-    pub batch_size: usize,
-}
-
-#[derive(Readable, Writable, Debug, Default)]
-pub struct PersiaBatchedEmbeddingsResponse {
-    pub emb_metas: Vec<EmbeddingMeta>,
-    pub gateway_server: String,
-    pub err_message: String,
-    pub data: Vec<f16>,
-}
-
-#[derive(Debug, Default)]
-pub struct PersiaBatchedEmbeddings {
-    pub response: PersiaBatchedEmbeddingsResponse,
-    pub addressing: HashMap<String, (usize, usize)>,
-    pub full_precision_data: Vec<f32>,
-}
-
-impl PersiaBatchedEmbeddings {
-    pub fn from_ptr(ptr: *const PersiaBatchedEmbeddings) -> &'static Self {
-        unsafe { &*ptr }
-    }
-}
-
-#[derive(Deserialize, Serialize, Debug, Readable, Writable, Default)]
-pub struct IndicesMeta {
-    pub embedding_name: String,
-    pub indices: Vec<u64>,
-    pub indices_offset: Vec<u64>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Readable, Writable, Default)]
-pub struct PersiaBatchedIndicesRequest {
-    pub inner: Vec<IndicesMeta>,
-}
-
-#[derive(Debug, Default)]
-pub struct PersiaBatchedIndices {
-    pub request: PersiaBatchedIndicesRequest,
-    pub serialized: Vec<u8>,
-}
-
-impl PersiaBatchedIndices {
-    pub fn from_ptr_mut(ptr: *mut PersiaBatchedIndices) -> &'static mut Self {
-        unsafe { &mut *ptr }
-    }
-
-    pub fn from_ptr(ptr: *const PersiaBatchedIndices) -> &'static Self {
-        unsafe { &*ptr }
-    }
-}
-
-#[derive(Debug)]
-pub enum TensorDtype {
-    F16,
-    F32,
-}
-
 pub fn ndarray_f32_to_f16(input: &Array2<f32>) -> Array2<f16> {
     let s = input.as_slice().unwrap();
     let f16v = Vec::from_f32_slice(s);
@@ -504,68 +381,4 @@ pub fn ndarray_f16_to_f32(input: &Array2<f16>) -> Array2<f32> {
         })
         .collect_vec();
     unsafe { Array2::from_shape_vec_unchecked((input.shape()[0], input.shape()[1]), f32v) }
-}
-
-#[derive(Default, Serialize, Deserialize, Readable, Writable, Debug, Clone)]
-pub struct PersiaDenseTensor<T> {
-    pub name: String,
-    pub dim: usize,
-    pub content: Vec<T>,
-}
-
-impl<T> PersiaDenseTensor<T> {
-    pub fn add_sample(&mut self, mut sample: Vec<T>) {
-        assert_eq!(sample.len(), self.dim);
-        self.content.append(&mut sample);
-    }
-
-    pub fn empty_like(&self) -> Self {
-        Self {
-            name: self.name.clone(),
-            dim: self.dim,
-            content: vec![],
-        }
-    }
-
-    pub fn get(&self, sample_idx: usize) -> &[T] {
-        &self.content[sample_idx * self.dim..(sample_idx + 1) * self.dim]
-    }
-}
-
-impl<T> std::convert::TryInto<Array2<T>> for PersiaDenseTensor<T> {
-    type Error = ShapeError;
-
-    fn try_into(self) -> Result<Array2<T>, Self::Error> {
-        Array2::<T>::from_shape_vec((self.content.len() / self.dim, self.dim), self.content)
-    }
-}
-
-impl<T> IntoIterator for PersiaDenseTensor<T> {
-    type Item = Vec<T>;
-    type IntoIter = PersiaDenseTensorSampleIterator<T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        assert_eq!(self.content.len() % self.dim, 0);
-        let mut chunks = self
-            .content
-            .into_iter()
-            .chunks(self.dim)
-            .into_iter()
-            .map(|chunk| chunk.collect_vec())
-            .collect_vec();
-        chunks.reverse();
-        PersiaDenseTensorSampleIterator { chunks }
-    }
-}
-
-pub struct PersiaDenseTensorSampleIterator<T> {
-    chunks: Vec<Vec<T>>,
-}
-
-impl<T> Iterator for PersiaDenseTensorSampleIterator<T> {
-    type Item = Vec<T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.chunks.pop()
-    }
 }

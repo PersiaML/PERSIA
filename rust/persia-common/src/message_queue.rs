@@ -1,8 +1,10 @@
+use crate::utils::ChannelPair;
+
 use std::ops::Add;
 use std::sync::Arc;
 
 use hyper::{self, Body, Request, Response};
-use persia_libs::{tokio, tracing, ChannelPair};
+use persia_libs::{tokio, tracing};
 use thiserror::Error;
 
 #[derive(Error, Debug)]

@@ -20,16 +20,16 @@ use persia_libs::{
 use snafu::ResultExt;
 use thiserror::Error;
 
+use persia_common::{
+    grad::{EmbeddingGradientBatch, Gradients, SkippableFeatureEmbeddingGradientBatch},
+    ndarray_f16_to_f32, ndarray_f32_to_f16,
+    optim::OptimizerConfig,
+    EmbeddingBatch, FeatureEmbeddingBatch, FeatureRawEmbeddingBatch, FeatureSumEmbeddingBatch,
+    HashMapEmbeddingEntry, PreForwardStub, SingleSignInFeatureBatch, SparseBatch,
+};
 use persia_embedding_config::{
     EmbeddingConfig, InstanceInfo, PersiaGlobalConfigError, PersiaMiddlewareConfig,
     PersiaReplicaInfo, PersiaSparseModelHyperparameters, SlotConfig,
-};
-use persia_common::optim::OptimizerConfig;
-use persia_common::{
-    ndarray_f16_to_f32, ndarray_f32_to_f16, EmbeddingBatch, EmbeddingGradientBatch,
-    FeatureEmbeddingBatch, FeatureRawEmbeddingBatch, FeatureSumEmbeddingBatch, Gradients,
-    HashMapEmbeddingEntry, PreForwardStub, SingleSignInFeatureBatch,
-    SkippableFeatureEmbeddingGradientBatch, SparseBatch,
 };
 use persia_metrics::{
     Gauge, GaugeVec, Histogram, IntCounterVec, PersiaMetricsManager, PersiaMetricsManagerError,
@@ -610,7 +610,7 @@ pub struct ShardedMiddlewareServerInner {
     pub all_shards_client: AllShardsClient,
     pub num_shards: u64,
     pub forward_id: AtomicU64,
-    pub cannot_forward_batched_time: crossbeam::atomic::AtomicCell<SystemTime>,
+    pub cannot_forward_batched_time: crossbeam::atomic::AtomicCell<SystemTime>, // TODO: use parking_lot::RwLock to replace
     pub forward_id_buffer:
         persia_libs::async_lock::RwLock<HashMap<usize, HashMap<u64, SparseBatch>>>,
     pub post_forward_buffer: persia_libs::async_lock::RwLock<HashMap<u64, SparseBatch>>,

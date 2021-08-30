@@ -5,7 +5,8 @@ use pyo3::types::PyBytes;
 use persia_libs::numpy::{PyArray1, PyArray2};
 
 use persia_common::{
-    BaseTensor, DenseTensor, EmbeddingTensor, PersiaBatchData, SparseBatch, SparseTensor, Tensor,
+    tensor::{BaseTensor, DenseTensor, SparseTensor, Tensor},
+    EmbeddingTensor, PersiaBatchData, SparseBatch,
 };
 use persia_speedy::Writable;
 

@@ -1937,7 +1937,6 @@ dependencies = [
 name = "persia-embedding-sharded-server"
 version = "0.1.0"
 dependencies = [
- "color-eyre",
  "crossbeam",
  "farmhash",
  "hyper",
@@ -1963,7 +1962,6 @@ dependencies = [
  "snafu",
  "structopt",
  "thiserror",
- "thread_local",
  "tokio",
  "tracing",
 ]
@@ -2022,6 +2020,7 @@ dependencies = [
  "async-oneshot",
  "bytes",
  "chrono",
+ "color-eyre",
  "easy-parallel",
  "flume",
  "futures",

@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use hyperloglogplus::HyperLogLog;
-use persia_libs::{hashbrown, once_cell, parking_lot, tracing, ChannelPair};
+use persia_libs::{hashbrown, once_cell, parking_lot, tracing};
 
-use persia_common::SingleSignInFeatureBatch;
+use persia_common::{utils::ChannelPair, SingleSignInFeatureBatch};
 use persia_metrics::{GaugeVec, PersiaMetricsManager, PersiaMetricsManagerError};
 
 const INDICES_CHANNEL_CAP: usize = 1000;
@@ -62,7 +62,7 @@ impl EmbeddingMonitorInner {
                     let indices = reveiver.recv().unwrap_or(vec![]);
                     let mut estimator = distinct_id_estimator.lock();
                     indices.iter().for_each(|id| {
-                        estimator.add(id);
+                        estimator.insert(id);
                     })
                 }
             })

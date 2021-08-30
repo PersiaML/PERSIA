@@ -6,6 +6,7 @@ pub use async_lock;
 pub use async_oneshot;
 pub use bytes;
 pub use chrono;
+pub use color_eyre;
 pub use easy_parallel;
 pub use flume;
 pub use futures;
@@ -29,20 +30,3 @@ pub use tokio;
 pub use tracing;
 pub use tracing_subscriber;
 
-#[derive(Clone)]
-pub struct ChannelPair<T> {
-    pub sender: flume::Sender<T>,
-    pub receiver: flume::Receiver<T>,
-}
-
-impl<T> ChannelPair<T> {
-    pub fn new(cap: usize) -> Self {
-        let (sender, receiver) = flume::bounded(cap);
-        Self { sender, receiver }
-    }
-
-    pub fn new_unbounded() -> Self {
-        let (sender, receiver) = flume::unbounded();
-        Self { sender, receiver }
-    }
-}

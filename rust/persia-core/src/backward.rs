@@ -1,19 +1,18 @@
 use crate::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
 use crate::cuda::set_device;
 use crate::cuda::utils::cuda_d2h;
+use crate::{MetricsHolder, PersiaRpcClient};
 
 use std::sync::Arc;
 
+use persia_libs::{flume, half, ndarray, tokio::sync::OwnedSemaphorePermit, tracing};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
-use persia_common::{
+use persia_common::grad::{
     EmbeddingGradientBatch, FeatureEmbeddingGradientBatch, Gradients,
     SkippableFeatureEmbeddingGradientBatch, SkippedGradientBatch,
 };
-use persia_libs::{flume, half, ndarray, tokio::sync::OwnedSemaphorePermit, tracing};
-
-use crate::{MetricsHolder, PersiaRpcClient};
 
 #[derive(Debug)]
 pub struct SingleSlotGradient {

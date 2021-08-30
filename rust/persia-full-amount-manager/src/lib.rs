@@ -8,10 +8,11 @@ use persia_libs::{
     once_cell,
     parking_lot::{Mutex, RwLock},
 };
+
 use thiserror::Error;
 
+use persia_common::{utils::ChannelPair, HashMapEmbeddingEntry};
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaShardedServerConfig};
-use persia_common::HashMapEmbeddingEntry;
 use persia_eviction_map::Sharded;
 use persia_speedy::{Readable, Writable};
 
@@ -31,8 +32,8 @@ static FULL_AMOUNT_MANAGER: once_cell::sync::OnceCell<Arc<FullAmountManager>> =
 // this sturct keep weak ptrs for all embedding entry
 pub struct FullAmountManager {
     weak_map: Sharded<HashMap<u64, Weak<RwLock<HashMapEmbeddingEntry>>>, u64>,
-    weak_ptr_channel: persia_libs::ChannelPair<Vec<(u64, Weak<RwLock<HashMapEmbeddingEntry>>)>>,
-    evicted_ids_channel: persia_libs::ChannelPair<Vec<u64>>,
+    weak_ptr_channel: ChannelPair<Vec<(u64, Weak<RwLock<HashMapEmbeddingEntry>>)>>,
+    evicted_ids_channel: ChannelPair<Vec<u64>>,
     _handles: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
 }
 
@@ -94,8 +95,8 @@ impl FullAmountManager {
                     .collect(),
                 phantom: std::marker::PhantomData::default(),
             },
-            weak_ptr_channel: persia_libs::ChannelPair::new(buffer_size),
-            evicted_ids_channel: persia_libs::ChannelPair::new(buffer_size),
+            weak_ptr_channel: ChannelPair::new(buffer_size),
+            evicted_ids_channel: ChannelPair::new(buffer_size),
             _handles: handles,
         }
     }
