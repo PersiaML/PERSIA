@@ -150,22 +150,22 @@ impl HashMapShardedServiceInner {
     pub async fn batched_lookup(
         &self,
         req: Vec<(u64, usize)>,
+        is_training: bool,
     ) -> Result<Vec<f32>, ShardEmbeddingError> {
         let num_elements: usize = req.iter().map(|x| x.1).sum();
         let mut embeddings = Vec::with_capacity(num_elements);
 
         let mut index_miss_count: usize = 0;
 
-        let intent = self.get_intent()?;
-        let conf = match intent {
-            PerisaIntent::Train => Some(self.get_configuration().await?),
-            _ => None,
+        let conf = match is_training {
+            true => Some(self.get_configuration().await?),
+            false => None,
         };
 
         let optimizer = self.optimizer.read().await;
 
-        tokio::task::block_in_place(|| match intent {
-            PerisaIntent::Train => {
+        tokio::task::block_in_place(|| match is_training {
+            true => {
                 if optimizer.is_none() {
                     return Err(ShardEmbeddingError::OptimizerNotFoundError);
                 }
@@ -233,7 +233,7 @@ impl HashMapShardedServiceInner {
                 }
                 Ok(())
             }
-            _ => {
+            false => {
                 req.iter().for_each(|(sign, dim)| {
                         let e = self.embedding.get_value(sign);
                         match e {
@@ -335,7 +335,7 @@ impl HashMapShardedServiceInner {
                 .observe(start_time.elapsed().as_secs_f64());
         }
 
-        let embedding = self.batched_lookup(indices).await;
+        let embedding = self.batched_lookup(indices, false).await;
         if let Ok(emb) = embedding {
             let encode_start_time = std::time::Instant::now();
             let buffer = tokio::task::block_in_place(|| emb.write_to_vec().unwrap());
@@ -355,10 +355,11 @@ impl HashMapShardedServiceInner {
 
     pub async fn lookup_mixed(
         &self,
-        indices: Vec<(u64, usize)>,
+        req: (Vec<(u64, usize)>, bool),
     ) -> Result<Vec<f32>, ShardEmbeddingError> {
+        let (indices, is_training) = req;
         let start_time = std::time::Instant::now();
-        let embedding = self.batched_lookup(indices).await;
+        let embedding = self.batched_lookup(indices, is_training).await;
         if let Ok(m) = MetricsHolder::get() {
             m.lookup_mixed_batch_time_cost
                 .observe(start_time.elapsed().as_secs_f64());
@@ -535,7 +536,7 @@ impl HashMapShardedService {
 
     pub async fn lookup_mixed(
         &self,
-        req: Vec<(u64, usize)>,
+        req: (Vec<(u64, usize)>, bool),
     ) -> Result<Vec<f32>, ShardEmbeddingError> {
         self.inner.lookup_mixed(req).await
     }
