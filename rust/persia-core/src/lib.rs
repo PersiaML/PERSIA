@@ -77,9 +77,9 @@ impl PersiaError {
 static PERSIA_COMMON_CONTEXT: OnceCell<Arc<PersiaCommonContext>> = OnceCell::new();
 
 struct PersiaCommonContext {
-    rpc_client: Arc<PersiaRpcClient>,
-    nats_publisher: Arc<nats::PersiaBatchFlowNatsStubPublisherWrapper>,
-    async_runtime: Arc<Runtime>,
+    pub rpc_client: Arc<PersiaRpcClient>,
+    pub nats_publisher: Arc<nats::PersiaBatchFlowNatsStubPublisherWrapper>,
+    pub async_runtime: Arc<Runtime>,
 }
 
 impl PersiaCommonContext {
@@ -95,9 +95,9 @@ impl PersiaCommonContext {
         replica_index: usize,
         replica_size: usize,
         world_size: Option<usize>,
-    ) -> Result<(), PersiaError> {
-        if PERSIA_COMMON_CONTEXT.get().is_some() {
-            return Ok(());
+    ) -> Result<Arc<Self>, PersiaError> {
+        if let Some(instance) = PERSIA_COMMON_CONTEXT.get() {
+            return Ok(instance.clone());
         }
         let runtime = Arc::new(
             persia_futures::tokio::runtime::Builder::new_multi_thread()
@@ -124,70 +124,13 @@ impl PersiaCommonContext {
         let addr = common_context.wait_servers_ready()?;
         common_context.init_rpc_client_with_addr(addr)?;
 
-        let result = PERSIA_COMMON_CONTEXT.set(Arc::new(common_context));
-
+        let instance = Arc::new(common_context);
+        let result = PERSIA_COMMON_CONTEXT.set(instance.clone());
         if result.is_err() {
             tracing::warn!("calling init persia common context multiple times");
         }
 
-        Ok(())
-    }
-
-    pub fn get_embedding_size(&self) -> Result<Vec<usize>, PersiaError> {
-        self.rpc_client.get_embedding_size()
-    }
-
-    pub fn dump(&self, dst_dir: String) -> Result<(), PersiaError> {
-        self.rpc_client.dump(dst_dir)
-    }
-
-    pub fn load(&self, src_dir: String) -> Result<(), PersiaError> {
-        self.rpc_client.load(src_dir)
-    }
-
-    pub fn wait_for_serving(&self) -> Result<(), PersiaError> {
-        self.rpc_client.wait_for_serving()
-    }
-
-    pub fn wait_for_emb_dumping(&self) -> Result<(), PersiaError> {
-        self.rpc_client.wait_for_emb_dumping()
-    }
-
-    pub fn shutdown(&self) -> Result<(), PersiaError> {
-        self.rpc_client.shutdown()
-    }
-
-    pub fn send_sparse_to_middleware(
-        &self,
-        batch: &mut PyPersiaBatchData,
-        block: bool,
-    ) -> Result<(), PersiaError> {
-        self.nats_publisher.send_sparse_to_middleware(batch, block)
-    }
-
-    pub fn send_dense_to_trainer(
-        &self,
-        batch: &PyPersiaBatchData,
-        block: bool,
-    ) -> Result<(), PersiaError> {
-        self.nats_publisher.send_dense_to_trainer(batch, block)
-    }
-
-    pub fn configure_sharded_servers(
-        &self,
-        initialize_lower: f32,
-        initialize_upper: f32,
-        admit_probability: f32,
-        enable_weight_bound: bool,
-        weight_bound: f32,
-    ) -> Result<(), PersiaError> {
-        self.nats_publisher.configure_sharded_servers(
-            initialize_lower,
-            initialize_upper,
-            admit_probability,
-            enable_weight_bound,
-            weight_bound,
-        )
+        Ok(instance)
     }
 
     pub fn register_optimizer(&self, opt: &PyOptimizerBase) -> Result<(), PersiaError> {
@@ -207,8 +150,7 @@ impl PersiaCommonContext {
 
 #[pyclass]
 pub struct PyPersiaCommonContext {
-    replica_index: usize,
-    replica_size: usize,
+    inner: Arc<PersiaCommonContext>,
 }
 
 #[pymethods]
@@ -220,59 +162,54 @@ impl PyPersiaCommonContext {
         replica_size: usize,
         world_size: Option<usize>,
     ) -> PyResult<Self> {
-        PersiaCommonContext::init(
+        let inner = PersiaCommonContext::init(
             num_coroutines_worker,
             replica_index,
             replica_size,
             world_size,
         )
         .map_err(|e| e.to_py_runtime_err())?;
-        Ok(Self {
-            replica_index,
-            replica_size,
-        })
-    }
-
-    pub fn replica_index(&self) -> PyResult<usize> {
-        Ok(self.replica_index)
-    }
-
-    pub fn replica_size(&self) -> PyResult<usize> {
-        Ok(self.replica_size)
+        Ok(Self { inner })
     }
 
     pub fn get_embedding_size(&self) -> PyResult<Vec<usize>> {
-        PersiaCommonContext::get()
+        self.inner
+            .rpc_client
             .get_embedding_size()
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn dump(&self, dst_dir: String) -> PyResult<()> {
-        PersiaCommonContext::get()
+        self.inner
+            .rpc_client
             .dump(dst_dir)
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn load(&self, src_dir: String) -> PyResult<()> {
-        PersiaCommonContext::get()
+        self.inner
+            .rpc_client
             .load(src_dir)
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn wait_for_serving(&self) -> PyResult<()> {
-        PersiaCommonContext::get()
+        self.inner
+            .rpc_client
             .wait_for_serving()
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn wait_for_emb_dumping(&self) -> PyResult<()> {
-        PersiaCommonContext::get()
+        self.inner
+            .rpc_client
             .wait_for_emb_dumping()
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn shutdown_servers(&self) -> PyResult<()> {
-        PersiaCommonContext::get()
+        self.inner
+            .rpc_client
             .shutdown()
             .map_err(|e| e.to_py_runtime_err())
     }
@@ -282,13 +219,15 @@ impl PyPersiaCommonContext {
         batch: &mut PyPersiaBatchData,
         block: bool,
     ) -> PyResult<()> {
-        PersiaCommonContext::get()
+        self.inner
+            .nats_publisher
             .send_sparse_to_middleware(batch, block)
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn send_dense_to_trainer(&self, batch: &PyPersiaBatchData, block: bool) -> PyResult<()> {
-        PersiaCommonContext::get()
+        self.inner
+            .nats_publisher
             .send_dense_to_trainer(batch, block)
             .map_err(|e| e.to_py_runtime_err())
     }
@@ -301,7 +240,8 @@ impl PyPersiaCommonContext {
         enable_weight_bound: bool,
         weight_bound: f32,
     ) -> PyResult<()> {
-        PersiaCommonContext::get()
+        self.inner
+            .nats_publisher
             .configure_sharded_servers(
                 initialize_lower,
                 initialize_upper,

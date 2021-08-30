@@ -82,7 +82,7 @@ impl PersiaRpcClient {
     }
 
     // TODO(zhuxuefeng): move to nats
-    pub fn load(&self, dst_dir: String) -> Result<(), PersiaError> {
+    pub fn load(&self, src_dir: String) -> Result<(), PersiaError> {
         let runtime = self.async_runtime.clone();
         let _guard = runtime.enter();
         runtime.block_on(
@@ -92,7 +92,7 @@ impl PersiaRpcClient {
                 .next()
                 .expect("clients not initialized")
                 .1
-                .load(&dst_dir),
+                .load(&src_dir),
         )??;
         Ok(())
     }
