@@ -142,7 +142,7 @@ impl Backward {
         }
     }
 
-    fn stop(&mut self) {
+    fn shutdown(&mut self) {
         tracing::info!("exiting persia backward context");
         self.running.store(false, Ordering::Relaxed);
     }
@@ -238,13 +238,12 @@ impl Backward {
 
     fn spawn_backward_worker(&mut self, num_backward_worker: usize) {
         let context = PersiaCommonContext::get();
-        let runtime = context.async_runtime.clone();
+        let _guard = context.async_runtime.enter();
 
         for _ in 0..num_backward_worker {
             let channel_r = self.cpu_backward_channel_r.clone();
             let rpc_client = context.rpc_client.clone();
             let running = self.running.clone();
-            let _guard = runtime.enter();
             let handle = persia_futures::tokio::spawn(async move {
                 loop {
                     if !running.load(Ordering::Acquire) {
@@ -309,8 +308,8 @@ impl PyBackward {
         self.inner.launch(device_id, num_backward_worker);
     }
 
-    pub fn stop(&mut self) {
-        self.inner.stop()
+    pub fn shutdown(&mut self) {
+        self.inner.shutdown()
     }
 
     pub fn update_sparse_gradient_batched(

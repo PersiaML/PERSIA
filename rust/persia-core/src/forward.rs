@@ -2,7 +2,6 @@ use crate::backward::PythonGradientBatch;
 use crate::cuda::utils::{cuda_dense_tensor_h2d, embedding2cuda_tensor};
 use crate::cuda::{set_device, AsyncEmbeddingOnCuda, AsyncTensorOnCuda};
 use crate::metrics::MetricsHolder;
-use crate::rpc::PersiaRpcClient;
 use crate::utils::PyPersiaBatchDataReceiver;
 use crate::PersiaCommonContext;
 
@@ -17,7 +16,6 @@ use persia_embedding_datatypes::{EmbeddingBatch, EmbeddingTensor, PersiaBatchDat
 use persia_embedding_sharded_server::sharded_middleware_service::ShardedMiddlewareError;
 use persia_futures::{
     flume,
-    tokio::runtime::Runtime,
     tokio::sync::{OwnedSemaphorePermit, Semaphore},
 };
 
@@ -343,7 +341,7 @@ impl Forward {
         }
     }
 
-    pub fn stop(&mut self) -> PyResult<()> {
+    pub fn shutdown(&mut self) -> PyResult<()> {
         tracing::info!("exiting persia forward context");
         self.running.store(false, Ordering::Relaxed);
         Ok(())
@@ -422,6 +420,9 @@ impl Forward {
     }
 
     fn spawn_forward_worker(&mut self, num_workers: usize) {
+        let context = PersiaCommonContext::get();
+        let _guard = context.async_runtime.enter();
+
         for _ in 0..num_workers {
             let channel_s = self.forwarded_channel_s.clone();
             let channel_r = if let Some(reorder_channel) = self.reorder_buffer_channel_r.as_ref() {
@@ -430,10 +431,7 @@ impl Forward {
                 self.input_channel.as_ref().unwrap().clone()
             };
 
-            let context = PersiaCommonContext::get();
-
             let rpc_client = context.rpc_client.clone();
-            let _guard = context.async_runtime.enter();
             let is_training = self.is_training;
 
             let running = self.running.clone();
@@ -542,13 +540,11 @@ impl Forward {
     }
 }
 
-pub fn forward_directly(
-    batch: PersiaBatchData,
-    device_id: i32,
-    rpc_client: Arc<PersiaRpcClient>,
-    async_runtime: Arc<Runtime>,
-) -> PyResult<PythonTrainBatch> {
+pub fn forward_directly(batch: PersiaBatchData, device_id: i32) -> PyResult<PythonTrainBatch> {
     set_device(device_id);
+
+    let rpc_client = PersiaCommonContext::get().rpc_client.clone();
+    let async_runtime = PersiaCommonContext::get().async_runtime.clone();
 
     let dense: Vec<AsyncTensorOnCuda> = batch
         .dense_data
@@ -627,8 +623,8 @@ impl PyForward {
         Ok(())
     }
 
-    fn stop(&mut self) -> PyResult<()> {
-        self.inner.stop()
+    fn shutdown(&mut self) -> PyResult<()> {
+        self.inner.shutdown()
     }
 
     pub fn get_batch(&self, timeout_ms: u64, py: Python) -> PyResult<PythonTrainBatch> {

@@ -173,4 +173,4 @@ class Dataloder(object):
         return len(self.dataset)
 
     def __del__(self):
-        self.forward_engine.stop()
+        self.forward_engine.shutdown()

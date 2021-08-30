@@ -516,7 +516,7 @@ class TrainCtx(EmbeddingCtx):
     def _exit(self):
         super()._exit()
 
-        self.backward_engine.stop()
+        self.backward_engine.shutdown()
 
     def backward(
         self, loss: torch.Tensor, embedding_gradient_check_frequency: int = 20
