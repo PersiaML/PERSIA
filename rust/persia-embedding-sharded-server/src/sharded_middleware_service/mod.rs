@@ -1178,6 +1178,40 @@ impl ShardedMiddlewareServerInner {
             _ => Ok(()),
         }
     }
+
+    pub async fn get_embedding_size(&self) -> Result<Vec<usize>, ShardedMiddlewareError> {
+        let clients = self.all_shards_client.clients.read().await;
+        let futs = clients.iter().map(|client| {
+            let client = client.clone();
+            async move {
+                let result = client
+                    .get_embedding_size(&())
+                    .await
+                    .map_err(|e| ShardedMiddlewareError::RpcError(format!("{:?}", e)))??;
+                Ok(result)
+            }
+        });
+
+        let result = persia_futures::futures::future::try_join_all(futs).await;
+        result
+    }
+
+    pub async fn clear_embeddings(&self) -> Result<(), ShardedMiddlewareError> {
+        let clients = self.all_shards_client.clients.read().await;
+        let futs = clients.iter().map(|client| {
+            let client = client.clone();
+            async move {
+                client
+                    .clear_embeddings(&())
+                    .await
+                    .map_err(|e| ShardedMiddlewareError::RpcError(format!("{:?}", e)))??;
+                Ok(())
+            }
+        });
+        persia_futures::futures::future::try_join_all(futs)
+            .await
+            .map(|_| ())
+    }
 }
 
 #[derive(Clone)]
@@ -1205,20 +1239,11 @@ impl ShardedMiddlewareServer {
     }
 
     pub async fn get_embedding_size(&self, _req: ()) -> Result<Vec<usize>, ShardedMiddlewareError> {
-        let clients = self.inner.all_shards_client.clients.read().await;
-        let futs = clients.iter().map(|client| {
-            let client = client.clone();
-            async move {
-                let result = client
-                    .get_embedding_size(&())
-                    .await
-                    .map_err(|e| ShardedMiddlewareError::RpcError(format!("{:?}", e)))??;
-                Ok(result)
-            }
-        });
+        self.inner.get_embedding_size().await
+    }
 
-        let result = persia_futures::futures::future::try_join_all(futs).await;
-        result
+    pub async fn clear_embeddings(&self, _req: ()) -> Result<(), ShardedMiddlewareError> {
+        self.inner.clear_embeddings().await
     }
 
     pub async fn shutdown_server(&self, _req: ()) -> Result<(), ShardEmbeddingError> {

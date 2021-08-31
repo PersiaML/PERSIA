@@ -1,5 +1,7 @@
 import os
 
+from typing import Optional
+
 import torch
 import numpy as np
 
@@ -49,16 +51,17 @@ class TestDataset(PersiaDataset):
         return self.loader_size
 
 
-def test(model: torch.nn.Module, data_laoder: Dataloder):
+def test(model: torch.nn.Module, data_laoder: Dataloder, checkpoint_dir: Optional[str] = None):
     logger.info("start to test...")
     model.eval()
 
-    with eval_ctx() as ctx:
+    with eval_ctx(model=model) as ctx:
+        if checkpoint_dir is not None:
+            ctx.load_checkpoint(checkpoint_dir)
         accuracies, losses = [], []
         all_pred, all_target = [], []
         for (batch_idx, batch_data) in enumerate(tqdm(data_laoder, desc="test...")):
-            dense, sparse, target = ctx.prepare_features(batch_data)
-            output = model(dense, sparse)
+            (output, target) = ctx.forward(batch_data)
             loss = loss_fn(output, target)
             all_pred.append(output.cpu().detach().numpy())
             all_target.append(target.cpu().detach().numpy())
@@ -97,6 +100,7 @@ if __name__ == "__main__":
 
     test_dir = os.path.join("/data/test.npz")
     test_dataset = TestDataset(test_dir, batch_size=128)
+    checkpoint_dir = os.path.join("/workspace/checkpoint/")
     test_interval = 254
     buffer_size = 10
 
@@ -111,8 +115,7 @@ if __name__ == "__main__":
         test_loader = Dataloder(test_dataset, is_training=False)
 
         for (batch_idx, data) in enumerate(train_dataloader):
-            dense, sparse, target = ctx.prepare_features(data)
-            output = model(dense, sparse)
+            (output, target) = ctx.forward(data)
             loss = loss_fn(output, target)
             scaled_loss = ctx.backward(loss)
             accuracy = (torch.round(output) == target).sum() / target.shape[0]
@@ -125,4 +128,8 @@ if __name__ == "__main__":
                 assert (
                     test_auc > 0.8
                 ), f"test_auc error, expect greater than 0.8 but got {test_auc}"
+                ctx.dump_checkpoint(checkpoint_dir)
+                ctx.clear_embeddings()
                 break
+    
+    test_auc, test_acc = test(model, test_loader, checkpoint_dir)

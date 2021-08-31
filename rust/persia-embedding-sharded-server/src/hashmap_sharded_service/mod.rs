@@ -504,6 +504,10 @@ impl HashMapShardedServiceInner {
     pub async fn get_embedding_size(&self) -> Result<usize, ShardEmbeddingError> {
         Ok(self.embedding.num_total_signs())
     }
+
+    pub async fn clear_embeddings(&self) -> Result<(), ShardEmbeddingError> {
+        Ok(self.embedding.clear())
+    }
 }
 
 #[derive(Clone)]
@@ -569,6 +573,10 @@ impl HashMapShardedService {
 
     pub async fn get_embedding_size(&self, _req: ()) -> Result<usize, ShardEmbeddingError> {
         self.inner.get_embedding_size().await
+    }
+
+    pub async fn clear_embeddings(&self, _req: ()) -> Result<(), ShardEmbeddingError> {
+        self.inner.clear_embeddings().await
     }
 
     pub async fn register_optimizer(
