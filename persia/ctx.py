@@ -226,7 +226,7 @@ class EmbeddingCtx(BaseCtx):
         """
         dense, sparse, target = self.prepare_features(batch)
         output = self.model(dense, sparse)
-        (output, target)
+        return (output, target)
 
     def prepare_features(
         self, batch: PythonTrainBatch
