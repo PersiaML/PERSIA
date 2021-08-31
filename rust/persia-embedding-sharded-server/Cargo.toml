@@ -11,8 +11,8 @@ farmhash = "1"
 hyper = "0.14.2"
 hyperloglogplus = "0.4"
 lz4 = "1.23"
-persia-embedding-config = {path = "../persia-embedding-config"}
 persia-common = {path = "../persia-common", default-features = false}
+persia-embedding-config = {path = "../persia-embedding-config"}
 persia-embedding-holder = {path = "../persia-embedding-holder"}
 persia-eviction-map = {path = "../persia-eviction-map"}
 persia-full-amount-manager = {path = "../persia-full-amount-manager"}
@@ -23,13 +23,11 @@ persia-model-manager = {path = "../persia-model-manager"}
 persia-nats-client = {path = "../others/persia-nats-client"}
 persia-nats-marcos = {path = "../others/persia-nats-marcos"}
 persia-rpc = "0.6"
-persia-simd = {path = "../persia-simd"}
 persia-speedy = "0.9"
-serde = {version = "1.0", features = ["derive"]}
+persia-simd = {path = "../persia-simd"}
 shadow-rs = "0.5"
 snafu = "0.6"
 structopt = "0.3"
-thiserror = "1.0"
 tokio = {version = "1.1", features = ["full"]}
 tracing = "0.1"
 

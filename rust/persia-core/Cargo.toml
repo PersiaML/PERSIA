@@ -26,7 +26,6 @@ persia-nats-marcos = {path = "../others/persia-nats-marcos"}
 persia-rpc = "0.6"
 persia-speedy = "0.9"
 shadow-rs = "0.5"
-thiserror = "1.0"
 
 [features]
 default = []

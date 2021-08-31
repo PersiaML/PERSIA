@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use persia_libs::{bytes, bytes::Bytes, once_cell, parking_lot, rand, rand::Rng, tracing};
-use thiserror::Error;
-
+use persia_libs::{
+    bytes, bytes::Bytes, once_cell, parking_lot, rand, rand::Rng, thiserror, tokio, tracing,
+};
 use snafu::ResultExt;
 
 use persia_common::{
@@ -64,7 +64,7 @@ impl MetricsHolder {
     }
 }
 
-#[derive(Error, Debug, Readable, Writable)]
+#[derive(thiserror::Error, Debug, Readable, Writable)]
 pub enum ShardEmbeddingError {
     #[error("rpc error")]
     RpcError(String),
@@ -514,6 +514,7 @@ pub struct HashMapShardedService {
 }
 
 #[persia_rpc::service]
+#[tracing(crate = "self::tracing")]
 impl HashMapShardedService {
     pub async fn ready_for_serving(&self, _req: ()) -> bool {
         self.inner.ready_for_serving().await

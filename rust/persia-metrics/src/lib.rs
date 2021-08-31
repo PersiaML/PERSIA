@@ -4,11 +4,11 @@ use std::time::Duration;
 
 use persia_libs::{
     once_cell::sync::{Lazy, OnceCell},
+    thiserror,
     tracing,
 };
 use prometheus::{Encoder, HistogramOpts, Opts, TextEncoder};
 use scheduled_thread_pool::ScheduledThreadPool;
-use thiserror::Error;
 
 pub use prometheus::{Gauge, GaugeVec, Histogram, HistogramVec, IntCounter, IntCounterVec};
 
@@ -16,7 +16,7 @@ use persia_embedding_config::{
     InstanceInfo, PersiaCommonConfig, PersiaGlobalConfigError, PersiaReplicaInfo,
 };
 
-#[derive(Error, Debug, Clone)]
+#[derive(thiserror::Error, Debug, Clone)]
 pub enum PersiaMetricsManagerError {
     #[error("failed to register metrics")]
     RegistryError,

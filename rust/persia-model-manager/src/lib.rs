@@ -8,12 +8,12 @@ use std::sync::Arc;
 use persia_libs::{
     anyhow::Error as AnyhowError,
     chrono,
+    thiserror,
     once_cell::sync::OnceCell,
     parking_lot::RwLock,
     rayon::{ThreadPool, ThreadPoolBuilder},
     tracing,
 };
-use thiserror::Error;
 
 use persia_common::HashMapEmbeddingEntry;
 use persia_embedding_config::{
@@ -27,7 +27,7 @@ use persia_storage_visitor::{
     PersiaCephVisitor, PersiaHdfsVisitor, PersiaStorageVisitor, SpeedyObj,
 };
 
-#[derive(Readable, Writable, Error, Debug)]
+#[derive(Readable, Writable, thiserror::Error, Debug)]
 pub enum PersistenceManagerError {
     #[error("storage error")]
     StorageError(String),

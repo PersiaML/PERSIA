@@ -7,6 +7,7 @@ use std::sync::Arc;
 use persia_libs::{
     anyhow::Result, color_eyre, hashbrown::HashMap, rand, tracing, tracing_subscriber,
 };
+
 use structopt::StructOpt;
 
 use persia_embedding_config::{

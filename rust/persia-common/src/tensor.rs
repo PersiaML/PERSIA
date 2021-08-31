@@ -1,5 +1,9 @@
-use persia_libs::{itertools::Itertools, ndarray::Array2, ndarray::ShapeError};
-use serde::{Deserialize, Serialize};
+use persia_libs::{
+    itertools::Itertools,
+    ndarray::Array2,
+    ndarray::ShapeError,
+    serde::{self, Deserialize, Serialize},
+};
 
 use persia_speedy::{Readable, Writable};
 
@@ -46,6 +50,7 @@ pub enum Tensor {
 }
 
 #[derive(Default, Serialize, Deserialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct PersiaDenseTensor<T> {
     pub name: String,
     pub dim: usize,

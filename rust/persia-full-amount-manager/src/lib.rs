@@ -7,16 +7,15 @@ use persia_libs::{
     hashbrown::HashMap,
     once_cell,
     parking_lot::{Mutex, RwLock},
+    thiserror,
 };
-
-use thiserror::Error;
 
 use persia_common::{utils::ChannelPair, HashMapEmbeddingEntry};
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaShardedServerConfig};
 use persia_eviction_map::Sharded;
 use persia_speedy::{Readable, Writable};
 
-#[derive(Readable, Writable, Error, Debug, Clone)]
+#[derive(Readable, Writable, thiserror::Error, Debug, Clone)]
 pub enum PersiaFullAmountManagerError {
     #[error("full amount manager not ready error")]
     NotReadyError,

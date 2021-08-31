@@ -12,4 +12,3 @@ persia-common = {path = "../persia-common"}
 persia-eviction-map = {path = "../persia-eviction-map"}
 persia-libs = {path = "../persia-libs"}
 persia-speedy = "0.9"
-thiserror = "1"

@@ -8,12 +8,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use griddle::HashMap;
 use persia_libs::{
+    thiserror,
     once_cell::sync::OnceCell,
     parking_lot::{Mutex, RwLock},
     rayon::{ThreadPool, ThreadPoolBuilder},
     tracing,
 };
-use thiserror::Error;
 
 use persia_common::{utils::ChannelPair, HashMapEmbeddingEntry};
 use persia_embedding_config::{
@@ -26,7 +26,7 @@ use persia_storage_visitor::{
     PerisaIncrementalPacket, PersiaCephVisitor, PersiaHdfsVisitor, PersiaStorageVisitor, SpeedyObj,
 };
 
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum IncrementalUpdateError {
     #[error("embedding holder error: {0}")]
     PersiaEmbeddingHolderError(#[from] PersiaEmbeddingHolderError),

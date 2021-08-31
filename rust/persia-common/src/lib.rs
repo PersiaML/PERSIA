@@ -22,13 +22,14 @@ use persia_libs::{
     numpy::PyArray1,
     rand::prelude::SmallRng,
     rand::SeedableRng,
+    serde::{self, Deserialize, Serialize},
 };
-use serde::{Deserialize, Serialize};
 
 use persia_embedding_config::InitializationMethod;
 use persia_speedy::{Readable, Writable};
 
 #[derive(Serialize, Deserialize, Readable, Writable, Clone, Debug)]
+#[serde(crate = "self::serde")]
 pub struct HashMapEmbeddingEntry {
     inner: Vec<f32>, // TODO option1: consider using smallvec and slab allocator, and reference that smallvec with &[f32] here to avoid const generics
     // TODO option2: consider wrap BufferPool (see crates.io) or modify sharded slab to allocate &[f32] here
@@ -163,12 +164,14 @@ impl HashMapEmbeddingEntry {
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct SingleSignInFeatureBatch {
     pub sign: u64,
     pub in_which_batch_samples: Vec<(u16, u16)>,
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct FeatureBatch {
     pub feature_name: String,
     pub index_batch: Vec<SingleSignInFeatureBatch>,
@@ -219,6 +222,7 @@ impl FeatureBatch {
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug)]
+#[serde(crate = "self::serde")]
 pub struct FeatureRawEmbeddingBatch {
     pub feature_name: String,
     pub embeddings: Array2<half::f16>,
@@ -227,23 +231,27 @@ pub struct FeatureRawEmbeddingBatch {
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug)]
+#[serde(crate = "self::serde")]
 pub struct FeatureSumEmbeddingBatch {
     pub feature_name: String,
     pub embeddings: Array2<half::f16>,
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug)]
+#[serde(crate = "self::serde")]
 pub enum FeatureEmbeddingBatch {
     RawEmbedding(FeatureRawEmbeddingBatch),
     SumEmbedding(FeatureSumEmbeddingBatch),
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug)]
+#[serde(crate = "self::serde")]
 pub struct EmbeddingBatch {
     pub batches: Vec<FeatureEmbeddingBatch>,
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct SparseBatch {
     pub batches: Vec<FeatureBatch>,
     #[serde(skip)]

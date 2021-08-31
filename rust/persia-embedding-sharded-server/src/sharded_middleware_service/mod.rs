@@ -15,10 +15,9 @@ use persia_libs::{
     ndarray, once_cell,
     retry::{delay::Fixed, retry},
     smol::block_on,
-    tracing,
+    thiserror, tokio, tracing,
 };
 use snafu::ResultExt;
-use thiserror::Error;
 
 use persia_common::{
     grad::{EmbeddingGradientBatch, Gradients, SkippableFeatureEmbeddingGradientBatch},
@@ -83,7 +82,7 @@ impl MetricsHolder {
     }
 }
 
-#[derive(Error, Debug, Readable, Writable)]
+#[derive(thiserror::Error, Debug, Readable, Writable)]
 pub enum ShardedMiddlewareError {
     #[error("rpc error")]
     RpcError(String),
@@ -1186,6 +1185,7 @@ pub struct ShardedMiddlewareServer {
 }
 
 #[persia_rpc::service]
+#[tracing(crate = "self::tracing")]
 impl ShardedMiddlewareServer {
     pub async fn ready_for_serving(&self, _req: ()) -> bool {
         self.inner.ready_for_serving().await

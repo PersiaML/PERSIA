@@ -3,17 +3,17 @@ use std::{sync::Arc, sync::Weak};
 
 use persia_libs::{
     hashbrown::HashMap,
+    thiserror,
     once_cell,
     parking_lot::{Mutex, RwLock},
 };
-use thiserror::Error;
 
 use persia_common::HashMapEmbeddingEntry;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaShardedServerConfig};
 use persia_eviction_map::PersiaEvictionMap;
 use persia_speedy::{Readable, Writable};
 
-#[derive(Readable, Writable, Error, Debug)]
+#[derive(Readable, Writable, thiserror::Error, Debug)]
 pub enum PersiaEmbeddingHolderError {
     #[error("global config error: {0}")]
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
