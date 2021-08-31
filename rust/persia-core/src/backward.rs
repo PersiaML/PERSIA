@@ -1,8 +1,8 @@
 use crate::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
 use crate::cuda::set_device;
 use crate::cuda::utils::cuda_d2h;
-
-use crate::{MetricsHolder, PersiaRpcClient};
+use crate::metrics::MetricsHolder;
+use crate::PersiaCommonContext;
 
 use persia_embedding_datatypes::{
     EmbeddingGradientBatch, FeatureEmbeddingGradientBatch, Gradients,
@@ -12,6 +12,7 @@ use persia_futures::{flume, tokio::sync::OwnedSemaphorePermit};
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -111,7 +112,9 @@ struct Backward {
     pub cpu_backward_channel_s: flume::Sender<EmbeddingBackwardStub>,
     pub cpu_backward_channel_r: flume::Receiver<EmbeddingBackwardStub>,
     pub launch: bool,
-    pub threaded_workers: Vec<std::thread::JoinHandle<()>>,
+    pub std_handles: Vec<std::thread::JoinHandle<()>>,
+    pub tokio_handles: Vec<persia_futures::tokio::task::JoinHandle<()>>,
+    pub running: Arc<AtomicBool>,
 }
 
 impl Backward {
@@ -124,30 +127,42 @@ impl Backward {
             cpu_backward_channel_s,
             cpu_backward_channel_r,
             launch: false,
-            threaded_workers: Vec::new(),
+            std_handles: Vec::new(),
+            tokio_handles: Vec::new(),
+            running: Arc::new(AtomicBool::new(false)),
         }
     }
 
     fn launch(&mut self, device_id: i32, num_backward_worker: usize) {
         if !self.launch {
+            self.running.store(true, Ordering::Relaxed);
             self.spawn_backward_to_cpu_worker(device_id);
             self.spawn_backward_worker(num_backward_worker);
             self.launch = true;
         }
     }
 
+    fn shutdown(&mut self) {
+        tracing::info!("exiting persia backward context");
+        self.running.store(false, Ordering::Relaxed);
+    }
+
     fn spawn_backward_to_cpu_worker(&mut self, device_id: i32) {
         let channel_r = self.backward_channel_r.clone();
         let channel_s = self.cpu_backward_channel_s.clone();
+
+        let running = self.running.clone();
         let handler = std::thread::spawn(move || {
             set_device(device_id as i32);
             loop {
+                if !running.load(Ordering::Acquire) {
+                    break;
+                }
                 let start_time = std::time::Instant::now();
-                let gradients = channel_r.recv().unwrap();
-                tracing::debug!("get backward message time cost {:?}", start_time.elapsed());
-                let grads =
-                    gradients.gradients.into_iter().map(
-                        |single_slot_grad| match single_slot_grad {
+                if let Ok(gradients) = channel_r.recv() {
+                    tracing::debug!("get backward message time cost {:?}", start_time.elapsed());
+                    let grads = gradients.gradients.into_iter().map(|single_slot_grad| {
+                        match single_slot_grad {
                             SkippableSingleSlotGradient::Skip(x) => {
                                 SkippableFeatureEmbeddingGradientBatch::Skipped(
                                     SkippedGradientBatch {
@@ -197,74 +212,80 @@ impl Backward {
                                     },
                                 )
                             }
-                        },
-                    );
+                        }
+                    });
 
-                let req = EmbeddingGradientBatch {
-                    gradients: grads.collect(),
-                };
-                let embedding_staleness_permit =
-                    Arc::try_unwrap(gradients.embedding_staleness_permit).unwrap();
+                    let req = EmbeddingGradientBatch {
+                        gradients: grads.collect(),
+                    };
+                    let embedding_staleness_permit =
+                        Arc::try_unwrap(gradients.embedding_staleness_permit).unwrap();
 
-                channel_s
-                    .send(EmbeddingBackwardStub {
+                    if let Err(e) = channel_s.send(EmbeddingBackwardStub {
                         forward_id: gradients.forward_id,
                         middleware_addr: gradients.middleware_addr,
                         embedding_staleness_permit,
                         embedding_gradient_batch: req,
-                    })
-                    .unwrap();
+                    }) {
+                        tracing::debug!("failed to send data to cpu_backward_channel_s {:?}", e);
+                    }
+                }
             }
         });
-        self.threaded_workers.push(handler);
+
+        self.std_handles.push(handler);
     }
 
     fn spawn_backward_worker(&mut self, num_backward_worker: usize) {
-        let rpc_client = PersiaRpcClient::get_instance();
-        let runtime = rpc_client.runtime.clone();
+        let context = PersiaCommonContext::get();
+        let _guard = context.async_runtime.enter();
 
         for _ in 0..num_backward_worker {
             let channel_r = self.cpu_backward_channel_r.clone();
-            let rpc_client = rpc_client.clone();
-            let _guard = runtime.enter();
-            persia_futures::tokio::spawn(async move {
+            let rpc_client = context.rpc_client.clone();
+            let running = self.running.clone();
+            let handle = persia_futures::tokio::spawn(async move {
                 loop {
+                    if !running.load(Ordering::Acquire) {
+                        break;
+                    }
                     let start_time = std::time::Instant::now();
+                    if let Ok(embedding_backward_stub) = channel_r.recv_async().await {
+                        let forward_id = embedding_backward_stub.forward_id;
+                        let middleware_addr = embedding_backward_stub.middleware_addr;
+                        let embedding_staleness_permit =
+                            embedding_backward_stub.embedding_staleness_permit;
+                        let req = embedding_backward_stub.embedding_gradient_batch;
 
-                    let embedding_backward_stub = channel_r.recv_async().await.unwrap();
-                    let forward_id = embedding_backward_stub.forward_id;
-                    let middleware_addr = embedding_backward_stub.middleware_addr;
-                    let embedding_staleness_permit =
-                        embedding_backward_stub.embedding_staleness_permit;
-                    let req = embedding_backward_stub.embedding_gradient_batch;
+                        tracing::debug!(
+                            "get cpu backward message time cost {:?}",
+                            start_time.elapsed()
+                        );
 
-                    tracing::debug!(
-                        "get cpu backward message time cost {:?}",
-                        start_time.elapsed()
-                    );
+                        let client = rpc_client.get_client_by_addr(middleware_addr.as_str());
+                        let result = client.update_gradient_batched(&(forward_id, req)).await;
 
-                    let client = rpc_client.get_client_by_addr(middleware_addr.as_str());
-                    let result = client.update_gradient_batched(&(forward_id, req)).await;
-
-                    if result.is_err() {
-                        tracing::error!("backward error {:?}", result.unwrap_err());
-                    } else {
-                        let result = result.unwrap();
                         if result.is_err() {
                             tracing::error!("backward error {:?}", result.unwrap_err());
+                        } else {
+                            let result = result.unwrap();
+                            if result.is_err() {
+                                tracing::error!("backward error {:?}", result.unwrap_err());
+                            }
                         }
-                    }
 
-                    if let Some(permit) = embedding_staleness_permit {
-                        drop(permit)
-                    }
+                        if let Some(permit) = embedding_staleness_permit {
+                            drop(permit)
+                        }
 
-                    if let Ok(m) = MetricsHolder::get() {
-                        m.backward_client_time_cost
-                            .observe(start_time.elapsed().as_secs_f64());
+                        if let Ok(m) = MetricsHolder::get() {
+                            m.backward_client_time_cost
+                                .observe(start_time.elapsed().as_secs_f64());
+                        }
                     }
                 }
             });
+            self.tokio_handles.push(handle);
         }
     }
 }
@@ -285,6 +306,10 @@ impl PyBackward {
 
     pub fn launch(&mut self, device_id: i32, num_backward_worker: usize) {
         self.inner.launch(device_id, num_backward_worker);
+    }
+
+    pub fn shutdown(&mut self) {
+        self.inner.shutdown()
     }
 
     pub fn update_sparse_gradient_batched(

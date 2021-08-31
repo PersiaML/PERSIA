@@ -1,4 +1,5 @@
 from threading import Thread
+from typing import Optional
 
 import torch
 from torch.utils.data.dataset import IterableDataset as TorchIterableDataset
@@ -7,7 +8,6 @@ from persia.ctx import cnt_ctx
 from persia.logger import get_default_logger
 from persia.prelude import (
     PyPersiaBatchDataChannel,
-    PyPersiaReplicaInfo,
     PyPersiaBatchDataReceiver,
     PyPersiaBatchDataSender,
     init_responder,
@@ -58,8 +58,9 @@ class StreamingDataset(IterableDataset):
         if not self.initialized:
             current_ctx = cnt_ctx()
             assert current_ctx is not None, "Current conext is None!"
-            replica_info = current_ctx.replica_info
-            init_responder(replica_info, self.sender)
+            world_size = current_ctx.world_size
+            assert world_size != -1, "world size not set"
+            init_responder(world_size, self.sender)
 
             _logger.info("initialize the responder")
             self.initialized = True
@@ -121,9 +122,10 @@ class Dataloder(object):
         dataset (IterableChannelBase): dataset for Dataloder to retrive replica info and sender channel
         forward_buffer_size: (int, optional): gpu forward channel buffer size, this args effect the gpu memory cost
         is_training (bool, optional): whether current forward status is training or not
-        timeout (int, optional): timeout for PyForward to fetch data, millisecond unit
+        timeout_ms (int, optional): timeout for PyForward to fetch data, millisecond unit
         num_workers (int, optional): spawn thread worker number for  PyForward to lookup embedding and PythonBatchData prefetch
         reproducible (bool, optional): iterate the data in fixed order, make the dataflow deterministic
+        embedding_staleness (int, optional): Max number of batched staleness embedding each rank. A staleness embedding means it prefetched from embedding server before gradient updated.
     """
 
     def __init__(
@@ -131,25 +133,26 @@ class Dataloder(object):
         dataset: IterableDataset,
         forward_buffer_size: int = 10,
         is_training: bool = True,
-        timeout: int = 1000 * 60 * 10,
+        timeout_ms: int = 1000 * 60 * 10,
         num_workers: int = 10,
-        replica_info: PyPersiaReplicaInfo = None,
         reproducible: bool = False,
+        embedding_staleness: Optional[int] = None,
     ):
         # dynamic import the PyForward due to conditional compilation
         from persia.prelude import PyForward
 
         self.dataset = dataset
-        self.timeout = timeout
+        self.timeout_ms = timeout_ms
         self.num_workers = num_workers
 
-        if not replica_info:
-            current_ctx = cnt_ctx()
-            assert current_ctx is not None, "Current conext is None!"
-            replica_info = current_ctx.replica_info
+        current_ctx = cnt_ctx()
+        assert current_ctx is not None, "Current conext is None!"
 
         self.forward_engine = PyForward(
-            forward_buffer_size, is_training, reproducible, replica_info
+            forward_buffer_size,
+            is_training,
+            reproducible,
+            embedding_staleness,
         )
         self.forward_engine.set_input_channel(dataset.receiver)
         self.forward_engine.launch(
@@ -160,7 +163,14 @@ class Dataloder(object):
     def __iter__(self):
 
         for _ in self.dataset:
-            yield self.forward_engine.get_batch(self.timeout)
+            try:
+                yield self.forward_engine.get_batch(self.timeout_ms)
+            except TimeoutError:
+                _logger.warn("get_batch time out, stop iter stream data")
+                break
 
     def __len__(self):
         return len(self.dataset)
+
+    def __del__(self):
+        self.forward_engine.shutdown()

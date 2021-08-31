@@ -10,465 +10,267 @@ mod cuda;
 mod data;
 #[cfg(feature = "cuda")]
 mod forward;
+mod metrics;
 mod nats;
 mod optim;
+mod rpc;
 mod utils;
 
-use std::sync::Arc;
-use std::time::Duration;
+use crate::data::PyPersiaBatchData;
+#[cfg(feature = "cuda")]
+use crate::forward::{forward_directly, PythonTrainBatch};
+use crate::optim::PyOptimizerBase;
+use crate::rpc::PersiaRpcClient;
 
 use anyhow::Result;
-use hashbrown::HashMap;
 use once_cell::sync::OnceCell;
-use parking_lot::RwLock;
-use persia_futures::tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use std::sync::Arc;
+
+use persia_futures::tokio::runtime::Runtime;
+use persia_speedy::Readable;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 use pyo3::wrap_pyfunction;
+use thiserror::Error;
 
-use persia_embedding_config::{
-    BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
-};
-use persia_embedding_sharded_server::sharded_middleware_service::{
-    ShardedMiddlewareError, ShardedMiddlewareServerClient,
-};
-use persia_metrics::{Histogram, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError};
-use persia_model_manager::PersiaPersistenceStatus;
+use persia_embedding_config::{PersiaGlobalConfigError, PersiaReplicaInfo};
+use persia_embedding_datatypes::PersiaBatchData;
+use persia_embedding_sharded_server::sharded_middleware_service::ShardedMiddlewareError;
 
-static METRICS_HOLDER: once_cell::sync::OnceCell<MetricsHolder> = once_cell::sync::OnceCell::new();
-static RPC_CLIENT: OnceCell<Arc<PersiaRpcClient>> = OnceCell::new();
-static EMBEDDING_STALENESS_SEMAPHORE: OnceCell<Arc<EmbeddingStalenessSemaphore>> = OnceCell::new();
-
-struct MetricsHolder {
-    pub forward_client_to_gpu_time_cost: Histogram,
-    pub forward_client_time_cost: Histogram,
-    pub forward_error: IntCounter,
-    pub backward_client_time_cost: Histogram,
-    pub long_get_train_batch_time_cost: Histogram,
-    pub long_update_gradient_batched_time_cost: Histogram,
+#[derive(Error, Debug)]
+pub enum PersiaError {
+    #[error("Persia context NOT initialized")]
+    NotInitializedError,
+    #[error("enter persia context multiple times")]
+    MultipleContextError,
+    #[error("shutdown server failed: {0}")]
+    ShutdownError(String),
+    #[error("server dump/load status error: {0}")]
+    ServerStatusError(String),
+    #[error("global config error: {0}")]
+    PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
+    #[error("server side error: {0}")]
+    ServerSideError(#[from] ShardedMiddlewareError),
+    #[error("rpc error: {0}")]
+    RpcError(#[from] persia_rpc::PersiaRpcError),
+    #[error("nats error: {0}")]
+    NatsError(#[from] persia_nats_client::NatsError),
+    #[error("send sparse data to middleware server multi times")]
+    MultipleSendError,
+    #[error("sparse data is null, please call batch.add_sparse first")]
+    NullSparseDataError,
+    #[error("batch id is null, please call send_sparse_to_middleware first")]
+    NullBatchIdError,
+    #[error("sparse optimizer not set yet")]
+    NullOptimizerError,
+    #[error("data send failed")]
+    SendDataError,
 }
 
-impl MetricsHolder {
-    pub fn get() -> Result<&'static Self, PersiaMetricsManagerError> {
-        METRICS_HOLDER.get_or_try_init(|| {
-            let m = PersiaMetricsManager::get()?;
-            let holder = Self {
-                forward_client_to_gpu_time_cost: m
-                    .create_histogram("forward_client_to_gpu_time_cost", "ATT")?,
-                forward_client_time_cost: m.create_histogram("forward_client_time_cost", "ATT")?,
-                forward_error: m.create_counter("forward_error", "ATT")?,
-                backward_client_time_cost: m
-                    .create_histogram("backward_client_time_cost", "ATT")?,
-                long_get_train_batch_time_cost: m
-                    .create_histogram("long_get_train_batch_time_cost", "ATT")?,
-                long_update_gradient_batched_time_cost: m
-                    .create_histogram("long_update_gradient_batched_time_cost", "ATT")?,
-            };
-            Ok(holder)
-        })
+impl PersiaError {
+    pub fn to_py_runtime_err(&self) -> PyErr {
+        PyRuntimeError::new_err(format!("{:?}", self))
     }
 }
 
-struct EmbeddingStalenessSemaphore {
-    pub semaphore: Arc<Semaphore>,
+static PERSIA_COMMON_CONTEXT: OnceCell<Arc<PersiaCommonContext>> = OnceCell::new();
+
+struct PersiaCommonContext {
+    pub rpc_client: Arc<PersiaRpcClient>,
+    pub nats_publisher: Arc<nats::PersiaBatchFlowNatsStubPublisherWrapper>,
+    pub async_runtime: Arc<Runtime>,
 }
 
-impl EmbeddingStalenessSemaphore {
-    pub fn get_instance() -> PyResult<Arc<EmbeddingStalenessSemaphore>> {
-        match EMBEDDING_STALENESS_SEMAPHORE.get() {
-            Some(val) => Ok(val.clone()),
-            None => Err(PyRuntimeError::new_err(
-                "init the persia embedding staleness manager first",
-            )),
-        }
-    }
-
-    fn new(staleness: usize) -> Arc<Self> {
-        EMBEDDING_STALENESS_SEMAPHORE
-            .get_or_init(|| {
-                let semaphore = Arc::new(Semaphore::new(staleness));
-
-                tracing::info!(
-                    "init persia embedding staleness semaphore with staleness {}",
-                    staleness
-                );
-                Arc::new(Self { semaphore })
-            })
+impl PersiaCommonContext {
+    pub fn get() -> Arc<Self> {
+        PERSIA_COMMON_CONTEXT
+            .get()
+            .expect("not in persia context")
             .clone()
     }
 
-    pub async fn get_permit(&self) -> OwnedSemaphorePermit {
-        self.semaphore.clone().acquire_owned().await.unwrap()
-    }
-}
-
-#[pyfunction]
-pub fn init_persia_embedding_staleness_semaphore(staleness: usize) -> PyResult<()> {
-    EmbeddingStalenessSemaphore::new(staleness);
-    Ok(())
-}
-
-struct PersiaRpcClient {
-    pub clients: RwLock<HashMap<String, Arc<ShardedMiddlewareServerClient>>>,
-    pub middleware_addrs: RwLock<Vec<String>>,
-    pub runtime: Arc<persia_futures::tokio::runtime::Runtime>,
-}
-
-impl PersiaRpcClient {
-    pub fn get_instance() -> Arc<PersiaRpcClient> {
-        match RPC_CLIENT.get() {
-            Some(val) => val.clone(),
-            None => panic!("init the persia rpc client first"),
+    pub fn init(
+        num_coroutines_worker: usize,
+        replica_index: usize,
+        replica_size: usize,
+        world_size: Option<usize>,
+    ) -> Result<Arc<Self>, PersiaError> {
+        if let Some(instance) = PERSIA_COMMON_CONTEXT.get() {
+            return Ok(instance.clone());
         }
-    }
+        let runtime = Arc::new(
+            persia_futures::tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .worker_threads(num_coroutines_worker)
+                .build()
+                .unwrap(),
+        );
 
-    fn new(worker_size: usize) -> Arc<PersiaRpcClient> {
-        RPC_CLIENT
-            .get_or_init(|| {
-                let runtime = Arc::new(
-                    persia_futures::tokio::runtime::Builder::new_multi_thread()
-                        .enable_all()
-                        .worker_threads(worker_size)
-                        .build()
-                        .unwrap(),
-                );
+        let rpc_client = Arc::new(PersiaRpcClient::new(runtime.clone()));
 
-                Arc::new(Self {
-                    clients: RwLock::new(HashMap::new()),
-                    middleware_addrs: RwLock::new(vec![]),
-                    runtime: runtime,
-                })
-            })
-            .clone()
-    }
-
-    fn get_random_client_with_addr(&self) -> (String, Arc<ShardedMiddlewareServerClient>) {
-        let middleware_addrs = self.middleware_addrs.read();
-        let addr = middleware_addrs[rand::random::<usize>() % middleware_addrs.len()].as_str();
-        let client = self.get_client_by_addr(addr);
-        (addr.to_string(), client)
-    }
-
-    fn get_random_client(&self) -> Arc<ShardedMiddlewareServerClient> {
-        return self.get_random_client_with_addr().1;
-    }
-
-    fn get_client_by_addr(&self, middleware_addr: &str) -> Arc<ShardedMiddlewareServerClient> {
-        if self.clients.read().contains_key(middleware_addr) {
-            self.clients.read().get(middleware_addr).unwrap().clone()
-        } else {
-            let _guard = self.runtime.enter();
-            let rpc_client = persia_rpc::RpcClient::new(middleware_addr).unwrap();
-            let client = Arc::new(ShardedMiddlewareServerClient::new(rpc_client));
-
-            self.clients
-                .write()
-                .insert(middleware_addr.to_string(), client.clone());
-
-            self.middleware_addrs
-                .write()
-                .push(middleware_addr.to_string());
-            tracing::info!("created client for middleware {}", middleware_addr);
-            client
-        }
-    }
-
-    pub fn get_embedding_size(&self) -> Result<Vec<usize>, ShardedMiddlewareError> {
-        let runtime = self.runtime.clone();
-        let _gurad = runtime.enter();
-        runtime
-            .block_on(self.get_random_client().get_embedding_size(&()))
-            .map_err(|e| ShardedMiddlewareError::RpcError(format!("{:?}", e)))?
-    }
-
-    pub fn submit_configuration(&self, config: PersiaSparseModelHyperparameters) -> Result<()> {
-        tracing::info!("configuring sharded servers: {:#?}", config);
-        while self.configure_sharded_servers(&config).is_err() {
-            tracing::warn!(
-                "configure sharded servers failed, server might be start later ,retrying..."
-            );
-            std::thread::sleep(std::time::Duration::from_secs(60));
-        }
-        Ok(())
-    }
-
-    fn configure_sharded_servers(
-        &self,
-        config: &PersiaSparseModelHyperparameters,
-    ) -> Result<(), ShardedMiddlewareError> {
-        let handler = self.runtime.clone();
-        let _guard = handler.enter();
-        let result = handler.block_on(persia_futures::tokio::time::timeout(
-            Duration::from_secs(10),
-            self.clients
-                .read()
-                .iter()
-                .next()
-                .expect("clients not initialized")
-                .1
-                .configure_sharded_servers(&config),
+        let _ = PersiaReplicaInfo::set(replica_size, replica_index);
+        let nats_publisher = Arc::new(nats::PersiaBatchFlowNatsStubPublisherWrapper::new(
+            world_size,
+            runtime.clone(),
         ));
 
-        if let Ok(Ok(_)) = result {
-            Ok(())
-        } else {
-            Err(ShardedMiddlewareError::RpcError(format!("{:?}", result)))
+        let common_context = Self {
+            rpc_client,
+            nats_publisher,
+            async_runtime: runtime,
+        };
+
+        let addr = common_context.wait_servers_ready()?;
+        common_context.init_rpc_client_with_addr(addr)?;
+
+        let instance = Arc::new(common_context);
+        let result = PERSIA_COMMON_CONTEXT.set(instance.clone());
+        if result.is_err() {
+            tracing::warn!("calling init persia common context multiple times");
         }
+
+        Ok(instance)
     }
 
-    fn dump(&self, dst_dir: String) -> Result<(), ShardedMiddlewareError> {
-        let handler = self.runtime.clone();
-        let _guard = handler.enter();
-        handler
-            .block_on(
-                self.clients
-                    .read()
-                    .iter()
-                    .next()
-                    .expect("clients not initialized")
-                    .1
-                    .dump(&dst_dir),
-            )
-            .unwrap_or_else(|e| Err(ShardedMiddlewareError::RpcError(format!("{:?}", e))))
+    pub fn register_optimizer(&self, opt: &PyOptimizerBase) -> Result<(), PersiaError> {
+        self.nats_publisher.register_optimizer(opt)
     }
 
-    fn load(&self, dst_dir: String) -> Result<(), ShardedMiddlewareError> {
-        let handler = self.runtime.clone();
-        let _guard = handler.enter();
-        handler
-            .block_on(
-                self.clients
-                    .read()
-                    .iter()
-                    .next()
-                    .expect("clients not initialized")
-                    .1
-                    .load(&dst_dir),
-            )
-            .unwrap_or_else(|e| Err(ShardedMiddlewareError::RpcError(format!("{:?}", e))))
+    pub fn wait_servers_ready(&self) -> Result<String, PersiaError> {
+        let addr = self.nats_publisher.wait_servers_ready()?;
+        Ok(addr)
     }
 
-    fn wait_for_serving(&self) -> PyResult<()> {
-        let handler = self.runtime.clone();
-        let _guard = handler.enter();
-        let client = self
-            .clients
-            .read()
-            .iter()
-            .next()
-            .expect("clients not initialized")
-            .1
-            .clone();
-
-        loop {
-            if let Ok(ready) = handler.block_on(client.ready_for_serving(&())) {
-                if ready {
-                    return Ok(());
-                }
-                std::thread::sleep(Duration::from_secs(5));
-                let status: Vec<PersiaPersistenceStatus> =
-                    handler.block_on(client.model_manager_status(&())).unwrap();
-
-                match self.process_status(status) {
-                    Ok(_) => {}
-                    Err(err_msg) => {
-                        return Err(PyRuntimeError::new_err(err_msg));
-                    }
-                }
-            } else {
-                tracing::warn!("failed to get sparse model status, retry later");
-            }
-        }
+    pub fn init_rpc_client_with_addr(&self, addr: String) -> Result<(), PersiaError> {
+        let _ = self.rpc_client.get_client_by_addr(&addr);
+        Ok(())
     }
+}
 
-    pub fn shutdown(&self) -> PyResult<()> {
-        let handler = self.runtime.clone();
-        let _guard = handler.enter();
-
-        let client = self.get_random_client();
-
-        match handler.block_on(client.shutdown_server(&())) {
-            Ok(response) => match response {
-                Ok(_) => {
-                    let clients = self.clients.read();
-                    let mut futs = clients
-                        .iter()
-                        .map(|client| handler.block_on(client.1.shutdown(&())));
-
-                    let middleware_shutdown_status = futs.all(|x| x.is_ok());
-                    if middleware_shutdown_status {
-                        Ok(())
-                    } else {
-                        Err(PyRuntimeError::new_err("shutdown middleware failed"))
-                    }
-                }
-                Err(err) => {
-                    tracing::error!("shutdown server failed, Rpc error: {:?}", err);
-                    Err(PyRuntimeError::new_err(err.to_string()))
-                }
-            },
-            Err(err) => {
-                tracing::error!("shutdown server failed, Rpc error: {:?}", err);
-                Err(PyRuntimeError::new_err(err.to_string()))
-            }
-        }
-    }
-
-    fn wait_for_emb_dumping(&self) -> PyResult<()> {
-        let handler = self.runtime.clone();
-        let _guard = handler.enter();
-        let client = self
-            .clients
-            .read()
-            .iter()
-            .next()
-            .expect("clients not initialized")
-            .1
-            .clone();
-
-        loop {
-            std::thread::sleep(Duration::from_secs(5));
-            let status: Result<Vec<PersiaPersistenceStatus>, _> =
-                handler.block_on(client.model_manager_status(&()));
-            if let Ok(status) = status {
-                if status.iter().any(|s| match s {
-                    PersiaPersistenceStatus::Loading(_) => true,
-                    _ => false,
-                }) {
-                    let err_msg = String::from("emb status is loading but waiting for dump.");
-                    return Err(PyRuntimeError::new_err(err_msg));
-                }
-                let num_total = status.len();
-                match self.process_status(status) {
-                    Ok(num_compeleted) => {
-                        if num_compeleted == num_total {
-                            return Ok(());
-                        }
-                    }
-                    Err(err_msg) => {
-                        return Err(PyRuntimeError::new_err(err_msg));
-                    }
-                }
-            } else {
-                tracing::warn!("failed to get sparse model status, retry later");
-            }
-        }
-    }
-
-    fn process_status(&self, status: Vec<PersiaPersistenceStatus>) -> Result<usize, String> {
-        let mut num_compeleted: usize = 0;
-        let mut errors = Vec::new();
-        status
-            .into_iter()
-            .enumerate()
-            .for_each(|(shard_idx, s)| match s {
-                PersiaPersistenceStatus::Failed(e) => {
-                    let err_msg = format!("emb dump FAILED for shard {}, due to {}.", shard_idx, e);
-                    errors.push(err_msg);
-                }
-                PersiaPersistenceStatus::Loading(p) => {
-                    tracing::info!(
-                        "loading emb for shard {}, pregress: {:?}%",
-                        shard_idx,
-                        p * 100.0
-                    );
-                }
-                PersiaPersistenceStatus::Idle => {
-                    num_compeleted = num_compeleted + 1;
-                }
-                PersiaPersistenceStatus::Dumping(p) => {
-                    tracing::info!(
-                        "dumping emb for shard {}, pregress: {:?}%",
-                        shard_idx,
-                        p * 100.0
-                    );
-                }
-            });
-        if errors.len() > 0 {
-            Err(errors.join(", "))
-        } else {
-            Ok(num_compeleted)
-        }
-    }
+#[pyclass]
+pub struct PyPersiaCommonContext {
+    inner: Arc<PersiaCommonContext>,
 }
 
 #[pymethods]
-impl PyPersiaRpcClient {
+impl PyPersiaCommonContext {
     #[new]
-    pub fn new(worker_size: usize) -> Self {
-        PyPersiaRpcClient {
-            inner: PersiaRpcClient::new(worker_size),
-        }
+    pub fn new(
+        num_coroutines_worker: usize,
+        replica_index: usize,
+        replica_size: usize,
+        world_size: Option<usize>,
+    ) -> PyResult<Self> {
+        let inner = PersiaCommonContext::init(
+            num_coroutines_worker,
+            replica_index,
+            replica_size,
+            world_size,
+        )
+        .map_err(|e| e.to_py_runtime_err())?;
+        Ok(Self { inner })
     }
 
-    pub fn add_rpc_client(&mut self, addr: &str) -> PyResult<()> {
-        let _ = self.inner.get_client_by_addr(addr);
-        Ok(())
+    pub fn get_embedding_size(&self) -> PyResult<Vec<usize>> {
+        self.inner
+            .rpc_client
+            .get_embedding_size()
+            .map_err(|e| e.to_py_runtime_err())
     }
 
-    pub fn set_configuration(
-        &mut self,
+    pub fn dump(&self, dst_dir: String) -> PyResult<()> {
+        self.inner
+            .rpc_client
+            .dump(dst_dir)
+            .map_err(|e| e.to_py_runtime_err())
+    }
+
+    pub fn load(&self, src_dir: String) -> PyResult<()> {
+        self.inner
+            .rpc_client
+            .load(src_dir)
+            .map_err(|e| e.to_py_runtime_err())
+    }
+
+    pub fn wait_for_serving(&self) -> PyResult<()> {
+        self.inner
+            .rpc_client
+            .wait_for_serving()
+            .map_err(|e| e.to_py_runtime_err())
+    }
+
+    pub fn wait_for_emb_dumping(&self) -> PyResult<()> {
+        self.inner
+            .rpc_client
+            .wait_for_emb_dumping()
+            .map_err(|e| e.to_py_runtime_err())
+    }
+
+    pub fn shutdown_servers(&self) -> PyResult<()> {
+        self.inner
+            .rpc_client
+            .shutdown()
+            .map_err(|e| e.to_py_runtime_err())
+    }
+
+    pub fn send_sparse_to_middleware(
+        &self,
+        batch: &mut PyPersiaBatchData,
+        block: bool,
+    ) -> PyResult<()> {
+        self.inner
+            .nats_publisher
+            .send_sparse_to_middleware(batch, block)
+            .map_err(|e| e.to_py_runtime_err())
+    }
+
+    pub fn send_dense_to_trainer(&self, batch: &PyPersiaBatchData, block: bool) -> PyResult<()> {
+        self.inner
+            .nats_publisher
+            .send_dense_to_trainer(batch, block)
+            .map_err(|e| e.to_py_runtime_err())
+    }
+
+    pub fn configure_sharded_servers(
+        &self,
         initialize_lower: f32,
         initialize_upper: f32,
         admit_probability: f32,
         enable_weight_bound: bool,
         weight_bound: f32,
     ) -> PyResult<()> {
-        assert!(
-            (0. <= admit_probability) && (admit_probability <= 1.),
-            "admit probability should be within 0 ~ 1"
-        );
-        let config = PersiaSparseModelHyperparameters {
-            initialization_method: InitializationMethod::BoundedUniform(
-                BoundedUniformInitialization {
-                    lower: initialize_lower,
-                    upper: initialize_upper,
-                },
-            ),
-            admit_probability,
-            weight_bound,
-            enable_weight_bound,
-        };
-
         self.inner
-            .submit_configuration(config)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+            .nats_publisher
+            .configure_sharded_servers(
+                initialize_lower,
+                initialize_upper,
+                admit_probability,
+                enable_weight_bound,
+                weight_bound,
+            )
+            .map_err(|e| e.to_py_runtime_err())
     }
 
-    pub fn get_embedding_size(&self) -> PyResult<Vec<usize>> {
-        self.inner
-            .get_embedding_size()
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    #[cfg(feature = "cuda")]
+    pub fn forward_directly_from_data(
+        &self,
+        batch: &mut PyPersiaBatchData,
+        device_id: i32,
+    ) -> PyResult<PythonTrainBatch> {
+        let batch = std::mem::replace(&mut batch.inner, PersiaBatchData::default());
+        forward_directly(batch, device_id)
     }
 
-    pub fn shutdown_service(&self) -> PyResult<()> {
-        self.inner.shutdown()
+    #[cfg(feature = "cuda")]
+    pub fn forward_directly_from_bytes(
+        &self,
+        batch: &PyBytes,
+        device_id: i32,
+    ) -> PyResult<PythonTrainBatch> {
+        let batch: PersiaBatchData = PersiaBatchData::read_from_buffer(batch.as_bytes()).unwrap();
+        forward_directly(batch, device_id)
     }
-
-    pub fn wait_for_load_embedding(&self) -> PyResult<()> {
-        self.inner.wait_for_serving()
-    }
-
-    pub fn wait_for_dump_embedding(&self) -> PyResult<()> {
-        self.inner.wait_for_emb_dumping()
-    }
-
-    pub fn dump_embedding(&self, dst_dir: String) -> PyResult<()> {
-        self.inner
-            .dump(dst_dir)
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(format!("{:?}", e)))
-    }
-
-    pub fn load_embedding(&self, dst_dir: String) -> PyResult<()> {
-        self.inner
-            .load(dst_dir)
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(format!("{:?}", e)))
-    }
-}
-
-#[pyclass]
-pub struct PyPersiaRpcClient {
-    inner: Arc<PersiaRpcClient>,
 }
 
 #[pyfunction]
@@ -491,17 +293,13 @@ fn persia_core(py: Python, m: &PyModule) -> PyResult<()> {
         tracing::warn!("http_proxy environment is set, this is generally not what we want, please double check");
     }
 
-    m.add_class::<PyPersiaRpcClient>()?;
+    m.add_class::<PyPersiaCommonContext>()?;
 
     data::init_module(m, py)?;
     utils::init_module(m, py)?;
     optim::init_module(m, py)?;
     nats::init_module(m, py)?;
     m.add_function(wrap_pyfunction!(is_cuda_feature_available, m)?)?;
-    m.add_function(wrap_pyfunction!(
-        init_persia_embedding_staleness_semaphore,
-        m
-    )?)?;
 
     #[cfg(feature = "cuda")]
     {
