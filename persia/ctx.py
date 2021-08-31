@@ -399,7 +399,9 @@ class EmbeddingCtx(BaseCtx):
             dst_dir (str): Destination directory.
             blocking (bool, optional): Dump embedding in blocking mode or not.
         """
-        self.common_context.dump_embedding(dst_dir, blocking)
+        self.common_context.dump(dst_dir)
+        if blocking:
+            self.wait_for_dump_embedding()
 
     def load_embedding(self, src_dir: str, blocking: bool = True):
         """Load embeddings from ``src_dir``. Use ``TrainCtx.wait_for_load_embedding`` to wait until finished
@@ -409,19 +411,21 @@ class EmbeddingCtx(BaseCtx):
             src_dir (str): Directory to load embeddings.
             blocking (bool, optional): Dump embedding in blocking mode or not.
         """
-        self.common_context.load_embedding(src_dir, blocking)
+        self.common_context.load(src_dir)
+        if blocking:
+            self.wait_for_load_embedding()
 
     def wait_for_dump_embedding(self):
         """Wait for the embedding dump process."""
-        self.common_context.wait_for_dump_embedding()
+        self.common_context.wait_for_emb_dumping()
 
     def wait_for_load_embedding(self):
         """Wait for the embedding load process."""
-        self.common_context.wait_for_load_embedding()
+        self.common_context.wait_for_serving()
 
-    def get_embedding_size(self):
+    def get_embedding_size(self) -> List[int]:
         """Get number of ids on all embedding servers."""
-        self.common_context.get_embedding_size()
+        return self.common_context.get_embedding_size()
 
     def clear_embeddings(self):
         """Clear all embeddings on all embedding servers."""
@@ -439,7 +443,7 @@ class EmbeddingCtx(BaseCtx):
         Returns:
             Input data with embeddings.
         """
-        self.common_context.get_embedding_from_data(data, device_id)
+        return self.common_context.get_embedding_from_data(data, device_id)
 
     def get_embedding_from_bytes(
         self, data: bytes, device_id: int = 0
@@ -453,7 +457,7 @@ class EmbeddingCtx(BaseCtx):
         Returns:
             Input data with embeddings.
         """
-        self.common_context.get_embedding_from_bytes(data, device_id)
+        return self.common_context.get_embedding_from_bytes(data, device_id)
 
 
 class TrainCtx(EmbeddingCtx):

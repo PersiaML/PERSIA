@@ -51,16 +51,20 @@ class TestDataset(PersiaDataset):
         return self.loader_size
 
 
-def test(model: torch.nn.Module, data_laoder: Dataloder, checkpoint_dir: Optional[str] = None):
+def test(model: torch.nn.Module, checkpoint_dir: Optional[str] = None):
     logger.info("start to test...")
     model.eval()
 
+    test_dir = os.path.join("/data/test.npz")
+    test_dataset = TestDataset(test_dir, batch_size=128)
+
     with eval_ctx(model=model) as ctx:
+        test_loader = Dataloder(test_dataset, is_training=False)
         if checkpoint_dir is not None:
             ctx.load_checkpoint(checkpoint_dir)
         accuracies, losses = [], []
         all_pred, all_target = [], []
-        for (batch_idx, batch_data) in enumerate(tqdm(data_laoder, desc="test...")):
+        for (batch_idx, batch_data) in enumerate(tqdm(test_loader, desc="test...")):
             (output, target) = ctx.forward(batch_data)
             loss = loss_fn(output, target)
             all_pred.append(output.cpu().detach().numpy())
@@ -98,8 +102,6 @@ if __name__ == "__main__":
     loss_fn = torch.nn.BCELoss(reduction="mean")
     logger.info("finish genreate dense ctx")
 
-    test_dir = os.path.join("/data/test.npz")
-    test_dataset = TestDataset(test_dir, batch_size=128)
     checkpoint_dir = os.path.join("/workspace/checkpoint/")
     test_interval = 254
     buffer_size = 10
@@ -113,8 +115,6 @@ if __name__ == "__main__":
         embedding_config=embedding_config,
     ) as ctx:
         train_dataloader = Dataloder(StreamingDataset(buffer_size))
-        test_loader = Dataloder(test_dataset, is_training=False)
-
         for (batch_idx, data) in enumerate(train_dataloader):
             (output, target) = ctx.forward(data)
             loss = loss_fn(output, target)
@@ -125,17 +125,19 @@ if __name__ == "__main__":
             )
 
             if batch_idx % test_interval == 0 and batch_idx != 0:
-                test_auc, test_acc = test(model, test_loader)
+                test_auc, test_acc = test(model)
                 assert (
                     test_auc > 0.8
                 ), f"test_auc error, expect greater than 0.8 but got {test_auc}"
                 ctx.dump_checkpoint(checkpoint_dir)
                 logger.info(f'dump checkpoint to {checkpoint_dir}')
                 ctx.clear_embeddings()
+                num_ids = sum(ctx.get_embedding_size())
+                assert (num_ids == 0), f'clear embedding failed'
                 break
 
-    eval_auc, eval_acc = test(model, test_loader, checkpoint_dir)
+    eval_auc, eval_acc = test(model, checkpoint_dir)
     auc_diff = abs(eval_auc - test_auc)
     assert (
-        auc_diff < 0.001
-    ), f"eval error, expect auc diff smaller than 0.001 but got {auc_diff}"
+        auc_diff == 0
+    ), f"eval error, expect auc diff is 0 but got {auc_diff}"
