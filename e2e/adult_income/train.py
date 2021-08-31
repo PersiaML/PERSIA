@@ -131,16 +131,14 @@ if __name__ == "__main__":
                     test_auc > 0.8
                 ), f"test_auc error, expect greater than 0.8 but got {test_auc}"
                 ctx.dump_checkpoint(checkpoint_dir)
-                logger.info(f'dump checkpoint to {checkpoint_dir}')
+                logger.info(f"dump checkpoint to {checkpoint_dir}")
                 ctx.clear_embeddings()
                 num_ids = sum(ctx.get_embedding_size())
-                assert (num_ids == 0), f'clear embedding failed'
+                assert num_ids == 0, f"clear embedding failed"
                 break
 
     eval_auc, eval_acc = test(model, checkpoint_dir)
     auc_diff = abs(eval_auc - test_auc)
-    assert (
-        auc_diff == 0
-    ), f"eval error, expect auc diff is 0 but got {auc_diff}"
+    assert auc_diff == 0, f"eval error, expect auc diff is 0 but got {auc_diff}"
 
     shutil.rmtree(checkpoint_dir)
