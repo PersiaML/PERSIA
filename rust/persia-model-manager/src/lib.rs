@@ -8,11 +8,10 @@ use std::sync::Arc;
 use persia_libs::{
     anyhow::Error as AnyhowError,
     chrono,
-    thiserror,
     once_cell::sync::OnceCell,
     parking_lot::RwLock,
     rayon::{ThreadPool, ThreadPoolBuilder},
-    tracing,
+    thiserror, tracing,
 };
 
 use persia_common::HashMapEmbeddingEntry;
