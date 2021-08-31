@@ -106,6 +106,7 @@ if __name__ == "__main__":
 
     embedding_config = EmbeddingConfig()
     with TrainCtx(
+        model=model,
         sparse_optimizer=sparse_optimizer,
         dense_optimizer=dense_optimizer,
         device_id=device_id,
@@ -129,7 +130,12 @@ if __name__ == "__main__":
                     test_auc > 0.8
                 ), f"test_auc error, expect greater than 0.8 but got {test_auc}"
                 ctx.dump_checkpoint(checkpoint_dir)
+                logger.info(f'dump checkpoint to {checkpoint_dir}')
                 ctx.clear_embeddings()
                 break
-    
-    test_auc, test_acc = test(model, test_loader, checkpoint_dir)
+
+    eval_auc, eval_acc = test(model, test_loader, checkpoint_dir)
+    auc_diff = abs(eval_auc - test_auc)
+    assert (
+        auc_diff < 0.001
+    ), f"eval error, expect auc diff smaller than 0.001 but got {auc_diff}"
