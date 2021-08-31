@@ -108,19 +108,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-compat"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b48b4ff0c2026db683dea961cd8ea874737f56cffca86fa84415eaddc51c00d"
-dependencies = [
- "futures-core",
- "futures-io",
- "once_cell",
- "pin-project-lite 0.2.7",
- "tokio",
-]
-
-[[package]]
 name = "async-executor"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -192,15 +179,6 @@ dependencies = [
  "async-io",
  "blocking",
  "futures-lite",
-]
-
-[[package]]
-name = "async-oneshot"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50f4770cbbff928c30a991de67fb3976f44d8e3e202f8c79ef91b47006e04904"
-dependencies = [
- "futures-micro",
 ]
 
 [[package]]
@@ -692,12 +670,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56899898ce76aaf4a0f24d914c97ea6ed976d42fec6ad33fcbb0a1103e07b2b0"
 
 [[package]]
-name = "easy-parallel"
-version = "3.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dd4afd79212583ff429b913ad6605242ed7eec277e950b1438f300748f948f4"
-
-[[package]]
 name = "ed25519"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -883,12 +855,6 @@ dependencies = [
  "quote",
  "syn",
 ]
-
-[[package]]
-name = "futures-micro"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61e9325be55c5581082cd110294fa988c1f920bc573ec370ef201e33c469a95a"
 
 [[package]]
 name = "futures-sink"
@@ -1985,7 +1951,6 @@ dependencies = [
 name = "persia-incremental-update-manager"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "griddle",
  "persia-common",
  "persia-embedding-config",
@@ -2000,15 +1965,10 @@ name = "persia-libs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-channel",
- "async-compat",
- "async-executor",
  "async-lock",
- "async-oneshot",
  "bytes",
  "chrono",
  "color-eyre",
- "easy-parallel",
  "flume",
  "futures",
  "half",

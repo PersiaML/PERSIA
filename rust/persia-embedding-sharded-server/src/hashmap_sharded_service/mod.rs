@@ -514,7 +514,6 @@ pub struct HashMapShardedService {
 }
 
 #[persia_rpc::service]
-#[tracing(crate = "self::tracing")]
 impl HashMapShardedService {
     pub async fn ready_for_serving(&self, _req: ()) -> bool {
         self.inner.ready_for_serving().await

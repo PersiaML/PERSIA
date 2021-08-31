@@ -7,7 +7,6 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-chrono = "0.4"
 griddle = "0.4"
 persia-embedding-config = {path = "../persia-embedding-config"}
 persia-common = {path = "../persia-common"}

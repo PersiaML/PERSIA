@@ -1,13 +1,8 @@
 pub use anyhow;
-pub use async_channel;
-pub use async_compat;
-pub use async_executor;
 pub use async_lock;
-pub use async_oneshot;
 pub use bytes;
 pub use chrono;
 pub use color_eyre;
-pub use easy_parallel;
 pub use flume;
 pub use futures;
 pub use half;

@@ -1185,7 +1185,6 @@ pub struct ShardedMiddlewareServer {
 }
 
 #[persia_rpc::service]
-#[tracing(crate = "self::tracing")]
 impl ShardedMiddlewareServer {
     pub async fn ready_for_serving(&self, _req: ()) -> bool {
         self.inner.ready_for_serving().await
