@@ -3,9 +3,9 @@ use std::{sync::Arc, sync::Weak};
 
 use persia_libs::{
     hashbrown::HashMap,
-    thiserror,
     once_cell,
     parking_lot::{Mutex, RwLock},
+    thiserror,
 };
 
 use persia_common::HashMapEmbeddingEntry;

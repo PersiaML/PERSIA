@@ -4,8 +4,7 @@ use std::time::Duration;
 
 use persia_libs::{
     once_cell::sync::{Lazy, OnceCell},
-    thiserror,
-    tracing,
+    thiserror, tracing,
 };
 use prometheus::{Encoder, HistogramOpts, Opts, TextEncoder};
 use scheduled_thread_pool::ScheduledThreadPool;
