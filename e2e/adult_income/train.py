@@ -1,4 +1,5 @@
 import os
+import shutil
 
 from typing import Optional
 
@@ -142,4 +143,4 @@ if __name__ == "__main__":
         auc_diff == 0
     ), f"eval error, expect auc diff is 0 but got {auc_diff}"
 
-    os.rmdir(checkpoint_dir)
+    shutil.rmtree(checkpoint_dir)
