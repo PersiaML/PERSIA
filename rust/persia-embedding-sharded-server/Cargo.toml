@@ -50,7 +50,7 @@ snafu = "0.6"
 structopt = "0.3"
 thiserror = "1.0"
 thread_local = "1.0"
-tokio = {version = "1.1", features = ["full"]}
+tokio = {version = "1.10", features = ["full"]}
 tracing = "0.1"
 tracing-subscriber = "0.2"
 
