@@ -11,12 +11,17 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use persia_common::{EmbeddingBatch, EmbeddingTensor, PersiaBatchData};
 use persia_embedding_config::PersiaReplicaInfo;
-use persia_embedding_datatypes::{EmbeddingBatch, EmbeddingTensor, PersiaBatchData};
 use persia_embedding_sharded_server::sharded_middleware_service::ShardedMiddlewareError;
-use persia_futures::{
+use persia_libs::{
     flume,
-    tokio::sync::{OwnedSemaphorePermit, Semaphore},
+    tokio::{
+        self,
+        sync::{OwnedSemaphorePermit, Semaphore},
+        task::JoinHandle as TokioJoinHandle,
+    },
+    tracing,
 };
 
 use pyo3::exceptions::PyRuntimeError;
@@ -275,7 +280,7 @@ struct Forward {
     pub launch: bool,
     pub embedding_staleness_semaphore: Option<Arc<Semaphore>>,
     pub std_handles: Vec<std::thread::JoinHandle<()>>,
-    pub tokio_handles: Vec<persia_futures::tokio::task::JoinHandle<()>>,
+    pub tokio_handles: Vec<TokioJoinHandle<()>>,
     pub running: Arc<AtomicBool>,
 }
 
@@ -440,7 +445,7 @@ impl Forward {
                 None => None,
             };
 
-            let handle = persia_futures::tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 loop {
                     if !running.load(Ordering::Acquire) {
                         break;

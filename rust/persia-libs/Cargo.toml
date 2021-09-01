@@ -1,0 +1,37 @@
+[package]
+authors = ["Kuaishou AI Platform PersiaML Team <admin@mail.xrlian.com>"]
+description = "commonly used future related things"
+edition = "2018"
+license = "MIT"
+name = "persia-libs"
+version = "0.1.0"
+
+[dependencies]
+anyhow = "1.0"
+async-lock = "2.1"
+bytes = {version = "1.0", features = ["serde"]}
+chrono = "0.4"
+color-eyre = "0.5"
+flume = "0.10"
+futures = "0.3"
+half = {version = "1.6", features = ["alloc", "std", "serde"]}
+hashbrown = {version = "0.11.2", features = ["serde"]}
+indexmap = {version = "1.5", features = ["serde-1"]}
+itertools = "0.10"
+ndarray = {version = "0.14", features = ["serde"]}
+ndarray-rand = "0.13"
+numpy = "0.13"
+once_cell = "1.3"
+parking_lot = "0.11"
+rand = {version = "0.8", features = ["small_rng"]}
+rayon = "1.5.1"
+retry = "1.2.1"
+serde = {version = "1.0", features = ["derive"]}
+serde_bytes = "0.11"
+serde_yaml = "0.8"
+smol = "1.0"
+smol-timeout = "0.6"
+thiserror = "1"
+tokio = {version = "1.11", features = ["full"]}
+tracing = "0.1"
+tracing-subscriber = "0.2"

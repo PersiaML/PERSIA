@@ -1,8 +1,8 @@
 use persia_metrics::{Histogram, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError};
 
-use anyhow::Result;
+use persia_libs::{anyhow::Result, once_cell::sync::OnceCell};
 
-static METRICS_HOLDER: once_cell::sync::OnceCell<MetricsHolder> = once_cell::sync::OnceCell::new();
+static METRICS_HOLDER: OnceCell<MetricsHolder> = OnceCell::new();
 
 pub struct MetricsHolder {
     pub forward_client_to_gpu_time_cost: Histogram,

@@ -1,23 +1,35 @@
 #![allow(clippy::needless_return)]
 
-use half::prelude::*;
-use hashbrown::HashMap;
-use itertools::Itertools;
-use ndarray::Array2;
-use ndarray_rand::rand_distr::{Gamma, Normal, Poisson, Uniform};
-use ndarray_rand::RandomExt;
-use numpy::PyArray1;
-use rand::SeedableRng;
-use serde::{Deserialize, Serialize};
+pub mod grad;
+pub mod message_queue;
+pub mod optim;
+pub mod tensor;
+pub mod utils;
+
 use std::cmp::Ordering;
 use std::u64;
+
+use tensor::{DenseTensor, Tensor};
+
+use persia_libs::{
+    half,
+    half::prelude::*,
+    hashbrown::HashMap,
+    itertools::Itertools,
+    ndarray::{Array1, Array2},
+    ndarray_rand::rand_distr::{Gamma, Normal, Poisson, Uniform},
+    ndarray_rand::RandomExt,
+    numpy::PyArray1,
+    rand::prelude::SmallRng,
+    rand::SeedableRng,
+    serde::{self, Deserialize, Serialize},
+};
 
 use persia_embedding_config::InitializationMethod;
 use persia_speedy::{Readable, Writable};
 
-pub mod optim;
-
 #[derive(Serialize, Deserialize, Readable, Writable, Clone, Debug)]
+#[serde(crate = "self::serde")]
 pub struct HashMapEmbeddingEntry {
     inner: Vec<f32>, // TODO option1: consider using smallvec and slab allocator, and reference that smallvec with &[f32] here to avoid const generics
     // TODO option2: consider wrap BufferPool (see crates.io) or modify sharded slab to allocate &[f32] here
@@ -35,20 +47,18 @@ impl HashMapEmbeddingEntry {
         seed: u64,
     ) -> Self {
         let emb = {
-            let mut rng = rand::prelude::SmallRng::seed_from_u64(seed);
+            let mut rng = SmallRng::seed_from_u64(seed);
             match initialization_method {
                 InitializationMethod::BoundedUniform(x) => {
-                    ndarray::Array1::random_using((dim,), Uniform::new(x.lower, x.upper), &mut rng)
+                    Array1::random_using((dim,), Uniform::new(x.lower, x.upper), &mut rng)
                 }
-                InitializationMethod::BoundedGamma(x) => ndarray::Array1::random_using(
-                    (dim,),
-                    Gamma::new(x.shape, x.scale).unwrap(),
-                    &mut rng,
-                ),
+                InitializationMethod::BoundedGamma(x) => {
+                    Array1::random_using((dim,), Gamma::new(x.shape, x.scale).unwrap(), &mut rng)
+                }
                 InitializationMethod::BoundedPoisson(x) => {
-                    ndarray::Array1::random_using((dim,), Poisson::new(x.lambda).unwrap(), &mut rng)
+                    Array1::random_using((dim,), Poisson::new(x.lambda).unwrap(), &mut rng)
                 }
-                InitializationMethod::BoundedNormal(x) => ndarray::Array1::random_using(
+                InitializationMethod::BoundedNormal(x) => Array1::random_using(
                     (dim,),
                     Normal::new(x.mean, x.standard_deviation).unwrap(),
                     &mut rng,
@@ -154,12 +164,14 @@ impl HashMapEmbeddingEntry {
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct SingleSignInFeatureBatch {
     pub sign: u64,
     pub in_which_batch_samples: Vec<(u16, u16)>,
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct FeatureBatch {
     pub feature_name: String,
     pub index_batch: Vec<SingleSignInFeatureBatch>,
@@ -210,31 +222,36 @@ impl FeatureBatch {
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug)]
+#[serde(crate = "self::serde")]
 pub struct FeatureRawEmbeddingBatch {
     pub feature_name: String,
-    pub embeddings: ndarray::Array2<half::f16>,
+    pub embeddings: Array2<half::f16>,
     pub index: Vec<usize>,
     pub sample_id_num: Vec<usize>,
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug)]
+#[serde(crate = "self::serde")]
 pub struct FeatureSumEmbeddingBatch {
     pub feature_name: String,
-    pub embeddings: ndarray::Array2<half::f16>,
+    pub embeddings: Array2<half::f16>,
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug)]
+#[serde(crate = "self::serde")]
 pub enum FeatureEmbeddingBatch {
     RawEmbedding(FeatureRawEmbeddingBatch),
     SumEmbedding(FeatureSumEmbeddingBatch),
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug)]
+#[serde(crate = "self::serde")]
 pub struct EmbeddingBatch {
     pub batches: Vec<FeatureEmbeddingBatch>,
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct SparseBatch {
     pub batches: Vec<FeatureBatch>,
     #[serde(skip)]
@@ -270,25 +287,6 @@ impl From<Vec<(String, Vec<&PyArray1<u64>>)>> for SparseBatch {
     }
 }
 
-#[derive(Readable, Writable, Debug)]
-pub enum BaseTensor {
-    F32(Vec<f32>),
-    F64(Vec<f64>),
-    I32(Vec<i32>),
-    I64(Vec<i64>),
-}
-
-impl BaseTensor {
-    pub fn type_size(&self) -> usize {
-        match &self {
-            BaseTensor::F32(_) => std::mem::size_of::<f32>(),
-            BaseTensor::F64(_) => std::mem::size_of::<f64>(),
-            BaseTensor::I32(_) => std::mem::size_of::<i32>(),
-            BaseTensor::I64(_) => std::mem::size_of::<i64>(),
-        }
-    }
-}
-
 #[derive(Readable, Writable, Debug, Clone)]
 pub struct PreForwardStub {
     pub middleware_addr: String,
@@ -304,23 +302,6 @@ impl Default for PreForwardStub {
             batcher_idx: 0,
         }
     }
-}
-
-#[derive(Readable, Writable, Debug)]
-pub struct DenseTensor {
-    pub data: BaseTensor,
-    pub shape: Vec<usize>,
-}
-
-#[derive(Readable, Writable, Debug)]
-pub struct SparseTensor {
-    pub data: BaseTensor,
-    pub offset: Vec<u64>,
-}
-#[derive(Readable, Writable, Debug)]
-pub enum Tensor {
-    Dense(DenseTensor),
-    Sparse(SparseTensor),
 }
 
 #[derive(Readable, Writable, Debug)]
@@ -385,105 +366,13 @@ impl Ord for PersiaBatchData {
     }
 }
 
-#[derive(Deserialize, Serialize, Readable, Writable, Debug)]
-pub enum Gradients {
-    F16(ndarray::Array2<half::f16>),
-    F32(ndarray::Array2<f32>),
-}
-
-#[derive(Deserialize, Serialize, Readable, Writable, Debug)]
-pub struct FeatureEmbeddingGradientBatch {
-    pub feature_name: String,
-    pub gradients: Gradients,
-    /// true gradient = gradients / scale_factor
-    pub scale_factor: f32,
-}
-
-#[derive(Deserialize, Serialize, Readable, Writable, Debug)]
-pub struct SkippedGradientBatch {
-    pub feature_name: String,
-}
-
-#[derive(Deserialize, Serialize, Readable, Writable, Debug)]
-pub enum SkippableFeatureEmbeddingGradientBatch {
-    GradientBatch(FeatureEmbeddingGradientBatch),
-    Skipped(SkippedGradientBatch),
-}
-
-#[derive(Deserialize, Serialize, Readable, Writable, Debug)]
-pub struct EmbeddingGradientBatch {
-    pub gradients: Vec<SkippableFeatureEmbeddingGradientBatch>,
-}
-
-#[derive(Deserialize, Serialize, Readable, Writable, Debug, Default)]
-pub struct EmbeddingMeta {
-    pub embedding_name: String,
-    pub embedding_dim: usize,
-    pub batch_size: usize,
-}
-
-#[derive(Readable, Writable, Debug, Default)]
-pub struct PersiaBatchedEmbeddingsResponse {
-    pub emb_metas: Vec<EmbeddingMeta>,
-    pub gateway_server: String,
-    pub err_message: String,
-    pub data: Vec<f16>,
-}
-
-#[derive(Debug, Default)]
-pub struct PersiaBatchedEmbeddings {
-    pub response: PersiaBatchedEmbeddingsResponse,
-    pub addressing: HashMap<String, (usize, usize)>,
-    pub full_precision_data: Vec<f32>,
-}
-
-impl PersiaBatchedEmbeddings {
-    pub fn from_ptr(ptr: *const PersiaBatchedEmbeddings) -> &'static Self {
-        unsafe { &*ptr }
-    }
-}
-
-#[derive(Deserialize, Serialize, Debug, Readable, Writable, Default)]
-pub struct IndicesMeta {
-    pub embedding_name: String,
-    pub indices: Vec<u64>,
-    pub indices_offset: Vec<u64>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Readable, Writable, Default)]
-pub struct PersiaBatchedIndicesRequest {
-    pub inner: Vec<IndicesMeta>,
-}
-
-#[derive(Debug, Default)]
-pub struct PersiaBatchedIndices {
-    pub request: PersiaBatchedIndicesRequest,
-    pub serialized: Vec<u8>,
-}
-
-impl PersiaBatchedIndices {
-    pub fn from_ptr_mut(ptr: *mut PersiaBatchedIndices) -> &'static mut Self {
-        unsafe { &mut *ptr }
-    }
-
-    pub fn from_ptr(ptr: *const PersiaBatchedIndices) -> &'static Self {
-        unsafe { &*ptr }
-    }
-}
-
-#[derive(Debug)]
-pub enum TensorDtype {
-    F16,
-    F32,
-}
-
-pub fn ndarray_f32_to_f16(input: &ndarray::Array2<f32>) -> ndarray::Array2<f16> {
+pub fn ndarray_f32_to_f16(input: &Array2<f32>) -> Array2<f16> {
     let s = input.as_slice().unwrap();
     let f16v = Vec::from_f32_slice(s);
-    unsafe { ndarray::Array2::from_shape_vec_unchecked((input.shape()[0], input.shape()[1]), f16v) }
+    unsafe { Array2::from_shape_vec_unchecked((input.shape()[0], input.shape()[1]), f16v) }
 }
 
-pub fn ndarray_f16_to_f32(input: &ndarray::Array2<f16>) -> ndarray::Array2<f32> {
+pub fn ndarray_f16_to_f32(input: &Array2<f16>) -> Array2<f32> {
     let f32v = input
         .as_slice()
         .unwrap()
@@ -499,85 +388,5 @@ pub fn ndarray_f16_to_f32(input: &ndarray::Array2<f16>) -> ndarray::Array2<f32> 
             }
         })
         .collect_vec();
-    unsafe { ndarray::Array2::from_shape_vec_unchecked((input.shape()[0], input.shape()[1]), f32v) }
-}
-
-#[derive(Serialize, Deserialize, Readable, Writable, Debug)]
-pub struct PersiaBatchRecordedShardedServer {
-    pub dense: Vec<PersiaDenseTensor<f32>>,
-    pub target: Vec<PersiaDenseTensor<f32>>,
-    pub uids: Vec<u64>,
-    pub pids: Vec<u64>,
-    pub num_samples: usize,
-    pub middleware_server_addr: String,
-    pub forward_id: u64,
-    pub timestamps: Vec<i64>,
-    pub metadata: bytes::Bytes,
-}
-
-#[derive(Default, Serialize, Deserialize, Readable, Writable, Debug, Clone)]
-pub struct PersiaDenseTensor<T> {
-    pub name: String,
-    pub dim: usize,
-    pub content: Vec<T>,
-}
-
-impl<T> PersiaDenseTensor<T> {
-    pub fn add_sample(&mut self, mut sample: Vec<T>) {
-        assert_eq!(sample.len(), self.dim);
-        self.content.append(&mut sample);
-    }
-
-    pub fn empty_like(&self) -> Self {
-        Self {
-            name: self.name.clone(),
-            dim: self.dim,
-            content: vec![],
-        }
-    }
-
-    pub fn get(&self, sample_idx: usize) -> &[T] {
-        &self.content[sample_idx * self.dim..(sample_idx + 1) * self.dim]
-    }
-}
-
-impl<T> std::convert::TryInto<ndarray::Array2<T>> for PersiaDenseTensor<T> {
-    type Error = ndarray::ShapeError;
-
-    fn try_into(self) -> Result<Array2<T>, Self::Error> {
-        ndarray::Array2::<T>::from_shape_vec(
-            (self.content.len() / self.dim, self.dim),
-            self.content,
-        )
-    }
-}
-
-impl<T> IntoIterator for PersiaDenseTensor<T> {
-    type Item = Vec<T>;
-    type IntoIter = PersiaDenseTensorSampleIterator<T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        assert_eq!(self.content.len() % self.dim, 0);
-        let mut chunks = self
-            .content
-            .into_iter()
-            .chunks(self.dim)
-            .into_iter()
-            .map(|chunk| chunk.collect_vec())
-            .collect_vec();
-        chunks.reverse();
-        PersiaDenseTensorSampleIterator { chunks }
-    }
-}
-
-pub struct PersiaDenseTensorSampleIterator<T> {
-    chunks: Vec<Vec<T>>,
-}
-
-impl<T> Iterator for PersiaDenseTensorSampleIterator<T> {
-    type Item = Vec<T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.chunks.pop()
-    }
+    unsafe { Array2::from_shape_vec_unchecked((input.shape()[0], input.shape()[1]), f32v) }
 }

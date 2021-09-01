@@ -1,18 +1,23 @@
 #[macro_use]
 extern crate shadow_rs;
-use hashbrown::HashMap;
+
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use persia_libs::{
+    anyhow::Result, color_eyre, hashbrown::HashMap, rand, tracing, tracing_subscriber,
+};
+
+use structopt::StructOpt;
+
 use persia_embedding_config::{
     EmbeddingConfig, PerisaIntent, PersiaCommonConfig, PersiaGlobalConfig, PersiaMiddlewareConfig,
 };
 use persia_embedding_sharded_server::hashmap_sharded_service::EmbeddingServerNatsStubPublisher;
-
 use persia_embedding_sharded_server::sharded_middleware_service::{
     AllShardsClient, MiddlewareNatsStub, MiddlewareNatsStubResponder, ShardedMiddlewareServer,
     ShardedMiddlewareServerInner,
 };
-use std::path::PathBuf;
-use std::sync::Arc;
-use structopt::StructOpt;
 
 #[derive(Debug, StructOpt, Clone)]
 #[structopt()]
@@ -30,7 +35,7 @@ struct Cli {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<()> {
     color_eyre::install().unwrap();
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_env("LOG_LEVEL"))
@@ -76,8 +81,8 @@ async fn main() -> anyhow::Result<()> {
         all_shards_client,
         num_shards,
         forward_id: std::sync::atomic::AtomicU64::new(rand::random()),
-        forward_id_buffer: persia_futures::async_lock::RwLock::new(HashMap::with_capacity(10000)),
-        post_forward_buffer: persia_futures::async_lock::RwLock::new(HashMap::with_capacity(10000)),
+        forward_id_buffer: persia_libs::async_lock::RwLock::new(HashMap::with_capacity(10000)),
+        post_forward_buffer: persia_libs::async_lock::RwLock::new(HashMap::with_capacity(10000)),
         cannot_forward_batched_time: crossbeam::atomic::AtomicCell::new(
             std::time::SystemTime::now(),
         ),
@@ -100,7 +105,7 @@ async fn main() -> anyhow::Result<()> {
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
     let service = ShardedMiddlewareServer {
         inner: inner,
-        shutdown_channel: Arc::new(persia_futures::async_lock::RwLock::new(Some(tx))),
+        shutdown_channel: Arc::new(persia_libs::async_lock::RwLock::new(Some(tx))),
     };
 
     let server = hyper::server::Server::bind(&([0, 0, 0, 0], args.port).into())

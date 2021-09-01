@@ -1,11 +1,17 @@
 #![allow(clippy::needless_return)]
-#[allow(dead_code)]
-pub mod feature_config;
-use once_cell::sync::OnceCell;
-use persia_speedy::{Readable, Writable};
-use serde::{Deserialize, Serialize};
+
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
-use thiserror::Error;
+
+use persia_libs::{
+    indexmap,
+    once_cell::sync::OnceCell,
+    serde::{self, Deserialize, Serialize},
+    serde_yaml,
+    thiserror::Error,
+    tracing,
+};
+
+use persia_speedy::{Readable, Writable};
 
 #[derive(Readable, Writable, Error, Debug, Clone)]
 pub enum PersiaGlobalConfigError {
@@ -18,6 +24,7 @@ pub enum PersiaGlobalConfigError {
 }
 
 #[derive(Serialize, Deserialize, Readable, Writable, Debug, Default, Clone)]
+#[serde(crate = "self::serde")]
 pub struct BoundedUniformInitialization {
     pub lower: f32,
     pub upper: f32,
@@ -30,6 +37,7 @@ impl BoundedUniformInitialization {
 }
 
 #[derive(Serialize, Deserialize, Readable, Writable, Debug, Default, Clone)]
+#[serde(crate = "self::serde")]
 pub struct BoundedGammaInitialization {
     pub shape: f32,
     pub scale: f32,
@@ -42,6 +50,7 @@ impl BoundedGammaInitialization {
 }
 
 #[derive(Serialize, Deserialize, Readable, Writable, Debug, Default, Clone)]
+#[serde(crate = "self::serde")]
 pub struct BoundedPoissonInitialization {
     pub lambda: f32,
 }
@@ -53,6 +62,7 @@ impl BoundedPoissonInitialization {
 }
 
 #[derive(Serialize, Deserialize, Readable, Writable, Debug, Default, Clone)]
+#[serde(crate = "self::serde")]
 pub struct BoundedNormalInitialization {
     pub mean: f32,
     pub standard_deviation: f32,
@@ -68,6 +78,7 @@ impl BoundedNormalInitialization {
 }
 
 #[derive(Serialize, Deserialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub enum InitializationMethod {
     InverseEmbeddingSizeSqrt,
     BoundedUniform(BoundedUniformInitialization),
@@ -125,12 +136,14 @@ fn get_local_ip() -> String {
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct InferConfig {
     pub servers: Vec<String>,
     pub embedding_checkpoint: String,
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub enum PerisaIntent {
     Train,
     Eval,
@@ -138,12 +151,14 @@ pub enum PerisaIntent {
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub enum PersiaPersistenceStorage {
     Ceph,
     Hdfs,
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct PersiaReplicaInfo {
     pub replica_size: usize,
     pub replica_index: usize,
@@ -170,6 +185,7 @@ impl PersiaReplicaInfo {
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct InstanceInfo {
     pub ip_address: String,
     pub port: u16,
@@ -280,6 +296,7 @@ fn get_default_feature_groups() -> indexmap::IndexMap<String, Vec<String>> {
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct PersiaMetricsConfig {
     #[serde(default = "get_false")]
     pub enable_metrics: bool,
@@ -300,6 +317,7 @@ impl Default for PersiaMetricsConfig {
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct PersiaCommonConfig {
     #[serde(default = "get_default_metrics_config")]
     pub metrics_config: PersiaMetricsConfig,
@@ -327,6 +345,7 @@ impl PersiaCommonConfig {
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct PersiaMiddlewareConfig {
     #[serde(default = "get_thousand")]
     pub forward_buffer_size: usize,
@@ -354,6 +373,7 @@ impl PersiaMiddlewareConfig {
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct PersiaShardedServerConfig {
     // Eviction map config
     #[serde(default = "get_billion")]
@@ -417,6 +437,7 @@ impl PersiaShardedServerConfig {
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct PersiaGlobalConfig {
     #[serde(default = "get_default_common_config")]
     pub common_config: PersiaCommonConfig,
@@ -485,12 +506,14 @@ impl PersiaGlobalConfig {
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct HashStackConfig {
     pub hash_stack_rounds: usize,
     pub embedding_size: usize,
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct SlotConfig {
     pub dim: usize,
     #[serde(default = "get_ten")]
@@ -507,6 +530,7 @@ pub struct SlotConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize, Readable, Writable, Clone)]
+#[serde(crate = "self::serde")]
 pub struct EmbeddingConfig {
     #[serde(default = "get_eight")]
     pub feature_index_prefix_bit: usize,

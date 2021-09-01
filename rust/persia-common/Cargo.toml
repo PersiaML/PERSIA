@@ -2,12 +2,15 @@
 authors = ["Kuaishou AI Platform PersiaML Team <admin@mail.xrlian.com>"]
 edition = "2018"
 license = "MIT"
-name = "persia-full-amount-manager"
+name = "persia-common"
+publish = false
 version = "0.1.0"
 
 [dependencies]
+hyper = {version = "0.14", features = ["full"]}
+paste = "1.0"
 persia-embedding-config = {path = "../persia-embedding-config"}
-persia-common = {path = "../persia-common", default-features = false}
-persia-eviction-map = {path = "../persia-eviction-map"}
 persia-libs = {path = "../persia-libs"}
+persia-simd = {path = "../persia-simd"}
 persia-speedy = "0.9"
+url = "2.1"

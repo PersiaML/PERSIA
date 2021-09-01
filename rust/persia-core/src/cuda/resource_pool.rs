@@ -1,5 +1,8 @@
 use std::sync::atomic::Ordering;
 
+use persia_common::utils::ChannelPair;
+use persia_libs::tracing;
+
 pub trait Allocatable {
     fn new(size: usize) -> Self;
     fn size(&self) -> usize;
@@ -46,7 +49,7 @@ where
 }
 
 pub struct SubPool<T: Allocatable> {
-    channel: persia_futures::ChannelPair<T>,
+    channel: ChannelPair<T>,
     num_allocated: std::sync::atomic::AtomicU32,
 }
 
@@ -55,7 +58,7 @@ where
     T: Allocatable,
 {
     fn default() -> Self {
-        let channel = persia_futures::ChannelPair::new_unbounded();
+        let channel = ChannelPair::new_unbounded();
         Self {
             channel,
             num_allocated: std::sync::atomic::AtomicU32::new(0),

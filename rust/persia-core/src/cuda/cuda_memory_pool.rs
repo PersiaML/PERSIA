@@ -1,5 +1,7 @@
+use super::resource_pool::{Allocatable, Pool};
+
 use cuda_runtime_sys as cuda;
-use resource_pool::{Allocatable, Pool};
+use persia_libs::{once_cell, tracing};
 
 pub static CUDA_DEVICE_MEMORY_POOL: once_cell::sync::Lazy<Pool<CudaMallocPtr>> =
     once_cell::sync::Lazy::new(|| return Pool::new());

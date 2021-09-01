@@ -4,13 +4,14 @@ pub mod cuda_event_pool;
 pub mod cuda_memory_pool;
 pub mod cuda_stream_pool;
 pub mod pinned_memory_pool;
+pub mod resource_pool;
 pub mod utils;
 
 use cuda_event_pool::CudaEventPtr;
 use cuda_memory_pool::CudaMallocPtr;
 use pinned_memory_pool::PinnedMemoryPtr;
 
-use persia_embedding_datatypes::TensorDtype;
+use persia_common::tensor::TensorDtype;
 
 pub fn set_device(card_index: i32) {
     let result = unsafe { cuda::cudaSetDevice(card_index) };

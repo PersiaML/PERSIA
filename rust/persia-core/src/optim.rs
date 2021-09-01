@@ -1,10 +1,9 @@
+use crate::PersiaCommonContext;
+
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
-use crate::PersiaCommonContext;
-use persia_embedding_datatypes::optim::{
-    AdagradConfig, AdamConfig, NaiveSGDConfig, OptimizerConfig,
-};
+use persia_common::optim::{AdagradConfig, AdamConfig, NaiveSGDConfig, OptimizerConfig};
 
 #[pyclass]
 pub struct PyOptimizerBase {

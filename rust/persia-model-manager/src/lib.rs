@@ -1,26 +1,32 @@
 #![allow(clippy::needless_return)]
-use anyhow::Error as AnyhowError;
-use once_cell::sync::OnceCell;
 
-use parking_lot::RwLock;
+use std::ffi::OsStr;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
+use persia_libs::{
+    anyhow::Error as AnyhowError,
+    chrono,
+    once_cell::sync::OnceCell,
+    parking_lot::RwLock,
+    rayon::{ThreadPool, ThreadPoolBuilder},
+    thiserror, tracing,
+};
+
+use persia_common::HashMapEmbeddingEntry;
 use persia_embedding_config::{
     PerisaIntent, PersiaCommonConfig, PersiaGlobalConfigError, PersiaPersistenceStorage,
     PersiaReplicaInfo, PersiaShardedServerConfig,
 };
-use persia_embedding_datatypes::HashMapEmbeddingEntry;
 use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
 use persia_full_amount_manager::{FullAmountManager, PersiaFullAmountManagerError};
 use persia_speedy::{Readable, Writable};
 use persia_storage_visitor::{
     PersiaCephVisitor, PersiaHdfsVisitor, PersiaStorageVisitor, SpeedyObj,
 };
-use std::ffi::OsStr;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-use thiserror::Error;
 
-#[derive(Readable, Writable, Error, Debug)]
+#[derive(Readable, Writable, thiserror::Error, Debug)]
 pub enum PersistenceManagerError {
     #[error("storage error")]
     StorageError(String),
@@ -62,8 +68,8 @@ pub struct PersiaPersistenceManager {
     storage_visitor: Arc<dyn PersiaStorageVisitor>,
     embedding_holder: PersiaEmbeddingHolder,
     full_amount_manager: Arc<FullAmountManager>,
-    status: Arc<parking_lot::RwLock<PersiaPersistenceStatus>>,
-    thread_pool: Arc<rayon::ThreadPool>,
+    status: Arc<RwLock<PersiaPersistenceStatus>>,
+    thread_pool: Arc<ThreadPool>,
     sign_per_file: usize,
     shard_idx: usize,
     shard_num: usize,
@@ -117,9 +123,9 @@ impl PersiaPersistenceManager {
             storage_visitor,
             embedding_holder,
             full_amount_manager,
-            status: Arc::new(parking_lot::RwLock::new(PersiaPersistenceStatus::Idle)),
+            status: Arc::new(RwLock::new(PersiaPersistenceStatus::Idle)),
             thread_pool: Arc::new(
-                rayon::ThreadPoolBuilder::new()
+                ThreadPoolBuilder::new()
                     .num_threads(concurrent_size)
                     .build()
                     .unwrap(),
@@ -230,7 +236,7 @@ impl PersiaPersistenceManager {
     pub fn dump_embedding_segment(
         &self,
         dst_dir: PathBuf,
-        segment: Vec<(u64, Arc<parking_lot::RwLock<HashMapEmbeddingEntry>>)>,
+        segment: Vec<(u64, Arc<RwLock<HashMapEmbeddingEntry>>)>,
         file_index: usize,
         num_dumped_signs: Arc<AtomicUsize>,
         num_total_signs: usize,
@@ -466,11 +472,11 @@ impl PersiaPersistenceManager {
         &self,
         content: Vec<(u64, HashMapEmbeddingEntry)>,
         load_opt: bool,
-    ) -> Vec<(u64, Arc<parking_lot::RwLock<HashMapEmbeddingEntry>>)> {
-        let embeddings: Vec<(u64, Arc<parking_lot::RwLock<HashMapEmbeddingEntry>>)> = if load_opt {
+    ) -> Vec<(u64, Arc<RwLock<HashMapEmbeddingEntry>>)> {
+        let embeddings: Vec<(u64, Arc<RwLock<HashMapEmbeddingEntry>>)> = if load_opt {
             content
                 .into_iter()
-                .map(|(id, entry)| (id, Arc::new(parking_lot::RwLock::new(entry))))
+                .map(|(id, entry)| (id, Arc::new(RwLock::new(entry))))
                 .collect()
         } else {
             let emb: Vec<(u64, HashMapEmbeddingEntry)> = content
@@ -482,7 +488,7 @@ impl PersiaPersistenceManager {
                 .collect();
 
             emb.into_iter()
-                .map(|(id, entry)| (id, Arc::new(parking_lot::RwLock::new(entry))))
+                .map(|(id, entry)| (id, Arc::new(RwLock::new(entry))))
                 .collect()
         };
         embeddings

@@ -22,23 +22,28 @@ use crate::forward::{forward_directly, PythonTrainBatch};
 use crate::optim::PyOptimizerBase;
 use crate::rpc::PersiaRpcClient;
 
-use anyhow::Result;
-use once_cell::sync::OnceCell;
 use std::sync::Arc;
 
-use persia_futures::tokio::runtime::Runtime;
-use persia_speedy::Readable;
+use persia_libs::{
+    anyhow::Result,
+    color_eyre,
+    once_cell::sync::OnceCell,
+    thiserror,
+    tokio::{self, runtime::Runtime},
+    tracing, tracing_subscriber,
+};
+
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::wrap_pyfunction;
-use thiserror::Error;
 
+use persia_common::PersiaBatchData;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaReplicaInfo};
-use persia_embedding_datatypes::PersiaBatchData;
 use persia_embedding_sharded_server::sharded_middleware_service::ShardedMiddlewareError;
+use persia_speedy::Readable;
 
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum PersiaError {
     #[error("Persia context NOT initialized")]
     NotInitializedError,
@@ -100,7 +105,7 @@ impl PersiaCommonContext {
             return Ok(instance.clone());
         }
         let runtime = Arc::new(
-            persia_futures::tokio::runtime::Builder::new_multi_thread()
+            tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .worker_threads(num_coroutines_worker)
                 .build()

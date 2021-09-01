@@ -1,12 +1,15 @@
-use async_nats::{Connection, Subscription};
-use once_cell::sync::OnceCell;
-use persia_futures::smol;
-use persia_speedy::{Readable, Writable};
-use retry::{delay::Fixed, retry};
 use std::time::Duration;
-use thiserror::Error;
 
-#[derive(Readable, Writable, Error, Debug)]
+use async_nats::{Connection, Subscription};
+use persia_libs::{
+    once_cell::sync::OnceCell,
+    retry::{delay::Fixed, retry},
+    smol, thiserror, tracing,
+};
+
+use persia_speedy::{Readable, Writable};
+
+#[derive(Readable, Writable, thiserror::Error, Clone, Debug)]
 pub enum NatsError {
     #[error("nats io error {0:?}")]
     IoError(String),

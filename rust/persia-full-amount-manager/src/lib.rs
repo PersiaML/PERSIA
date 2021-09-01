@@ -3,16 +3,19 @@ use std::{
     sync::{Arc, Weak},
 };
 
-use hashbrown::HashMap;
-use parking_lot::RwLock;
-use thiserror::Error;
+use persia_libs::{
+    hashbrown::HashMap,
+    once_cell,
+    parking_lot::{Mutex, RwLock},
+    thiserror,
+};
 
+use persia_common::{utils::ChannelPair, HashMapEmbeddingEntry};
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaShardedServerConfig};
-use persia_embedding_datatypes::HashMapEmbeddingEntry;
 use persia_eviction_map::Sharded;
 use persia_speedy::{Readable, Writable};
 
-#[derive(Readable, Writable, Error, Debug, Clone)]
+#[derive(Readable, Writable, thiserror::Error, Debug, Clone)]
 pub enum PersiaFullAmountManagerError {
     #[error("full amount manager not ready error")]
     NotReadyError,
@@ -28,16 +31,16 @@ static FULL_AMOUNT_MANAGER: once_cell::sync::OnceCell<Arc<FullAmountManager>> =
 // this sturct keep weak ptrs for all embedding entry
 pub struct FullAmountManager {
     weak_map: Sharded<HashMap<u64, Weak<RwLock<HashMapEmbeddingEntry>>>, u64>,
-    weak_ptr_channel: persia_futures::ChannelPair<Vec<(u64, Weak<RwLock<HashMapEmbeddingEntry>>)>>,
-    evicted_ids_channel: persia_futures::ChannelPair<Vec<u64>>,
-    _handles: Arc<parking_lot::Mutex<Vec<std::thread::JoinHandle<()>>>>,
+    weak_ptr_channel: ChannelPair<Vec<(u64, Weak<RwLock<HashMapEmbeddingEntry>>)>>,
+    evicted_ids_channel: ChannelPair<Vec<u64>>,
+    _handles: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
 }
 
 impl FullAmountManager {
     pub fn get() -> Result<Arc<Self>, PersiaFullAmountManagerError> {
         let singleton = FULL_AMOUNT_MANAGER.get_or_try_init(|| {
             let config = PersiaShardedServerConfig::get()?;
-            let handles = Arc::new(parking_lot::Mutex::new(Vec::new()));
+            let handles = Arc::new(Mutex::new(Vec::new()));
             let full_amount_manager = Self::new(
                 config.capacity,
                 config.num_hashmap_internal_shards,
@@ -81,7 +84,7 @@ impl FullAmountManager {
         capacity: usize,
         bucket_size: usize,
         buffer_size: usize,
-        handles: Arc<parking_lot::Mutex<Vec<std::thread::JoinHandle<()>>>>,
+        handles: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
     ) -> Self {
         Self {
             weak_map: Sharded {
@@ -91,8 +94,8 @@ impl FullAmountManager {
                     .collect(),
                 phantom: std::marker::PhantomData::default(),
             },
-            weak_ptr_channel: persia_futures::ChannelPair::new(buffer_size),
-            evicted_ids_channel: persia_futures::ChannelPair::new(buffer_size),
+            weak_ptr_channel: ChannelPair::new(buffer_size),
+            evicted_ids_channel: ChannelPair::new(buffer_size),
             _handles: handles,
         }
     }

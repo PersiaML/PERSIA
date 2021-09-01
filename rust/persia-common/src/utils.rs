@@ -1,14 +1,4 @@
-pub use async_channel;
-pub use async_compat;
-pub use async_executor;
-pub use async_lock;
-pub use async_oneshot;
-pub use easy_parallel;
-pub use flume;
-pub use futures;
-pub use smol;
-pub use smol_timeout;
-pub use tokio;
+use persia_libs::flume;
 
 #[derive(Clone)]
 pub struct ChannelPair<T> {

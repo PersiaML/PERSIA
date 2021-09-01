@@ -1,10 +1,9 @@
-use hashbrown::HashMap;
-use parking_lot::RwLock;
 use std::sync::Arc;
+
+use persia_libs::{hashbrown::HashMap, parking_lot::RwLock};
 
 use persia_embedding_config::EmbeddingConfig;
 use persia_simd::{adam_avx2, decayed_adagrad_avx2, decayed_sgd_avx2};
-
 use persia_speedy::{Readable, Writable};
 
 #[derive(Readable, Writable, Debug, Clone)]

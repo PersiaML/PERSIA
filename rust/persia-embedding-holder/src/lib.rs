@@ -1,15 +1,19 @@
+use std::collections::LinkedList;
+use std::{sync::Arc, sync::Weak};
+
+use persia_libs::{
+    hashbrown::HashMap,
+    once_cell,
+    parking_lot::{Mutex, RwLock},
+    thiserror,
+};
+
+use persia_common::HashMapEmbeddingEntry;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaShardedServerConfig};
-use persia_embedding_datatypes::HashMapEmbeddingEntry;
 use persia_eviction_map::PersiaEvictionMap;
 use persia_speedy::{Readable, Writable};
 
-use hashbrown::HashMap;
-use parking_lot::{Mutex, RwLock};
-use std::collections::LinkedList;
-use std::{sync::Arc, sync::Weak};
-use thiserror::Error;
-
-#[derive(Readable, Writable, Error, Debug)]
+#[derive(Readable, Writable, thiserror::Error, Debug)]
 pub enum PersiaEmbeddingHolderError {
     #[error("global config error: {0}")]
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
@@ -103,7 +107,7 @@ impl RecyclePool {
             let mut map = self.inner.write();
             let list = map.get(&dim);
             if list.is_none() {
-                let empty_list = parking_lot::Mutex::new(LinkedList::new());
+                let empty_list = Mutex::new(LinkedList::new());
                 map.insert(dim, empty_list);
             }
         }

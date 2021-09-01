@@ -4,16 +4,24 @@ use crate::cuda::utils::cuda_d2h;
 use crate::metrics::MetricsHolder;
 use crate::PersiaCommonContext;
 
-use persia_embedding_datatypes::{
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::thread::JoinHandle;
+
+use persia_libs::{
+    flume, half, ndarray,
+    tokio::{self, sync::OwnedSemaphorePermit, task::JoinHandle as TokioJoinHandle},
+    tracing,
+};
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
+
+use persia_common::grad::{
     EmbeddingGradientBatch, FeatureEmbeddingGradientBatch, Gradients,
     SkippableFeatureEmbeddingGradientBatch, SkippedGradientBatch,
 };
-use persia_futures::{flume, tokio::sync::OwnedSemaphorePermit};
-
-use pyo3::exceptions::PyRuntimeError;
-use pyo3::prelude::*;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct SingleSlotGradient {
@@ -112,8 +120,8 @@ struct Backward {
     pub cpu_backward_channel_s: flume::Sender<EmbeddingBackwardStub>,
     pub cpu_backward_channel_r: flume::Receiver<EmbeddingBackwardStub>,
     pub launch: bool,
-    pub std_handles: Vec<std::thread::JoinHandle<()>>,
-    pub tokio_handles: Vec<persia_futures::tokio::task::JoinHandle<()>>,
+    pub std_handles: Vec<JoinHandle<()>>,
+    pub tokio_handles: Vec<TokioJoinHandle<()>>,
     pub running: Arc<AtomicBool>,
 }
 
@@ -244,7 +252,7 @@ impl Backward {
             let channel_r = self.cpu_backward_channel_r.clone();
             let rpc_client = context.rpc_client.clone();
             let running = self.running.clone();
-            let handle = persia_futures::tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 loop {
                     if !running.load(Ordering::Acquire) {
                         break;

@@ -1,17 +1,21 @@
-use once_cell::sync::OnceCell;
-use persia_embedding_config::{
-    InstanceInfo, PersiaCommonConfig, PersiaGlobalConfigError, PersiaReplicaInfo,
-};
-use persia_scheduled_thread_pool::SCHEDULED_THREAD_POOL;
-use prometheus::{Encoder, HistogramOpts, Opts, TextEncoder};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use thiserror::Error;
+
+use persia_libs::{
+    once_cell::sync::{Lazy, OnceCell},
+    thiserror, tracing,
+};
+use prometheus::{Encoder, HistogramOpts, Opts, TextEncoder};
+use scheduled_thread_pool::ScheduledThreadPool;
 
 pub use prometheus::{Gauge, GaugeVec, Histogram, HistogramVec, IntCounter, IntCounterVec};
 
-#[derive(Error, Debug, Clone)]
+use persia_embedding_config::{
+    InstanceInfo, PersiaCommonConfig, PersiaGlobalConfigError, PersiaReplicaInfo,
+};
+
+#[derive(thiserror::Error, Debug, Clone)]
 pub enum PersiaMetricsManagerError {
     #[error("failed to register metrics")]
     RegistryError,
@@ -22,6 +26,16 @@ pub enum PersiaMetricsManagerError {
 }
 
 static PERSIA_METRICS_MANAGER: OnceCell<Arc<PersiaMetricsManager>> = OnceCell::new();
+
+static SCHEDULED_THREAD_POOL: Lazy<ScheduledThreadPool> = Lazy::new(|| {
+    ScheduledThreadPool::with_name(
+        "persia_scheduled_thread_pool",
+        std::env::var("PERSIA_SCHEDULED_THREAD_POOL_SIZE")
+            .unwrap_or_else(|_| "1".into())
+            .parse()
+            .expect("set scheduled thread pool size error"),
+    )
+});
 
 pub struct PersiaMetricsManager {
     const_labels: HashMap<String, String>,

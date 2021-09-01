@@ -3,7 +3,11 @@
 #[macro_use]
 extern crate shadow_rs;
 
-use anyhow::Result;
+use std::{path::PathBuf, sync::Arc};
+
+use persia_libs::{anyhow::Result, color_eyre, tracing, tracing_subscriber};
+use structopt::StructOpt;
+
 use persia_embedding_config::{
     EmbeddingConfig, PerisaIntent, PersiaCommonConfig, PersiaGlobalConfig,
     PersiaShardedServerConfig,
@@ -16,9 +20,6 @@ use persia_embedding_sharded_server::hashmap_sharded_service::{
 use persia_full_amount_manager::FullAmountManager;
 use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
 use persia_model_manager::PersiaPersistenceManager;
-
-use std::{path::PathBuf, sync::Arc};
-use structopt::StructOpt;
 
 #[derive(Debug, StructOpt, Clone)]
 #[structopt()]
@@ -84,7 +85,7 @@ async fn main() -> Result<()> {
 
     let service = HashMapShardedService {
         inner: inner.clone(),
-        shutdown_channel: Arc::new(persia_futures::async_lock::RwLock::new(Some(tx))),
+        shutdown_channel: Arc::new(persia_libs::async_lock::RwLock::new(Some(tx))),
     };
 
     let server = hyper::Server::bind(&([0, 0, 0, 0], args.port).into())
