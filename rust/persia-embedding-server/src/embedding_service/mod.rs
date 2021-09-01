@@ -11,7 +11,7 @@ use persia_common::{
     HashMapEmbeddingEntry,
 };
 use persia_embedding_config::{
-    EmbeddingConfig, InstanceInfo, PerisaIntent, PersiaCommonConfig, PersiaEmbeddingServerConfig,
+    EmbeddingConfig, InstanceInfo, PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig,
     PersiaGlobalConfigError, PersiaReplicaInfo, PersiaSparseModelHyperparameters,
 };
 use persia_embedding_holder::PersiaEmbeddingHolder;
@@ -131,9 +131,9 @@ impl EmbeddingServiceInner {
         self.replica_index
     }
 
-    pub fn get_intent(&self) -> Result<PerisaIntent, EmbeddingServerError> {
-        let intent = self.common_config.intent.clone();
-        Ok(intent)
+    pub fn get_job_type(&self) -> Result<PerisaJobType, EmbeddingServerError> {
+        let job_type = self.common_config.job_type.clone();
+        Ok(job_type)
     }
 
     pub async fn get_configuration(
@@ -280,9 +280,9 @@ impl EmbeddingServiceInner {
         if !model_ready {
             return false;
         }
-        let intent = self.common_config.intent.clone();
-        match intent {
-            PerisaIntent::Infer(_) => true,
+        let job_type = self.common_config.job_type.clone();
+        match job_type {
+            PerisaJobType::Infer(_) => true,
             _ => *self.hyperparameter_configured.lock().await,
         }
     }

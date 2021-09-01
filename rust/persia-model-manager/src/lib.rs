@@ -16,7 +16,7 @@ use persia_libs::{
 
 use persia_common::HashMapEmbeddingEntry;
 use persia_embedding_config::{
-    PerisaIntent, PersiaCommonConfig, PersiaEmbeddingServerConfig, PersiaGlobalConfigError,
+    PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig, PersiaGlobalConfigError,
     PersiaPersistenceStorage, PersiaReplicaInfo,
 };
 use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
@@ -73,7 +73,7 @@ pub struct PersiaPersistenceManager {
     sign_per_file: usize,
     replica_index: usize,
     replica_size: usize,
-    cur_task: PerisaIntent,
+    cur_task: PerisaJobType,
 }
 
 impl PersiaPersistenceManager {
@@ -98,7 +98,7 @@ impl PersiaPersistenceManager {
                 server_config.num_signs_per_file,
                 replica_info.replica_index,
                 replica_info.replica_size,
-                common_config.intent.clone(),
+                common_config.job_type.clone(),
             ));
             Ok(singleton)
         });
@@ -117,7 +117,7 @@ impl PersiaPersistenceManager {
         sign_per_file: usize,
         replica_index: usize,
         replica_size: usize,
-        cur_task: PerisaIntent,
+        cur_task: PerisaJobType,
     ) -> Self {
         Self {
             storage_visitor,
@@ -420,8 +420,8 @@ impl PersiaPersistenceManager {
                     match speedy_content {
                         SpeedyObj::EmbeddingVec(content) => {
                             let load_opt = match manager.cur_task {
-                                PerisaIntent::Train | PerisaIntent::Eval => true,
-                                PerisaIntent::Infer(_) => false,
+                                PerisaJobType::Train | PerisaJobType::Eval => true,
+                                PerisaJobType::Infer(_) => false,
                             };
                             let embeddings = manager.wrap_embeddings(content, load_opt);
 

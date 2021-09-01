@@ -144,7 +144,7 @@ pub struct InferConfig {
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
 #[serde(crate = "self::serde")]
-pub enum PerisaIntent {
+pub enum PerisaJobType {
     Train,
     Eval,
     Infer(InferConfig),
@@ -280,8 +280,8 @@ fn get_default_metrics_config() -> PersiaMetricsConfig {
     PersiaMetricsConfig::default()
 }
 
-fn get_default_intent() -> PerisaIntent {
-    PerisaIntent::Train
+fn get_default_job_type() -> PerisaJobType {
+    PerisaJobType::Train
 }
 
 fn get_default_hashstack_config() -> HashStackConfig {
@@ -321,15 +321,15 @@ impl Default for PersiaMetricsConfig {
 pub struct PersiaCommonConfig {
     #[serde(default = "get_default_metrics_config")]
     pub metrics_config: PersiaMetricsConfig,
-    #[serde(default = "get_default_intent")]
-    pub intent: PerisaIntent,
+    #[serde(default = "get_default_job_type")]
+    pub job_type: PerisaJobType,
 }
 
 impl Default for PersiaCommonConfig {
     fn default() -> Self {
         Self {
             metrics_config: PersiaMetricsConfig::default(),
-            intent: PerisaIntent::Train,
+            job_type: PerisaJobType::Train,
         }
     }
 }

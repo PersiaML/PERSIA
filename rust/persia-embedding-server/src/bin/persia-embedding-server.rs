@@ -9,7 +9,7 @@ use persia_libs::{anyhow::Result, color_eyre, tracing, tracing_subscriber};
 use structopt::StructOpt;
 
 use persia_embedding_config::{
-    EmbeddingConfig, PerisaIntent, PersiaCommonConfig, PersiaEmbeddingServerConfig,
+    EmbeddingConfig, PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig,
     PersiaGlobalConfig,
 };
 use persia_embedding_holder::PersiaEmbeddingHolder;
@@ -95,9 +95,9 @@ async fn main() -> Result<()> {
             async move { Ok::<_, hyper::Error>(service) }
         }));
 
-    let intent = inner.get_intent()?;
-    let _responder = match intent {
-        PerisaIntent::Infer(_) => None,
+    let job_type = inner.get_job_type()?;
+    let _responder = match job_type {
+        PerisaJobType::Infer(_) => None,
         _ => {
             let nats_stub = EmbeddingServerNatsStub {
                 inner: inner.clone(),
@@ -107,8 +107,8 @@ async fn main() -> Result<()> {
         }
     };
 
-    match intent {
-        PerisaIntent::Infer(ref conf) => {
+    match job_type {
+        PerisaJobType::Infer(ref conf) => {
             let sparse_ckpt = conf.embedding_checkpoint.clone();
             inner.load(sparse_ckpt).await?;
         }

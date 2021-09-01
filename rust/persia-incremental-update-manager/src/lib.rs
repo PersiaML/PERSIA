@@ -17,7 +17,7 @@ use persia_libs::{
 
 use persia_common::{utils::ChannelPair, HashMapEmbeddingEntry};
 use persia_embedding_config::{
-    PerisaIntent, PersiaCommonConfig, PersiaEmbeddingServerConfig, PersiaGlobalConfigError,
+    PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig, PersiaGlobalConfigError,
     PersiaPersistenceStorage, PersiaReplicaInfo,
 };
 use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
@@ -89,7 +89,7 @@ impl PerisaIncrementalUpdateManager {
             let singleton = Self::new(
                 server_config.storage.clone(),
                 embedding_holder,
-                common_comfig.intent.clone(),
+                common_comfig.job_type.clone(),
                 server_config.num_persistence_workers,
                 server_config.num_signs_per_file,
                 replica_info.replica_index,
@@ -109,7 +109,7 @@ impl PerisaIncrementalUpdateManager {
     fn new(
         storage: PersiaPersistenceStorage,
         embedding_holder: PersiaEmbeddingHolder,
-        cur_task: PerisaIntent,
+        cur_task: PerisaJobType,
         num_executors: usize,
         sign_per_file: usize,
         replica_index: usize,
@@ -153,7 +153,7 @@ impl PerisaIncrementalUpdateManager {
 
         let mut handle_guard = background_threads.lock();
         match cur_task {
-            PerisaIntent::Train => {
+            PerisaJobType::Train => {
                 let handle = std::thread::spawn({
                     let instance = instance.clone();
                     move || {
@@ -170,7 +170,7 @@ impl PerisaIncrementalUpdateManager {
                 });
                 handle_guard.push(handle);
             }
-            PerisaIntent::Infer(_) => {
+            PerisaJobType::Infer(_) => {
                 let handle = std::thread::spawn({
                     let instance = instance.clone();
                     move || {

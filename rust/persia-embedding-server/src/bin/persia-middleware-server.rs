@@ -11,7 +11,7 @@ use persia_libs::{
 use structopt::StructOpt;
 
 use persia_embedding_config::{
-    EmbeddingConfig, PerisaIntent, PersiaCommonConfig, PersiaGlobalConfig, PersiaMiddlewareConfig,
+    EmbeddingConfig, PerisaJobType, PersiaCommonConfig, PersiaGlobalConfig, PersiaMiddlewareConfig,
 };
 use persia_embedding_server::embedding_service::EmbeddingServerNatsStubPublisher;
 use persia_embedding_server::middleware_service::{
@@ -61,9 +61,9 @@ async fn main() -> Result<()> {
 
     EmbeddingConfig::set(&args.embedding_config)?;
 
-    let intent = &PersiaCommonConfig::get()?.intent;
-    let all_embedding_server_client = match intent {
-        PerisaIntent::Infer(ref conf) => {
+    let job_type = &PersiaCommonConfig::get()?.job_type;
+    let all_embedding_server_client = match job_type {
+        PerisaJobType::Infer(ref conf) => {
             let servers = conf.servers.clone();
             AllEmbeddingServerClient::with_addrs(servers)
         }
@@ -91,8 +91,8 @@ async fn main() -> Result<()> {
         middleware_config,
     });
 
-    let _responder = match intent {
-        PerisaIntent::Infer(_) => None,
+    let _responder = match job_type {
+        PerisaJobType::Infer(_) => None,
         _ => {
             let nats_stub = MiddlewareNatsStub {
                 inner: inner.clone(),
