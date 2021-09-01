@@ -2,7 +2,7 @@
 authors = ["Kuaishou AI Platform PersiaML Team <admin@mail.xrlian.com>"]
 edition = "2018"
 license = "MIT"
-name = "persia-embedding-sharded-server"
+name = "persia-embedding-server"
 version = "0.1.0"
 
 [dependencies]
@@ -35,12 +35,12 @@ tracing = "0.1"
 rand = "0.8"
 
 [[bin]]
-name = "persia-embedding-sharded-server"
-path = "src/bin/persia-embedding-sharded-server.rs"
+name = "persia-embedding-server"
+path = "src/bin/persia-embedding-server.rs"
 
 [[bin]]
-name = "persia-embedding-sharded-middleware"
-path = "src/bin/persia-embedding-sharded-middleware.rs"
+name = "persia-middleware-server"
+path = "src/bin/persia-middleware-server.rs"
 
 [build-dependencies]
 shadow-rs = "0.7"

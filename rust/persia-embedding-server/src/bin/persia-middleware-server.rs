@@ -13,10 +13,10 @@ use structopt::StructOpt;
 use persia_embedding_config::{
     EmbeddingConfig, PerisaIntent, PersiaCommonConfig, PersiaGlobalConfig, PersiaMiddlewareConfig,
 };
-use persia_embedding_sharded_server::hashmap_sharded_service::EmbeddingServerNatsStubPublisher;
-use persia_embedding_sharded_server::sharded_middleware_service::{
-    AllShardsClient, MiddlewareNatsStub, MiddlewareNatsStubResponder, ShardedMiddlewareServer,
-    ShardedMiddlewareServerInner,
+use persia_embedding_server::embedding_service::EmbeddingServerNatsStubPublisher;
+use persia_embedding_server::middleware_service::{
+    AllEmbeddingServerClient, MiddlewareNatsStub, MiddlewareNatsStubResponder, MiddlewareServer,
+    MiddlewareServerInner,
 };
 
 #[derive(Debug, StructOpt, Clone)]
@@ -62,24 +62,24 @@ async fn main() -> Result<()> {
     EmbeddingConfig::set(&args.embedding_config)?;
 
     let intent = &PersiaCommonConfig::get()?.intent;
-    let all_shards_client = match intent {
+    let all_embedding_server_client = match intent {
         PerisaIntent::Infer(ref conf) => {
             let servers = conf.servers.clone();
-            AllShardsClient::with_addrs(servers)
+            AllEmbeddingServerClient::with_addrs(servers)
         }
         _ => {
             let nats_publisher = EmbeddingServerNatsStubPublisher::new();
-            AllShardsClient::with_nats(nats_publisher)
+            AllEmbeddingServerClient::with_nats(nats_publisher)
         }
     };
 
-    let num_shards = all_shards_client.num_shards() as u64;
+    let replica_size = all_embedding_server_client.replica_size() as u64;
     let middleware_config = PersiaMiddlewareConfig::get()?;
     let embedding_config = EmbeddingConfig::get()?;
 
-    let inner = Arc::new(ShardedMiddlewareServerInner {
-        all_shards_client,
-        num_shards,
+    let inner = Arc::new(MiddlewareServerInner {
+        all_embedding_server_client,
+        replica_size,
         forward_id: std::sync::atomic::AtomicU64::new(rand::random()),
         forward_id_buffer: persia_libs::async_lock::RwLock::new(HashMap::with_capacity(10000)),
         post_forward_buffer: persia_libs::async_lock::RwLock::new(HashMap::with_capacity(10000)),
@@ -103,7 +103,7 @@ async fn main() -> Result<()> {
     };
 
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-    let service = ShardedMiddlewareServer {
+    let service = MiddlewareServer {
         inner: inner,
         shutdown_channel: Arc::new(persia_libs::async_lock::RwLock::new(Some(tx))),
     };

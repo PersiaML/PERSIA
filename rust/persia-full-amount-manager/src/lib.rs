@@ -11,7 +11,7 @@ use persia_libs::{
 };
 
 use persia_common::{utils::ChannelPair, HashMapEmbeddingEntry};
-use persia_embedding_config::{PersiaGlobalConfigError, PersiaShardedServerConfig};
+use persia_embedding_config::{PersiaEmbeddingServerConfig, PersiaGlobalConfigError};
 use persia_eviction_map::Sharded;
 use persia_speedy::{Readable, Writable};
 
@@ -39,7 +39,7 @@ pub struct FullAmountManager {
 impl FullAmountManager {
     pub fn get() -> Result<Arc<Self>, PersiaFullAmountManagerError> {
         let singleton = FULL_AMOUNT_MANAGER.get_or_try_init(|| {
-            let config = PersiaShardedServerConfig::get()?;
+            let config = PersiaEmbeddingServerConfig::get()?;
             let handles = Arc::new(Mutex::new(Vec::new()));
             let full_amount_manager = Self::new(
                 config.capacity,

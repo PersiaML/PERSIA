@@ -35,15 +35,15 @@ if __name__ == "__main__":
             # TODO: Due to this issue https://github.com/PyO3/setuptools-rust/issues/153 still not release
             # the new version of setuptool_rust, RustExtension can't enable the script feature
             # {
-            #     "persia-embedding-sharded-middleware": "persia.persia_middleware",
-            #     "persia-embedding-sharded-server": "persia.persia_server"
+            #     "persia-middleware-server": "persia.persia_middleware",
+            #     "persia-embedding-server": "persia.persia_server"
             # },
             # script=True,
             {
-                "persia-embedding-sharded-middleware": "persia.persia-embedding-sharded-middleware",
-                "persia-embedding-sharded-server": "persia.persia-embedding-sharded-server",
+                "persia-middleware-server": "persia.persia-middleware-server",
+                "persia-embedding-server": "persia.persia-embedding-server",
             },
-            path="rust/persia-embedding-sharded-server/Cargo.toml",
+            path="rust/persia-embedding-server/Cargo.toml",
             binding=Binding.Exec,
             native=True,
         )

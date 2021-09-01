@@ -4,7 +4,7 @@ members = [
   "persia-embedding-config",
   "persia-common",
   "persia-simd",
-  "persia-embedding-sharded-server",
+  "persia-embedding-server",
   "persia-core",
   "persia-libs",
   "persia-eviction-map",

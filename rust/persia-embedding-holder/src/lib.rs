@@ -9,7 +9,7 @@ use persia_libs::{
 };
 
 use persia_common::HashMapEmbeddingEntry;
-use persia_embedding_config::{PersiaGlobalConfigError, PersiaShardedServerConfig};
+use persia_embedding_config::{PersiaEmbeddingServerConfig, PersiaGlobalConfigError};
 use persia_eviction_map::PersiaEvictionMap;
 use persia_speedy::{Readable, Writable};
 
@@ -33,7 +33,7 @@ pub struct PersiaEmbeddingHolder {
 impl PersiaEmbeddingHolder {
     pub fn get() -> Result<PersiaEmbeddingHolder, PersiaEmbeddingHolderError> {
         let singleton = PERSIA_EMBEDDING_HOLDER.get_or_try_init(|| {
-            let config = PersiaShardedServerConfig::get()?;
+            let config = PersiaEmbeddingServerConfig::get()?;
             let eviction_map: PersiaEvictionMap<u64, Arc<RwLock<HashMapEmbeddingEntry>>> =
                 PersiaEvictionMap::new(config.capacity, config.num_hashmap_internal_shards);
             Ok(PersiaEmbeddingHolder {
