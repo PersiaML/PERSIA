@@ -7,7 +7,6 @@ use persia_common::{
     message_queue::{PersiaMessageQueueClient, PersiaMessageQueueServer},
     PersiaBatchData,
 };
-use persia_embedding_config::PersiaReplicaInfo;
 use persia_libs::{flume, tokio::runtime::Runtime};
 
 #[pyclass]
@@ -83,38 +82,6 @@ impl PyPersiaMessageQueueServer {
 }
 
 #[pyclass]
-pub struct PyPersiaReplicaInfo {
-    inner: PersiaReplicaInfo,
-}
-
-impl PyPersiaReplicaInfo {
-    pub fn get_replica_info(&self) -> PersiaReplicaInfo {
-        self.inner.clone()
-    }
-}
-
-#[pymethods]
-impl PyPersiaReplicaInfo {
-    #[new]
-    fn new(replica_size: usize, replica_index: usize) -> Self {
-        Self {
-            inner: PersiaReplicaInfo {
-                replica_index,
-                replica_size,
-            },
-        }
-    }
-
-    pub fn replica_index(&self) -> usize {
-        self.inner.replica_index
-    }
-
-    pub fn replica_size(&self) -> usize {
-        self.inner.replica_size
-    }
-}
-
-#[pyclass]
 pub struct PyPersiaBatchDataSender {
     pub inner: flume::Sender<PersiaBatchData>,
 }
@@ -165,7 +132,6 @@ pub fn init_module(super_module: &PyModule, py: Python) -> PyResult<()> {
     let module = PyModule::new(py, "utils")?;
     module.add_class::<PyPersiaMessageQueueClient>()?;
     module.add_class::<PyPersiaMessageQueueServer>()?;
-    module.add_class::<PyPersiaReplicaInfo>()?;
     module.add_class::<PyPersiaBatchDataChannel>()?;
     module.add_class::<PyPersiaBatchDataReceiver>()?;
     module.add_class::<PyPersiaBatchDataSender>()?;

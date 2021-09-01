@@ -10,11 +10,7 @@ import persia.env as env
 
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
-from persia.backend import init_backend
-from persia.prelude import (
-    PyPersiaReplicaInfo,
-    init_persia_embedding_staleness_semaphore,
-)
+from persia.prelude import PyPersiaCommonContext, PyPersiaBatchData
 
 _CURRENT_CXT = None
 
@@ -46,19 +42,8 @@ class PreprocessMode(Enum):
 
 
 class BaseCtx:
-    r"""It provide the communicate ability for data generator component to send the PersiaBatchData
-    to the trainer and embedding middleware.
-
-    Examples::
-        >>> from persia.prelude import PyPersiaBatchData
-        >>> loader = make_simple_loader()
-        >>> with BaseCtx() as ctx:
-        >>>     for (dense, batch_sparse_ids, target) in loader:
-        >>>         batch_data = PyPersiaBatchData()
-        >>>         batch_data.add_dense([dense])
-        >>>         batch_data.add_sparse(batch_sparse_ids)
-        >>>         batch_data.add_target(target)
-        >>>         ctx.backend.send_data(batch_data)
+    r"""It initialize a common context for other persia context, e.g. `DataCtx`, `EmbeddingCtx` and `TrainCtx`.
+    This class should not be instantiated directly.
     """
 
     def __init__(
@@ -69,23 +54,26 @@ class BaseCtx:
         Arguments:
             threadpool_worker_size (int): Rpc threadpool worker size.
         """
-        world_size = env.get_world_size()
+        self.origin_context = None
+        self.world_size = env.get_world_size()
 
-        if world_size == -1:
+        if self.world_size == -1:
             replica_size = env.get_replica_size()
             replica_index = env.get_replica_index()
-            self.replica_info = PyPersiaReplicaInfo(replica_size, replica_index)
+            self.common_context = PyPersiaCommonContext(
+                threadpool_worker_size, replica_index, replica_size, None
+            )
             _logger.info(
-                f"init datacompose backend replica_size: {replica_size} replica_index: {replica_index}"
+                f"init datacompose, replica_size: {replica_size} replica_index: {replica_index}"
             )
         else:
             rank_id = env.get_rank()
-            self.replica_info = PyPersiaReplicaInfo(world_size, rank_id)
-            _logger.info(
-                f"init trainer backend world size: {world_size} rank_id: {rank_id}"
+            self.common_context = PyPersiaCommonContext(
+                threadpool_worker_size, rank_id, self.world_size, self.world_size
             )
-
-        self.backend = init_backend(threadpool_worker_size, self.replica_info)
+            _logger.info(
+                f"init trainer, world size: {self.world_size} rank_id: {rank_id}"
+            )
 
     def _enter(self):
         """Hook when enter the context"""
@@ -99,6 +87,7 @@ class BaseCtx:
         self._enter()
 
         global _CURRENT_CXT
+        self.origin_context = _CURRENT_CXT
         _CURRENT_CXT = self
 
         return self
@@ -107,12 +96,66 @@ class BaseCtx:
         self._exit()
 
         global _CURRENT_CXT
-        _CURRENT_CXT = None
+        _CURRENT_CXT = self.origin_context
 
         if exc_type:
             import traceback
 
             _logger.error("\n" + traceback.format_exc())
+
+
+class DataCtx(BaseCtx):
+    r"""It provide the communicate ability for data generator component to send the PersiaBatchData
+    to the trainer and embedding middleware.
+
+    Examples::
+        >>> from persia.prelude import PyPersiaBatchData
+        >>> loader = make_simple_loader()
+        >>> with DataCtx() as ctx:
+        >>>     for (dense, batch_sparse_ids, target) in loader:
+        >>>         batch_data = PyPersiaBatchData()
+        >>>         batch_data.add_dense([dense])
+        >>>         batch_data.add_sparse(batch_sparse_ids)
+        >>>         batch_data.add_target(target)
+        >>>         ctx.send_data(batch_data)
+    """
+
+    def __init__(
+        self,
+        *args,
+        **kwargs,
+    ):
+        super(DataCtx, self).__init__(*args, **kwargs)
+
+    def send_data(self, data: PyPersiaBatchData, blocking: bool = True):
+        """Send PersiaBatchData from data compose to trainer and middleware side.
+
+        Arguments:
+            data (PyPersiaBatchData): PersiaBatchData that haven't been process.
+            blocking (bool, optional): Wait util the data send successfully.
+        """
+        self.common_context.send_sparse_to_middleware(data, blocking)
+        self.common_context.send_dense_to_trainer(data, blocking)
+
+
+class EmbeddingConfig:
+    r"""Embedding hyperparameters, argument of ``EmbeddingCtx``."""
+
+    def __init__(
+        self,
+        emb_initialization: Tuple[float, float] = (-0.01, 0.01),
+        admit_probability: float = 1.0,
+        weight_bound: float = 10,
+    ):
+        """
+        Arguments:
+            emb_initialization (Tuple[float, float], optional): Embedding uniform initialization arguments that corresponding to low and high.
+            admit_probability (float, optional): The probability (0<=, <=1) of admitting a new embedding.
+            weight_bound (float, optional): Restrict each element value of an embedding in [-weight_bound, weight_bound].
+        """
+        self.emb_initialization = emb_initialization
+        self.admit_probability = admit_probability
+        self.weight_bound = weight_bound
 
 
 class EmbeddingCtx(BaseCtx):
@@ -124,8 +167,10 @@ class EmbeddingCtx(BaseCtx):
         >>> from persia.prelude import PyPersiaBatchData
         >>> model = get_dnn_model()
         >>> loader = make_dataloader()
+        >>> embedding_config = EmbeddingConfig()
         >>> with EmbeddingCtx(
-        ...     PreprocessMode.EVAL
+        ...     PreprocessMode.EVAL,
+        ...     embedding_config
         ... ) as ctx:
         >>>     for (dense, batch_sparse_ids, target) in loader:
         >>>         batch_data = PyPersiaBatchData()
@@ -140,9 +185,7 @@ class EmbeddingCtx(BaseCtx):
     def __init__(
         self,
         preprocess_mode: PreprocessMode,
-        emb_initialization: Tuple[float, float] = (-0.01, 0.01),
-        admit_probability: float = 1.0,
-        weight_bound: float = 10,
+        embedding_config: Optional[EmbeddingConfig] = None,
         checkpoint_dir: Optional[str] = None,
         *args,
         **kwargs,
@@ -150,29 +193,26 @@ class EmbeddingCtx(BaseCtx):
         """
         Arguments:
             preprocess_mode (PreprocessMode): Different preprocess mode effect the behave of ``prepare_features``.
-            emb_initialization (Tuple[float, float], optional): Embedding uniform initialization arguments that corresponding to low and high.
-            admit_probability (float, optional): The probability (0<=, <=1) of admitting a new embedding.
-            weight_bound (float, optional): Restrict each element value of an embedding in [-weight_bound, weight_bound].
+            embedding_config (EmbeddingConfig, optional): The configuration about embedding that will be sent to the embedding server.
             checkpoint_dir(str, optional): Pretrained checkpoint directory, load the dense and sparse checkpoint in this dir when enter the context.
         """
         super(EmbeddingCtx, self).__init__(*args, **kwargs)
         self.preprocess_mode = preprocess_mode
-        self.emb_initialization = emb_initialization
-        self.admit_probability = admit_probability
-        self.weight_bound = weight_bound
+        self.embedding_config = embedding_config
         self.checkpoint_dir = checkpoint_dir
 
         self.current_batch = None
         self.pretrained_loaded = False
 
     def _enter(self):
-        self.backend.set_configuration(
-            self.emb_initialization[0],
-            self.emb_initialization[1],
-            self.admit_probability,
-            self.weight_bound > 0,
-            self.weight_bound,
-        )
+        if self.embedding_config is not None:
+            self.common_context.configure_sharded_servers(
+                self.embedding_config.emb_initialization[0],
+                self.embedding_config.emb_initialization[1],
+                self.embedding_config.admit_probability,
+                self.embedding_config.weight_bound > 0,
+                self.embedding_config.weight_bound,
+            )
 
         if not self.pretrained_loaded and self.checkpoint_dir is not None:
             self.load_embedding(self.checkpoint_dir)
@@ -371,7 +411,7 @@ class EmbeddingCtx(BaseCtx):
             dst_dir (str): Destination directory.
             blocking (bool, optional): Dump embedding in blocking mode or not.
         """
-        self.backend.dump_embedding(dst_dir, blocking)
+        self.common_context.dump_embedding(dst_dir, blocking)
 
     def load_embedding(self, src_dir: str, blocking: bool = True):
         """Load embeddings from ``src_dir``. Use ``TrainCtx.wait_for_load_embedding`` to wait until finished
@@ -381,15 +421,19 @@ class EmbeddingCtx(BaseCtx):
             src_dir (str): Directory to load embeddings.
             blocking (bool, optional): Dump embedding in blocking mode or not.
         """
-        self.backend.load_embedding(src_dir, blocking)
+        self.common_context.load_embedding(src_dir, blocking)
 
     def wait_for_dump_embedding(self):
         """Wait for the embedding dump process."""
-        self.backend.wait_for_dump_embedding()
+        self.common_context.wait_for_dump_embedding()
 
     def wait_for_load_embedding(self):
         """Wait for the embedding load process."""
-        self.backend.wait_for_load_embedding()
+        self.common_context.wait_for_load_embedding()
+
+    def get_embedding_size(self):
+        """Get number of ids on all embedding servers."""
+        self.common_context.get_embedding_size()
 
 
 class TrainCtx(EmbeddingCtx):
@@ -419,7 +463,6 @@ class TrainCtx(EmbeddingCtx):
         dense_optimizer: torch.optim.Optimizer,
         device_id: int = 0,
         grad_scalar_update_factor: float = 4,
-        embedding_staleness: int = -1,
         backward_buffer_size: int = 10,
         backward_workers_size: int = 8,
         grad_update_buffer_size: int = 60,
@@ -432,7 +475,6 @@ class TrainCtx(EmbeddingCtx):
             dense_optimizer (torch.optim.Optimizer): Optimizer for dense parameters.
             device_id (int, optional): The CUDA device to use for this process.
             grad_scalar_update_factor (float, optional): Update factor of ``Gradscalar`` to ensure loss scale finitely if set ``mixed_precision=True``.
-            embedding_staleness (int, optional): Max number of batched staleness embedding each rank. A staleness embedding means it prefetched from embedding server before gradient updated.
             backward_buffer_size (int, optional): Max number of not updated gradients queued.
             backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
             grad_tensor_cache_size(int, optional): Number of reference cache , hold the gradient tensor reference to avoid
@@ -458,9 +500,6 @@ class TrainCtx(EmbeddingCtx):
         self.sparse_optimizer = sparse_optimizer
         self.dense_optimizer = dense_optimizer
         self.backward_workers_size = backward_workers_size
-        self.embedding_staleness = (
-            embedding_staleness if embedding_staleness is not None else -1
-        )
 
         from persia.prelude import PyBackward
 
@@ -471,10 +510,13 @@ class TrainCtx(EmbeddingCtx):
     def _enter(self):
         super()._enter()
 
-        if self.embedding_staleness > 0:
-            init_persia_embedding_staleness_semaphore(self.embedding_staleness)
         self.sparse_optimizer.apply()
         self.backward_engine.launch(self.device_id, self.backward_workers_size)
+
+    def _exit(self):
+        super()._exit()
+
+        self.backward_engine.shutdown()
 
     def backward(
         self, loss: torch.Tensor, embedding_gradient_check_frequency: int = 20

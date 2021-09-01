@@ -9,7 +9,7 @@ use persia_libs::{anyhow::Result, color_eyre, tracing, tracing_subscriber};
 use structopt::StructOpt;
 
 use persia_embedding_config::{
-    EmbeddingConfig, PerisaIntent, PersiaCommonConfig, PersiaGlobalConfig, PersiaReplicaInfo,
+    EmbeddingConfig, PerisaIntent, PersiaCommonConfig, PersiaGlobalConfig,
     PersiaShardedServerConfig,
 };
 use persia_embedding_holder::PersiaEmbeddingHolder;
@@ -20,7 +20,6 @@ use persia_embedding_sharded_server::hashmap_sharded_service::{
 use persia_full_amount_manager::FullAmountManager;
 use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
 use persia_model_manager::PersiaPersistenceManager;
-use persia_nats_client::NatsClient;
 
 #[derive(Debug, StructOpt, Clone)]
 #[structopt()]
@@ -103,14 +102,7 @@ async fn main() -> Result<()> {
             let nats_stub = EmbeddingServerNatsStub {
                 inner: inner.clone(),
             };
-            let repilca_info = PersiaReplicaInfo::get()?.as_ref().clone();
-            let responder = EmbeddingServerNatsStubResponder {
-                inner: nats_stub,
-                nats_client: NatsClient::new(repilca_info),
-            };
-            responder
-                .spawn_subscriptions()
-                .expect("failed to spawn nats subscriptions");
+            let responder = EmbeddingServerNatsStubResponder::new(nats_stub);
             Some(responder)
         }
     };

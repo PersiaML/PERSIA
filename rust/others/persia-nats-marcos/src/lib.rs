@@ -75,10 +75,11 @@ impl NatsSubject {
         quote::quote! {
             pub fn #subscribe_ident(&self) -> Result<(), NatsError> {
                 let nats_client = self.nats_client.clone();
+                let replica_info = PersiaReplicaInfo::get().expect("failed to get replica_info");
                 let subject = nats_client.get_subject(
                     #stub_type_name,
                     #subject_string,
-                    Some(nats_client.replica_info.replica_index),
+                    Some(replica_info.replica_index),
                 );
 
                 #spawn_task
@@ -160,11 +161,20 @@ impl NatsStub {
 
         quote::quote! {
             pub struct #responder_ident {
-                pub inner: #stub_ident,
-                pub nats_client: NatsClient
+                inner: #stub_ident,
+                nats_client: NatsClient,
             }
 
             impl #responder_ident {
+                pub fn new(stub: #stub_ident) -> Self {
+                    let instance = Self {
+                        inner: stub,
+                        nats_client: NatsClient::get(),
+                    };
+                    instance.spawn_subscriptions().expect("failed to spawn nats subscriptions");
+                    instance
+                }
+
                 #( #subscriptions )*
 
                 pub fn spawn_subscriptions(&self) -> Result<(), NatsError> {
@@ -185,10 +195,15 @@ impl NatsStub {
 
         quote::quote! {
             pub struct #publisher_ident {
-                pub nats_client: NatsClient
+                nats_client: NatsClient
             }
 
             impl #publisher_ident {
+                pub fn new() -> Self {
+                    Self {
+                        nats_client: NatsClient::get(),
+                    }
+                }
                 #( #publish )*
             }
         }

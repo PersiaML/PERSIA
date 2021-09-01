@@ -846,6 +846,7 @@ impl ShardedMiddlewareServerInner {
     pub async fn lookup_batched_all_slots(
         &self,
         indices: &mut SparseBatch,
+        is_training: bool,
     ) -> Result<EmbeddingBatch, ShardedMiddlewareError> {
         let start_time_all = std::time::Instant::now();
         let start_time = std::time::Instant::now();
@@ -859,7 +860,10 @@ impl ShardedMiddlewareServerInner {
             .enumerate()
             .map(|(shard_idx, shard_indices)| {
                 let req = tokio::task::block_in_place(|| {
-                    shard_indices.iter().map(|x| (x.sign, x.dim)).collect()
+                    (
+                        shard_indices.iter().map(|x| (x.sign, x.dim)).collect(),
+                        is_training,
+                    )
                 });
                 let client = block_on(self.all_shards_client.get_client_by_index(shard_idx));
                 async move {
@@ -1009,7 +1013,9 @@ impl ShardedMiddlewareServerInner {
         };
         tracing::debug!("received forward_batch_id request");
         self.staleness.fetch_add(1, Ordering::AcqRel);
-        let result = inner.lookup_batched_all_slots(&mut indices).await;
+        let result = inner
+            .lookup_batched_all_slots(&mut indices, is_training)
+            .await;
         if result.is_err() {
             self.staleness.fetch_sub(1, Ordering::AcqRel);
         }
@@ -1032,7 +1038,7 @@ impl ShardedMiddlewareServerInner {
         indices: SparseBatch,
     ) -> Result<EmbeddingBatch, ShardedMiddlewareError> {
         let mut indices = indices;
-        self.lookup_batched_all_slots(&mut indices).await
+        self.lookup_batched_all_slots(&mut indices, false).await
     }
 
     pub async fn update_gradient_batched(

@@ -12,14 +12,12 @@ use structopt::StructOpt;
 
 use persia_embedding_config::{
     EmbeddingConfig, PerisaIntent, PersiaCommonConfig, PersiaGlobalConfig, PersiaMiddlewareConfig,
-    PersiaReplicaInfo,
 };
 use persia_embedding_sharded_server::hashmap_sharded_service::EmbeddingServerNatsStubPublisher;
 use persia_embedding_sharded_server::sharded_middleware_service::{
     AllShardsClient, MiddlewareNatsStub, MiddlewareNatsStubResponder, ShardedMiddlewareServer,
     ShardedMiddlewareServerInner,
 };
-use persia_nats_client::NatsClient;
 
 #[derive(Debug, StructOpt, Clone)]
 #[structopt()]
@@ -70,11 +68,7 @@ async fn main() -> Result<()> {
             AllShardsClient::with_addrs(servers)
         }
         _ => {
-            let replica_info = PersiaReplicaInfo::get()?.as_ref().clone();
-            let nats_publisher = EmbeddingServerNatsStubPublisher {
-                nats_client: NatsClient::new(replica_info),
-            };
-
+            let nats_publisher = EmbeddingServerNatsStubPublisher::new();
             AllShardsClient::with_nats(nats_publisher)
         }
     };
@@ -103,18 +97,7 @@ async fn main() -> Result<()> {
             let nats_stub = MiddlewareNatsStub {
                 inner: inner.clone(),
             };
-
-            let repilca_info = PersiaReplicaInfo::get()?.as_ref().clone();
-            let responder = MiddlewareNatsStubResponder {
-                inner: nats_stub,
-                nats_client: NatsClient::new(repilca_info),
-            };
-
-            responder
-                .spawn_subscriptions()
-                .expect("failed to spawn nats subscriptions");
-            tracing::info!("middleware responder started");
-
+            let responder = MiddlewareNatsStubResponder::new(nats_stub);
             Some(responder)
         }
     };
