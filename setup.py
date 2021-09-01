@@ -5,7 +5,6 @@ from setuptools import setup, find_packages
 from setuptools_rust import Binding, RustExtension
 
 use_cuda = os.environ.get("USE_CUDA", False)
-integration_core = os.environ.get("INTEGRATION_CORE", True)
 
 if __name__ == "__main__":
 
@@ -55,17 +54,16 @@ if __name__ == "__main__":
         )
     )
 
-    if integration_core:
-        features = None if not use_cuda else ["cuda"]
-        rust_extensions.append(
-            RustExtension(
-                "persia_core",
-                path="rust/persia-core/Cargo.toml",
-                binding=Binding.PyO3,
-                native=True,
-                features=features,
-            )
+    features = None if not use_cuda else ["cuda"]
+    rust_extensions.append(
+        RustExtension(
+            "persia_core",
+            path="rust/persia-core/Cargo.toml",
+            binding=Binding.PyO3,
+            native=True,
+            features=features,
         )
+    )
 
     setup(
         name="persia",
