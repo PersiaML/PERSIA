@@ -9,7 +9,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use persia_libs::{
     async_lock::RwLock,
-    bytes,
+    bytes, futures,
     hashbrown::HashMap,
     itertools::Itertools,
     ndarray, once_cell,
@@ -184,9 +184,7 @@ impl AllShardsClient {
             return Err(());
         });
 
-        persia_libs::futures::future::try_join_all(futs)
-            .await
-            .is_ok()
+        futures::future::try_join_all(futs).await.is_ok()
     }
 
     pub async fn model_manager_status(&self) -> Vec<PersiaPersistenceStatus> {
@@ -195,9 +193,7 @@ impl AllShardsClient {
             .iter()
             .map(|client| async move { client.model_manager_status(&()).await });
 
-        let status: Vec<_> = persia_libs::futures::future::try_join_all(futs)
-            .await
-            .unwrap_or(vec![
+        let status: Vec<_> = futures::future::try_join_all(futs).await.unwrap_or(vec![
                 PersiaPersistenceStatus::Failed(String::from(
                     "failed to get status"
                 ));
@@ -827,8 +823,7 @@ impl ShardedMiddlewareServerInner {
                 }
             });
 
-        let _updated_gradient_groups: Vec<_> =
-            persia_libs::futures::future::try_join_all(futs).await?;
+        let _updated_gradient_groups: Vec<_> = futures::future::try_join_all(futs).await?;
 
         tracing::debug!(
             "update gradients all slots time cost {:?}",
@@ -885,7 +880,7 @@ impl ShardedMiddlewareServerInner {
         }
         let start_time = std::time::Instant::now();
 
-        let forwarded_groups: Vec<_> = persia_libs::futures::future::try_join_all(futs).await?;
+        let forwarded_groups: Vec<_> = futures::future::try_join_all(futs).await?;
 
         tracing::debug!("rpc time cost {:?}", start_time.elapsed());
         if let Ok(m) = MetricsHolder::get() {
@@ -950,9 +945,7 @@ impl ShardedMiddlewareServerInner {
                 })
                 .collect()
         });
-        persia_libs::futures::future::try_join_all(futs)
-            .await
-            .map(|_| ())
+        futures::future::try_join_all(futs).await.map(|_| ())
     }
 
     pub async fn can_forward_batched(&self, batcher_idx: usize) -> bool {
@@ -1079,9 +1072,7 @@ impl ShardedMiddlewareServerInner {
                 Ok(())
             }
         });
-        persia_libs::futures::future::try_join_all(futs)
-            .await
-            .map(|_| ())
+        futures::future::try_join_all(futs).await.map(|_| ())
     }
 
     pub async fn load(&self, req: String) -> Result<(), ShardedMiddlewareError> {
@@ -1100,9 +1091,7 @@ impl ShardedMiddlewareServerInner {
                 Ok(())
             }
         });
-        let result = persia_libs::futures::future::try_join_all(futs)
-            .await
-            .map(|_| ());
+        let result = futures::future::try_join_all(futs).await.map(|_| ());
         result
     }
 
@@ -1126,9 +1115,7 @@ impl ShardedMiddlewareServerInner {
                 Ok(())
             }
         });
-        let result = persia_libs::futures::future::try_join_all(futs)
-            .await
-            .map(|_| ());
+        let result = futures::future::try_join_all(futs).await.map(|_| ());
         tracing::info!("sharded servers configured: {:?}", result);
         result
     }
@@ -1153,9 +1140,7 @@ impl ShardedMiddlewareServerInner {
             }
         });
         tracing::info!("register optimizer: {:?}", &optimizer);
-        persia_libs::futures::future::try_join_all(futs)
-            .await
-            .map(|_| ())
+        futures::future::try_join_all(futs).await.map(|_| ())
     }
 
     pub async fn get_address(&self) -> Result<String, ShardedMiddlewareError> {
@@ -1195,7 +1180,7 @@ impl ShardedMiddlewareServerInner {
             }
         });
 
-        let result = persia_futures::futures::future::try_join_all(futs).await;
+        let result = futures::future::try_join_all(futs).await;
         result
     }
 
@@ -1211,9 +1196,7 @@ impl ShardedMiddlewareServerInner {
                 Ok(())
             }
         });
-        persia_futures::futures::future::try_join_all(futs)
-            .await
-            .map(|_| ())
+        futures::future::try_join_all(futs).await.map(|_| ())
     }
 }
 
@@ -1256,7 +1239,7 @@ impl ShardedMiddlewareServer {
             .iter()
             .map(|client| async move { client.shutdown(&()).await });
 
-        let result = persia_libs::futures::future::try_join_all(futs).await;
+        let result = futures::future::try_join_all(futs).await;
 
         if result.is_ok() {
             Ok(())
