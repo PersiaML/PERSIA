@@ -472,7 +472,7 @@ impl EmbeddingServiceInner {
             *conf_guard = Some(Arc::new(config));
         }
         *self.hyperparameter_configured.lock().await = true;
-        tracing::info!("sharded server configured");
+        tracing::info!("embedding server configured");
         Ok(())
     }
 

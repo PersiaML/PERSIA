@@ -36,7 +36,7 @@ pub enum PersistenceManagerError {
     PersiaEmbeddingHolderError(#[from] PersiaEmbeddingHolderError),
     #[error("global config error: {0}")]
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
-    #[error("wait for other shard time out when dump embedding")]
+    #[error("wait for other server time out when dump embedding")]
     WaitForOtherServerTimeOut,
     #[error("loading from an uncompelete embedding ckpt")]
     LoadingFromUncompeleteCheckpoint,
