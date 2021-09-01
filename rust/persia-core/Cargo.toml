@@ -25,7 +25,7 @@ persia-nats-client = {path = "../others/persia-nats-client"}
 persia-nats-marcos = {path = "../others/persia-nats-marcos"}
 persia-rpc = "0.6"
 persia-speedy = "0.9"
-shadow-rs = "0.5"
+shadow-rs = "0.7"
 
 [features]
 default = []
@@ -38,4 +38,4 @@ features = ["macros"]
 version = "0.13"
 
 [build-dependencies]
-shadow-rs = "0.5"
+shadow-rs = "0.7"
