@@ -129,6 +129,10 @@ where
         (old_val, evcited)
     }
 
+    pub fn clear(&self) {
+        self.inner.inner.iter().for_each(|x| x.write().clear());
+    }
+
     #[inline]
     pub fn capacity(&self) -> usize {
         self.capacity

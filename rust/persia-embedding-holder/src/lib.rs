@@ -78,6 +78,10 @@ impl PersiaEmbeddingHolder {
             None => None,
         }
     }
+
+    pub fn clear(&self) {
+        self.inner.clear();
+    }
 }
 
 pub struct RecyclePool {

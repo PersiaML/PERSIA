@@ -177,32 +177,30 @@ class EmbeddingCtx(BaseCtx):
         >>>         batch_data.add_dense([dense])
         >>>         batch_data.add_sparse(batch_sparse_ids)
         >>>         batch_data.add_target(target)
-        >>>         python_train_batch = forward_directly_from_data(batch_data)
-        >>>         dense_tensor, sparse_tensors, target_tensor = ctx.prepare_features(python_train_batch)
-        >>>         output = model(dense_tensor, sparse_tensors)
+        >>>         python_train_batch = ctx.get_embedding_from_data(batch_data)
+        >>>         (output, target) = ctx.forward(python_train_batch)
     """
 
     def __init__(
         self,
         preprocess_mode: PreprocessMode,
+        model: torch.nn.Module,
         embedding_config: Optional[EmbeddingConfig] = None,
-        checkpoint_dir: Optional[str] = None,
         *args,
         **kwargs,
     ):
         """
         Arguments:
             preprocess_mode (PreprocessMode): Different preprocess mode effect the behave of ``prepare_features``.
+            model (torch.nn.Module): Torch model matched with embeddings in this context.
             embedding_config (EmbeddingConfig, optional): The configuration about embedding that will be sent to the embedding server.
-            checkpoint_dir(str, optional): Pretrained checkpoint directory, load the dense and sparse checkpoint in this dir when enter the context.
         """
         super(EmbeddingCtx, self).__init__(*args, **kwargs)
         self.preprocess_mode = preprocess_mode
+        self.model = model
         self.embedding_config = embedding_config
-        self.checkpoint_dir = checkpoint_dir
 
         self.current_batch = None
-        self.pretrained_loaded = False
 
     def _enter(self):
         if self.embedding_config is not None:
@@ -214,9 +212,21 @@ class EmbeddingCtx(BaseCtx):
                 self.embedding_config.weight_bound,
             )
 
-        if not self.pretrained_loaded and self.checkpoint_dir is not None:
-            self.load_embedding(self.checkpoint_dir)
-            self.pretrained_loaded = True
+    def forward(
+        self, batch: PythonTrainBatch
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        """Call `prepare_features` and then do forward of the model in context.
+
+        Arguments:
+            batch (PythonTrainBatch): Training data provided by PersiaML upstream including
+                dense, target, sparse data and meta info.
+
+        Returns:
+            the tuple of output data and target data.
+        """
+        dense, sparse, target = self.prepare_features(batch)
+        output = self.model(dense, sparse)
+        return (output, target)
 
     def prepare_features(
         self, batch: PythonTrainBatch
@@ -339,67 +349,45 @@ class EmbeddingCtx(BaseCtx):
     def dump_checkpoint(
         self,
         dst_dir: str,
-        model: Optional[torch.nn.Module] = None,
-        optimizer: Optional[torch.optim.Optimizer] = None,
-        default_filename: str = "dense.pt",
+        dense_filename: str = "dense.pt",
         blocking: bool = True,
     ):
         """Dump the dense and sparse checkpoint to destination directory.
 
         Arguments:
             dst_dir (str): Destination directory.
-            model (torch.nn.Module, optional): Pytorch model instance.
-            optimizer (torch.optim.Optimizer, optional): Pytorch optimizer instance.
-            default_filename (str, optional): Dense checkpoint filename.
+            dense_filename (str, optional): Dense checkpoint filename.
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
         """
         os.makedirs(dst_dir, exist_ok=True)
-
-        cpk_dict = {}
-        if model:
-            cpk_dict["model"] = model.state_dict()
-
-        if optimizer:
-            cpk_dict["opt"] = optimizer.state_dict()
-
-        if len(cpk_dict.keys()) > 0:
-            dense_model_filepath = os.path.join(dst_dir, default_filename)
-            torch.save(cpk_dict, dense_model_filepath)
+        dense_model_filepath = os.path.join(dst_dir, dense_filename)
+        torch.save(self.model.state_dict(), dense_model_filepath)
 
         self.dump_embedding(dst_dir, blocking=blocking)
 
     def load_checkpoint(
         self,
         src_dir: str,
-        model: Optional[torch.nn.Module] = None,
-        optimizer: Optional[torch.optim.Optimizer] = None,
         map_location: Optional[str] = None,
-        default_filename: str = "dense.pt",
+        dense_filename: str = "dense.pt",
         blocking: bool = True,
     ):
         """Load the dense and sparse checkpoint from source directory.
 
         Arguments:
             src_dir (str): Source directory.
-            model (torch.nn.Module, optional): Pytorch model instance.
-            optimizer (torch.optim.Optimizer, optional): Pytorch optimizer instance.
             map_location (str, optional): Load the dense checkpoint to specific device.
-            default_filename (str, optional): Dense checkpoint filename.
+            dense_filename (str, optional): Dense checkpoint filename.
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
         """
         if not os.path.exists(src_dir):
             _logger.warn(f"source directory: {src_dir} not exists")
             return
 
-        dense_model_filepath = os.path.join(src_dir, default_filename)
+        dense_model_filepath = os.path.join(src_dir, dense_filename)
         if os.path.exists(dense_model_filepath):
-            cpk_dict = torch.load(dense_model_filepath, map_location)
-
-            if model:
-                model.load_state_dict(cpk_dict["model"], strict=True)
-
-            if optimizer:
-                optimizer.load_state_dict(cpk_dict["opt"])
+            dense_state_dict = torch.load(dense_model_filepath, map_location)
+            self.model.load_state_dict(dense_state_dict)
 
         self.load_embedding(src_dir, blocking=blocking)
 
@@ -411,7 +399,9 @@ class EmbeddingCtx(BaseCtx):
             dst_dir (str): Destination directory.
             blocking (bool, optional): Dump embedding in blocking mode or not.
         """
-        self.common_context.dump_embedding(dst_dir, blocking)
+        self.common_context.dump(dst_dir)
+        if blocking:
+            self.wait_for_dump_embedding()
 
     def load_embedding(self, src_dir: str, blocking: bool = True):
         """Load embeddings from ``src_dir``. Use ``TrainCtx.wait_for_load_embedding`` to wait until finished
@@ -421,19 +411,53 @@ class EmbeddingCtx(BaseCtx):
             src_dir (str): Directory to load embeddings.
             blocking (bool, optional): Dump embedding in blocking mode or not.
         """
-        self.common_context.load_embedding(src_dir, blocking)
+        self.common_context.load(src_dir)
+        if blocking:
+            self.wait_for_load_embedding()
 
     def wait_for_dump_embedding(self):
         """Wait for the embedding dump process."""
-        self.common_context.wait_for_dump_embedding()
+        self.common_context.wait_for_emb_dumping()
 
     def wait_for_load_embedding(self):
         """Wait for the embedding load process."""
-        self.common_context.wait_for_load_embedding()
+        self.common_context.wait_for_serving()
 
-    def get_embedding_size(self):
+    def get_embedding_size(self) -> List[int]:
         """Get number of ids on all embedding servers."""
-        self.common_context.get_embedding_size()
+        return self.common_context.get_embedding_size()
+
+    def clear_embeddings(self):
+        """Clear all embeddings on all embedding servers."""
+        self.common_context.clear_embeddings()
+
+    def get_embedding_from_data(
+        self, data: PyPersiaBatchData, device_id: int = 0
+    ) -> PythonTrainBatch:
+        """Get embeddings of the input batch data.
+
+         Arguments:
+            data (PyPersiaBatchData): Input data without embeddings.
+            device_id (int, optional): The CUDA device to use for this process.
+
+        Returns:
+            Input data with embeddings.
+        """
+        return self.common_context.get_embedding_from_data(data, device_id)
+
+    def get_embedding_from_bytes(
+        self, data: bytes, device_id: int = 0
+    ) -> PythonTrainBatch:
+        """Get embeddings of the serialized input batch data.
+
+         Arguments:
+            data (PyPersiaBatchData): Serialized input data without embeddings.
+            device_id (int, optional): The CUDA device to use for this process.
+
+        Returns:
+            Input data with embeddings.
+        """
+        return self.common_context.get_embedding_from_bytes(data, device_id)
 
 
 class TrainCtx(EmbeddingCtx):
@@ -615,6 +639,57 @@ class TrainCtx(EmbeddingCtx):
                 f"Current batch exists empty gradient tensors, num: {len(empty_grads)}, {empty_grads}"
             )
         return finite
+
+    def dump_checkpoint(
+        self,
+        dst_dir: str,
+        dense_filename: str = "dense.pt",
+        opt_filename: str = "opt.pt",
+        blocking: bool = True,
+    ):
+        """Dump the dense and sparse checkpoint to destination directory.
+
+        Arguments:
+            dst_dir (str): Destination directory.
+            dense_filename (str, optional): Dense checkpoint filename.
+            opt_filename (str, optional): Optimizer checkpoint filename.
+            blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
+        """
+        super().dump_checkpoint(
+            dst_dir, dense_filename=dense_filename, blocking=blocking
+        )
+
+        optimizer_filepath = os.path.join(dst_dir, opt_filename)
+        torch.save(self.dense_optimizer.state_dict(), optimizer_filepath)
+
+    def load_checkpoint(
+        self,
+        src_dir: str,
+        map_location: Optional[str] = None,
+        dense_filename: str = "dense.pt",
+        opt_filename: str = "opt.pt",
+        blocking: bool = True,
+    ):
+        """Load the dense and sparse checkpoint from source directory.
+
+        Arguments:
+            src_dir (str): Source directory.
+            map_location (str, optional): Load the dense checkpoint to specific device.
+            dense_filename (str, optional): Dense checkpoint filename.
+            opt_filename (str, optional): Optimizer checkpoint filename.
+            blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
+        """
+        super().load_checkpoint(
+            src_dir,
+            map_location=map_location,
+            dense_filename=dense_filename,
+            blocking=blocking,
+        )
+
+        optimizer_filepath = os.path.join(src_dir, opt_filename)
+        if os.path.exists(optimizer_filepath):
+            optimizer_state_dict = torch.load(optimizer_filepath, map_location)
+            self.dense_optimizer.load_state_dict(optimizer_state_dict)
 
 
 def cnt_ctx() -> Optional[BaseCtx]:

@@ -1,4 +1,3 @@
-forward_buffer_size: 1000
 feature_index_prefix_bit: 12
 slots_config:
   workclass:
@@ -26,7 +25,3 @@ slots_config:
     dim: 8
     embedding_summation: true
 feature_groups: {}
-target_config:
-  - name: unused
-    negative: [unused]
-    positive: [unused]

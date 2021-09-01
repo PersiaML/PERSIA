@@ -184,6 +184,13 @@ impl PyPersiaCommonContext {
             .map_err(|e| e.to_py_runtime_err())
     }
 
+    pub fn clear_embeddings(&self) -> PyResult<()> {
+        self.inner
+            .rpc_client
+            .clear_embeddings()
+            .map_err(|e| e.to_py_runtime_err())
+    }
+
     pub fn dump(&self, dst_dir: String) -> PyResult<()> {
         self.inner
             .rpc_client
@@ -258,7 +265,7 @@ impl PyPersiaCommonContext {
     }
 
     #[cfg(feature = "cuda")]
-    pub fn forward_directly_from_data(
+    pub fn get_embedding_from_data(
         &self,
         batch: &mut PyPersiaBatchData,
         device_id: i32,
@@ -268,7 +275,7 @@ impl PyPersiaCommonContext {
     }
 
     #[cfg(feature = "cuda")]
-    pub fn forward_directly_from_bytes(
+    pub fn get_embedding_from_bytes(
         &self,
         batch: &PyBytes,
         device_id: i32,
