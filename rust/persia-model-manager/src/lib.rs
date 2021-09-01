@@ -16,8 +16,8 @@ use persia_libs::{
 
 use persia_common::HashMapEmbeddingEntry;
 use persia_embedding_config::{
-    PerisaIntent, PersiaCommonConfig, PersiaGlobalConfigError, PersiaPersistenceStorage,
-    PersiaReplicaInfo, PersiaShardedServerConfig,
+    PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig, PersiaGlobalConfigError,
+    PersiaPersistenceStorage, PersiaReplicaInfo,
 };
 use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
 use persia_full_amount_manager::{FullAmountManager, PersiaFullAmountManagerError};
@@ -36,8 +36,8 @@ pub enum PersistenceManagerError {
     PersiaEmbeddingHolderError(#[from] PersiaEmbeddingHolderError),
     #[error("global config error: {0}")]
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
-    #[error("wait for other shard time out when dump embedding")]
-    WaitForOtherShardTimeOut,
+    #[error("wait for other server time out when dump embedding")]
+    WaitForOtherServerTimeOut,
     #[error("loading from an uncompelete embedding ckpt")]
     LoadingFromUncompeleteCheckpoint,
     #[error("embedding file type worong")]
@@ -71,15 +71,15 @@ pub struct PersiaPersistenceManager {
     status: Arc<RwLock<PersiaPersistenceStatus>>,
     thread_pool: Arc<ThreadPool>,
     sign_per_file: usize,
-    shard_idx: usize,
-    shard_num: usize,
-    cur_task: PerisaIntent,
+    replica_index: usize,
+    replica_size: usize,
+    cur_task: PerisaJobType,
 }
 
 impl PersiaPersistenceManager {
     pub fn get() -> Result<Arc<Self>, PersistenceManagerError> {
         let singleton = MODEL_PERSISTENCE_MANAGER.get_or_try_init(|| {
-            let server_config = PersiaShardedServerConfig::get()?;
+            let server_config = PersiaEmbeddingServerConfig::get()?;
             let common_config = PersiaCommonConfig::get()?;
             let embedding_holder = PersiaEmbeddingHolder::get()?;
             let full_amount_manager = FullAmountManager::get()?;
@@ -98,7 +98,7 @@ impl PersiaPersistenceManager {
                 server_config.num_signs_per_file,
                 replica_info.replica_index,
                 replica_info.replica_size,
-                common_config.intent.clone(),
+                common_config.job_type.clone(),
             ));
             Ok(singleton)
         });
@@ -115,9 +115,9 @@ impl PersiaPersistenceManager {
         full_amount_manager: Arc<FullAmountManager>,
         concurrent_size: usize,
         sign_per_file: usize,
-        shard_idx: usize,
-        shard_num: usize,
-        cur_task: PerisaIntent,
+        replica_index: usize,
+        replica_size: usize,
+        cur_task: PerisaJobType,
     ) -> Self {
         Self {
             storage_visitor,
@@ -131,8 +131,8 @@ impl PersiaPersistenceManager {
                     .unwrap(),
             ),
             sign_per_file,
-            shard_idx,
-            shard_num,
+            replica_index,
+            replica_size,
             cur_task,
         }
     }
@@ -143,14 +143,14 @@ impl PersiaPersistenceManager {
     }
 
     pub fn get_shard_dir(&self, root_dir: &PathBuf) -> PathBuf {
-        let shard_dir_name = format!("s{}", self.shard_idx);
+        let shard_dir_name = format!("s{}", self.replica_index);
         let shard_dir_name = PathBuf::from(shard_dir_name);
         let shard_dir = [root_dir, &shard_dir_name].iter().collect();
         shard_dir
     }
 
-    pub fn get_other_shard_dir(&self, root_dir: &PathBuf, shard_idx: usize) -> PathBuf {
-        let shard_dir_name = format!("s{}", shard_idx);
+    pub fn get_other_shard_dir(&self, root_dir: &PathBuf, replica_index: usize) -> PathBuf {
+        let shard_dir_name = format!("s{}", replica_index);
         let shard_dir_name = PathBuf::from(shard_dir_name);
         let shard_dir = [root_dir, &shard_dir_name].iter().collect();
         shard_dir
@@ -192,41 +192,41 @@ impl PersiaPersistenceManager {
         Ok(res)
     }
 
-    pub fn waiting_for_all_sharded_server_dump(
+    pub fn waiting_for_all_embedding_server_dump(
         &self,
         timeout_sec: usize,
         dst_dir: PathBuf,
     ) -> Result<(), PersistenceManagerError> {
-        let num_total_shard = self.shard_num;
-        if num_total_shard < 2 {
-            tracing::info!("num_total_shard < 2, will not wait for other sharded servers");
+        let replica_size = self.replica_size;
+        if replica_size < 2 {
+            tracing::info!("replica_size < 2, will not wait for other embedding servers");
             return Ok(());
         }
         let start_time = std::time::Instant::now();
-        let mut compeleted = std::collections::HashSet::with_capacity(num_total_shard);
+        let mut compeleted = std::collections::HashSet::with_capacity(replica_size);
         loop {
             std::thread::sleep(std::time::Duration::from_secs(10));
-            for shard_idx in 0..num_total_shard {
-                if compeleted.contains(&shard_idx) {
+            for replica_index in 0..replica_size {
+                if compeleted.contains(&replica_index) {
                     continue;
                 }
-                let shard_dir = self.get_other_shard_dir(&dst_dir, shard_idx);
+                let shard_dir = self.get_other_shard_dir(&dst_dir, replica_index);
                 let done = self.check_embedding_dump_done(&shard_dir)?;
                 if done {
-                    tracing::info!("dump complete for shard {}", shard_idx);
-                    compeleted.insert(shard_idx);
+                    tracing::info!("dump complete for index {}", replica_index);
+                    compeleted.insert(replica_index);
                 } else {
-                    tracing::info!("waiting dump emb for shard {}...", shard_idx);
+                    tracing::info!("waiting dump emb for index {}...", replica_index);
                 }
             }
-            if compeleted.len() == num_total_shard {
-                tracing::info!("all sharded server compelte to dump embedding");
+            if compeleted.len() == replica_size {
+                tracing::info!("all embedding server compelte to dump embedding");
                 break;
             }
 
             if start_time.elapsed().as_secs() as usize > timeout_sec {
-                tracing::error!("waiting for other sharded server to dump embedding TIMEOUT");
-                return Err(PersistenceManagerError::WaitForOtherShardTimeOut);
+                tracing::error!("waiting for other embedding server to dump embedding TIMEOUT");
+                return Err(PersistenceManagerError::WaitForOtherServerTimeOut);
             }
         }
 
@@ -265,7 +265,7 @@ impl PersiaPersistenceManager {
                     .format("%Y-%m-%d-%H-%M-%S")
                     .to_string();
 
-                let file_name = format!("{}_{}_{}.emb", date, manager.shard_idx, file_index);
+                let file_name = format!("{}_{}_{}.emb", date, manager.replica_index, file_index);
                 let file_name = PathBuf::from(file_name);
                 if let Err(e) = manager.storage_visitor.dump_to_file_speedy(speedy_content, dst_dir.clone(), file_name) {
                     let msg = format!("{:?}", e);
@@ -288,9 +288,9 @@ impl PersiaPersistenceManager {
                             *manager.status.write() = PersiaPersistenceStatus::Failed(msg);
                         }
                         else {
-                            if manager.shard_idx == 0 {
+                            if manager.replica_index == 0 {
                                 let upper_dir = manager.get_upper_dir(&dst_dir);
-                                if let Err(e) = manager.waiting_for_all_sharded_server_dump(600, upper_dir.clone()) {
+                                if let Err(e) = manager.waiting_for_all_embedding_server_dump(600, upper_dir.clone()) {
                                     let msg = format!("{:?}", e);
                                     tracing::error!("dump embedding error: {}", msg);
                                     *manager.status.write() = PersiaPersistenceStatus::Failed(msg);
@@ -420,8 +420,8 @@ impl PersiaPersistenceManager {
                     match speedy_content {
                         SpeedyObj::EmbeddingVec(content) => {
                             let load_opt = match manager.cur_task {
-                                PerisaIntent::Train | PerisaIntent::Eval => true,
-                                PerisaIntent::Infer(_) => false,
+                                PerisaJobType::Train | PerisaJobType::Eval => true,
+                                PerisaJobType::Infer(_) => false,
                             };
                             let embeddings = manager.wrap_embeddings(content, load_opt);
 

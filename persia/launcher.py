@@ -119,7 +119,7 @@ def middleware(
     replica_index: int,
     replica_size: int,
 ):
-    executable_path = resolve_binary_execute_path("persia-embedding-sharded-middleware")
+    executable_path = resolve_binary_execute_path("persia-middleware-server")
     cmd = [
         executable_path,
         "--port",
@@ -155,7 +155,7 @@ def server(
     replica_index: int,
     replica_size: int,
 ):
-    executable_path = resolve_binary_execute_path("persia-embedding-sharded-server")
+    executable_path = resolve_binary_execute_path("persia-embedding-server")
     cmd = [
         executable_path,
         "--port",
@@ -164,9 +164,9 @@ def server(
         global_config,
         "--embedding-config",
         embedding_config,
-        "--shard-idx",
+        "--replica-index",
         replica_index,
-        "--num-shards",
+        "--replica-size",
         replica_size,
     ]
     run_command(cmd)

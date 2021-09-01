@@ -7,11 +7,11 @@ use persia_libs::{
     anyhow::Result, hashbrown::HashMap, parking_lot::RwLock, rand, tokio::runtime::Runtime, tracing,
 };
 
-use persia_embedding_sharded_server::sharded_middleware_service::ShardedMiddlewareServerClient;
+use persia_embedding_server::middleware_service::MiddlewareServerClient;
 use persia_model_manager::PersiaPersistenceStatus;
 
 pub struct PersiaRpcClient {
-    pub clients: RwLock<HashMap<String, Arc<ShardedMiddlewareServerClient>>>,
+    pub clients: RwLock<HashMap<String, Arc<MiddlewareServerClient>>>,
     pub middleware_addrs: RwLock<Vec<String>>,
     pub async_runtime: Arc<Runtime>,
 }
@@ -25,24 +25,24 @@ impl PersiaRpcClient {
         }
     }
 
-    pub fn get_random_client_with_addr(&self) -> (String, Arc<ShardedMiddlewareServerClient>) {
+    pub fn get_random_client_with_addr(&self) -> (String, Arc<MiddlewareServerClient>) {
         let middleware_addrs = self.middleware_addrs.read();
         let addr = middleware_addrs[rand::random::<usize>() % middleware_addrs.len()].as_str();
         let client = self.get_client_by_addr(addr);
         (addr.to_string(), client)
     }
 
-    pub fn get_random_client(&self) -> Arc<ShardedMiddlewareServerClient> {
+    pub fn get_random_client(&self) -> Arc<MiddlewareServerClient> {
         return self.get_random_client_with_addr().1;
     }
 
-    pub fn get_client_by_addr(&self, middleware_addr: &str) -> Arc<ShardedMiddlewareServerClient> {
+    pub fn get_client_by_addr(&self, middleware_addr: &str) -> Arc<MiddlewareServerClient> {
         if self.clients.read().contains_key(middleware_addr) {
             self.clients.read().get(middleware_addr).unwrap().clone()
         } else {
             let _guard = self.async_runtime.enter();
             let rpc_client = persia_rpc::RpcClient::new(middleware_addr).unwrap();
-            let client = Arc::new(ShardedMiddlewareServerClient::new(rpc_client));
+            let client = Arc::new(MiddlewareServerClient::new(rpc_client));
 
             self.clients
                 .write()
@@ -222,15 +222,18 @@ impl PersiaRpcClient {
         status
             .into_iter()
             .enumerate()
-            .for_each(|(shard_idx, s)| match s {
+            .for_each(|(replica_index, s)| match s {
                 PersiaPersistenceStatus::Failed(e) => {
-                    let err_msg = format!("emb dump FAILED for shard {}, due to {}.", shard_idx, e);
+                    let err_msg = format!(
+                        "emb dump FAILED for server {}, due to {}.",
+                        replica_index, e
+                    );
                     errors.push(err_msg);
                 }
                 PersiaPersistenceStatus::Loading(p) => {
                     tracing::info!(
-                        "loading emb for shard {}, pregress: {:?}%",
-                        shard_idx,
+                        "loading emb for server {}, pregress: {:?}%",
+                        replica_index,
                         p * 100.0
                     );
                 }
@@ -239,8 +242,8 @@ impl PersiaRpcClient {
                 }
                 PersiaPersistenceStatus::Dumping(p) => {
                     tracing::info!(
-                        "dumping emb for shard {}, pregress: {:?}%",
-                        shard_idx,
+                        "dumping emb for server {}, pregress: {:?}%",
+                        replica_index,
                         p * 100.0
                     );
                 }

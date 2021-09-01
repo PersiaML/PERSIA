@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use persia_common::{EmbeddingBatch, EmbeddingTensor, PersiaBatchData};
 use persia_embedding_config::PersiaReplicaInfo;
-use persia_embedding_sharded_server::sharded_middleware_service::ShardedMiddlewareError;
+use persia_embedding_server::middleware_service::MiddlewareServerError;
 use persia_libs::{
     flume,
     tokio::{
@@ -117,7 +117,7 @@ impl PythonAsyncTensorOnCuda {
 
 #[pyclass(dict)]
 pub struct PythonTrainBatch {
-    pub inner: PersiaTrainingBatchShardedServerOnGpu,
+    pub inner: PersiaTrainingBatchOnGpu,
 }
 
 #[pymethods]
@@ -176,7 +176,7 @@ impl PythonTrainBatch {
 }
 
 #[derive(Debug)]
-pub struct PersiaTrainingBatchShardedServerOnGpu {
+pub struct PersiaTrainingBatchOnGpu {
     pub dense: Vec<AsyncTensorOnCuda>,
     pub embeddings: Vec<AsyncEmbeddingOnCuda>,
     pub target: Vec<AsyncTensorOnCuda>,
@@ -274,8 +274,8 @@ struct Forward {
         EmbeddingBatch,
         Option<OwnedSemaphorePermit>,
     )>,
-    pub gpu_forwarded_channel_s: flume::Sender<PersiaTrainingBatchShardedServerOnGpu>,
-    pub gpu_forwarded_channel_r: flume::Receiver<PersiaTrainingBatchShardedServerOnGpu>,
+    pub gpu_forwarded_channel_s: flume::Sender<PersiaTrainingBatchOnGpu>,
+    pub gpu_forwarded_channel_r: flume::Receiver<PersiaTrainingBatchOnGpu>,
     pub is_training: bool,
     pub launch: bool,
     pub embedding_staleness_semaphore: Option<Arc<Semaphore>>,
@@ -400,7 +400,7 @@ impl Forward {
                         .collect();
 
                     let (middleware_addr, forward_id) = batch.sparse_data.to_forward_id();
-                    let training_batch = PersiaTrainingBatchShardedServerOnGpu {
+                    let training_batch = PersiaTrainingBatchOnGpu {
                         dense: dense_tensors,
                         embeddings,
                         target: target_tensors,
@@ -511,8 +511,8 @@ impl Forward {
                                     );
                                 }
                             }
-                            Err(ShardedMiddlewareError::ShardServerError(_))
-                            | Err(ShardedMiddlewareError::RpcError(_)) => {
+                            Err(MiddlewareServerError::EmbeddingServerError(_))
+                            | Err(MiddlewareServerError::RpcError(_)) => {
                                 match rpc_client.wait_for_serving() {
                                     Ok(_) => {
                                         tracing::debug!("wait for serving success");
@@ -584,7 +584,7 @@ pub fn forward_directly(batch: PersiaBatchData, device_id: i32) -> PyResult<Pyth
         .map(|t| cuda_dense_tensor_h2d(t).expect("cannot move dense to gpu"))
         .collect();
 
-    let infer_batch = PersiaTrainingBatchShardedServerOnGpu {
+    let infer_batch = PersiaTrainingBatchOnGpu {
         dense,
         embeddings,
         target,

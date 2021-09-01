@@ -11,8 +11,8 @@ use persia_common::{
     HashMapEmbeddingEntry,
 };
 use persia_embedding_config::{
-    EmbeddingConfig, InstanceInfo, PerisaIntent, PersiaCommonConfig, PersiaGlobalConfigError,
-    PersiaReplicaInfo, PersiaShardedServerConfig, PersiaSparseModelHyperparameters,
+    EmbeddingConfig, InstanceInfo, PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig,
+    PersiaGlobalConfigError, PersiaReplicaInfo, PersiaSparseModelHyperparameters,
 };
 use persia_embedding_holder::PersiaEmbeddingHolder;
 use persia_full_amount_manager::FullAmountManager;
@@ -65,7 +65,7 @@ impl MetricsHolder {
 }
 
 #[derive(thiserror::Error, Debug, Readable, Writable)]
-pub enum ShardEmbeddingError {
+pub enum EmbeddingServerError {
     #[error("rpc error")]
     RpcError(String),
     #[error("shutdown error: shutdown channel send signal failed")]
@@ -86,31 +86,31 @@ pub enum ShardEmbeddingError {
     EmbeddingDimNotMatch,
 }
 
-pub struct HashMapShardedServiceInner {
+pub struct EmbeddingServiceInner {
     pub embedding: PersiaEmbeddingHolder,
     pub optimizer: persia_libs::async_lock::RwLock<Option<Arc<Box<dyn Optimizable + Send + Sync>>>>,
     pub hyperparameter_config:
         persia_libs::async_lock::RwLock<Option<Arc<PersiaSparseModelHyperparameters>>>,
     pub hyperparameter_configured: persia_libs::async_lock::Mutex<bool>,
-    pub server_config: Arc<PersiaShardedServerConfig>,
+    pub server_config: Arc<PersiaEmbeddingServerConfig>,
     pub common_config: Arc<PersiaCommonConfig>,
     pub embedding_config: Arc<EmbeddingConfig>,
     pub inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
     pub model_persistence_manager: Arc<PersiaPersistenceManager>,
     pub full_amount_manager: Arc<FullAmountManager>,
-    pub shard_idx: usize,
+    pub replica_index: usize,
 }
 
-impl HashMapShardedServiceInner {
+impl EmbeddingServiceInner {
     pub fn new(
         embedding: PersiaEmbeddingHolder,
-        server_config: Arc<PersiaShardedServerConfig>,
+        server_config: Arc<PersiaEmbeddingServerConfig>,
         common_config: Arc<PersiaCommonConfig>,
         embedding_config: Arc<EmbeddingConfig>,
         inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
         model_persistence_manager: Arc<PersiaPersistenceManager>,
         full_amount_manager: Arc<FullAmountManager>,
-        shard_idx: usize,
+        replica_index: usize,
     ) -> Self {
         Self {
             embedding,
@@ -123,28 +123,28 @@ impl HashMapShardedServiceInner {
             inc_update_manager,
             model_persistence_manager,
             full_amount_manager,
-            shard_idx,
+            replica_index,
         }
     }
 
-    pub fn shard_idx(&self) -> usize {
-        self.shard_idx
+    pub fn replica_index(&self) -> usize {
+        self.replica_index
     }
 
-    pub fn get_intent(&self) -> Result<PerisaIntent, ShardEmbeddingError> {
-        let intent = self.common_config.intent.clone();
-        Ok(intent)
+    pub fn get_job_type(&self) -> Result<PerisaJobType, EmbeddingServerError> {
+        let job_type = self.common_config.job_type.clone();
+        Ok(job_type)
     }
 
     pub async fn get_configuration(
         &self,
-    ) -> Result<Arc<PersiaSparseModelHyperparameters>, ShardEmbeddingError> {
+    ) -> Result<Arc<PersiaSparseModelHyperparameters>, EmbeddingServerError> {
         let conf = self.hyperparameter_config.read().await;
         let conf = conf.as_ref();
         if let Some(conf) = conf {
             Ok(conf.clone())
         } else {
-            Err(ShardEmbeddingError::NotConfiguredError)
+            Err(EmbeddingServerError::NotConfiguredError)
         }
     }
 
@@ -152,7 +152,7 @@ impl HashMapShardedServiceInner {
         &self,
         req: Vec<(u64, usize)>,
         is_training: bool,
-    ) -> Result<Vec<f32>, ShardEmbeddingError> {
+    ) -> Result<Vec<f32>, EmbeddingServerError> {
         let num_elements: usize = req.iter().map(|x| x.1).sum();
         let mut embeddings = Vec::with_capacity(num_elements);
 
@@ -168,7 +168,7 @@ impl HashMapShardedServiceInner {
         tokio::task::block_in_place(|| match is_training {
             true => {
                 if optimizer.is_none() {
-                    return Err(ShardEmbeddingError::OptimizerNotFoundError);
+                    return Err(EmbeddingServerError::OptimizerNotFoundError);
                 }
                 let optimizer = optimizer.as_ref().unwrap();
 
@@ -280,9 +280,9 @@ impl HashMapShardedServiceInner {
         if !model_ready {
             return false;
         }
-        let intent = self.common_config.intent.clone();
-        match intent {
-            PerisaIntent::Infer(_) => true,
+        let job_type = self.common_config.job_type.clone();
+        match job_type {
+            PerisaJobType::Infer(_) => true,
             _ => *self.hyperparameter_configured.lock().await,
         }
     }
@@ -295,7 +295,7 @@ impl HashMapShardedServiceInner {
     pub async fn set_embedding(
         &self,
         embeddings: Vec<(u64, HashMapEmbeddingEntry)>,
-    ) -> Result<(), ShardEmbeddingError> {
+    ) -> Result<(), EmbeddingServerError> {
         let start_time = std::time::Instant::now();
         let mut evcited_ids = Vec::with_capacity(embeddings.len());
         tokio::task::block_in_place(|| {
@@ -321,12 +321,12 @@ impl HashMapShardedServiceInner {
         Ok(())
     }
 
-    pub async fn lookup_inference(&self, req: Bytes) -> Result<Bytes, ShardEmbeddingError> {
+    pub async fn lookup_inference(&self, req: Bytes) -> Result<Bytes, EmbeddingServerError> {
         let start_time = std::time::Instant::now();
         let indices =
             tokio::task::block_in_place(|| Vec::<(u64, usize)>::read_from_buffer(req.as_ref()));
         if indices.is_err() {
-            return Err(ShardEmbeddingError::RpcError(
+            return Err(EmbeddingServerError::RpcError(
                 "fail to des request".to_string(),
             ));
         }
@@ -348,7 +348,7 @@ impl HashMapShardedServiceInner {
             }
             Ok(Bytes::from(buffer))
         } else {
-            Err(ShardEmbeddingError::RpcError(
+            Err(EmbeddingServerError::RpcError(
                 "fail to lookup embedding".to_string(),
             ))
         }
@@ -357,7 +357,7 @@ impl HashMapShardedServiceInner {
     pub async fn lookup_mixed(
         &self,
         req: (Vec<(u64, usize)>, bool),
-    ) -> Result<Vec<f32>, ShardEmbeddingError> {
+    ) -> Result<Vec<f32>, EmbeddingServerError> {
         let (indices, is_training) = req;
         let start_time = std::time::Instant::now();
         let embedding = self.batched_lookup(indices, is_training).await;
@@ -372,7 +372,7 @@ impl HashMapShardedServiceInner {
     pub async fn update_gradient_mixed(
         &self,
         req: (Vec<u64>, Vec<f32>),
-    ) -> Result<(), ShardEmbeddingError> {
+    ) -> Result<(), EmbeddingServerError> {
         let conf = self.get_configuration().await?;
         let (signs, remaining_gradients) = req;
         let mut remaining_gradients = remaining_gradients.as_slice();
@@ -381,7 +381,7 @@ impl HashMapShardedServiceInner {
 
         let optimizer = self.optimizer.read().await;
         if optimizer.is_none() {
-            return Err(ShardEmbeddingError::OptimizerNotFoundError);
+            return Err(EmbeddingServerError::OptimizerNotFoundError);
         }
 
         let optimizer = optimizer.as_ref().unwrap();
@@ -455,7 +455,7 @@ impl HashMapShardedServiceInner {
     pub async fn register_optimizer(
         &self,
         optimizer: OptimizerConfig,
-    ) -> Result<(), ShardEmbeddingError> {
+    ) -> Result<(), EmbeddingServerError> {
         {
             let mut optimizer_ = self.optimizer.write().await;
             *optimizer_ = Some(Arc::new(Optimizer::new(optimizer).to_optimizable()));
@@ -466,60 +466,60 @@ impl HashMapShardedServiceInner {
     pub async fn configure(
         &self,
         config: PersiaSparseModelHyperparameters,
-    ) -> Result<(), ShardEmbeddingError> {
+    ) -> Result<(), EmbeddingServerError> {
         {
             let mut conf_guard = self.hyperparameter_config.write().await;
             *conf_guard = Some(Arc::new(config));
         }
         *self.hyperparameter_configured.lock().await = true;
-        tracing::info!("sharded server configured");
+        tracing::info!("embedding server configured");
         Ok(())
     }
 
-    pub async fn dump(&self, dir: String) -> Result<(), ShardEmbeddingError> {
+    pub async fn dump(&self, dir: String) -> Result<(), EmbeddingServerError> {
         let dst_dir = PathBuf::from(dir);
         self.model_persistence_manager
             .dump_full_amount_embedding(dst_dir)?;
         Ok(())
     }
 
-    pub async fn load(&self, dir: String) -> Result<(), ShardEmbeddingError> {
+    pub async fn load(&self, dir: String) -> Result<(), EmbeddingServerError> {
         let dst_dir = PathBuf::from(dir);
         self.model_persistence_manager
             .load_embedding_from_dir(dst_dir)?;
         Ok(())
     }
 
-    pub async fn get_address(&self) -> Result<String, ShardEmbeddingError> {
+    pub async fn get_address(&self) -> Result<String, EmbeddingServerError> {
         let instance_info = InstanceInfo::get()?;
         let address = format!("{}:{}", instance_info.ip_address, instance_info.port);
         Ok(address)
     }
 
-    pub async fn get_replica_info(&self) -> Result<PersiaReplicaInfo, ShardEmbeddingError> {
+    pub async fn get_replica_info(&self) -> Result<PersiaReplicaInfo, EmbeddingServerError> {
         let replica_info = PersiaReplicaInfo::get()?;
         let replica_info = replica_info.as_ref().clone();
         Ok(replica_info)
     }
 
-    pub async fn get_embedding_size(&self) -> Result<usize, ShardEmbeddingError> {
+    pub async fn get_embedding_size(&self) -> Result<usize, EmbeddingServerError> {
         Ok(self.embedding.num_total_signs())
     }
 
-    pub async fn clear_embeddings(&self) -> Result<(), ShardEmbeddingError> {
+    pub async fn clear_embeddings(&self) -> Result<(), EmbeddingServerError> {
         Ok(self.embedding.clear())
     }
 }
 
 #[derive(Clone)]
-pub struct HashMapShardedService {
-    pub inner: Arc<HashMapShardedServiceInner>,
+pub struct EmbeddingService {
+    pub inner: Arc<EmbeddingServiceInner>,
     pub shutdown_channel:
         Arc<persia_libs::async_lock::RwLock<Option<tokio::sync::oneshot::Sender<()>>>>,
 }
 
 #[persia_rpc::service]
-impl HashMapShardedService {
+impl EmbeddingService {
     pub async fn ready_for_serving(&self, _req: ()) -> bool {
         self.inner.ready_for_serving().await
     }
@@ -531,63 +531,63 @@ impl HashMapShardedService {
     pub async fn set_embedding(
         &self,
         req: Vec<(u64, HashMapEmbeddingEntry)>,
-    ) -> Result<(), ShardEmbeddingError> {
+    ) -> Result<(), EmbeddingServerError> {
         self.inner.set_embedding(req).await
     }
 
-    pub async fn lookup_inference(&self, req: Bytes) -> Result<Bytes, ShardEmbeddingError> {
+    pub async fn lookup_inference(&self, req: Bytes) -> Result<Bytes, EmbeddingServerError> {
         self.inner.lookup_inference(req).await
     }
 
     pub async fn lookup_mixed(
         &self,
         req: (Vec<(u64, usize)>, bool),
-    ) -> Result<Vec<f32>, ShardEmbeddingError> {
+    ) -> Result<Vec<f32>, EmbeddingServerError> {
         self.inner.lookup_mixed(req).await
     }
 
-    pub async fn shard_idx(&self, _req: ()) -> usize {
-        self.inner.shard_idx()
+    pub async fn replica_index(&self, _req: ()) -> usize {
+        self.inner.replica_index()
     }
 
     pub async fn update_gradient_mixed(
         &self,
         req: (Vec<u64>, Vec<f32>),
-    ) -> Result<(), ShardEmbeddingError> {
+    ) -> Result<(), EmbeddingServerError> {
         self.inner.update_gradient_mixed(req).await
     }
 
     pub async fn configure(
         &self,
         config: PersiaSparseModelHyperparameters,
-    ) -> Result<(), ShardEmbeddingError> {
+    ) -> Result<(), EmbeddingServerError> {
         self.inner.configure(config).await
     }
 
-    pub async fn dump(&self, req: String) -> Result<(), ShardEmbeddingError> {
+    pub async fn dump(&self, req: String) -> Result<(), EmbeddingServerError> {
         self.inner.dump(req).await
     }
 
-    pub async fn load(&self, req: String) -> Result<(), ShardEmbeddingError> {
+    pub async fn load(&self, req: String) -> Result<(), EmbeddingServerError> {
         self.inner.load(req).await
     }
 
-    pub async fn get_embedding_size(&self, _req: ()) -> Result<usize, ShardEmbeddingError> {
+    pub async fn get_embedding_size(&self, _req: ()) -> Result<usize, EmbeddingServerError> {
         self.inner.get_embedding_size().await
     }
 
-    pub async fn clear_embeddings(&self, _req: ()) -> Result<(), ShardEmbeddingError> {
+    pub async fn clear_embeddings(&self, _req: ()) -> Result<(), EmbeddingServerError> {
         self.inner.clear_embeddings().await
     }
 
     pub async fn register_optimizer(
         &self,
         optimizer: OptimizerConfig,
-    ) -> Result<(), ShardEmbeddingError> {
+    ) -> Result<(), EmbeddingServerError> {
         self.inner.register_optimizer(optimizer).await
     }
 
-    pub async fn shutdown(&self, _req: ()) -> Result<(), ShardEmbeddingError> {
+    pub async fn shutdown(&self, _req: ()) -> Result<(), EmbeddingServerError> {
         let mut shutdown_channel = self.shutdown_channel.write().await;
         let shutdown_channel = shutdown_channel.take();
         match shutdown_channel {
@@ -598,7 +598,7 @@ impl HashMapShardedService {
                 }
                 Err(_) => {
                     tracing::warn!("Send the shutdown singal failed corresponding receiver has already been deallocated");
-                    Err(ShardEmbeddingError::ShutdownError)
+                    Err(EmbeddingServerError::ShutdownError)
                 }
             },
             None => {
@@ -611,7 +611,7 @@ impl HashMapShardedService {
 
 #[derive(Clone)]
 pub struct EmbeddingServerNatsStub {
-    pub inner: Arc<HashMapShardedServiceInner>,
+    pub inner: Arc<EmbeddingServiceInner>,
 }
 
 #[persia_nats_marcos::stub]
@@ -624,40 +624,40 @@ impl EmbeddingServerNatsStub {
         self.inner.model_manager_status().await
     }
 
-    pub async fn shard_idx(&self, _req: ()) -> usize {
-        self.inner.shard_idx()
+    pub async fn replica_index(&self, _req: ()) -> usize {
+        self.inner.replica_index()
     }
 
     pub async fn configure(
         &self,
         config: PersiaSparseModelHyperparameters,
-    ) -> Result<(), ShardEmbeddingError> {
+    ) -> Result<(), EmbeddingServerError> {
         self.inner.configure(config).await
     }
 
-    pub async fn dump(&self, req: String) -> Result<(), ShardEmbeddingError> {
+    pub async fn dump(&self, req: String) -> Result<(), EmbeddingServerError> {
         self.inner.dump(req).await
     }
 
-    pub async fn load(&self, req: String) -> Result<(), ShardEmbeddingError> {
+    pub async fn load(&self, req: String) -> Result<(), EmbeddingServerError> {
         self.inner.load(req).await
     }
 
-    pub async fn get_address(&self, _req: ()) -> Result<String, ShardEmbeddingError> {
+    pub async fn get_address(&self, _req: ()) -> Result<String, EmbeddingServerError> {
         self.inner.get_address().await
     }
 
     pub async fn get_replica_info(
         &self,
         _req: (),
-    ) -> Result<PersiaReplicaInfo, ShardEmbeddingError> {
+    ) -> Result<PersiaReplicaInfo, EmbeddingServerError> {
         self.inner.get_replica_info().await
     }
 
     pub async fn register_optimizer(
         &self,
         optimizer: OptimizerConfig,
-    ) -> Result<(), ShardEmbeddingError> {
+    ) -> Result<(), EmbeddingServerError> {
         self.inner.register_optimizer(optimizer).await
     }
 }

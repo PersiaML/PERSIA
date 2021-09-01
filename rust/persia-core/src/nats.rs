@@ -23,8 +23,8 @@ use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
 };
-use persia_embedding_sharded_server::sharded_middleware_service::{
-    MiddlewareNatsStubPublisher, ShardedMiddlewareError,
+use persia_embedding_server::middleware_service::{
+    MiddlewareNatsStubPublisher, MiddlewareServerError,
 };
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::Writable;
@@ -119,7 +119,7 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
                 let op = || {
                     let cur_middleware_id = self.cur_middleware_id.fetch_add(1, Ordering::AcqRel);
                     let _gurad = self.async_runtime.enter();
-                    let result: Result<PreForwardStub, ShardedMiddlewareError> = self
+                    let result: Result<PreForwardStub, MiddlewareServerError> = self
                         .async_runtime
                         .block_on(self.to_middleware.publish_forward_batched(
                             sparse_batch,
@@ -198,7 +198,7 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
         Ok(())
     }
 
-    pub fn configure_sharded_servers(
+    pub fn configure_embedding_servers(
         &self,
         initialize_lower: f32,
         initialize_upper: f32,
@@ -225,7 +225,7 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
         let _gurad = self.async_runtime.enter();
         self.async_runtime.block_on(
             self.to_middleware
-                .publish_configure_sharded_servers(&config, None),
+                .publish_configure_embedding_servers(&config, None),
         )??;
 
         Ok(())

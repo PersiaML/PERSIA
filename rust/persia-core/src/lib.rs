@@ -40,7 +40,7 @@ use pyo3::wrap_pyfunction;
 
 use persia_common::PersiaBatchData;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaReplicaInfo};
-use persia_embedding_sharded_server::sharded_middleware_service::ShardedMiddlewareError;
+use persia_embedding_server::middleware_service::MiddlewareServerError;
 use persia_speedy::Readable;
 
 #[derive(thiserror::Error, Debug)]
@@ -56,7 +56,7 @@ pub enum PersiaError {
     #[error("global config error: {0}")]
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
     #[error("server side error: {0}")]
-    ServerSideError(#[from] ShardedMiddlewareError),
+    ServerSideError(#[from] MiddlewareServerError),
     #[error("rpc error: {0}")]
     RpcError(#[from] persia_rpc::PersiaRpcError),
     #[error("nats error: {0}")]
@@ -244,7 +244,7 @@ impl PyPersiaCommonContext {
             .map_err(|e| e.to_py_runtime_err())
     }
 
-    pub fn configure_sharded_servers(
+    pub fn configure_embedding_servers(
         &self,
         initialize_lower: f32,
         initialize_upper: f32,
@@ -254,7 +254,7 @@ impl PyPersiaCommonContext {
     ) -> PyResult<()> {
         self.inner
             .nats_publisher
-            .configure_sharded_servers(
+            .configure_embedding_servers(
                 initialize_lower,
                 initialize_upper,
                 admit_probability,

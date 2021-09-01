@@ -17,8 +17,8 @@ use persia_libs::{
 
 use persia_common::{utils::ChannelPair, HashMapEmbeddingEntry};
 use persia_embedding_config::{
-    PerisaIntent, PersiaCommonConfig, PersiaGlobalConfigError, PersiaPersistenceStorage,
-    PersiaReplicaInfo, PersiaShardedServerConfig,
+    PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig, PersiaGlobalConfigError,
+    PersiaPersistenceStorage, PersiaReplicaInfo,
 };
 use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
 use persia_metrics::{Gauge, PersiaMetricsManager, PersiaMetricsManagerError};
@@ -70,7 +70,7 @@ pub struct PerisaIncrementalUpdateManager {
     embedding_holder: PersiaEmbeddingHolder,
     executors: Arc<ThreadPool>,
     sign_per_file: usize,
-    shard_idx: usize,
+    replica_index: usize,
     incremental_buffer_size: usize,
     incremental_dir: std::path::PathBuf,
     buffer_channel_input: ChannelPair<Vec<(u64, Arc<RwLock<HashMapEmbeddingEntry>>)>>,
@@ -81,7 +81,7 @@ pub struct PerisaIncrementalUpdateManager {
 impl PerisaIncrementalUpdateManager {
     pub fn get() -> Result<Arc<Self>, IncrementalUpdateError> {
         let singleton = INCREMENTAL_UPDATE_MANAGER.get_or_try_init(|| {
-            let server_config = PersiaShardedServerConfig::get()?;
+            let server_config = PersiaEmbeddingServerConfig::get()?;
             let common_comfig = PersiaCommonConfig::get()?;
             let embedding_holder = PersiaEmbeddingHolder::get()?;
             let replica_info = PersiaReplicaInfo::get()?;
@@ -89,7 +89,7 @@ impl PerisaIncrementalUpdateManager {
             let singleton = Self::new(
                 server_config.storage.clone(),
                 embedding_holder,
-                common_comfig.intent.clone(),
+                common_comfig.job_type.clone(),
                 server_config.num_persistence_workers,
                 server_config.num_signs_per_file,
                 replica_info.replica_index,
@@ -109,10 +109,10 @@ impl PerisaIncrementalUpdateManager {
     fn new(
         storage: PersiaPersistenceStorage,
         embedding_holder: PersiaEmbeddingHolder,
-        cur_task: PerisaIntent,
+        cur_task: PerisaJobType,
         num_executors: usize,
         sign_per_file: usize,
-        shard_idx: usize,
+        replica_index: usize,
         incremental_buffer_size: usize,
         incremental_dir: String,
         update_channel_capacity: usize,
@@ -133,7 +133,7 @@ impl PerisaIncrementalUpdateManager {
         let buffer_channel_output: ChannelPair<Vec<(u64, Arc<RwLock<HashMapEmbeddingEntry>>)>> =
             ChannelPair::new(update_channel_capacity);
 
-        let incremental_dir = [incremental_dir, format!("s{}", shard_idx)]
+        let incremental_dir = [incremental_dir, format!("s{}", replica_index)]
             .iter()
             .collect();
         let background_threads = Arc::new(Mutex::new(vec![]));
@@ -143,7 +143,7 @@ impl PerisaIncrementalUpdateManager {
             embedding_holder,
             executors,
             sign_per_file,
-            shard_idx,
+            replica_index,
             incremental_buffer_size,
             incremental_dir,
             buffer_channel_input,
@@ -153,7 +153,7 @@ impl PerisaIncrementalUpdateManager {
 
         let mut handle_guard = background_threads.lock();
         match cur_task {
-            PerisaIntent::Train => {
+            PerisaJobType::Train => {
                 let handle = std::thread::spawn({
                     let instance = instance.clone();
                     move || {
@@ -170,7 +170,7 @@ impl PerisaIncrementalUpdateManager {
                 });
                 handle_guard.push(handle);
             }
-            PerisaIntent::Infer(_) => {
+            PerisaJobType::Infer(_) => {
                 let handle = std::thread::spawn({
                     let instance = instance.clone();
                     move || {
@@ -194,7 +194,7 @@ impl PerisaIncrementalUpdateManager {
         num_total_signs: usize,
     ) -> () {
         let segment_len = segment.len();
-        let file_name = PathBuf::from(format!("{}_{}.inc", self.shard_idx, file_index));
+        let file_name = PathBuf::from(format!("{}_{}.inc", self.replica_index, file_index));
 
         let content = SpeedyObj::PerisaIncrementalPacket(PerisaIncrementalPacket {
             content: segment,

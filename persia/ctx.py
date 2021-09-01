@@ -204,7 +204,7 @@ class EmbeddingCtx(BaseCtx):
 
     def _enter(self):
         if self.embedding_config is not None:
-            self.common_context.configure_sharded_servers(
+            self.common_context.configure_embedding_servers(
                 self.embedding_config.emb_initialization[0],
                 self.embedding_config.emb_initialization[1],
                 self.embedding_config.admit_probability,

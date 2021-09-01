@@ -1,5 +1,5 @@
-PersiaShardedServerConfig:
-  intent: train
+PersiaEmbeddingServerConfig:
+  job_type: train
   capacity: 100000000
   num_hashmap_internal_shards: 128
   full_amount_manager_buffer_size: 1000
