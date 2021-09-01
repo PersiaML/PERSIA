@@ -20,11 +20,6 @@ if __name__ == "__main__":
         extensions.append(
             CUDAExtension(
                 "persia_torch_ext",
-                include_dirs=[
-                    os.getcwd() + "/torch_ext/third_party/thread_pool",
-                    os.getcwd() + "/torch_ext/third_party/dbg_macro",
-                    "/opt/cuda/include",
-                ],
                 sources=[
                     "torch_ext/persia_torch_ext.cpp",
                 ],
