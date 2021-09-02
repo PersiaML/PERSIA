@@ -21,6 +21,11 @@ python -m grpc_tools.protoc \
     /workspace/proto/inference.proto
 
 chmod 007 /workspace/proto/*.py
-chmod 007 /workspace/logs/*
 
 python serve_client.py
+
+torchserve --stop
+
+sleep 1m
+
+chmod 007 /workspace/logs/*
