@@ -1,4 +1,5 @@
 from persia.ctx import InferCtx
+from persia.service import get_middleware_services
 from ts.torch_handler.base_handler import BaseHandler
 
 from abc import ABC
@@ -9,7 +10,8 @@ import os
 class PersiaHandler(BaseHandler, ABC):
     def initialize(self, context):
         super().initialize(context)
-        self.persia_context = InferCtx()
+        middleware_addrs = get_middleware_services()
+        self.persia_context = InferCtx(middleware_addrs)
 
     def preprocess(self, data):
         batch = data[0].get("batch")

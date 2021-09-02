@@ -283,6 +283,12 @@ impl PyPersiaCommonContext {
         let batch: PersiaBatchData = PersiaBatchData::read_from_buffer(batch.as_bytes()).unwrap();
         forward_directly(batch, device_id)
     }
+
+    pub fn init_rpc_client_with_addr(&self, middleware_addr: String) -> PyResult<()> {
+        self.inner
+            .init_rpc_client_with_addr(middleware_addr)
+            .map_err(|e| e.to_py_runtime_err())
+    }
 }
 
 #[pyfunction]

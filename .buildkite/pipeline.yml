@@ -1,11 +1,11 @@
 steps:
-  # - label: "Build docker ci image for latest persiaml framework"
-  #   command: docker build --build-arg USE_CUDA=1 -t persiaml-test:latest -f docker/persia-cuda-runtime/Dockerfile .
+  - label: "Build docker ci image for latest persiaml framework"
+    command: docker build --build-arg USE_CUDA=1 -t persiaml-test:latest -f docker/persia-cuda-runtime/Dockerfile .
 
-  # - label: "Build docker ci image with inference environment for latest persiaml framework"
-  #   command: docker build --build-arg USE_CUDA=1 -t persiaml-infer-test:latest -f docker/persia-inference-runtime/Dockerfile .
+  - label: "Build docker ci image with inference environment for latest persiaml framework"
+    command: docker build --build-arg USE_CUDA=1 -t persiaml-infer-test:latest -f docker/persia-inference-runtime/Dockerfile .
 
-  # - wait
+  - wait
 
   - label: "launch train eval e2e test"
     key: "train-eval"
@@ -15,13 +15,13 @@ steps:
           run: trainer
           graceful-shutdown: true
 
-  # - label: "launch infer e2e test"
-  #   key: "infer"
-  #   plugins:
-  #     - docker-compose#v3.8.0::
-  #         config: "e2e/infer/docker-compose.yml"
-  #         run: torch_serve
-  #         graceful-shutdown: true
+  - label: "launch infer e2e test"
+    key: "infer"
+    plugins:
+      - docker-compose#v3.8.0::
+          config: "e2e/docker-compose.infer.yml"
+          run: torch_serve
+          graceful-shutdown: true
 
 
   - label: "upload the latest cuda-runtime image"

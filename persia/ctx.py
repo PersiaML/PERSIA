@@ -163,12 +163,13 @@ class EmbeddingCtx(BaseCtx):
     according to different preprocess_mode.The most simple way to get this context is use ``persia.ctx.eval_ctx()`` or
     ``persia.ctx.inference_ctx`` to get the ``EmbeddingCtx`` instance.
 
-    Examples::
+    Examples:
         >>> from persia.prelude import PyPersiaBatchData
         >>> model = get_dnn_model()
         >>> loader = make_dataloader()
         >>> embedding_config = EmbeddingConfig()
         >>> with EmbeddingCtx(
+        ...     model=model,
         ...     PreprocessMode.EVAL,
         ...     embedding_config
         ... ) as ctx:
@@ -184,7 +185,7 @@ class EmbeddingCtx(BaseCtx):
     def __init__(
         self,
         preprocess_mode: PreprocessMode,
-        model: torch.nn.Module,
+        model: Optional[torch.nn.Module] = None,
         embedding_config: Optional[EmbeddingConfig] = None,
         *args,
         **kwargs,
@@ -224,6 +225,7 @@ class EmbeddingCtx(BaseCtx):
         Returns:
             the tuple of output data and target data.
         """
+        assert self.model is not None, f"model not found, please init context with model"
         dense, sparse, target = self.prepare_features(batch)
         output = self.model(dense, sparse)
         return (output, target)
@@ -361,6 +363,7 @@ class EmbeddingCtx(BaseCtx):
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
             for_inference (bool, optional): Dump dense checkpoint as jit script or not.
         """
+        assert self.model is not None, f"model not found, please init context with model"
         os.makedirs(dst_dir, exist_ok=True)
         dense_model_filepath = os.path.join(dst_dir, dense_filename)
         if for_inference:
@@ -386,6 +389,7 @@ class EmbeddingCtx(BaseCtx):
             dense_filename (str, optional): Dense checkpoint filename.
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
         """
+        assert self.model is not None, f"model not found, please init context with model"
         if not os.path.exists(src_dir):
             _logger.warn(f"source directory: {src_dir} not exists")
             return
@@ -476,6 +480,7 @@ class TrainCtx(EmbeddingCtx):
         >>> dense_optimizer = torch.optim.SGD(lr=1e-3)
         >>> loss_fn = torch.nn.BCELoss(reduction="mean")
         >>> with TrainCtx(
+        >>>     model=model,
         >>>     sparse_optimizer,
         >>>     dense_optimizer,
         >>>     mixed_precision=True
@@ -519,6 +524,7 @@ class TrainCtx(EmbeddingCtx):
             0 <= device_id < torch.cuda.device_count()
         ), f"device_id: {device_id} invalid!"
         assert grad_scalar_update_factor > 0, "grad scalar should greater than zero"
+        assert self.model is not None, f"model not found, please init context with model"
 
         torch.cuda.set_device(device_id)
 
@@ -712,7 +718,27 @@ def eval_ctx(*args, **kwargs) -> EmbeddingCtx:
     """Get the ``EmbeddingCtx`` with the ``PreprocessMode.EVAL`` mode."""
     return EmbeddingCtx(PreprocessMode.EVAL, *args, **kwargs)
 
+class InferCtx(EmbeddingCtx):
+    r"""Subclass of ``EmbeddingCtx`` that provide the forward ability without nats servers.
 
-def inference_ctx(*args, **kwargs) -> EmbeddingCtx:
-    """Get the ``EmbeddingCtx`` with the ``PreprocessMode.INFERENCE`` mode."""
-    return EmbeddingCtx(PreprocessMode.INFERENCE, *args, **kwargs)
+    Example::
+        >>> from persia.ctx import InferCtx
+        >>> persia_context = InferCtx()
+        >>> batch = persia_context.get_embedding_from_bytes(batch, 0)
+        >>> model_input = persia_context.prepare_features(batch)
+    """
+
+    def __init__(
+        self,
+        middleware_addrs: List[str],
+        *args,
+        **kwargs,
+    ):
+        """
+        Arguments:
+            middleware_addrs (List[str]): middleware address(ip:port) list.
+        """
+        super(InferCtx, self).__init__(PreprocessMode.INFERENCE, *args, **kwargs)
+
+        for addr in middleware_addrs:
+            self.common_context.init_rpc_client_with_addr(addr)
