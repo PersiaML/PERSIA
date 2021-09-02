@@ -7,17 +7,13 @@ steps:
 
   - wait
 
-  - label: "launch train eval e2e test"
-    key: "train-eval"
+  - label: "launch e2e test"
+    key: "e2e-test"
     plugins:
       - docker-compose#v3.8.0::
           config: "e2e/docker-compose.train.yml"
           run: trainer
           graceful-shutdown: true
-
-  - label: "launch infer e2e test"
-    key: "infer"
-    plugins:
       - docker-compose#v3.8.0::
           config: "e2e/docker-compose.infer.yml"
           run: torch_serve
