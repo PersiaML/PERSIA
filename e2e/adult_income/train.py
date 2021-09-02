@@ -152,6 +152,3 @@ if __name__ == "__main__":
 
     chmod_cmd = f"chmod -R 007 {infer_checkpoint_dir}"
     subprocess.run(chmod_cmd, shell=True)
-
-    chmod_cmd = "chmod -R 007 /workspace/__pycache__"
-    subprocess.run(chmod_cmd, shell=True)

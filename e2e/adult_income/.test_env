@@ -14,3 +14,5 @@ RUST_BACKTRACE=full
 
 EVAL_CHECKPOINT_DIR=/workspace/eval_checkpoint/
 INFER_CHECKPOINT_DIR=/workspace/infer_checkpoint/
+
+PYTHONDONTWRITEBYTECODE=1
