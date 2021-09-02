@@ -23,8 +23,9 @@ use persia_common::{
     grad::{EmbeddingGradientBatch, Gradients, SkippableFeatureEmbeddingGradientBatch},
     ndarray_f16_to_f32, ndarray_f32_to_f16,
     optim::OptimizerConfig,
-    EmbeddingBatch, FeatureEmbeddingBatch, FeatureRawEmbeddingBatch, FeatureSumEmbeddingBatch,
-    HashMapEmbeddingEntry, PreForwardStub, SingleSignInFeatureBatch, SparseBatch,
+    EmbeddingBatch, EmbeddingBatchWithState, FeatureEmbeddingBatch, FeatureRawEmbeddingBatch,
+    FeatureSumEmbeddingBatch, HashMapEmbeddingEntry, MiddlewareSlot, SingleSignInFeatureBatch,
+    SparseBatch,
 };
 use persia_embedding_config::{
     EmbeddingConfig, InstanceInfo, PersiaGlobalConfigError, PersiaMiddlewareConfig,
@@ -999,19 +1000,19 @@ impl MiddlewareServerInner {
 
     pub async fn forward_batch_id(
         &self,
-        req: (PreForwardStub, bool),
-    ) -> Result<EmbeddingBatch, MiddlewareServerError> {
-        let (stub, is_training) = req;
-        let forward_id = stub.forward_id;
+        req: (MiddlewareSlot, bool),
+    ) -> Result<EmbeddingBatchWithState, MiddlewareServerError> {
+        let (slot, is_training) = req;
+        let slot_id = slot.slot_id;
         let inner = self.clone();
         let mut indices = {
             let mut forward_id_buffer = inner.forward_id_buffer.write().await;
             let sub_buffer = forward_id_buffer
-                .get_mut(&stub.batcher_idx)
-                .ok_or_else(|| MiddlewareServerError::ForwardIdNotFound(forward_id))?;
+                .get_mut(&slot.batcher_idx)
+                .ok_or_else(|| MiddlewareServerError::ForwardIdNotFound(slot_id))?;
             sub_buffer
-                .remove(&forward_id)
-                .ok_or_else(|| MiddlewareServerError::ForwardIdNotFound(forward_id))?
+                .remove(&slot_id)
+                .ok_or_else(|| MiddlewareServerError::ForwardIdNotFound(slot_id))?
         };
         tracing::debug!("received forward_batch_id request");
         self.staleness.fetch_add(1, Ordering::AcqRel);
@@ -1029,18 +1030,38 @@ impl MiddlewareServerInner {
                 .post_forward_buffer
                 .write()
                 .await
-                .insert(forward_id, indices);
+                .insert(slot_id, indices);
             tracing::debug!("indices inserted into post forward buffer");
         }
-        return Ok(result);
+        return Ok(EmbeddingBatchWithState::Trainable((result, slot_id)));
     }
 
     pub async fn forward_batched_direct(
         &self,
-        indices: SparseBatch,
-    ) -> Result<EmbeddingBatch, MiddlewareServerError> {
+        req: (SparseBatch, bool),
+    ) -> Result<EmbeddingBatchWithState, MiddlewareServerError> {
+        let (indices, is_training) = req;
         let mut indices = indices;
-        self.lookup_batched_all_slots(&mut indices, false).await
+
+        let result = self
+            .lookup_batched_all_slots(&mut indices, is_training)
+            .await?;
+
+        if is_training {
+            let backward_id = self.get_id();
+            let inner = self.clone();
+
+            indices.enter_post_forward_buffer_time = Some(SystemTime::now());
+            inner
+                .post_forward_buffer
+                .write()
+                .await
+                .insert(backward_id, indices);
+            tracing::debug!("indices inserted into post forward buffer");
+            Ok(EmbeddingBatchWithState::Trainable((result, backward_id)))
+        } else {
+            Ok(EmbeddingBatchWithState::Inferable(result))
+        }
     }
 
     pub async fn update_gradient_batched(
@@ -1275,8 +1296,8 @@ impl MiddlewareServer {
 
     pub async fn forward_batch_id(
         &self,
-        req: (PreForwardStub, bool),
-    ) -> Result<EmbeddingBatch, MiddlewareServerError> {
+        req: (MiddlewareSlot, bool),
+    ) -> Result<EmbeddingBatchWithState, MiddlewareServerError> {
         let resp = self.inner.forward_batch_id(req).await;
         if resp.is_err() {
             self.inner.error_handle(resp.as_ref().unwrap_err()).await?
@@ -1286,9 +1307,9 @@ impl MiddlewareServer {
 
     pub async fn forward_batched_direct(
         &self,
-        indices: SparseBatch,
-    ) -> Result<EmbeddingBatch, MiddlewareServerError> {
-        self.inner.forward_batched_direct(indices).await
+        req: (SparseBatch, bool),
+    ) -> Result<EmbeddingBatchWithState, MiddlewareServerError> {
+        self.inner.forward_batched_direct(req).await
     }
 
     pub async fn update_gradient_batched(
@@ -1347,21 +1368,21 @@ impl MiddlewareNatsStub {
     pub async fn forward_batched(
         &self,
         indices: SparseBatch,
-    ) -> Result<PreForwardStub, MiddlewareServerError> {
+    ) -> Result<MiddlewareSlot, MiddlewareServerError> {
         let batcher_idx = indices
             .batcher_idx
             .ok_or_else(|| MiddlewareServerError::DataSrcIdxNotSet)?;
         if !self.inner.can_forward_batched(batcher_idx).await {
             return Err(MiddlewareServerError::ForwardBufferFull);
         }
-        let forward_id = self.inner.forward_batched(indices, batcher_idx).await?;
+        let slot_id = self.inner.forward_batched(indices, batcher_idx).await?;
         let middleware_addr = self.inner.get_address().await?;
-        let stub = PreForwardStub {
+        let slot = MiddlewareSlot {
             middleware_addr,
-            forward_id,
+            slot_id,
             batcher_idx,
         };
-        Ok(stub)
+        Ok(slot)
     }
 
     pub async fn dump(&self, req: String) -> Result<(), MiddlewareServerError> {

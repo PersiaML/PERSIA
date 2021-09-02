@@ -250,6 +250,22 @@ pub struct EmbeddingBatch {
     pub batches: Vec<FeatureEmbeddingBatch>,
 }
 
+#[derive(Deserialize, Serialize, Readable, Writable, Debug)]
+#[serde(crate = "self::serde")]
+pub enum EmbeddingBatchWithState {
+    Inferable(EmbeddingBatch),
+    Trainable((EmbeddingBatch, u64)),
+}
+
+impl Into<EmbeddingBatch> for EmbeddingBatchWithState {
+    fn into(self) -> EmbeddingBatch {
+        match self {
+            EmbeddingBatchWithState::Inferable(data) => data,
+            EmbeddingBatchWithState::Trainable((data, _)) => data,
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
 #[serde(crate = "self::serde")]
 pub struct SparseBatch {
@@ -288,17 +304,17 @@ impl From<Vec<(String, Vec<&PyArray1<u64>>)>> for SparseBatch {
 }
 
 #[derive(Readable, Writable, Debug, Clone)]
-pub struct PreForwardStub {
+pub struct MiddlewareSlot {
     pub middleware_addr: String,
-    pub forward_id: u64,
+    pub slot_id: u64,
     pub batcher_idx: usize,
 }
 
-impl Default for PreForwardStub {
+impl Default for MiddlewareSlot {
     fn default() -> Self {
         Self {
             middleware_addr: String::from(""),
-            forward_id: 0,
+            slot_id: 0,
             batcher_idx: 0,
         }
     }
@@ -307,14 +323,14 @@ impl Default for PreForwardStub {
 #[derive(Readable, Writable, Debug)]
 pub enum EmbeddingTensor {
     Null,
-    PreForwardStub(PreForwardStub),
+    Slot(MiddlewareSlot),
     SparseBatch(SparseBatch),
 }
 
 impl EmbeddingTensor {
     pub fn to_forward_id(&self) -> (&str, u64) {
         match &self {
-            EmbeddingTensor::PreForwardStub(stub) => (&stub.middleware_addr, stub.forward_id),
+            EmbeddingTensor::Slot(slot) => (&slot.middleware_addr, slot.slot_id),
             EmbeddingTensor::SparseBatch(_) => ("", 0u64),
             _ => panic!("forward id not found on embedding tensor"),
         }

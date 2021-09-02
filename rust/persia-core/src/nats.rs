@@ -18,7 +18,7 @@ use persia_libs::{
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
-use persia_common::{EmbeddingTensor, PersiaBatchData, PreForwardStub};
+use persia_common::{EmbeddingTensor, MiddlewareSlot, PersiaBatchData};
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
@@ -109,7 +109,7 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
     ) -> Result<(), PersiaError> {
         let start = std::time::Instant::now();
         match &mut batch.inner.sparse_data {
-            EmbeddingTensor::PreForwardStub(_) => {
+            EmbeddingTensor::Slot(_) => {
                 tracing::error!("sparse data has already sent to middleware, you are calling sparse_to_middleware muti times");
                 return Err(PersiaError::MultipleSendError);
             }
@@ -119,7 +119,7 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
                 let op = || {
                     let cur_middleware_id = self.cur_middleware_id.fetch_add(1, Ordering::AcqRel);
                     let _gurad = self.async_runtime.enter();
-                    let result: Result<PreForwardStub, MiddlewareServerError> = self
+                    let result: Result<MiddlewareSlot, MiddlewareServerError> = self
                         .async_runtime
                         .block_on(self.to_middleware.publish_forward_batched(
                             sparse_batch,
@@ -141,7 +141,7 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
 
                 let result = resp.map_err(|_| PersiaError::SendDataError)?;
 
-                batch.inner.sparse_data = EmbeddingTensor::PreForwardStub(result);
+                batch.inner.sparse_data = EmbeddingTensor::Slot(result);
                 let local_batch_id = self.cur_batch_id.fetch_add(1, Ordering::AcqRel);
                 let batch_id = local_batch_id * self.replica_info.replica_size
                     + self.replica_info.replica_index;
