@@ -28,4 +28,4 @@ torchserve --stop
 
 sleep 1m
 
-chmod 007 /workspace/logs/*
+rm -rf /workspace/logs/
