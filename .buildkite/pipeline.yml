@@ -12,7 +12,7 @@ steps:
     plugins:
       - docker-compose#v3.8.0::
           workdir: "e2e/"
-          config: "e2e/train/docker-compose.yml"
+          config: "e2e/docker-compose.train.yml"
           run: trainer
           graceful-shutdown: true
 
