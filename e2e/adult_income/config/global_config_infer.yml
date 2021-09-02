@@ -5,7 +5,7 @@ common_config:
   job_type: Infer
     servers:
       - emb_server:8000
-    initial_sparse_checkpoint: /workspace/checkpoint/
+    embedding_checkpoint: /workspace/checkpoint/
 shard_server_config:
   capacity: 10000000000
   num_hashmap_internal_shards: 128
