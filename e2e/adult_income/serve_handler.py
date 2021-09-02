@@ -5,13 +5,14 @@ from abc import ABC
 import torch
 import os
 
+
 class PersiaHandler(BaseHandler, ABC):
     def initialize(self, context):
         super().initialize(context)
         self.persia_context = InferCtx()
 
     def preprocess(self, data):
-        batch = data[0].get('batch')
+        batch = data[0].get("batch")
         batch = bytes(batch)
         batch = self.persia_context.get_embedding_from_bytes(batch, 0)
 
@@ -28,4 +29,3 @@ class PersiaHandler(BaseHandler, ABC):
         data = torch.reshape(data, (-1,))
         data = data.tolist()
         return [data]
-

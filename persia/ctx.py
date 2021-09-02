@@ -664,7 +664,10 @@ class TrainCtx(EmbeddingCtx):
             for_inference (bool, optional): Dump dense checkpoint as jit script or not.
         """
         super().dump_checkpoint(
-            dst_dir, dense_filename=dense_filename, blocking=blocking, for_inference=for_inference
+            dst_dir,
+            dense_filename=dense_filename,
+            blocking=blocking,
+            for_inference=for_inference,
         )
 
         optimizer_filepath = os.path.join(dst_dir, opt_filename)

@@ -102,8 +102,8 @@ if __name__ == "__main__":
     loss_fn = torch.nn.BCELoss(reduction="mean")
     logger.info("finish genreate dense ctx")
 
-    eval_checkpoint_dir = os.environ['EVAL_CHECKPOINT_DIR']
-    infer_checkpoint_dir = os.environ['INFER_CHECKPOINT_DIR']
+    eval_checkpoint_dir = os.environ["EVAL_CHECKPOINT_DIR"]
+    infer_checkpoint_dir = os.environ["INFER_CHECKPOINT_DIR"]
     test_interval = 254
     buffer_size = 10
 
