@@ -170,7 +170,7 @@ impl PerisaIncrementalUpdateManager {
                 });
                 handle_guard.push(handle);
             }
-            PerisaJobType::Infer(_) => {
+            PerisaJobType::Infer => {
                 let handle = std::thread::spawn({
                     let instance = instance.clone();
                     move || {

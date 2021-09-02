@@ -282,7 +282,7 @@ impl EmbeddingServiceInner {
         }
         let job_type = self.common_config.job_type.clone();
         match job_type {
-            PerisaJobType::Infer(_) => true,
+            PerisaJobType::Infer => true,
             _ => *self.hyperparameter_configured.lock().await,
         }
     }

@@ -421,7 +421,7 @@ impl PersiaPersistenceManager {
                         SpeedyObj::EmbeddingVec(content) => {
                             let load_opt = match manager.cur_task {
                                 PerisaJobType::Train | PerisaJobType::Eval => true,
-                                PerisaJobType::Infer(_) => false,
+                                PerisaJobType::Infer => false,
                             };
                             let embeddings = manager.wrap_embeddings(content, load_opt);
 

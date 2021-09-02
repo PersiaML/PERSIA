@@ -3,6 +3,7 @@ common_config:
     enable_metrics: true
     push_interval_sec: 10
   job_type: Infer
+  infer_config:
     servers:
       - emb_server:8000
     embedding_checkpoint: /workspace/checkpoint/

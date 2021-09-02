@@ -95,9 +95,9 @@ async fn main() -> Result<()> {
             async move { Ok::<_, hyper::Error>(service) }
         }));
 
-    let job_type = inner.get_job_type()?;
+    let job_type = &inner.get_job_type()?;
     let _responder = match job_type {
-        PerisaJobType::Infer(_) => None,
+        PerisaJobType::Infer => None,
         _ => {
             let nats_stub = EmbeddingServerNatsStub {
                 inner: inner.clone(),
@@ -108,8 +108,9 @@ async fn main() -> Result<()> {
     };
 
     match job_type {
-        PerisaJobType::Infer(ref conf) => {
-            let sparse_ckpt = conf.embedding_checkpoint.clone();
+        PerisaJobType::Infer => {
+            let common_config = PersiaCommonConfig::get()?;
+            let sparse_ckpt = common_config.infer_config.embedding_checkpoint.clone();
             inner.load(sparse_ckpt).await?;
         }
         _ => {}
