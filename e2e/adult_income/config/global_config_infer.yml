@@ -2,7 +2,7 @@ common_config:
   metrics_config:
     enable_metrics: true
     push_interval_sec: 10
-  intent: Infer
+  job_type: Infer
     servers:
       - emb_server:8000
     initial_sparse_checkpoint: /workspace/checkpoint/
