@@ -11,6 +11,9 @@ services:
                 - ./adult_income:/workspace
             deploy:
                 endpoint_mode: dnsrr
+            depends_on:
+                - middleware
+                - emb_server
 
         middleware:
             env_file:
