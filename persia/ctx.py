@@ -351,6 +351,7 @@ class EmbeddingCtx(BaseCtx):
         dst_dir: str,
         dense_filename: str = "dense.pt",
         blocking: bool = True,
+        for_inference: bool = False,
     ):
         """Dump the dense and sparse checkpoint to destination directory.
 
@@ -358,10 +359,15 @@ class EmbeddingCtx(BaseCtx):
             dst_dir (str): Destination directory.
             dense_filename (str, optional): Dense checkpoint filename.
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
+            for_inference (bool, optional): Dump dense checkpoint as jit script or not.
         """
         os.makedirs(dst_dir, exist_ok=True)
         dense_model_filepath = os.path.join(dst_dir, dense_filename)
-        torch.save(self.model.state_dict(), dense_model_filepath)
+        if for_inference:
+            jit_model = torch.jit.script(self.model)
+            jit_model.save(dense_model_filepath)
+        else:
+            torch.save(self.model.state_dict(), dense_model_filepath)
 
         self.dump_embedding(dst_dir, blocking=blocking)
 
@@ -646,6 +652,7 @@ class TrainCtx(EmbeddingCtx):
         dense_filename: str = "dense.pt",
         opt_filename: str = "opt.pt",
         blocking: bool = True,
+        for_inference: bool = False,
     ):
         """Dump the dense and sparse checkpoint to destination directory.
 
@@ -654,9 +661,10 @@ class TrainCtx(EmbeddingCtx):
             dense_filename (str, optional): Dense checkpoint filename.
             opt_filename (str, optional): Optimizer checkpoint filename.
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
+            for_inference (bool, optional): Dump dense checkpoint as jit script or not.
         """
         super().dump_checkpoint(
-            dst_dir, dense_filename=dense_filename, blocking=blocking
+            dst_dir, dense_filename=dense_filename, blocking=blocking, for_inference=for_inference
         )
 
         optimizer_filepath = os.path.join(dst_dir, opt_filename)

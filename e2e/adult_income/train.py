@@ -1,5 +1,4 @@
 import os
-import shutil
 
 from typing import Optional
 
@@ -103,7 +102,8 @@ if __name__ == "__main__":
     loss_fn = torch.nn.BCELoss(reduction="mean")
     logger.info("finish genreate dense ctx")
 
-    checkpoint_dir = os.path.join("/workspace/checkpoint/")
+    eval_checkpoint_dir = os.environ['EVAL_CHECKPOINT_DIR']
+    infer_checkpoint_dir = os.environ['INFER_CHECKPOINT_DIR']
     test_interval = 254
     buffer_size = 10
 
@@ -130,15 +130,21 @@ if __name__ == "__main__":
                 assert (
                     test_auc > 0.8
                 ), f"test_auc error, expect greater than 0.8 but got {test_auc}"
-                ctx.dump_checkpoint(checkpoint_dir)
-                logger.info(f"dump checkpoint to {checkpoint_dir}")
-                ctx.clear_embeddings()
-                num_ids = sum(ctx.get_embedding_size())
-                assert num_ids == 0, f"clear embedding failed"
                 break
 
-    eval_auc, eval_acc = test(model, checkpoint_dir)
+        ctx.dump_checkpoint(eval_checkpoint_dir)
+        logger.info(f"dump checkpoint to {eval_checkpoint_dir}")
+
+        ctx.dump_checkpoint(infer_checkpoint_dir, for_inference=True)
+        logger.info(f"dump checkpoint to {infer_checkpoint_dir}")
+
+        ctx.clear_embeddings()
+        num_ids = sum(ctx.get_embedding_size())
+        assert num_ids == 0, f"clear embedding failed"
+
+    eval_auc, eval_acc = test(model, eval_checkpoint_dir)
     auc_diff = abs(eval_auc - test_auc)
     assert auc_diff == 0, f"eval error, expect auc diff is 0 but got {auc_diff}"
 
-    shutil.rmtree(checkpoint_dir)
+    os.chmod(eval_checkpoint_dir, 0o007)
+    os.chmod(infer_checkpoint_dir, 0o007)

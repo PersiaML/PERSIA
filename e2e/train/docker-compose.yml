@@ -1,0 +1,54 @@
+version: "3.3"
+services:
+        persia_nats_service:
+            image: nats:latest
+            deploy:
+                replicas: 1
+                
+        data_compose:
+            env_file:
+                - adult_income/.test_env
+            environment:
+                JOB_ID: 1
+            image: persiaml-test:latest
+            command: persia_launcher compose /workspace/data_compose.py
+            volumes:
+                - ./adult_income:/workspace
+                - /data/adult_income:/data/
+
+        trainer:
+            env_file:
+                - adult_income/.test_env
+            environment:
+                JOB_ID: 1
+                GPU_NUM: 1
+            image: persiaml-test:latest
+            command:  persia_launcher trainer /workspace/train.py
+            depends_on:
+                - data_compose
+                - middleware
+                - server
+                - persia_nats_service
+            volumes:
+                - ./adult_income:/workspace
+                - /data/adult_income:/data/
+
+        middleware:
+            env_file:
+                - adult_income/.test_env
+            environment:
+                JOB_ID: 1
+            image: persiaml-test:latest
+            command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
+            volumes:
+                - ./adult_income:/workspace
+
+        server:
+            env_file:
+                - adult_income/.test_env
+            environment:
+                JOB_ID: 1
+            image: persiaml-test:latest
+            command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
+            volumes:
+                - ./adult_income:/workspace
