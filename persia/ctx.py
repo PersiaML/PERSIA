@@ -225,7 +225,9 @@ class EmbeddingCtx(BaseCtx):
         Returns:
             the tuple of output data and target data.
         """
-        assert self.model is not None, f"model not found, please init context with model"
+        assert (
+            self.model is not None
+        ), f"model not found, please init context with model"
         dense, sparse, target = self.prepare_features(batch)
         output = self.model(dense, sparse)
         return (output, target)
@@ -363,7 +365,9 @@ class EmbeddingCtx(BaseCtx):
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
             for_inference (bool, optional): Dump dense checkpoint as jit script or not.
         """
-        assert self.model is not None, f"model not found, please init context with model"
+        assert (
+            self.model is not None
+        ), f"model not found, please init context with model"
         os.makedirs(dst_dir, exist_ok=True)
         dense_model_filepath = os.path.join(dst_dir, dense_filename)
         if for_inference:
@@ -389,7 +393,9 @@ class EmbeddingCtx(BaseCtx):
             dense_filename (str, optional): Dense checkpoint filename.
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
         """
-        assert self.model is not None, f"model not found, please init context with model"
+        assert (
+            self.model is not None
+        ), f"model not found, please init context with model"
         if not os.path.exists(src_dir):
             _logger.warn(f"source directory: {src_dir} not exists")
             return
@@ -524,7 +530,9 @@ class TrainCtx(EmbeddingCtx):
             0 <= device_id < torch.cuda.device_count()
         ), f"device_id: {device_id} invalid!"
         assert grad_scalar_update_factor > 0, "grad scalar should greater than zero"
-        assert self.model is not None, f"model not found, please init context with model"
+        assert (
+            self.model is not None
+        ), f"model not found, please init context with model"
 
         torch.cuda.set_device(device_id)
 
@@ -717,6 +725,7 @@ def cnt_ctx() -> Optional[BaseCtx]:
 def eval_ctx(*args, **kwargs) -> EmbeddingCtx:
     """Get the ``EmbeddingCtx`` with the ``PreprocessMode.EVAL`` mode."""
     return EmbeddingCtx(PreprocessMode.EVAL, *args, **kwargs)
+
 
 class InferCtx(EmbeddingCtx):
     r"""Subclass of ``EmbeddingCtx`` that provide the forward ability without nats servers.

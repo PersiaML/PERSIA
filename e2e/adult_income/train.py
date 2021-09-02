@@ -1,4 +1,5 @@
 import os
+import subprocess
 
 from typing import Optional
 
@@ -146,5 +147,11 @@ if __name__ == "__main__":
     auc_diff = abs(eval_auc - test_auc)
     assert auc_diff == 0, f"eval error, expect auc diff is 0 but got {auc_diff}"
 
-    os.chmod(eval_checkpoint_dir, 0o007)
-    os.chmod(infer_checkpoint_dir, 0o007)
+    chmod_cmd = f"chmod -R 007 /workspace/{eval_checkpoint_dir}"
+    subprocess.run(chmod_cmd, shell=True)
+
+    chmod_cmd = f"chmod -R 007 /workspace/{infer_checkpoint_dir}"
+    subprocess.run(chmod_cmd, shell=True)
+
+    chmod_cmd = "chmod -R 007 /workspace/__pycache__"
+    subprocess.run(chmod_cmd, shell=True)
