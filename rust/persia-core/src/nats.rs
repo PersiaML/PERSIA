@@ -102,6 +102,10 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
         }
     }
 
+    pub fn world_size(&self) -> usize {
+        self.world_size
+    }
+
     pub fn send_sparse_to_middleware(
         &self,
         batch: &mut PyPersiaBatchData,

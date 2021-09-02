@@ -55,25 +55,22 @@ class BaseCtx:
             threadpool_worker_size (int): Rpc threadpool worker size.
         """
         self.origin_context = None
-        self.world_size = env.get_world_size()
 
-        if self.world_size == -1:
-            replica_size = env.get_replica_size()
-            replica_index = env.get_replica_index()
-            self.common_context = PyPersiaCommonContext(
-                threadpool_worker_size, replica_index, replica_size, None
-            )
-            _logger.info(
-                f"init datacompose, replica_size: {replica_size} replica_index: {replica_index}"
-            )
-        else:
-            rank_id = env.get_rank()
-            self.common_context = PyPersiaCommonContext(
-                threadpool_worker_size, rank_id, self.world_size, self.world_size
-            )
-            _logger.info(
-                f"init trainer, world size: {self.world_size} rank_id: {rank_id}"
-            )
+        replica_index = (
+            env.get_rank() if env.get_rank() != -1 else env.get_replica_index()
+        )
+        replica_size = (
+            env.get_world_size()
+            if env.get_world_size() != -1
+            else env.get_replica_size()
+        )
+
+        self.common_context = PyPersiaCommonContext(
+            threadpool_worker_size, replica_index, replica_size
+        )
+        _logger.info(
+            f"init persia context, replica_size: {replica_size} replica_index: {replica_index}"
+        )
 
     def _enter(self):
         """Hook when enter the context"""
@@ -126,6 +123,9 @@ class DataCtx(BaseCtx):
         **kwargs,
     ):
         super(DataCtx, self).__init__(*args, **kwargs)
+
+        self.common_context.init_nats_publisher(None)
+        self.common_context.wait_servers_ready()
 
     def send_data(self, data: PyPersiaBatchData, blocking: bool = True):
         """Send PersiaBatchData from data compose to trainer and middleware side.
@@ -535,6 +535,12 @@ class TrainCtx(EmbeddingCtx):
         ), f"model not found, please init context with model"
 
         torch.cuda.set_device(device_id)
+
+        world_size = env.get_world_size()
+        assert world_size != -1, f"WORLD_SIZE not set"
+
+        self.common_context.init_nats_publisher(world_size)
+        self.common_context.wait_servers_ready()
 
         self.device_id = device_id
 

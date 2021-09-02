@@ -58,7 +58,7 @@ class StreamingDataset(IterableDataset):
         if not self.initialized:
             current_ctx = cnt_ctx()
             assert current_ctx is not None, "Current conext is None!"
-            world_size = current_ctx.world_size
+            world_size = current_ctx.common_context.world_size()
             assert world_size != -1, "world size not set"
             init_responder(world_size, self.sender)
 
