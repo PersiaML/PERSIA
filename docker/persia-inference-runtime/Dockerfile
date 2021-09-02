@@ -14,7 +14,7 @@ RUN /opt/conda/bin/pip install --no-cache-dir \
     captum \
     grpcio \
     protobuf \
-    grpcio-tools \
+    grpcio-tools
 
 COPY . .
 
