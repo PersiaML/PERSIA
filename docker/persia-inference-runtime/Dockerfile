@@ -15,10 +15,6 @@ RUN /opt/conda/bin/pip install --no-cache-dir \
     grpcio \
     protobuf \
     grpcio-tools \
-    rm -rf /var/lib/apt/lists/* && \
-    apt-get purge --auto-remove && \
-    apt-get clean && \
-    update-alternatives --install /usr/bin/python3 python3 /opt/conda/bin/python3.8 10 
 
 COPY . .
 
