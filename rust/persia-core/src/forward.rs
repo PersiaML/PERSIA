@@ -512,6 +512,8 @@ impl Forward {
                             Ok(embedding_with_state) => {
                                 let embedding_batch = match embedding_with_state {
                                     EmbeddingBatchWithState::Inferable(embedding_batch) => {
+                                        batch.sparse_data =
+                                            EmbeddingTensor::Slot(MiddlewareSlot::default());
                                         embedding_batch
                                     }
                                     EmbeddingBatchWithState::Trainable((
