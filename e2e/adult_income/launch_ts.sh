@@ -14,8 +14,6 @@ torchserve --start --ncs --model-store $INFER_CHECKPOINT_DIR \
     --models adult_income.mar \
     --ts-config config/ts_config.properties &
 
-chmod 007 /workspace/logs/*
-
 python -m grpc_tools.protoc \
     --proto_path=/workspace/proto/ \
     --python_out=/workspace/proto/ \
@@ -23,5 +21,6 @@ python -m grpc_tools.protoc \
     /workspace/proto/inference.proto
 
 chmod 007 /workspace/proto/*.py
+chmod 007 /workspace/logs/*
 
 python serve_client.py

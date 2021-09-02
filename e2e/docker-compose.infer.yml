@@ -21,7 +21,7 @@ services:
             environment:
                 JOB_ID: 1
             image: persiaml-infer-test:latest
-            command: mkdir -p /workspace/logs/ && persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml > /workspace/logs/middleware.log
+            command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
             volumes:
                 - ./adult_income:/workspace
             deploy:
@@ -33,7 +33,7 @@ services:
             environment:
                 JOB_ID: 1
             image: persiaml-infer-test:latest
-            command: mkdir -p /workspace/logs/ && persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml > /workspace/logs/emb_server.log
+            command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
             volumes:
                 - ./adult_income:/workspace
             deploy:
