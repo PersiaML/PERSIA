@@ -147,10 +147,10 @@ if __name__ == "__main__":
     auc_diff = abs(eval_auc - test_auc)
     assert auc_diff == 0, f"eval error, expect auc diff is 0 but got {auc_diff}"
 
-    chmod_cmd = f"chmod -R 007 /workspace/{eval_checkpoint_dir}"
+    chmod_cmd = f"chmod -R 007 {eval_checkpoint_dir}"
     subprocess.run(chmod_cmd, shell=True)
 
-    chmod_cmd = f"chmod -R 007 /workspace/{infer_checkpoint_dir}"
+    chmod_cmd = f"chmod -R 007 {infer_checkpoint_dir}"
     subprocess.run(chmod_cmd, shell=True)
 
     chmod_cmd = "chmod -R 007 /workspace/__pycache__"
