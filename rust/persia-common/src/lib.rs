@@ -269,6 +269,7 @@ impl Into<EmbeddingBatch> for EmbeddingBatchWithState {
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
 #[serde(crate = "self::serde")]
 pub struct SparseBatch {
+    pub requires_grad: bool,
     pub batches: Vec<FeatureBatch>,
     #[serde(skip)]
     pub enter_forward_id_buffer_time: Option<std::time::SystemTime>,
@@ -281,6 +282,7 @@ pub struct SparseBatch {
 impl From<Vec<(String, Vec<&PyArray1<u64>>)>> for SparseBatch {
     fn from(batches: Vec<(String, Vec<&PyArray1<u64>>)>) -> Self {
         SparseBatch {
+            requires_grad: true,
             batches: batches
                 .into_iter()
                 .map(|(feature_name, batch)| {

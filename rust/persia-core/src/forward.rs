@@ -458,20 +458,16 @@ impl Forward {
                             "get deserialized message time cost {:?}",
                             start_time.elapsed()
                         );
-
+                        
                         let mut batch = batch;
-                        let embed_tensor =
-                            std::mem::replace(&mut batch.sparse_data, EmbeddingTensor::Null);
-
                         let (embeddings_result, middleware_addr, embedding_staleness_permit) =
-                            match embed_tensor {
-                                EmbeddingTensor::SparseBatch(sparse_data) => {
+                            match batch.sparse_data{
+                                EmbeddingTensor::SparseBatch(mut sparse_data) => {
                                     let (middleware_addr, client) =
                                         rpc_client.get_random_client_with_addr();
 
-                                    let result = client
-                                        .forward_batched_direct(&(sparse_data, is_training))
-                                        .await;
+                                    sparse_data.requires_grad = is_training;
+                                    let result = client.forward_batched_direct(&sparse_data).await;
 
                                     (result, middleware_addr, None)
                                 }
@@ -510,25 +506,24 @@ impl Forward {
                         }
                         match embedding_with_state_result {
                             Ok(embedding_with_state) => {
-                                let embedding_batch = match embedding_with_state {
+                                let (embedding_batch, middleware_slot) = match embedding_with_state
+                                {
                                     EmbeddingBatchWithState::Inferable(embedding_batch) => {
-                                        batch.sparse_data =
-                                            EmbeddingTensor::Slot(MiddlewareSlot::default());
-                                        embedding_batch
+                                        (embedding_batch, MiddlewareSlot::default())
                                     }
                                     EmbeddingBatchWithState::Trainable((
                                         embedding_batch,
                                         backward_slot_id,
-                                    )) => {
-                                        batch.sparse_data = EmbeddingTensor::Slot(MiddlewareSlot {
+                                    )) => (
+                                        embedding_batch,
+                                        MiddlewareSlot {
                                             middleware_addr,
                                             slot_id: backward_slot_id,
                                             batcher_idx: 0,
-                                        });
-                                        embedding_batch
-                                    }
+                                        },
+                                    ),
                                 };
-
+                                batch.sparse_data = EmbeddingTensor::Slot(middleware_slot);
                                 if let Err(e) = channel_s
                                     .send_async((
                                         batch,
@@ -582,7 +577,6 @@ pub fn forward_directly(batch: PersiaBatchData, device_id: i32) -> PyResult<Pyth
 
     let rpc_client = PersiaCommonContext::get().rpc_client.clone();
     let async_runtime = PersiaCommonContext::get().async_runtime.clone();
-    let mut batch = batch;
 
     let dense: Vec<AsyncTensorOnCuda> = batch
         .dense_data
@@ -590,13 +584,12 @@ pub fn forward_directly(batch: PersiaBatchData, device_id: i32) -> PyResult<Pyth
         .map(|d| cuda_dense_tensor_h2d(d).expect("cannot move dense to gpu"))
         .collect();
 
-    let emb_tensor = std::mem::replace(&mut batch.sparse_data, EmbeddingTensor::Null);
-    let embeddings = match emb_tensor {
+    let embeddings = match &batch.sparse_data {
         EmbeddingTensor::SparseBatch(sparse_batch) => {
             let _guard = async_runtime.enter();
             let (_middleware_addr, client) = rpc_client.get_random_client_with_addr();
             let embeddings: EmbeddingBatch = async_runtime
-                .block_on(client.forward_batched_direct(&(sparse_batch, false)))
+                .block_on(client.forward_batched_direct(sparse_batch))
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
                 .into();

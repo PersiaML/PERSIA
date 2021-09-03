@@ -1038,16 +1038,16 @@ impl MiddlewareServerInner {
 
     pub async fn forward_batched_direct(
         &self,
-        req: (SparseBatch, bool),
+        indices: SparseBatch,
     ) -> Result<EmbeddingBatchWithState, MiddlewareServerError> {
-        let (indices, is_training) = req;
         let mut indices = indices;
 
+        let requires_grad = indices.requires_grad.clone();
         let result = self
-            .lookup_batched_all_slots(&mut indices, is_training)
+            .lookup_batched_all_slots(&mut indices, requires_grad)
             .await?;
 
-        if is_training {
+        if requires_grad {
             let backward_id = self.get_id();
             let inner = self.clone();
 
@@ -1068,13 +1068,13 @@ impl MiddlewareServerInner {
         &self,
         req: (u64, EmbeddingGradientBatch),
     ) -> Result<(), MiddlewareServerError> {
-        let (forward_id, gradients) = req;
+        let (backward_slot_id, gradients) = req;
         let indices = self
             .post_forward_buffer
             .write()
             .await
-            .remove(&forward_id)
-            .ok_or_else(|| MiddlewareServerError::ForwardIdNotFound(forward_id))?;
+            .remove(&backward_slot_id)
+            .ok_or_else(|| MiddlewareServerError::ForwardIdNotFound(backward_slot_id))?;
 
         let inner = self.clone();
         inner
@@ -1307,9 +1307,9 @@ impl MiddlewareServer {
 
     pub async fn forward_batched_direct(
         &self,
-        req: (SparseBatch, bool),
+        indices : SparseBatch,
     ) -> Result<EmbeddingBatchWithState, MiddlewareServerError> {
-        self.inner.forward_batched_direct(req).await
+        self.inner.forward_batched_direct(indices).await
     }
 
     pub async fn update_gradient_batched(
