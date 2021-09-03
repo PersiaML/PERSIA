@@ -75,4 +75,6 @@ if __name__ == "__main__":
 
         eval_auc = result["eval_auc"]
         auc_diff = abs(eval_auc - infer_auc)
-        assert auc_diff < 1e-6, f"infer error, expect auc diff < 1e-6 but got {auc_diff}"
+        assert (
+            auc_diff < 1e-6
+        ), f"infer error, expect auc diff < 1e-6 but got {auc_diff}"
