@@ -41,7 +41,7 @@ def infer(stub, model_name, model_input):
 if __name__ == "__main__":
 
     test_filepath = os.path.join("/data/", "test.npz")
-    _, loader = make_dataloader(test_filepath, batch_size=8)
+    _, loader = make_dataloader(test_filepath, batch_size=1024)
     all_pred = []
     all_target = []
 
