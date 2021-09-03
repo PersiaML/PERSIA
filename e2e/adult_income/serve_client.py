@@ -70,9 +70,9 @@ if __name__ == "__main__":
 
     result_filepath = os.environ["RESULT_FILE_PATH"]
     with open(result_filepath, "r") as f:
-        result = f.read(result_filepath)
+        result = f.read()
         result = json.loads(result)
 
         eval_auc = result["eval_auc"]
         auc_diff = abs(eval_auc - infer_auc)
-        assert auc_diff == 0, f"infer error, expect auc diff is 0 but got {auc_diff}"
+        assert auc_diff < 1e-6, f"infer error, expect auc diff < 1e-6 but got {auc_diff}"
