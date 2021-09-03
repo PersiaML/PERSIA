@@ -22,7 +22,7 @@ class PersiaHandler(BaseHandler, ABC):
         return model_input
 
     def inference(self, data, *args, **kwargs):
-        denses, sparses = data
+        denses, sparses, _ = data
         with torch.no_grad():
             results = self.model(denses, sparses)
         return results

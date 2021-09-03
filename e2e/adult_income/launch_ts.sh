@@ -6,7 +6,7 @@ torch-model-archiver \
     --version 1.0 \
     --serialized-file $INFER_CHECKPOINT_DIR/dense.pt \
     --handler /workspace/serve_handler.py \
-    --export-path $INFER_CHECKPOINT_DIR/
+    --export-path $INFER_CHECKPOINT_DIR/ -f
 
 chmod 007 $INFER_CHECKPOINT_DIR/adult_income.mar
 
@@ -21,6 +21,8 @@ python -m grpc_tools.protoc \
     /workspace/proto/inference.proto
 
 chmod 007 /workspace/proto/*.py
+
+sleep 10s
 
 python serve_client.py
 

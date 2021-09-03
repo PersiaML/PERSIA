@@ -6,7 +6,7 @@ services:
             environment:
                 JOB_ID: 1
             image: persiaml-infer-test:latest
-            command: bash -c "/workspace/launch_ts.sh"
+            command: bash -c "sleep 1d && /workspace/launch_ts.sh"
             volumes:
                 - ./adult_income:/workspace
                 - /data/adult_income:/data/
