@@ -1307,7 +1307,7 @@ impl MiddlewareServer {
 
     pub async fn forward_batched_direct(
         &self,
-        indices : SparseBatch,
+        indices: SparseBatch,
     ) -> Result<EmbeddingBatchWithState, MiddlewareServerError> {
         self.inner.forward_batched_direct(indices).await
     }

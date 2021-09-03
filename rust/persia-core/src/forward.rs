@@ -458,10 +458,10 @@ impl Forward {
                             "get deserialized message time cost {:?}",
                             start_time.elapsed()
                         );
-                        
+
                         let mut batch = batch;
                         let (embeddings_result, middleware_addr, embedding_staleness_permit) =
-                            match batch.sparse_data{
+                            match batch.sparse_data {
                                 EmbeddingTensor::SparseBatch(mut sparse_data) => {
                                     let (middleware_addr, client) =
                                         rpc_client.get_random_client_with_addr();
