@@ -5,7 +5,7 @@ common_config:
   job_type: Infer
   infer_config:
     servers:
-      - emb_server:8000
+      - emb_server:8888
     embedding_checkpoint: /workspace/infer_checkpoint/
 shard_server_config:
   capacity: 10000000000
