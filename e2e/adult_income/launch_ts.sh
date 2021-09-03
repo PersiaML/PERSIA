@@ -8,8 +8,6 @@ torch-model-archiver \
     --handler /workspace/serve_handler.py \
     --export-path $INFER_CHECKPOINT_DIR/ -f
 
-chmod 007 $INFER_CHECKPOINT_DIR/adult_income.mar
-
 torchserve --start --ncs --model-store $INFER_CHECKPOINT_DIR \
     --models adult_income.mar \
     --ts-config config/ts_config.properties &
@@ -20,14 +18,8 @@ python -m grpc_tools.protoc \
     --grpc_python_out=/workspace/proto/ \
     /workspace/proto/inference.proto
 
-chmod 007 /workspace/proto/*.py
-
 sleep 10s
 
 python serve_client.py
 
 torchserve --stop
-
-sleep 1m
-
-rm -rf /workspace/logs/
