@@ -28,6 +28,50 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
+#[cfg(not(feature="cuda"))]
+mod CudaStub {
+    #[derive(Debug)]
+    struct GPUTensor {}
+}
+
+#[cfg(not(feature="cuda"))]
+type GPUTensorWrapper = CudaStub::GPUTensor;
+
+#[cfg(feature="cuda")]
+type GPUTensorWrapper = crate::cuda::GPUTensor;
+
+#[derive(Debug)]
+struct CPUTensor {
+    data: Vec<u8>,
+    shape: Vec<usize>,
+    dtype: i32
+}
+
+#[derive(Debug)]
+pub enum Tensor {
+    CPU(CPUTensor),
+    GPU(GPUTensorWrapper),
+}
+
+#[derive(Debug)]
+pub enum Embedding {
+    Raw(RawEmbedding),
+    Sum(SumEmbedding),
+}
+
+#[derive(Debug)]
+pub struct SumEmbedding {
+    pub tensor: Tensor,
+}
+
+#[derive(Debug)]
+pub struct RawEmbedding {
+    pub tensor: Tensor,
+    pub index: Tensor,
+    pub non_empty_index: Tensor,
+    pub samples_id_num: Vec<usize>,
+}
+
 #[pyclass]
 pub struct PythonAsyncEmbeddingOnCuda {
     inner: Option<AsyncEmbeddingOnCuda>,
@@ -41,6 +85,7 @@ impl PythonAsyncEmbeddingOnCuda {
             AsyncEmbeddingOnCuda::Sum(_) => false,
         }
     }
+
     pub fn get_sum_embedding(&mut self) -> PythonAsyncTensorOnCuda {
         if let AsyncEmbeddingOnCuda::Sum(sum_embedding) = self.inner.take().unwrap() {
             PythonAsyncTensorOnCuda {

@@ -33,6 +33,16 @@ pub struct AsyncRawEmbeddingOnCuda {
 }
 
 #[derive(Debug)]
+pub struct GPUTensor {
+    pub name: String,
+    pub ptr: CudaMallocPtr,
+    pub shape: [usize; 2],
+    pub event: CudaEventPtr,
+    pub host_ptr: PinnedMemoryPtr,
+    pub dtype: TensorDtype,
+}
+
+#[derive(Debug)]
 pub struct AsyncTensorOnCuda {
     pub name: String,
     pub ptr: CudaMallocPtr,
