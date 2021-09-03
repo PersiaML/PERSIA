@@ -363,6 +363,7 @@ class EmbeddingCtx(BaseCtx):
         Arguments:
             dst_dir (str): Destination directory.
             dense_filename (str, optional): Dense checkpoint filename.
+            jit_dense_filename (str, optional): Jit dense checkpoint filename.
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
             with_jit_model (bool, optional): Dump jit script dense checkpoint or not.
         """
@@ -673,6 +674,7 @@ class TrainCtx(EmbeddingCtx):
         self,
         dst_dir: str,
         dense_filename: str = "dense.pt",
+        jit_dense_filename: str = "jit_dense.pt",
         opt_filename: str = "opt.pt",
         blocking: bool = True,
         with_jit_model: bool = False,
@@ -682,6 +684,7 @@ class TrainCtx(EmbeddingCtx):
         Arguments:
             dst_dir (str): Destination directory.
             dense_filename (str, optional): Dense checkpoint filename.
+            jit_dense_filename (str, optional): Jit dense checkpoint filename.
             opt_filename (str, optional): Optimizer checkpoint filename.
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
             with_jit_model (bool, optional): Dump dense checkpoint as jit script or not.
@@ -689,6 +692,7 @@ class TrainCtx(EmbeddingCtx):
         super().dump_checkpoint(
             dst_dir,
             dense_filename=dense_filename,
+            jit_dense_filename=jit_dense_filename,
             blocking=blocking,
             with_jit_model=with_jit_model,
         )
