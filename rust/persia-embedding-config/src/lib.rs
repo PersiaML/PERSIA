@@ -142,12 +142,21 @@ pub struct InferConfig {
     pub embedding_checkpoint: String,
 }
 
+impl Default for InferConfig {
+    fn default() -> Self {
+        Self {
+            servers: vec![],
+            embedding_checkpoint: String::from(""),
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
 #[serde(crate = "self::serde")]
 pub enum PerisaJobType {
     Train,
     Eval,
-    Infer(InferConfig),
+    Infer,
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
@@ -284,6 +293,10 @@ fn get_default_job_type() -> PerisaJobType {
     PerisaJobType::Train
 }
 
+fn get_default_infer_config() -> InferConfig {
+    InferConfig::default()
+}
+
 fn get_default_hashstack_config() -> HashStackConfig {
     HashStackConfig {
         hash_stack_rounds: 0,
@@ -323,6 +336,8 @@ pub struct PersiaCommonConfig {
     pub metrics_config: PersiaMetricsConfig,
     #[serde(default = "get_default_job_type")]
     pub job_type: PerisaJobType,
+    #[serde(default = "get_default_infer_config")]
+    pub infer_config: InferConfig,
 }
 
 impl Default for PersiaCommonConfig {
@@ -330,6 +345,7 @@ impl Default for PersiaCommonConfig {
         Self {
             metrics_config: PersiaMetricsConfig::default(),
             job_type: PerisaJobType::Train,
+            infer_config: InferConfig::default(),
         }
     }
 }

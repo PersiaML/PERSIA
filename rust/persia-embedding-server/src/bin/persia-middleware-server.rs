@@ -61,10 +61,10 @@ async fn main() -> Result<()> {
 
     EmbeddingConfig::set(&args.embedding_config)?;
 
-    let job_type = &PersiaCommonConfig::get()?.job_type;
-    let all_embedding_server_client = match job_type {
-        PerisaJobType::Infer(ref conf) => {
-            let servers = conf.servers.clone();
+    let common_config = PersiaCommonConfig::get()?;
+    let all_embedding_server_client = match &common_config.job_type {
+        PerisaJobType::Infer => {
+            let servers = common_config.infer_config.servers.clone();
             AllEmbeddingServerClient::with_addrs(servers)
         }
         _ => {
@@ -91,8 +91,8 @@ async fn main() -> Result<()> {
         middleware_config,
     });
 
-    let _responder = match job_type {
-        PerisaJobType::Infer(_) => None,
+    let _responder = match &common_config.job_type {
+        PerisaJobType::Infer => None,
         _ => {
             let nats_stub = MiddlewareNatsStub {
                 inner: inner.clone(),

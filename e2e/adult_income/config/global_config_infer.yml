@@ -1,0 +1,20 @@
+common_config:
+  metrics_config:
+    enable_metrics: true
+    push_interval_sec: 10
+  job_type: Infer
+  infer_config:
+    servers:
+      - emb_server:8888
+    embedding_checkpoint: /workspace/infer_checkpoint/
+shard_server_config:
+  capacity: 10000000000
+  num_hashmap_internal_shards: 128
+  full_amount_manager_buffer_size: 1000
+  num_persistence_workers: 4
+  num_signs_per_file: 5000000
+  enable_incremental_update: false
+  incremental_buffer_size: 5000000
+  incremental_channel_capacity: 1000
+middleware_config:
+  forward_buffer_size: 1000

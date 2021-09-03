@@ -55,25 +55,22 @@ class BaseCtx:
             threadpool_worker_size (int): Rpc threadpool worker size.
         """
         self.origin_context = None
-        self.world_size = env.get_world_size()
 
-        if self.world_size == -1:
-            replica_size = env.get_replica_size()
-            replica_index = env.get_replica_index()
-            self.common_context = PyPersiaCommonContext(
-                threadpool_worker_size, replica_index, replica_size, None
-            )
-            _logger.info(
-                f"init datacompose, replica_size: {replica_size} replica_index: {replica_index}"
-            )
-        else:
-            rank_id = env.get_rank()
-            self.common_context = PyPersiaCommonContext(
-                threadpool_worker_size, rank_id, self.world_size, self.world_size
-            )
-            _logger.info(
-                f"init trainer, world size: {self.world_size} rank_id: {rank_id}"
-            )
+        replica_index = (
+            env.get_rank() if env.get_rank() != -1 else env.get_replica_index()
+        )
+        replica_size = (
+            env.get_world_size()
+            if env.get_world_size() != -1
+            else env.get_replica_size()
+        )
+
+        self.common_context = PyPersiaCommonContext(
+            threadpool_worker_size, replica_index, replica_size
+        )
+        _logger.info(
+            f"init persia context, replica_size: {replica_size} replica_index: {replica_index}"
+        )
 
     def _enter(self):
         """Hook when enter the context"""
@@ -108,7 +105,7 @@ class DataCtx(BaseCtx):
     r"""It provide the communicate ability for data generator component to send the PersiaBatchData
     to the trainer and embedding middleware.
 
-    Examples::
+    Example:
         >>> from persia.prelude import PyPersiaBatchData
         >>> loader = make_simple_loader()
         >>> with DataCtx() as ctx:
@@ -126,6 +123,9 @@ class DataCtx(BaseCtx):
         **kwargs,
     ):
         super(DataCtx, self).__init__(*args, **kwargs)
+
+        self.common_context.init_nats_publisher(None)
+        self.common_context.wait_servers_ready()
 
     def send_data(self, data: PyPersiaBatchData, blocking: bool = True):
         """Send PersiaBatchData from data compose to trainer and middleware side.
@@ -163,12 +163,13 @@ class EmbeddingCtx(BaseCtx):
     according to different preprocess_mode.The most simple way to get this context is use ``persia.ctx.eval_ctx()`` or
     ``persia.ctx.inference_ctx`` to get the ``EmbeddingCtx`` instance.
 
-    Examples::
+    Example:
         >>> from persia.prelude import PyPersiaBatchData
         >>> model = get_dnn_model()
         >>> loader = make_dataloader()
         >>> embedding_config = EmbeddingConfig()
         >>> with EmbeddingCtx(
+        ...     model=model,
         ...     PreprocessMode.EVAL,
         ...     embedding_config
         ... ) as ctx:
@@ -184,7 +185,7 @@ class EmbeddingCtx(BaseCtx):
     def __init__(
         self,
         preprocess_mode: PreprocessMode,
-        model: torch.nn.Module,
+        model: Optional[torch.nn.Module] = None,
         embedding_config: Optional[EmbeddingConfig] = None,
         *args,
         **kwargs,
@@ -224,6 +225,9 @@ class EmbeddingCtx(BaseCtx):
         Returns:
             the tuple of output data and target data.
         """
+        assert (
+            self.model is not None
+        ), f"model not found, please init context with model"
         dense, sparse, target = self.prepare_features(batch)
         output = self.model(dense, sparse)
         return (output, target)
@@ -350,16 +354,29 @@ class EmbeddingCtx(BaseCtx):
         self,
         dst_dir: str,
         dense_filename: str = "dense.pt",
+        jit_dense_filename: str = "jit_dense.pt",
         blocking: bool = True,
+        with_jit_model: bool = False,
     ):
         """Dump the dense and sparse checkpoint to destination directory.
 
         Arguments:
             dst_dir (str): Destination directory.
             dense_filename (str, optional): Dense checkpoint filename.
+            jit_dense_filename (str, optional): Jit dense checkpoint filename.
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
+            with_jit_model (bool, optional): Dump jit script dense checkpoint or not.
         """
+        assert (
+            self.model is not None
+        ), f"model not found, please init context with model"
         os.makedirs(dst_dir, exist_ok=True)
+
+        if with_jit_model:
+            jit_model_filepath = os.path.join(dst_dir, jit_dense_filename)
+            jit_model = torch.jit.script(self.model)
+            jit_model.save(jit_model_filepath)
+
         dense_model_filepath = os.path.join(dst_dir, dense_filename)
         torch.save(self.model.state_dict(), dense_model_filepath)
 
@@ -380,6 +397,9 @@ class EmbeddingCtx(BaseCtx):
             dense_filename (str, optional): Dense checkpoint filename.
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
         """
+        assert (
+            self.model is not None
+        ), f"model not found, please init context with model"
         if not os.path.exists(src_dir):
             _logger.warn(f"source directory: {src_dir} not exists")
             return
@@ -463,13 +483,14 @@ class EmbeddingCtx(BaseCtx):
 class TrainCtx(EmbeddingCtx):
     r"""Subclass of ``EmbeddingCtx`` that provide the backward ability to update the sparse embedding.
 
-    Example::
+    Example:
         >>> import torch
         >>> model = get_dnn_model()
         >>> sparse_optimizer = persia.sparse.optim.SGD(lr=1e-3)
         >>> dense_optimizer = torch.optim.SGD(lr=1e-3)
         >>> loss_fn = torch.nn.BCELoss(reduction="mean")
         >>> with TrainCtx(
+        >>>     model=model,
         >>>     sparse_optimizer,
         >>>     dense_optimizer,
         >>>     mixed_precision=True
@@ -513,8 +534,17 @@ class TrainCtx(EmbeddingCtx):
             0 <= device_id < torch.cuda.device_count()
         ), f"device_id: {device_id} invalid!"
         assert grad_scalar_update_factor > 0, "grad scalar should greater than zero"
+        assert (
+            self.model is not None
+        ), f"model not found, please init context with model"
 
         torch.cuda.set_device(device_id)
+
+        world_size = env.get_world_size()
+        assert world_size != -1, f"WORLD_SIZE not set"
+
+        self.common_context.init_nats_publisher(world_size)
+        self.common_context.wait_servers_ready()
 
         self.device_id = device_id
 
@@ -644,19 +674,27 @@ class TrainCtx(EmbeddingCtx):
         self,
         dst_dir: str,
         dense_filename: str = "dense.pt",
+        jit_dense_filename: str = "jit_dense.pt",
         opt_filename: str = "opt.pt",
         blocking: bool = True,
+        with_jit_model: bool = False,
     ):
         """Dump the dense and sparse checkpoint to destination directory.
 
         Arguments:
             dst_dir (str): Destination directory.
             dense_filename (str, optional): Dense checkpoint filename.
+            jit_dense_filename (str, optional): Jit dense checkpoint filename.
             opt_filename (str, optional): Optimizer checkpoint filename.
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
+            with_jit_model (bool, optional): Dump dense checkpoint as jit script or not.
         """
         super().dump_checkpoint(
-            dst_dir, dense_filename=dense_filename, blocking=blocking
+            dst_dir,
+            dense_filename=dense_filename,
+            jit_dense_filename=jit_dense_filename,
+            blocking=blocking,
+            with_jit_model=with_jit_model,
         )
 
         optimizer_filepath = os.path.join(dst_dir, opt_filename)
@@ -702,6 +740,27 @@ def eval_ctx(*args, **kwargs) -> EmbeddingCtx:
     return EmbeddingCtx(PreprocessMode.EVAL, *args, **kwargs)
 
 
-def inference_ctx(*args, **kwargs) -> EmbeddingCtx:
-    """Get the ``EmbeddingCtx`` with the ``PreprocessMode.INFERENCE`` mode."""
-    return EmbeddingCtx(PreprocessMode.INFERENCE, *args, **kwargs)
+class InferCtx(EmbeddingCtx):
+    r"""Subclass of ``EmbeddingCtx`` that provide the forward ability without nats servers.
+
+    Example:
+        >>> from persia.ctx import InferCtx
+        >>> persia_context = InferCtx()
+        >>> batch = persia_context.get_embedding_from_bytes(batch, device_id)
+        >>> model_input = persia_context.prepare_features(batch)
+    """
+
+    def __init__(
+        self,
+        middleware_addrs: List[str],
+        *args,
+        **kwargs,
+    ):
+        """
+        Arguments:
+            middleware_addrs (List[str]): middleware address(ip:port) list.
+        """
+        super(InferCtx, self).__init__(PreprocessMode.INFERENCE, *args, **kwargs)
+
+        for addr in middleware_addrs:
+            self.common_context.init_rpc_client_with_addr(addr)

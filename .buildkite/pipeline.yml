@@ -8,9 +8,14 @@ steps:
     key: "e2e-test"
     plugins:
       - docker-compose#v3.8.0::
-          config: "e2e/docker-compose.yml"
+          config: "e2e/docker-compose.train.yml"
           run: trainer
           graceful-shutdown: true
+      - docker-compose#v3.8.0::
+          config: "e2e/docker-compose.infer.yml"
+          run: torch_serve
+          graceful-shutdown: true
+
 
   - label: "upload the latest cuda-runtime image"
     branches: "main"
