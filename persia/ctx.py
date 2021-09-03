@@ -370,7 +370,7 @@ class EmbeddingCtx(BaseCtx):
             self.model is not None
         ), f"model not found, please init context with model"
         os.makedirs(dst_dir, exist_ok=True)
-        
+
         if with_jit_model:
             jit_model_filepath = os.path.join(dst_dir, jit_dense_filename)
             jit_model = torch.jit.script(self.model)

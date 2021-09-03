@@ -69,10 +69,10 @@ if __name__ == "__main__":
     print(f"infer_auc = {infer_auc}")
 
     result_filepath = os.environ["RESULT_FILE_PATH"]
-    with open(result_filepath, 'r') as f:
+    with open(result_filepath, "r") as f:
         result = f.read(result_filepath)
         result = json.loads(result)
 
-        eval_auc = result['eval_auc']
+        eval_auc = result["eval_auc"]
         auc_diff = abs(eval_auc - infer_auc)
         assert auc_diff == 0, f"infer error, expect auc diff is 0 but got {auc_diff}"

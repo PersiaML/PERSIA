@@ -149,10 +149,10 @@ if __name__ == "__main__":
 
     result_filepath = os.environ["RESULT_FILE_PATH"]
     result = {
-        "test_auc" : test_auc,
-        "eval_auc" : eval_auc,
+        "test_auc": test_auc,
+        "eval_auc": eval_auc,
     }
     result = json.dumps(result)
 
-    with open(result_filepath, 'w') as f:
+    with open(result_filepath, "w") as f:
         f.write(result)
