@@ -86,7 +86,7 @@ static PERSIA_COMMON_CONTEXT: OnceCell<Arc<PersiaCommonContext>> = OnceCell::new
 
 struct PersiaCommonContext {
     pub rpc_client: Arc<PersiaRpcClient>,
-    pub nats_publisher: RwLock<Option<Arc<nats::PersiaBatchFlowNatsStubPublisherWrapper>>>,
+    pub nats_publisher: Arc<RwLock<Option<nats::PersiaBatchFlowNatsStubPublisherWrapper>>>,
     pub async_runtime: Arc<Runtime>,
 }
 
@@ -119,7 +119,7 @@ impl PersiaCommonContext {
 
         let common_context = Self {
             rpc_client,
-            nats_publisher: RwLock::new(None),
+            nats_publisher: Arc::new(RwLock::new(None)),
             async_runtime: runtime,
         };
 
@@ -133,7 +133,11 @@ impl PersiaCommonContext {
     }
 
     pub fn register_optimizer(&self, opt: &PyOptimizerBase) -> Result<(), PersiaError> {
-        self.get_nats_publisher()?.register_optimizer(opt)
+        self.nats_publisher
+            .read()
+            .as_ref()
+            .ok_or_else(|| PersiaError::NatsNotInitializedError)?
+            .register_optimizer(opt)
     }
 
     pub fn init_rpc_client_with_addr(&self, addr: String) -> Result<(), PersiaError> {
@@ -147,17 +151,8 @@ impl PersiaCommonContext {
             self.async_runtime.clone(),
         );
         let mut nats_publisher = self.nats_publisher.write();
-        *nats_publisher = Some(Arc::new(instance));
+        *nats_publisher = Some(instance);
         Ok(())
-    }
-
-    pub fn get_nats_publisher(
-        &self,
-    ) -> Result<Arc<nats::PersiaBatchFlowNatsStubPublisherWrapper>, PersiaError> {
-        match self.nats_publisher.read().clone() {
-            Some(nats_publisher) => Ok(nats_publisher),
-            None => Err(PersiaError::NatsNotInitializedError),
-        }
     }
 }
 
@@ -193,7 +188,10 @@ impl PyPersiaCommonContext {
 
     pub fn wait_servers_ready(&self) -> PyResult<String> {
         self.inner
-            .get_nats_publisher()
+            .nats_publisher
+            .read()
+            .as_ref()
+            .ok_or_else(|| PersiaError::NatsNotInitializedError)
             .map_err(|e| e.to_py_runtime_err())?
             .wait_servers_ready()
             .map_err(|e| e.to_py_runtime_err())
@@ -254,7 +252,10 @@ impl PyPersiaCommonContext {
         block: bool,
     ) -> PyResult<()> {
         self.inner
-            .get_nats_publisher()
+            .nats_publisher
+            .read()
+            .as_ref()
+            .ok_or_else(|| PersiaError::NatsNotInitializedError)
             .map_err(|e| e.to_py_runtime_err())?
             .send_sparse_to_middleware(batch, block)
             .map_err(|e| e.to_py_runtime_err())
@@ -262,7 +263,10 @@ impl PyPersiaCommonContext {
 
     pub fn send_dense_to_trainer(&self, batch: &PyPersiaBatchData, block: bool) -> PyResult<()> {
         self.inner
-            .get_nats_publisher()
+            .nats_publisher
+            .read()
+            .as_ref()
+            .ok_or_else(|| PersiaError::NatsNotInitializedError)
             .map_err(|e| e.to_py_runtime_err())?
             .send_dense_to_trainer(batch, block)
             .map_err(|e| e.to_py_runtime_err())
@@ -277,7 +281,10 @@ impl PyPersiaCommonContext {
         weight_bound: f32,
     ) -> PyResult<()> {
         self.inner
-            .get_nats_publisher()
+            .nats_publisher
+            .read()
+            .as_ref()
+            .ok_or_else(|| PersiaError::NatsNotInitializedError)
             .map_err(|e| e.to_py_runtime_err())?
             .configure_embedding_servers(
                 initialize_lower,
