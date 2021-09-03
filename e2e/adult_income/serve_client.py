@@ -2,6 +2,7 @@ import grpc
 import os
 import re
 import sys
+import json
 
 sys.path.append("/workspace/proto/")
 import numpy as np
@@ -66,4 +67,12 @@ if __name__ == "__main__":
     infer_auc = metrics.auc(fpr, tpr)
 
     print(f"infer_auc = {infer_auc}")
-    assert infer_auc > 0.8, f"expect infer auc > 0.8, but get {infer_auc}"
+
+    result_filepath = os.environ["RESULT_FILE_PATH"]
+    with open(result_filepath, 'r') as f:
+        result = f.read(result_filepath)
+        result = json.loads(result)
+
+        eval_auc = result['eval_auc']
+        auc_diff = abs(eval_auc - infer_auc)
+        assert auc_diff == 0, f"infer error, expect auc diff is 0 but got {auc_diff}"

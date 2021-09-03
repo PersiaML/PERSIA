@@ -4,7 +4,7 @@ set -x
 torch-model-archiver \
     --model-name adult_income \
     --version 1.0 \
-    --serialized-file $INFER_CHECKPOINT_DIR/dense.pt \
+    --serialized-file $INFER_CHECKPOINT_DIR/jit_dense.pt \
     --handler /workspace/serve_handler.py \
     --export-path $INFER_CHECKPOINT_DIR/ -f
 

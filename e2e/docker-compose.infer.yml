@@ -5,7 +5,7 @@ services:
                 - adult_income/.test_env
             environment:
                 JOB_ID: 1
-            image: persiaml-infer-test:latest
+            image: persiaml-test:latest
             command: bash -c "/workspace/launch_ts.sh"
             volumes:
                 - ./adult_income:/workspace
@@ -21,7 +21,7 @@ services:
                 - adult_income/.test_env
             environment:
                 JOB_ID: 1
-            image: persiaml-infer-test:latest
+            image: persiaml-test:latest
             command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
             volumes:
                 - ./adult_income:/workspace
@@ -35,7 +35,7 @@ services:
                 - adult_income/.test_env
             environment:
                 JOB_ID: 1
-            image: persiaml-infer-test:latest
+            image: persiaml-test:latest
             command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
             volumes:
                 - ./adult_income:/workspace

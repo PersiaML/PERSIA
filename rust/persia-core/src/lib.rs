@@ -179,15 +179,6 @@ impl PyPersiaCommonContext {
         Ok(Self { inner })
     }
 
-    pub fn world_size(&self) -> PyResult<usize> {
-        let world_size = self
-            .inner
-            .get_nats_publisher()
-            .map_err(|e| e.to_py_runtime_err())?
-            .world_size();
-        Ok(world_size)
-    }
-
     pub fn init_nats_publisher(&self, world_size: Option<usize>) -> PyResult<()> {
         self.inner
             .init_nats_publisher(world_size)

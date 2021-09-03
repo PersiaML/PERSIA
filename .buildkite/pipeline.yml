@@ -1,9 +1,6 @@
 steps:
   - label: "Build docker ci image for latest persiaml framework"
-    command: docker build --build-arg USE_CUDA=1 -t persiaml-test:latest -f docker/persia-cuda-runtime/Dockerfile .
-
-  - label: "Build docker ci image with inference environment for latest persiaml framework"
-    command: docker build --build-arg USE_CUDA=1 -t persiaml-infer-test:latest -f docker/persia-inference-runtime/Dockerfile .
+    command: docker build --build-arg USE_CUDA=1 -t persiaml-test:latest .
 
   - wait
 

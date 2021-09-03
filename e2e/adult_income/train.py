@@ -1,5 +1,4 @@
 import os
-import subprocess
 
 from typing import Optional
 
@@ -8,6 +7,7 @@ import numpy as np
 
 from tqdm import tqdm
 from sklearn import metrics
+import json
 
 from persia.ctx import TrainCtx, eval_ctx, EmbeddingConfig
 from persia.sparse.optim import Adagrad
@@ -136,7 +136,7 @@ if __name__ == "__main__":
         ctx.dump_checkpoint(eval_checkpoint_dir)
         logger.info(f"dump checkpoint to {eval_checkpoint_dir}")
 
-        ctx.dump_checkpoint(infer_checkpoint_dir, for_inference=True)
+        ctx.dump_checkpoint(infer_checkpoint_dir, with_jit_model=True)
         logger.info(f"dump checkpoint to {infer_checkpoint_dir}")
 
         ctx.clear_embeddings()
@@ -146,3 +146,13 @@ if __name__ == "__main__":
     eval_auc, eval_acc = test(model, eval_checkpoint_dir)
     auc_diff = abs(eval_auc - test_auc)
     assert auc_diff == 0, f"eval error, expect auc diff is 0 but got {auc_diff}"
+
+    result_filepath = os.environ["RESULT_FILE_PATH"]
+    result = {
+        "test_auc" : test_auc,
+        "eval_auc" : eval_auc,
+    }
+    result = json.dumps(result)
+
+    with open(result_filepath, 'w') as f:
+        f.write(result)
