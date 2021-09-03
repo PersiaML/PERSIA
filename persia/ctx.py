@@ -105,7 +105,7 @@ class DataCtx(BaseCtx):
     r"""It provide the communicate ability for data generator component to send the PersiaBatchData
     to the trainer and embedding middleware.
 
-    Examples::
+    Example:
         >>> from persia.prelude import PyPersiaBatchData
         >>> loader = make_simple_loader()
         >>> with DataCtx() as ctx:
@@ -163,7 +163,7 @@ class EmbeddingCtx(BaseCtx):
     according to different preprocess_mode.The most simple way to get this context is use ``persia.ctx.eval_ctx()`` or
     ``persia.ctx.inference_ctx`` to get the ``EmbeddingCtx`` instance.
 
-    Examples:
+    Example:
         >>> from persia.prelude import PyPersiaBatchData
         >>> model = get_dnn_model()
         >>> loader = make_dataloader()
@@ -479,7 +479,7 @@ class EmbeddingCtx(BaseCtx):
 class TrainCtx(EmbeddingCtx):
     r"""Subclass of ``EmbeddingCtx`` that provide the backward ability to update the sparse embedding.
 
-    Example::
+    Example:
         >>> import torch
         >>> model = get_dnn_model()
         >>> sparse_optimizer = persia.sparse.optim.SGD(lr=1e-3)
@@ -736,10 +736,10 @@ def eval_ctx(*args, **kwargs) -> EmbeddingCtx:
 class InferCtx(EmbeddingCtx):
     r"""Subclass of ``EmbeddingCtx`` that provide the forward ability without nats servers.
 
-    Example::
+    Example:
         >>> from persia.ctx import InferCtx
         >>> persia_context = InferCtx()
-        >>> batch = persia_context.get_embedding_from_bytes(batch, 0)
+        >>> batch = persia_context.get_embedding_from_bytes(batch, device_id)
         >>> model_input = persia_context.prepare_features(batch)
     """
 
