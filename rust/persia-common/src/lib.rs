@@ -248,22 +248,7 @@ pub enum FeatureEmbeddingBatch {
 #[serde(crate = "self::serde")]
 pub struct EmbeddingBatch {
     pub batches: Vec<FeatureEmbeddingBatch>,
-}
-
-#[derive(Deserialize, Serialize, Readable, Writable, Debug)]
-#[serde(crate = "self::serde")]
-pub enum EmbeddingBatchWithState {
-    Inferable(EmbeddingBatch),
-    Trainable((EmbeddingBatch, u64)),
-}
-
-impl Into<EmbeddingBatch> for EmbeddingBatchWithState {
-    fn into(self) -> EmbeddingBatch {
-        match self {
-            EmbeddingBatchWithState::Inferable(data) => data,
-            EmbeddingBatchWithState::Trainable((data, _)) => data,
-        }
-    }
+    pub backward_ref_id: Option<u64>,
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
@@ -306,17 +291,17 @@ impl From<Vec<(String, Vec<&PyArray1<u64>>)>> for SparseBatch {
 }
 
 #[derive(Readable, Writable, Debug, Clone)]
-pub struct MiddlewareSlot {
+pub struct SparseBatchRemoteReference {
     pub middleware_addr: String,
-    pub slot_id: u64,
+    pub ref_id: u64,
     pub batcher_idx: usize,
 }
 
-impl Default for MiddlewareSlot {
+impl Default for SparseBatchRemoteReference {
     fn default() -> Self {
         Self {
             middleware_addr: String::from(""),
-            slot_id: 0,
+            ref_id: 0,
             batcher_idx: 0,
         }
     }
@@ -325,14 +310,16 @@ impl Default for MiddlewareSlot {
 #[derive(Readable, Writable, Debug)]
 pub enum EmbeddingTensor {
     Null,
-    Slot(MiddlewareSlot),
     SparseBatch(SparseBatch),
+    SparseBatchRemoteReference(SparseBatchRemoteReference),
 }
 
 impl EmbeddingTensor {
     pub fn to_forward_id(&self) -> (&str, u64) {
         match &self {
-            EmbeddingTensor::Slot(slot) => (&slot.middleware_addr, slot.slot_id),
+            EmbeddingTensor::SparseBatchRemoteReference(slot) => {
+                (&slot.middleware_addr, slot.ref_id)
+            }
             EmbeddingTensor::SparseBatch(_) => ("", 0u64),
             _ => panic!("forward id not found on embedding tensor"),
         }
