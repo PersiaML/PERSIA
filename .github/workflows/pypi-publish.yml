@@ -1,6 +1,6 @@
-on: push
-
 name: pypi publish
+
+on: push
 
 jobs:
   publish:
