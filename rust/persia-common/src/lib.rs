@@ -248,11 +248,13 @@ pub enum FeatureEmbeddingBatch {
 #[serde(crate = "self::serde")]
 pub struct EmbeddingBatch {
     pub batches: Vec<FeatureEmbeddingBatch>,
+    pub backward_ref_id: Option<u64>,
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
 #[serde(crate = "self::serde")]
 pub struct SparseBatch {
+    pub requires_grad: bool,
     pub batches: Vec<FeatureBatch>,
     #[serde(skip)]
     pub enter_forward_id_buffer_time: Option<std::time::SystemTime>,
@@ -265,6 +267,7 @@ pub struct SparseBatch {
 impl From<Vec<(String, Vec<&PyArray1<u64>>)>> for SparseBatch {
     fn from(batches: Vec<(String, Vec<&PyArray1<u64>>)>) -> Self {
         SparseBatch {
+            requires_grad: true,
             batches: batches
                 .into_iter()
                 .map(|(feature_name, batch)| {
@@ -288,17 +291,17 @@ impl From<Vec<(String, Vec<&PyArray1<u64>>)>> for SparseBatch {
 }
 
 #[derive(Readable, Writable, Debug, Clone)]
-pub struct PreForwardStub {
+pub struct SparseBatchRemoteReference {
     pub middleware_addr: String,
-    pub forward_id: u64,
+    pub ref_id: u64,
     pub batcher_idx: usize,
 }
 
-impl Default for PreForwardStub {
+impl Default for SparseBatchRemoteReference {
     fn default() -> Self {
         Self {
             middleware_addr: String::from(""),
-            forward_id: 0,
+            ref_id: 0,
             batcher_idx: 0,
         }
     }
@@ -307,14 +310,16 @@ impl Default for PreForwardStub {
 #[derive(Readable, Writable, Debug)]
 pub enum EmbeddingTensor {
     Null,
-    PreForwardStub(PreForwardStub),
     SparseBatch(SparseBatch),
+    SparseBatchRemoteReference(SparseBatchRemoteReference),
 }
 
 impl EmbeddingTensor {
     pub fn to_forward_id(&self) -> (&str, u64) {
         match &self {
-            EmbeddingTensor::PreForwardStub(stub) => (&stub.middleware_addr, stub.forward_id),
+            EmbeddingTensor::SparseBatchRemoteReference(sparse_ref) => {
+                (&sparse_ref.middleware_addr, sparse_ref.ref_id)
+            }
             EmbeddingTensor::SparseBatch(_) => ("", 0u64),
             _ => panic!("forward id not found on embedding tensor"),
         }

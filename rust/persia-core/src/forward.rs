@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use persia_common::{EmbeddingBatch, EmbeddingTensor, PersiaBatchData};
+use persia_common::{EmbeddingBatch, EmbeddingTensor, PersiaBatchData, SparseBatchRemoteReference};
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_server::middleware_service::MiddlewareServerError;
 use persia_libs::{
@@ -457,52 +457,66 @@ impl Forward {
                             start_time.elapsed()
                         );
 
-                        let (embeddings_result, middleware_addr, embedding_staleness_permit) =
-                            match &batch.sparse_data {
-                                EmbeddingTensor::SparseBatch(sparse_data) => {
+                        let mut batch = batch;
+                        let (embeddings_rpc_result, middleware_addr, embedding_staleness_permit) =
+                            match batch.sparse_data {
+                                EmbeddingTensor::SparseBatch(mut sparse_data) => {
                                     let (middleware_addr, client) =
                                         rpc_client.get_random_client_with_addr();
 
-                                    let result = client.forward_batched_direct(sparse_data).await;
+                                    sparse_data.requires_grad = is_training;
+                                    let result = client.forward_batched_direct(&sparse_data).await;
+
                                     (result, middleware_addr, None)
                                 }
-                                EmbeddingTensor::PreForwardStub(stub) => {
+                                EmbeddingTensor::SparseBatchRemoteReference(sparse_ref) => {
                                     let permit = match &embedding_staleness_semaphore {
                                         Some(s) => Some(s.clone().acquire_owned().await.unwrap()),
                                         None => None,
                                     };
 
                                     let client = rpc_client
-                                        .get_client_by_addr(stub.middleware_addr.as_str());
-                                    let result =
-                                        client.forward_batch_id(&(stub.clone(), is_training)).await;
-                                    (result, stub.middleware_addr.clone(), permit)
+                                        .get_client_by_addr(sparse_ref.middleware_addr.as_str());
+                                    let result = client
+                                        .forward_batch_id(&(sparse_ref.clone(), is_training))
+                                        .await;
+                                    (result, sparse_ref.middleware_addr.clone(), permit)
                                 }
                                 EmbeddingTensor::Null => {
                                     panic!("current sparse data not support null data",)
                                 }
                             };
 
-                        if embeddings_result.is_err() {
+                        if let Err(err) = embeddings_rpc_result {
                             tracing::error!(
                                 "forward data failed {:?}, middleware: {:?}, wait embedding server recovery service",
-                                embeddings_result,
+                                err,
                                 middleware_addr
                             );
                             rpc_client.wait_for_serving().unwrap();
                             continue;
                         }
-                        let embeddings = embeddings_result.unwrap();
+                        let embedding_batch = embeddings_rpc_result.unwrap();
 
                         tracing::debug!("forward done, got embeddings");
                         if let Ok(m) = MetricsHolder::get() {
                             m.forward_client_time_cost
                                 .observe(start_time.elapsed().as_secs_f64());
                         }
-                        match embeddings {
-                            Ok(embeddings) => {
+                        match embedding_batch {
+                            Ok(embedding) => {
+                                let sparse_ref = match embedding.backward_ref_id {
+                                    Some(backward_ref_id) => SparseBatchRemoteReference {
+                                        middleware_addr,
+                                        ref_id: backward_ref_id,
+                                        batcher_idx: 0,
+                                    },
+                                    None => SparseBatchRemoteReference::default(),
+                                };
+                                batch.sparse_data =
+                                    EmbeddingTensor::SparseBatchRemoteReference(sparse_ref);
                                 if let Err(e) = channel_s
-                                    .send_async((batch, embeddings, embedding_staleness_permit))
+                                    .send_async((batch, embedding, embedding_staleness_permit))
                                     .await
                                 {
                                     tracing::debug!(
@@ -526,13 +540,13 @@ impl Forward {
                                 }
                             }
                             _ => {
-                                tracing::error!("forward error: {:?}", embeddings);
+                                tracing::error!("forward error: {:?}", embedding_batch);
                                 if let Ok(m) = MetricsHolder::get() {
                                     m.forward_error.inc();
                                 }
                                 tracing::error!(
                                     message = "forward with id failed, continue...",
-                                    error = tracing::field::debug(&embeddings),
+                                    error = tracing::field::debug(&embedding_batch),
                                 );
                             }
                         }
@@ -557,8 +571,7 @@ pub fn forward_directly(batch: PersiaBatchData, device_id: i32) -> PyResult<Pyth
         .map(|d| cuda_dense_tensor_h2d(d).expect("cannot move dense to gpu"))
         .collect();
 
-    let emb_tensor = &batch.sparse_data;
-    let embeddings = match emb_tensor {
+    let embeddings = match &batch.sparse_data {
         EmbeddingTensor::SparseBatch(sparse_batch) => {
             let _guard = async_runtime.enter();
             let (_middleware_addr, client) = rpc_client.get_random_client_with_addr();
