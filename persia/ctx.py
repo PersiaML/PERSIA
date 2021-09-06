@@ -1,4 +1,5 @@
 import os
+import socket
 
 from enum import Enum
 from queue import Queue
@@ -511,6 +512,7 @@ class TrainCtx(EmbeddingCtx):
         backward_buffer_size: int = 10,
         backward_workers_size: int = 8,
         grad_update_buffer_size: int = 60,
+        torch_distributed_port: int = 23456,
         *args,
         **kwargs,
     ):
@@ -524,6 +526,7 @@ class TrainCtx(EmbeddingCtx):
             backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
             grad_tensor_cache_size(int, optional): Number of reference cache , hold the gradient tensor reference to avoid
                 meet dangle data in gradient backward phase.
+            torch_distributed_port(int, optional): tcp Port when init torch distributed process group.
         """
         super(TrainCtx, self).__init__(PreprocessMode.TRAIN, *args, **kwargs)
 
@@ -541,7 +544,36 @@ class TrainCtx(EmbeddingCtx):
         torch.cuda.set_device(device_id)
 
         world_size = env.get_world_size()
-        assert world_size != -1, f"WORLD_SIZE not set"
+        assert world_size != -1, "WORLD_SIZE not set"
+        rank_id = env.get_rank()
+        assert rank_id != -1, "RANK not set"
+
+        if world_size > 1:
+            if rank_id == 0:
+                ip = socket.gethostbyname(socket.gethostname())
+                leader_addr = f"tcp://{ip}:{torch_distributed_port}"
+                self.common_context.init_leader_discovery_stub(leader_addr)
+            else:
+                self.common_context.init_leader_discovery_stub(None)
+                leader_addr = self.common_context.get_leader_addr()
+
+            _logger.info(f"leader addr is {leader_addr}")
+
+            torch.distributed.init_process_group(
+                "nccl",
+                init_method=leader_addr,
+                rank=rank_id,
+                world_size=world_size,
+            )
+
+            _logger.info("torch ddp init process group done")
+
+            self.model = torch.nn.parallel.DistributedDataParallel(
+                self.model,
+                device_ids=[device_id],
+                output_device=device_id,
+                find_unused_parameters=True,
+            )
 
         self.common_context.init_nats_publisher(world_size)
         self.common_context.wait_servers_ready()

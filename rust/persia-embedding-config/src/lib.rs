@@ -191,6 +191,10 @@ impl PersiaReplicaInfo {
             .set(Arc::new(instance))
             .map_err(|_| PersiaGlobalConfigError::SetError)
     }
+
+    pub fn is_leader(&self) -> bool {
+        self.replica_index == 0
+    }
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]

@@ -12,14 +12,14 @@ _DEBUG = int(os.environ.get("DEBUG", False))
 _ENV = os.environ.copy()
 
 if _DEBUG:
-    # add thirdparty_path into PATH
+    # add persia_dev_path into PATH
     persia_dev_path = os.environ.get("PERSIA_DEV_PATH", None)
     if persia_dev_path is not None:
         origin_path = os.environ.get("PATH", "")
         _ENV["PATH"] = f"{persia_dev_path}:{origin_path}"
         _logger.info(f"Use persia_dev_path: {persia_dev_path} to replace origin path")
 
-    # add thirdparty_path into PYTHONPATH
+    # add persia_dev_path into PYTHONPATH
     persia_dev_pythonpath = os.environ.get("PERSIA_DEV_PYTHONPATH", None)
     if persia_dev_pythonpath is not None:
         origin_pythonpath = os.environ.get("PYTHONPATH", "")
@@ -31,15 +31,15 @@ if _DEBUG:
 
 def resolve_binary_execute_path(binary_name: str) -> str:
     if _DEBUG:
-        thirdparty_path = os.environ.get("THIRDPARTY_PATH", None)
-        if not thirdparty_path:
+        persia_dev_path = os.environ.get("PERSIA_DEV_PATH", None)
+        if not persia_dev_path:
             raise KeyError(
-                "Launch program with debug mode but without THIRDPARTY_PATH env"
+                "Launch program with debug mode but without PERSIA_DEV_PATH env"
             )
 
-        if os.access(os.path.join(thirdparty_path, binary_name), os.X_OK):
+        if os.access(os.path.join(persia_dev_path, binary_name), os.X_OK):
             raise Exception(
-                f"Can't not found executable {binary_name} in {thirdparty_path}"
+                f"Can't not found executable {binary_name} in {persia_dev_path}"
             )
 
         return binary_name
