@@ -469,17 +469,18 @@ impl Forward {
 
                                     (result, middleware_addr, None)
                                 }
-                                EmbeddingTensor::SparseBatchRemoteReference(slot) => {
+                                EmbeddingTensor::SparseBatchRemoteReference(sparse_ref) => {
                                     let permit = match &embedding_staleness_semaphore {
                                         Some(s) => Some(s.clone().acquire_owned().await.unwrap()),
                                         None => None,
                                     };
 
                                     let client = rpc_client
-                                        .get_client_by_addr(slot.middleware_addr.as_str());
-                                    let result =
-                                        client.forward_batch_id(&(slot.clone(), is_training)).await;
-                                    (result, slot.middleware_addr.clone(), permit)
+                                        .get_client_by_addr(sparse_ref.middleware_addr.as_str());
+                                    let result = client
+                                        .forward_batch_id(&(sparse_ref.clone(), is_training))
+                                        .await;
+                                    (result, sparse_ref.middleware_addr.clone(), permit)
                                 }
                                 EmbeddingTensor::Null => {
                                     panic!("current sparse data not support null data",)
@@ -504,7 +505,7 @@ impl Forward {
                         }
                         match embedding_batch {
                             Ok(embedding) => {
-                                let middleware_slot = match embedding.backward_ref_id {
+                                let sparse_ref = match embedding.backward_ref_id {
                                     Some(backward_ref_id) => SparseBatchRemoteReference {
                                         middleware_addr,
                                         ref_id: backward_ref_id,
@@ -513,7 +514,7 @@ impl Forward {
                                     None => SparseBatchRemoteReference::default(),
                                 };
                                 batch.sparse_data =
-                                    EmbeddingTensor::SparseBatchRemoteReference(middleware_slot);
+                                    EmbeddingTensor::SparseBatchRemoteReference(sparse_ref);
                                 if let Err(e) = channel_s
                                     .send_async((batch, embedding, embedding_staleness_permit))
                                     .await

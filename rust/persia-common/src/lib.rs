@@ -317,8 +317,8 @@ pub enum EmbeddingTensor {
 impl EmbeddingTensor {
     pub fn to_forward_id(&self) -> (&str, u64) {
         match &self {
-            EmbeddingTensor::SparseBatchRemoteReference(slot) => {
-                (&slot.middleware_addr, slot.ref_id)
+            EmbeddingTensor::SparseBatchRemoteReference(sparse_ref) => {
+                (&sparse_ref.middleware_addr, sparse_ref.ref_id)
             }
             EmbeddingTensor::SparseBatch(_) => ("", 0u64),
             _ => panic!("forward id not found on embedding tensor"),

@@ -24,7 +24,7 @@ use persia_common::{
     ndarray_f16_to_f32, ndarray_f32_to_f16,
     optim::OptimizerConfig,
     EmbeddingBatch, FeatureEmbeddingBatch, FeatureRawEmbeddingBatch, FeatureSumEmbeddingBatch,
-    HashMapEmbeddingEntry, SparseBatchRemoteReference, SingleSignInFeatureBatch, SparseBatch,
+    HashMapEmbeddingEntry, SingleSignInFeatureBatch, SparseBatch, SparseBatchRemoteReference,
 };
 use persia_embedding_config::{
     EmbeddingConfig, InstanceInfo, PersiaGlobalConfigError, PersiaMiddlewareConfig,
@@ -844,7 +844,7 @@ impl MiddlewareServerInner {
     pub async fn lookup_batched_all_slots(
         &self,
         indices: &mut SparseBatch,
-        is_training: bool,
+        requires_grad: bool,
     ) -> Result<Vec<FeatureEmbeddingBatch>, MiddlewareServerError> {
         let start_time_all = std::time::Instant::now();
         let start_time = std::time::Instant::now();
@@ -860,7 +860,7 @@ impl MiddlewareServerInner {
                 let req = tokio::task::block_in_place(|| {
                     (
                         shard_indices.iter().map(|x| (x.sign, x.dim)).collect(),
-                        is_training,
+                        requires_grad,
                     )
                 });
                 let client = block_on(
@@ -1002,14 +1002,14 @@ impl MiddlewareServerInner {
         &self,
         req: (SparseBatchRemoteReference, bool),
     ) -> Result<EmbeddingBatch, MiddlewareServerError> {
-        let (slot, is_training) = req;
-        let ref_id = slot.ref_id;
+        let (sparse_ref, requires_grad) = req;
+        let ref_id = sparse_ref.ref_id;
 
         let inner = self.clone();
         let mut indices = {
             let mut forward_id_buffer = inner.forward_id_buffer.write().await;
             let sub_buffer = forward_id_buffer
-                .get_mut(&slot.batcher_idx)
+                .get_mut(&sparse_ref.batcher_idx)
                 .ok_or_else(|| MiddlewareServerError::ForwardIdNotFound(ref_id))?;
             sub_buffer
                 .remove(&ref_id)
@@ -1019,7 +1019,7 @@ impl MiddlewareServerInner {
         tracing::debug!("received forward_batch_id request");
         self.staleness.fetch_add(1, Ordering::AcqRel);
         let result = inner
-            .lookup_batched_all_slots(&mut indices, is_training)
+            .lookup_batched_all_slots(&mut indices, requires_grad)
             .await;
 
         if result.is_err() {
@@ -1027,7 +1027,7 @@ impl MiddlewareServerInner {
         }
         let result = result?;
 
-        if is_training {
+        if requires_grad {
             indices.enter_post_forward_buffer_time = Some(SystemTime::now());
             inner
                 .post_forward_buffer
