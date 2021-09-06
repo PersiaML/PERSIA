@@ -24,7 +24,7 @@ use persia_common::{
     ndarray_f16_to_f32, ndarray_f32_to_f16,
     optim::OptimizerConfig,
     EmbeddingBatch, FeatureEmbeddingBatch, FeatureRawEmbeddingBatch, FeatureSumEmbeddingBatch,
-    HashMapEmbeddingEntry, SparseBatchRemoteReference, SingleSignInFeatureBatch, SparseBatch,
+    HashMapEmbeddingEntry, SingleSignInFeatureBatch, SparseBatch, SparseBatchRemoteReference,
 };
 use persia_embedding_config::{
     EmbeddingConfig, InstanceInfo, PersiaGlobalConfigError, PersiaMiddlewareConfig,
