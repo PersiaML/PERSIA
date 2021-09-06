@@ -1389,12 +1389,12 @@ impl MiddlewareNatsStub {
         }
         let ref_id = self.inner.forward_batched(indices, batcher_idx).await?;
         let middleware_addr = self.inner.get_address().await?;
-        let slot = SparseBatchRemoteReference {
+        let sparse_ref = SparseBatchRemoteReference {
             middleware_addr,
             ref_id,
             batcher_idx,
         };
-        Ok(slot)
+        Ok(sparse_ref)
     }
 
     pub async fn dump(&self, req: String) -> Result<(), MiddlewareServerError> {
