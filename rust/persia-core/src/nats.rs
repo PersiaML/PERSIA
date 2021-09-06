@@ -139,9 +139,9 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
                     retry(Fixed::from_millis(1000).take(1), op)
                 };
 
-                let result = resp.map_err(|_| PersiaError::SendDataError)?;
+                let sparse_ref = resp.map_err(|_| PersiaError::SendDataError)?;
 
-                batch.inner.sparse_data = EmbeddingTensor::SparseBatchRemoteReference(result);
+                batch.inner.sparse_data = EmbeddingTensor::SparseBatchRemoteReference(sparse_ref);
                 let local_batch_id = self.cur_batch_id.fetch_add(1, Ordering::AcqRel);
                 let batch_id = local_batch_id * self.replica_info.replica_size
                     + self.replica_info.replica_index;
