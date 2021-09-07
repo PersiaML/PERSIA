@@ -23,7 +23,7 @@ use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError}
 use persia_full_amount_manager::{FullAmountManager, PersiaFullAmountManagerError};
 use persia_speedy::{Readable, Writable};
 use persia_storage_visitor::{
-    PersiaCephVisitor, PersiaHdfsVisitor, PersiaStorageVisitor, SpeedyObj,
+    PersiaDiskVisitor, PersiaHdfsVisitor, PersiaStorageVisitor, SpeedyObj,
 };
 
 #[derive(Readable, Writable, thiserror::Error, Debug)]
@@ -86,8 +86,8 @@ impl PersiaPersistenceManager {
             let replica_info = PersiaReplicaInfo::get()?;
 
             let storage_visitor: Arc<dyn PersiaStorageVisitor> = match server_config.storage {
-                PersiaPersistenceStorage::Ceph => Arc::new(PersiaCephVisitor {}),
-                PersiaPersistenceStorage::Hdfs => Arc::new(PersiaHdfsVisitor::new()),
+                PersiaPersistenceStorage::Ceph => Arc::new(PersiaDiskVisitor {}),
+                PersiaPersistenceStorage::Hdfs => Arc::new(PersiaHdfsVisitor {}),
             };
 
             let singleton = Arc::new(Self::new(

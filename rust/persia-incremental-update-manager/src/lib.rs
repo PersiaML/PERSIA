@@ -23,7 +23,7 @@ use persia_embedding_config::{
 use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
 use persia_metrics::{Gauge, PersiaMetricsManager, PersiaMetricsManagerError};
 use persia_storage_visitor::{
-    PerisaIncrementalPacket, PersiaCephVisitor, PersiaHdfsVisitor, PersiaStorageVisitor, SpeedyObj,
+    PerisaIncrementalPacket, PersiaDiskVisitor, PersiaHdfsVisitor, PersiaStorageVisitor, SpeedyObj,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -124,8 +124,8 @@ impl PerisaIncrementalUpdateManager {
                 .unwrap(),
         );
         let storage_visitor: Arc<dyn PersiaStorageVisitor> = match storage {
-            PersiaPersistenceStorage::Ceph => Arc::new(PersiaCephVisitor {}),
-            PersiaPersistenceStorage::Hdfs => Arc::new(PersiaHdfsVisitor::new()),
+            PersiaPersistenceStorage::Ceph => Arc::new(PersiaDiskVisitor {}),
+            PersiaPersistenceStorage::Hdfs => Arc::new(PersiaHdfsVisitor {}),
         };
         let buffer_channel_input: ChannelPair<Vec<(u64, Arc<RwLock<HashMapEmbeddingEntry>>)>> =
             ChannelPair::new(update_channel_capacity);

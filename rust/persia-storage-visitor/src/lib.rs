@@ -8,6 +8,8 @@ use persia_libs::anyhow::{anyhow, Result};
 use persia_common::HashMapEmbeddingEntry;
 use persia_speedy::{Readable, Writable};
 
+const INIT_BUFFER_SIZE: usize = 1000;
+
 #[derive(Readable, Writable, Debug)]
 pub struct PerisaIncrementalPacket {
     pub content: Vec<(u64, Vec<f32>)>,
@@ -45,9 +47,9 @@ pub trait PersiaStorageVisitor: Send + Sync {
     fn append_line_to_file(&self, line: String, file_path: PathBuf) -> Result<()>;
 }
 
-pub struct PersiaCephVisitor {}
+pub struct PersiaDiskVisitor {}
 
-impl PersiaStorageVisitor for PersiaCephVisitor {
+impl PersiaStorageVisitor for PersiaDiskVisitor {
     fn create_file(&self, file_dir: PathBuf, file_name: PathBuf) -> Result<PathBuf> {
         std::fs::create_dir_all(file_dir.clone())?;
         let file_path: PathBuf = [file_dir, file_name].iter().collect();
@@ -126,22 +128,7 @@ impl PersiaStorageVisitor for PersiaCephVisitor {
     }
 }
 
-pub struct PersiaHdfsVisitor {
-    local_buffer_dir: PathBuf,
-    local_storage_visitor: PersiaCephVisitor,
-}
-
-impl PersiaHdfsVisitor {
-    pub fn new() -> Self {
-        let local_buffer_dir = PathBuf::from("/tmp/persia_buffer_dir/");
-        std::fs::create_dir_all(local_buffer_dir.clone())
-            .expect("perisa can not create dump buffer dir");
-        Self {
-            local_buffer_dir,
-            local_storage_visitor: PersiaCephVisitor {},
-        }
-    }
-}
+pub struct PersiaHdfsVisitor {}
 
 impl PersiaStorageVisitor for PersiaHdfsVisitor {
     fn create_file(&self, file_dir: PathBuf, file_name: PathBuf) -> Result<PathBuf> {
@@ -174,29 +161,17 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
     }
 
     fn read_from_file(&self, file_path: PathBuf) -> Result<Vec<u8>> {
-        let get_out = Command::new("hdfs")
-            .arg("dfs")
-            .arg("-get")
+        let text_cmd = Command::new("hadoop")
+            .arg("fs")
+            .arg("-text")
             .arg(file_path.as_os_str())
-            .arg(self.local_buffer_dir.as_os_str())
-            .output()?;
+            .stdout(Stdio::piped())
+            .spawn()?;
 
-        if get_out.status.success() {
-            let local_buffer_file: PathBuf = [
-                self.local_buffer_dir.clone().as_os_str(),
-                file_path.file_name().unwrap(),
-            ]
-            .iter()
-            .collect();
-            let res = self
-                .local_storage_visitor
-                .read_from_file(local_buffer_file.clone());
-            self.local_storage_visitor.remove_file(file_path.clone())?;
-
-            res
-        } else {
-            Err(anyhow!("hdfs get error"))
-        }
+        let mut stdout = text_cmd.stdout.unwrap();
+        let mut result = Vec::with_capacity(INIT_BUFFER_SIZE);
+        stdout.read_to_end(&mut result)?;
+        Ok(result)
     }
 
     fn read_from_file_speedy(&self, file_path: PathBuf) -> Result<SpeedyObj> {
@@ -214,39 +189,18 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
     }
 
     fn dump_to_file(&self, content: Vec<u8>, file_dir: PathBuf, file_name: PathBuf) -> Result<()> {
-        let local_buffer_file: PathBuf = [self.local_buffer_dir.clone(), file_name.clone()]
-            .iter()
-            .collect();
-
-        self.local_storage_visitor.dump_to_file(
-            content,
-            self.local_buffer_dir.clone(),
-            file_name.clone(),
-        )?;
-
-        let mkdir_out = Command::new("hdfs")
+        let file_path = self.create_file(file_dir.clone(), file_name)?;
+        let mut append_cmd = Command::new("hdfs")
             .arg("dfs")
-            .arg("-mkdir")
-            .arg("-p")
-            .arg(file_dir.as_os_str())
-            .output()?;
+            .arg("-appendToFile")
+            .arg("-")
+            .arg(file_path.as_os_str())
+            .stdin(Stdio::piped())
+            .spawn()?;
 
-        if !mkdir_out.status.success() {
-            return Err(anyhow!("hdfs mkdir error"));
-        }
-
-        let put_out = Command::new("hdfs")
-            .arg("dfs")
-            .arg("-put")
-            .arg(local_buffer_file.as_os_str())
-            .arg(file_dir.as_os_str())
-            .output()?;
-
-        if !put_out.status.success() {
-            return Err(anyhow!("hdfs put error"));
-        }
-
-        self.local_storage_visitor.remove_file(local_buffer_file)
+        let mut write_stream = BufWriter::new(append_cmd.stdin.as_mut().unwrap());
+        write_stream.write_all(content.as_slice())?;
+        Ok(())
     }
 
     fn dump_to_file_speedy(
