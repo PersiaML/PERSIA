@@ -107,7 +107,7 @@ impl PythonGradientBatch {
     }
 }
 
-struct EmbeddingBackwardStub {
+struct EmbeddingBackwardPacket {
     pub forward_id: u64,
     pub middleware_addr: String,
     pub embedding_staleness_permit: Option<OwnedSemaphorePermit>,
@@ -117,8 +117,8 @@ struct EmbeddingBackwardStub {
 struct Backward {
     pub backward_channel_s: flume::Sender<GradientBatch>,
     pub backward_channel_r: flume::Receiver<GradientBatch>,
-    pub cpu_backward_channel_s: flume::Sender<EmbeddingBackwardStub>,
-    pub cpu_backward_channel_r: flume::Receiver<EmbeddingBackwardStub>,
+    pub cpu_backward_channel_s: flume::Sender<EmbeddingBackwardPacket>,
+    pub cpu_backward_channel_r: flume::Receiver<EmbeddingBackwardPacket>,
     pub launch: bool,
     pub std_handles: Vec<JoinHandle<()>>,
     pub tokio_handles: Vec<TokioJoinHandle<()>>,
@@ -229,7 +229,7 @@ impl Backward {
                     let embedding_staleness_permit =
                         Arc::try_unwrap(gradients.embedding_staleness_permit).unwrap();
 
-                    if let Err(e) = channel_s.send(EmbeddingBackwardStub {
+                    if let Err(e) = channel_s.send(EmbeddingBackwardPacket {
                         forward_id: gradients.forward_id,
                         middleware_addr: gradients.middleware_addr,
                         embedding_staleness_permit,
@@ -258,12 +258,12 @@ impl Backward {
                         break;
                     }
                     let start_time = std::time::Instant::now();
-                    if let Ok(embedding_backward_stub) = channel_r.recv_async().await {
-                        let forward_id = embedding_backward_stub.forward_id;
-                        let middleware_addr = embedding_backward_stub.middleware_addr;
+                    if let Ok(embedding_backward_packet) = channel_r.recv_async().await {
+                        let forward_id = embedding_backward_packet.forward_id;
+                        let middleware_addr = embedding_backward_packet.middleware_addr;
                         let embedding_staleness_permit =
-                            embedding_backward_stub.embedding_staleness_permit;
-                        let req = embedding_backward_stub.embedding_gradient_batch;
+                            embedding_backward_packet.embedding_staleness_permit;
+                        let req = embedding_backward_packet.embedding_gradient_batch;
 
                         tracing::debug!(
                             "get cpu backward message time cost {:?}",
