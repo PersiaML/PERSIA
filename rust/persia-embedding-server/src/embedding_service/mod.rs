@@ -610,12 +610,12 @@ impl EmbeddingService {
 }
 
 #[derive(Clone)]
-pub struct EmbeddingServerNatsStub {
+pub struct EmbeddingServerNatsService {
     pub inner: Arc<EmbeddingServiceInner>,
 }
 
-#[persia_nats_marcos::stub]
-impl EmbeddingServerNatsStub {
+#[persia_nats_marcos::service]
+impl EmbeddingServerNatsService {
     pub async fn ready_for_serving(&self, _req: ()) -> bool {
         self.inner.ready_for_serving().await
     }

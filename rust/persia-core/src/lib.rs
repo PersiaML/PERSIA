@@ -74,8 +74,8 @@ pub enum PersiaError {
     SendDataError,
     #[error("nats publisher not initialized")]
     NatsNotInitializedError,
-    #[error("LeaderDiscoveryStub not initialized")]
-    LeaderDiscoveryStubNotInitializedError,
+    #[error("LeaderDiscoveryService not initialized")]
+    LeaderDiscoveryServiceNotInitializedError,
     #[error("leader addr input wrong")]
     LeaderAddrInputError,
 }
@@ -90,7 +90,7 @@ static PERSIA_COMMON_CONTEXT: OnceCell<Arc<PersiaCommonContext>> = OnceCell::new
 
 struct PersiaCommonContext {
     pub rpc_client: Arc<PersiaRpcClient>,
-    pub nats_publisher: Arc<RwLock<Option<nats::PersiaBatchFlowNatsStubPublisherWrapper>>>,
+    pub nats_publisher: Arc<RwLock<Option<nats::PersiaBatchFlowNatsServicePublisherWrapper>>>,
     pub leader_discovery_service: Arc<RwLock<Option<nats::LeaderDiscoveryNatsServiceWrapper>>>,
     pub async_runtime: Arc<Runtime>,
 }
@@ -171,7 +171,7 @@ impl PyPersiaCommonContext {
     }
 
     pub fn init_nats_publisher(&self, world_size: Option<usize>) -> PyResult<()> {
-        let instance = nats::PersiaBatchFlowNatsStubPublisherWrapper::new(
+        let instance = nats::PersiaBatchFlowNatsServicePublisherWrapper::new(
             world_size,
             self.inner.async_runtime.clone(),
         );
@@ -200,7 +200,7 @@ impl PyPersiaCommonContext {
             .leader_discovery_service
             .read()
             .as_ref()
-            .ok_or_else(|| PersiaError::LeaderDiscoveryStubNotInitializedError)
+            .ok_or_else(|| PersiaError::LeaderDiscoveryServiceNotInitializedError)
             .map_err(|e| e.to_py_runtime_err())?
             .get_leader_addr();
         Ok(leader_addr)

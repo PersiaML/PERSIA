@@ -25,7 +25,7 @@ use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
 };
 use persia_embedding_server::middleware_service::{
-    MiddlewareNatsStubPublisher, MiddlewareServerError,
+    MiddlewareNatsServicePublisher, MiddlewareServerError,
 };
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::Writable;
@@ -35,7 +35,7 @@ pub struct LeaderDiscoveryNatsService {
     pub leader_addr: Arc<RwLock<Option<String>>>,
 }
 
-#[persia_nats_marcos::stub]
+#[persia_nats_marcos::service]
 impl LeaderDiscoveryNatsService {
     pub async fn get_leader_addr(&self, _placeholder: ()) -> String {
         self.leader_addr
@@ -82,13 +82,13 @@ impl LeaderDiscoveryNatsServiceWrapper {
 }
 
 #[derive(Clone)]
-pub struct PersiaBatchFlowNatsStub {
+pub struct PersiaBatchFlowNatsService {
     pub output_channel: flume::Sender<PersiaBatchData>,
     pub world_size: usize,
 }
 
-#[persia_nats_marcos::stub]
-impl PersiaBatchFlowNatsStub {
+#[persia_nats_marcos::service]
+impl PersiaBatchFlowNatsService {
     pub async fn batch(&self, batch: PersiaBatchData) -> bool {
         let result = self.output_channel.try_send(batch);
         result.is_ok()
@@ -99,22 +99,22 @@ impl PersiaBatchFlowNatsStub {
     }
 }
 
-static RESPONDER: OnceCell<Arc<PersiaBatchFlowNatsStubResponder>> = OnceCell::new();
+static RESPONDER: OnceCell<Arc<PersiaBatchFlowNatsServiceResponder>> = OnceCell::new();
 
-pub struct PersiaBatchFlowNatsStubPublisherWrapper {
-    to_middleware: MiddlewareNatsStubPublisher,
+pub struct PersiaBatchFlowNatsServicePublisherWrapper {
+    to_middleware: MiddlewareNatsServicePublisher,
     num_middlewares: usize,
     cur_middleware_id: AtomicUsize,
     cur_batch_id: AtomicUsize,
     replica_info: Arc<PersiaReplicaInfo>,
-    to_trainer: PersiaBatchFlowNatsStubPublisher,
+    to_trainer: PersiaBatchFlowNatsServicePublisher,
     world_size: usize,
     async_runtime: Arc<Runtime>,
 }
 
-impl PersiaBatchFlowNatsStubPublisherWrapper {
+impl PersiaBatchFlowNatsServicePublisherWrapper {
     pub fn new(world_size: Option<usize>, async_runtime: Arc<Runtime>) -> Self {
-        let to_trainer = PersiaBatchFlowNatsStubPublisher::new();
+        let to_trainer = PersiaBatchFlowNatsServicePublisher::new();
         let world_size = world_size.unwrap_or_else(|| {
             retry(Fixed::from_millis(5000), || {
                 let resp = async_runtime.block_on(to_trainer.publish_get_world_size(&(), None));
@@ -126,7 +126,7 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
             .expect("failed to get world_size of trainer")
         });
 
-        let to_middleware = MiddlewareNatsStubPublisher::new();
+        let to_middleware = MiddlewareNatsServicePublisher::new();
         let num_middlewares = retry(Fixed::from_millis(5000), || {
             let resp: Result<usize, _> =
                 async_runtime.block_on(to_middleware.publish_get_replica_size(&(), None))?;
@@ -317,12 +317,12 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
 pub fn init_responder(world_size: usize, channel: &PyPersiaBatchDataSender) -> PyResult<()> {
     let common_context = PersiaCommonContext::get();
     RESPONDER.get_or_init(|| {
-        let nats_stub = PersiaBatchFlowNatsStub {
+        let nats_service = PersiaBatchFlowNatsService {
             output_channel: channel.inner.clone(),
             world_size,
         };
         let _guard = common_context.async_runtime.enter();
-        Arc::new(PersiaBatchFlowNatsStubResponder::new(nats_stub))
+        Arc::new(PersiaBatchFlowNatsServiceResponder::new(nats_service))
     });
 
     Ok(())
