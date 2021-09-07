@@ -33,8 +33,13 @@ impl PyPersiaBatchData {
         });
     }
 
-    pub fn add_sparse(&mut self, sparse_data: Vec<(String, Vec<&PyArray1<u64>>)>) {
-        self.inner.sparse_data = EmbeddingTensor::SparseBatch(SparseBatch::from(sparse_data));
+    pub fn add_sparse(
+        &mut self,
+        sparse_data: Vec<(String, Vec<&PyArray1<u64>>)>,
+        requires_grad: Option<bool>,
+    ) {
+        self.inner.sparse_data =
+            EmbeddingTensor::SparseBatch(SparseBatch::new(sparse_data, requires_grad));
     }
 
     pub fn add_target(&mut self, target_data: &PyArray2<f32>) {

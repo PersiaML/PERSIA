@@ -264,10 +264,10 @@ pub struct SparseBatch {
     pub batcher_idx: Option<usize>,
 }
 
-impl From<Vec<(String, Vec<&PyArray1<u64>>)>> for SparseBatch {
-    fn from(batches: Vec<(String, Vec<&PyArray1<u64>>)>) -> Self {
+impl SparseBatch {
+    pub fn new(batches: Vec<(String, Vec<&PyArray1<u64>>)>, requires_grad: Option<bool>) {
         SparseBatch {
-            requires_grad: true,
+            requires_grad: requires_grad.unwrap_or(true),
             batches: batches
                 .into_iter()
                 .map(|(feature_name, batch)| {
