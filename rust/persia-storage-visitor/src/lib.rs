@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::Arc;
 
 use persia_libs::anyhow::{anyhow, Result};
 
@@ -47,7 +48,7 @@ pub trait PersiaStorageVisitor: Send + Sync {
     fn append_line_to_file(&self, line: String, file_path: PathBuf) -> Result<()>;
 }
 
-pub struct PersiaDiskVisitor {}
+struct PersiaDiskVisitor {}
 
 impl PersiaStorageVisitor for PersiaDiskVisitor {
     fn create_file(&self, file_dir: PathBuf, file_name: PathBuf) -> Result<PathBuf> {
@@ -128,7 +129,7 @@ impl PersiaStorageVisitor for PersiaDiskVisitor {
     }
 }
 
-pub struct PersiaHdfsVisitor {}
+struct PersiaHdfsVisitor {}
 
 impl PersiaStorageVisitor for PersiaHdfsVisitor {
     fn create_file(&self, file_dir: PathBuf, file_name: PathBuf) -> Result<PathBuf> {
@@ -307,5 +308,76 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
         } else {
             Err(anyhow!("hdfs appendToFile error"))
         }
+    }
+}
+
+pub struct PersiaStorageAdapter {
+    disk_visitor: Arc<PersiaDiskVisitor>,
+    hdfs_visitor: Arc<PersiaHdfsVisitor>,
+}
+
+impl PersiaStorageAdapter {
+    pub fn new() -> Self {
+        Self {
+            disk_visitor: Arc::new(PersiaDiskVisitor {}),
+            hdfs_visitor: Arc::new(PersiaHdfsVisitor {}),
+        }
+    }
+
+    fn get_visitor(&self, path: &PathBuf) -> Arc<dyn PersiaStorageVisitor> {
+        match path.starts_with("hdfs://") {
+            true => self.hdfs_visitor.clone(),
+            false => self.disk_visitor.clone(),
+        }
+    }
+
+    pub fn create_file(&self, file_dir: PathBuf, file_name: PathBuf) -> Result<PathBuf> {
+        self.get_visitor(&file_dir).create_file(file_dir, file_name)
+    }
+
+    pub fn read_from_file(&self, file_path: PathBuf) -> Result<Vec<u8>> {
+        self.get_visitor(&file_path).read_from_file(file_path)
+    }
+
+    pub fn read_from_file_speedy(&self, file_path: PathBuf) -> Result<SpeedyObj> {
+        self.get_visitor(&file_path)
+            .read_from_file_speedy(file_path)
+    }
+
+    pub fn dump_to_file(
+        &self,
+        content: Vec<u8>,
+        file_dir: PathBuf,
+        file_name: PathBuf,
+    ) -> Result<()> {
+        self.get_visitor(&file_dir)
+            .dump_to_file(content, file_dir, file_name)
+    }
+
+    pub fn dump_to_file_speedy(
+        &self,
+        content: SpeedyObj,
+        file_dir: PathBuf,
+        file_name: PathBuf,
+    ) -> Result<()> {
+        self.get_visitor(&file_dir)
+            .dump_to_file_speedy(content, file_dir, file_name)
+    }
+
+    pub fn is_file(&self, file_path: PathBuf) -> Result<bool> {
+        self.get_visitor(&file_path).is_file(file_path)
+    }
+
+    pub fn list_dir(&self, dir_path: PathBuf) -> Result<Vec<PathBuf>> {
+        self.get_visitor(&dir_path).list_dir(dir_path)
+    }
+
+    pub fn remove_file(&self, file_path: PathBuf) -> Result<()> {
+        self.get_visitor(&file_path).remove_file(file_path)
+    }
+
+    pub fn append_line_to_file(&self, line: String, file_path: PathBuf) -> Result<()> {
+        self.get_visitor(&file_path)
+            .append_line_to_file(line, file_path)
     }
 }

@@ -18,13 +18,11 @@ use persia_libs::{
 use persia_common::{utils::ChannelPair, HashMapEmbeddingEntry};
 use persia_embedding_config::{
     PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig, PersiaGlobalConfigError,
-    PersiaPersistenceStorage, PersiaReplicaInfo,
+    PersiaReplicaInfo,
 };
 use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
 use persia_metrics::{Gauge, PersiaMetricsManager, PersiaMetricsManagerError};
-use persia_storage_visitor::{
-    PerisaIncrementalPacket, PersiaDiskVisitor, PersiaHdfsVisitor, PersiaStorageVisitor, SpeedyObj,
-};
+use persia_storage_visitor::{PerisaIncrementalPacket, PersiaStorageAdapter, SpeedyObj};
 
 #[derive(thiserror::Error, Debug)]
 pub enum IncrementalUpdateError {
@@ -66,7 +64,7 @@ pub fn current_unix_time() -> u64 {
 static INCREMENTAL_UPDATE_MANAGER: OnceCell<Arc<PerisaIncrementalUpdateManager>> = OnceCell::new();
 
 pub struct PerisaIncrementalUpdateManager {
-    storage_visitor: Arc<dyn PersiaStorageVisitor>,
+    storage_visitor: Arc<PersiaStorageAdapter>,
     embedding_holder: PersiaEmbeddingHolder,
     executors: Arc<ThreadPool>,
     sign_per_file: usize,
@@ -87,7 +85,6 @@ impl PerisaIncrementalUpdateManager {
             let replica_info = PersiaReplicaInfo::get()?;
 
             let singleton = Self::new(
-                server_config.storage.clone(),
                 embedding_holder,
                 common_comfig.job_type.clone(),
                 server_config.num_persistence_workers,
@@ -107,7 +104,6 @@ impl PerisaIncrementalUpdateManager {
     }
 
     fn new(
-        storage: PersiaPersistenceStorage,
         embedding_holder: PersiaEmbeddingHolder,
         cur_task: PerisaJobType,
         num_executors: usize,
@@ -123,10 +119,7 @@ impl PerisaIncrementalUpdateManager {
                 .build()
                 .unwrap(),
         );
-        let storage_visitor: Arc<dyn PersiaStorageVisitor> = match storage {
-            PersiaPersistenceStorage::Ceph => Arc::new(PersiaDiskVisitor {}),
-            PersiaPersistenceStorage::Hdfs => Arc::new(PersiaHdfsVisitor {}),
-        };
+        let storage_visitor = Arc::new(PersiaStorageAdapter::new());
         let buffer_channel_input: ChannelPair<Vec<(u64, Arc<RwLock<HashMapEmbeddingEntry>>)>> =
             ChannelPair::new(update_channel_capacity);
 

@@ -17,14 +17,12 @@ use persia_libs::{
 use persia_common::HashMapEmbeddingEntry;
 use persia_embedding_config::{
     PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig, PersiaGlobalConfigError,
-    PersiaPersistenceStorage, PersiaReplicaInfo,
+    PersiaReplicaInfo,
 };
 use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
 use persia_full_amount_manager::{FullAmountManager, PersiaFullAmountManagerError};
 use persia_speedy::{Readable, Writable};
-use persia_storage_visitor::{
-    PersiaDiskVisitor, PersiaHdfsVisitor, PersiaStorageVisitor, SpeedyObj,
-};
+use persia_storage_visitor::{PersiaStorageAdapter, SpeedyObj};
 
 #[derive(Readable, Writable, thiserror::Error, Debug)]
 pub enum PersistenceManagerError {
@@ -65,7 +63,7 @@ static MODEL_PERSISTENCE_MANAGER: OnceCell<Arc<PersiaPersistenceManager>> = Once
 
 #[derive(Clone)]
 pub struct PersiaPersistenceManager {
-    storage_visitor: Arc<dyn PersiaStorageVisitor>,
+    storage_visitor: Arc<PersiaStorageAdapter>,
     embedding_holder: PersiaEmbeddingHolder,
     full_amount_manager: Arc<FullAmountManager>,
     status: Arc<RwLock<PersiaPersistenceStatus>>,
@@ -85,10 +83,7 @@ impl PersiaPersistenceManager {
             let full_amount_manager = FullAmountManager::get()?;
             let replica_info = PersiaReplicaInfo::get()?;
 
-            let storage_visitor: Arc<dyn PersiaStorageVisitor> = match server_config.storage {
-                PersiaPersistenceStorage::Ceph => Arc::new(PersiaDiskVisitor {}),
-                PersiaPersistenceStorage::Hdfs => Arc::new(PersiaHdfsVisitor {}),
-            };
+            let storage_visitor = Arc::new(PersiaStorageAdapter::new());
 
             let singleton = Arc::new(Self::new(
                 storage_visitor,
@@ -110,7 +105,7 @@ impl PersiaPersistenceManager {
     }
 
     fn new(
-        storage_visitor: Arc<dyn PersiaStorageVisitor>,
+        storage_visitor: Arc<PersiaStorageAdapter>,
         embedding_holder: PersiaEmbeddingHolder,
         full_amount_manager: Arc<FullAmountManager>,
         concurrent_size: usize,
