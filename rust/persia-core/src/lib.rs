@@ -3,12 +3,8 @@
 #[macro_use]
 extern crate shadow_rs;
 
-#[cfg(feature = "cuda")]
 mod backward;
-#[cfg(feature = "cuda")]
-mod cuda;
 mod data;
-#[cfg(feature = "cuda")]
 mod forward;
 mod metrics;
 mod nats;
@@ -17,7 +13,6 @@ mod rpc;
 mod utils;
 
 use crate::data::PyPersiaBatchData;
-#[cfg(feature = "cuda")]
 use crate::forward::{forward_directly, PythonTrainBatch};
 use crate::optim::PyOptimizerBase;
 use crate::rpc::PersiaRpcClient;
@@ -85,6 +80,7 @@ struct PersiaCommonContext {
     pub rpc_client: Arc<PersiaRpcClient>,
     pub nats_publisher: Arc<nats::PersiaBatchFlowNatsStubPublisherWrapper>,
     pub async_runtime: Arc<Runtime>,
+    pub device_id: Arc<Option<i32>>,
 }
 
 impl PersiaCommonContext {
@@ -100,6 +96,7 @@ impl PersiaCommonContext {
         replica_index: usize,
         replica_size: usize,
         world_size: Option<usize>,
+        device_id: Option<i32>,
     ) -> Result<Arc<Self>, PersiaError> {
         if let Some(instance) = PERSIA_COMMON_CONTEXT.get() {
             return Ok(instance.clone());
@@ -124,6 +121,7 @@ impl PersiaCommonContext {
             rpc_client,
             nats_publisher,
             async_runtime: runtime,
+            device_id: Arc::new(device_id),
         };
 
         let addr = common_context.wait_servers_ready()?;
@@ -166,12 +164,14 @@ impl PyPersiaCommonContext {
         replica_index: usize,
         replica_size: usize,
         world_size: Option<usize>,
+        device_id: Option<i32>,
     ) -> PyResult<Self> {
         let inner = PersiaCommonContext::init(
             num_coroutines_worker,
             replica_index,
             replica_size,
             world_size,
+            device_id,
         )
         .map_err(|e| e.to_py_runtime_err())?;
         Ok(Self { inner })

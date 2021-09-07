@@ -1,6 +1,5 @@
 use crate::backward::PythonGradientBatch;
-use crate::cuda::utils::{cuda_dense_tensor_h2d, embedding2cuda_tensor};
-use crate::cuda::{set_device, AsyncEmbeddingOnCuda, AsyncTensorOnCuda};
+
 use crate::metrics::MetricsHolder;
 use crate::utils::PyPersiaBatchDataReceiver;
 use crate::PersiaCommonContext;
@@ -11,7 +10,15 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use persia_common::{EmbeddingBatch, EmbeddingTensor, PersiaBatchData};
+use persia_common::tensor::CPUStorage;
+use persia_common::{
+    tensor::{Storage, Tensor},
+    EmbeddingBatch, EmbeddingTensor, FeatureEmbeddingBatch, PersiaBatchData,
+};
+
+#[cfg(feature = "cuda")]
+use persia_common::cuda::set_device;
+
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_server::middleware_service::MiddlewareServerError;
 use persia_libs::{
@@ -27,31 +34,6 @@ use persia_libs::{
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-
-#[cfg(not(feature="cuda"))]
-mod CudaStub {
-    #[derive(Debug)]
-    struct GPUTensor {}
-}
-
-#[cfg(not(feature="cuda"))]
-type GPUTensorWrapper = CudaStub::GPUTensor;
-
-#[cfg(feature="cuda")]
-type GPUTensorWrapper = crate::cuda::GPUTensor;
-
-#[derive(Debug)]
-struct CPUTensor {
-    data: Vec<u8>,
-    shape: Vec<usize>,
-    dtype: i32
-}
-
-#[derive(Debug)]
-pub enum Tensor {
-    CPU(CPUTensor),
-    GPU(GPUTensorWrapper),
-}
 
 #[derive(Debug)]
 pub enum Embedding {
@@ -73,51 +55,44 @@ pub struct RawEmbedding {
 }
 
 #[pyclass]
-pub struct PythonAsyncEmbeddingOnCuda {
-    inner: Option<AsyncEmbeddingOnCuda>,
+pub struct PyEmbedding {
+    inner: Option<Embedding>,
 }
 
 #[pymethods]
-impl PythonAsyncEmbeddingOnCuda {
+impl PyEmbedding {
     pub fn is_raw_embedding(&self) -> bool {
         match self.inner.as_ref().unwrap() {
-            AsyncEmbeddingOnCuda::Raw(_) => true,
-            AsyncEmbeddingOnCuda::Sum(_) => false,
+            Embedding::Raw(_) => true,
+            Embedding::Sum(_) => false,
         }
     }
 
-    pub fn get_sum_embedding(&mut self) -> PythonAsyncTensorOnCuda {
-        if let AsyncEmbeddingOnCuda::Sum(sum_embedding) = self.inner.take().unwrap() {
-            PythonAsyncTensorOnCuda {
-                inner: sum_embedding,
-                done_sync: false,
+    pub fn get_sum_embedding(&mut self) -> PyTensor {
+        if let Embedding::Sum(sum_embedding) = self.inner.take().unwrap() {
+            PyTensor {
+                inner: sum_embedding.tensor,
+                is_ready: false,
             }
         } else {
             panic!("AttrError: raw embedding can not convert to sum embedding")
         }
     }
 
-    pub fn get_raw_embedding(
-        &mut self,
-    ) -> (
-        PythonAsyncTensorOnCuda,
-        PythonAsyncTensorOnCuda,
-        PythonAsyncTensorOnCuda,
-        Vec<usize>,
-    ) {
-        if let AsyncEmbeddingOnCuda::Raw(raw_embedding) = self.inner.take().unwrap() {
+    pub fn get_raw_embedding(&mut self) -> (PyTensor, PyTensor, PyTensor, Vec<usize>) {
+        if let Embedding::Raw(raw_embedding) = self.inner.take().unwrap() {
             (
-                PythonAsyncTensorOnCuda {
+                PyTensor {
                     inner: raw_embedding.tensor,
-                    done_sync: false,
+                    is_ready: false,
                 },
-                PythonAsyncTensorOnCuda {
+                PyTensor {
                     inner: raw_embedding.index,
-                    done_sync: false,
+                    is_ready: false,
                 },
-                PythonAsyncTensorOnCuda {
+                PyTensor {
                     inner: raw_embedding.non_empty_index,
-                    done_sync: false,
+                    is_ready: false,
                 },
                 raw_embedding.samples_id_num,
             )
@@ -128,41 +103,43 @@ impl PythonAsyncEmbeddingOnCuda {
 }
 
 #[pyclass]
-pub struct PythonAsyncTensorOnCuda {
-    inner: AsyncTensorOnCuda,
-    done_sync: bool,
+pub struct PyTensor {
+    inner: Tensor,
+    is_ready: bool,
 }
 
 #[pymethods]
-impl PythonAsyncTensorOnCuda {
+impl PyTensor {
+    #[cfg(feature = "cuda")]
     pub fn sync_event(&mut self) {
-        if !self.done_sync {
-            self.inner.event.synchronize();
-            self.done_sync = true;
+        if !self.is_ready {
+            self.inner.storage.gpu_storage_ref().event.synchronize();
+            self.is_ready = true;
         }
     }
 
-    pub fn name(&self) -> &str {
-        self.inner.name.as_str()
-    }
-
+    #[cfg(feature = "cuda")]
     pub fn data_ptr(&mut self) -> u64 {
         self.sync_event();
-        self.inner.ptr.inner as u64
+        self.inner.storage.gpu_storage_ref().ptr.inner as u64
     }
 
-    pub fn shape(&self) -> [usize; 2] {
-        self.inner.shape
+    #[cfg(feature = "cuda")]
+    pub fn shape(&self) -> Vec<usize> {
+        self.inner.shape.clone()
     }
 
+    #[cfg(feature = "cuda")]
     pub fn num_bytes(&self) -> usize {
-        self.inner.ptr.num_bytes
+        self.inner.storage.gpu_storage_ref().ptr.num_bytes
     }
+
+    pub fn numpy(&self) {}
 }
 
 #[pyclass(dict)]
 pub struct PythonTrainBatch {
-    pub inner: PersiaTrainingBatchOnGpu,
+    pub inner: PersiaTrainingBatch,
 }
 
 #[pymethods]
@@ -171,29 +148,29 @@ impl PythonTrainBatch {
         self.inner.middleware_server_addr.as_str()
     }
 
-    pub fn consume_all_dense_features(&mut self) -> Vec<PythonAsyncTensorOnCuda> {
+    pub fn consume_all_dense_features(&mut self) -> Vec<PyTensor> {
         std::mem::replace(&mut self.inner.dense, vec![])
             .into_iter()
-            .map(|x| PythonAsyncTensorOnCuda {
+            .map(|x| PyTensor {
                 inner: x,
-                done_sync: false,
+                is_ready: false,
             })
             .collect()
     }
 
-    pub fn consume_all_sparse_features(&mut self) -> Vec<PythonAsyncEmbeddingOnCuda> {
+    pub fn consume_all_sparse_features(&mut self) -> Vec<PyEmbedding> {
         std::mem::replace(&mut self.inner.embeddings, vec![])
             .into_iter()
-            .map(|x| PythonAsyncEmbeddingOnCuda { inner: Some(x) })
+            .map(|x| PyEmbedding { inner: Some(x) })
             .collect()
     }
 
-    pub fn consume_all_targets(&mut self) -> Vec<PythonAsyncTensorOnCuda> {
+    pub fn consume_all_targets(&mut self) -> Vec<PyTensor> {
         std::mem::replace(&mut self.inner.target, vec![])
             .into_iter()
-            .map(|x| PythonAsyncTensorOnCuda {
+            .map(|x| PyTensor {
                 inner: x,
-                done_sync: false,
+                is_ready: false,
             })
             .collect()
     }
@@ -221,14 +198,63 @@ impl PythonTrainBatch {
 }
 
 #[derive(Debug)]
-pub struct PersiaTrainingBatchOnGpu {
-    pub dense: Vec<AsyncTensorOnCuda>,
-    pub embeddings: Vec<AsyncEmbeddingOnCuda>,
-    pub target: Vec<AsyncTensorOnCuda>,
+pub struct PersiaTrainingBatch {
+    pub dense: Vec<Tensor>,
+    pub embeddings: Vec<Embedding>,
+    pub target: Vec<Tensor>,
     pub meta_data: Option<Vec<u8>>,
     pub middleware_server_addr: String,
     pub forward_id: u64,
     pub embedding_staleness_permit: Option<OwnedSemaphorePermit>,
+}
+
+fn embedding2tensor(embedding: FeatureEmbeddingBatch) -> Embedding {
+    match embedding {
+        FeatureEmbeddingBatch::RawEmbedding(raw_embedding) => {
+            let mut non_empty_index_list = Vec::new();
+
+            raw_embedding
+                .index
+                .iter()
+                .enumerate()
+                .for_each(|(idx, id2idx)| {
+                    if *id2idx != 0 {
+                        non_empty_index_list.push(idx as u64);
+                    }
+                });
+
+            Embedding::Raw(RawEmbedding {
+                tensor: Tensor {
+                    shape: raw_embedding.embeddings.shape().to_vec(),
+                    storage: Storage::CPU(CPUStorage::from_f16(
+                        raw_embedding.embeddings.into_raw_vec(),
+                    )),
+                    name: None,
+                },
+                index: Tensor {
+                    shape: vec![raw_embedding.index.len()],
+                    storage: Storage::CPU(CPUStorage::from_usize(raw_embedding.index)),
+                    name: None,
+                },
+                non_empty_index: Tensor {
+                    shape: vec![std::cmp::max(non_empty_index_list.len(), 1)],
+                    storage: Storage::CPU(CPUStorage::from_u64(non_empty_index_list)),
+                    name: None,
+                },
+                samples_id_num: raw_embedding.sample_id_num,
+            })
+        }
+        FeatureEmbeddingBatch::SumEmbedding(sum_embedding) => {
+            let tensor = Tensor {
+                shape: sum_embedding.embeddings.shape().to_vec(),
+                storage: Storage::CPU(CPUStorage::from_f16(
+                    sum_embedding.embeddings.into_raw_vec(),
+                )),
+                name: None,
+            };
+            Embedding::Sum(SumEmbedding { tensor })
+        }
+    }
 }
 
 struct PerisaDataOrderManager {
@@ -319,8 +345,8 @@ struct Forward {
         EmbeddingBatch,
         Option<OwnedSemaphorePermit>,
     )>,
-    pub gpu_forwarded_channel_s: flume::Sender<PersiaTrainingBatchOnGpu>,
-    pub gpu_forwarded_channel_r: flume::Receiver<PersiaTrainingBatchOnGpu>,
+    pub gpu_forwarded_channel_s: flume::Sender<PersiaTrainingBatch>,
+    pub gpu_forwarded_channel_r: flume::Receiver<PersiaTrainingBatch>,
     pub is_training: bool,
     pub launch: bool,
     pub embedding_staleness_semaphore: Option<Arc<Semaphore>>,
@@ -368,7 +394,7 @@ impl Forward {
         }
     }
 
-    pub fn launch(&mut self, device_id: i32, num_workers: usize) -> PyResult<()> {
+    pub fn launch(&mut self, num_workers: usize) -> PyResult<()> {
         if !self.launch {
             match &self.input_channel {
                 Some(_) => {
@@ -376,7 +402,7 @@ impl Forward {
                     if self.reorder_buffer_channel_r.is_some() {
                         self.spawn_reorder_buffer_worker()?;
                     }
-                    self.spawn_to_gpu_worker(device_id);
+                    self.spawn_to_gpu_worker();
                     self.spawn_forward_worker(num_workers);
                     self.launch = true;
                     Ok(())
@@ -410,13 +436,23 @@ impl Forward {
         Ok(())
     }
 
-    fn spawn_to_gpu_worker(&mut self, device_id: i32) {
+    fn spawn_to_gpu_worker(&mut self) {
         let channel_r = self.forwarded_channel_r.clone();
         let channel_s = self.gpu_forwarded_channel_s.clone();
 
         let running = self.running.clone();
+        let common_ctx = PersiaCommonContext::get();
+
         let handler = std::thread::spawn(move || {
-            set_device(device_id);
+            let mut use_gpu = false;
+            #[cfg(feature = "cuda")]
+            {
+                use_gpu = common_ctx.device_id.as_ref().is_some();
+                if let Some(device_id) = common_ctx.device_id.as_ref() {
+                    set_device(*device_id);
+                }
+            }
+
             loop {
                 if !running.load(Ordering::Acquire) {
                     break;
@@ -427,25 +463,51 @@ impl Forward {
                     let embeddings: Vec<_> = embeddings
                         .batches
                         .into_iter()
-                        .map(|feature_embedding_batch| {
-                            embedding2cuda_tensor(feature_embedding_batch)
+                        .map(|feature_embedding_batch| embedding2tensor(feature_embedding_batch))
+                        .collect();
+
+                    let dense_tensors: Vec<Tensor> = batch
+                        .dense_data
+                        .into_iter()
+                        .map(|d| {
+                            #[cfg(feature = "cuda")]
+                            {
+                                if use_gpu {
+                                    d.cuda()
+                                } else {
+                                    d
+                                }
+                            }
+
+                            #[cfg(not(feature = "cuda"))]
+                            {
+                                d
+                            }
                         })
                         .collect();
 
-                    let dense_tensors: Vec<AsyncTensorOnCuda> = batch
-                        .dense_data
-                        .into_iter()
-                        .map(|d| cuda_dense_tensor_h2d(d).expect("cannot move dense to gpu"))
-                        .collect();
-
-                    let target_tensors: Vec<AsyncTensorOnCuda> = batch
+                    let target_tensors: Vec<Tensor> = batch
                         .target_data
                         .into_iter()
-                        .map(|t| cuda_dense_tensor_h2d(t).expect("cannot move target to gpu"))
+                        .map(|t| {
+                            #[cfg(feature = "cuda")]
+                            {
+                                if use_gpu {
+                                    t.cuda()
+                                } else {
+                                    t
+                                }
+                            }
+
+                            #[cfg(not(feature = "cuda"))]
+                            {
+                                t
+                            }
+                        })
                         .collect();
 
                     let (middleware_addr, forward_id) = batch.sparse_data.to_forward_id();
-                    let training_batch = PersiaTrainingBatchOnGpu {
+                    let training_batch = PersiaTrainingBatch {
                         dense: dense_tensors,
                         embeddings,
                         target: target_tensors,
@@ -596,11 +658,7 @@ pub fn forward_directly(batch: PersiaBatchData, device_id: i32) -> PyResult<Pyth
     let rpc_client = PersiaCommonContext::get().rpc_client.clone();
     let async_runtime = PersiaCommonContext::get().async_runtime.clone();
 
-    let dense: Vec<AsyncTensorOnCuda> = batch
-        .dense_data
-        .into_iter()
-        .map(|d| cuda_dense_tensor_h2d(d).expect("cannot move dense to gpu"))
-        .collect();
+    let dense: Vec<Tensor> = batch.dense_data.into_iter().map(|d| d).collect();
 
     let emb_tensor = &batch.sparse_data;
     let embeddings = match emb_tensor {
@@ -612,10 +670,10 @@ pub fn forward_directly(batch: PersiaBatchData, device_id: i32) -> PyResult<Pyth
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
-            let embeddings: Vec<AsyncEmbeddingOnCuda> = embeddings
+            let embeddings: Vec<Embedding> = embeddings
                 .batches
                 .into_iter()
-                .map(|feature_embedding_batch| embedding2cuda_tensor(feature_embedding_batch))
+                .map(|feature_embedding_batch| embedding2tensor(feature_embedding_batch))
                 .collect();
 
             embeddings
@@ -623,13 +681,9 @@ pub fn forward_directly(batch: PersiaBatchData, device_id: i32) -> PyResult<Pyth
         _ => Vec::new(),
     };
 
-    let target = batch
-        .target_data
-        .into_iter()
-        .map(|t| cuda_dense_tensor_h2d(t).expect("cannot move dense to gpu"))
-        .collect();
+    let target = batch.target_data.into_iter().map(|t| t).collect();
 
-    let infer_batch = PersiaTrainingBatchOnGpu {
+    let infer_batch = PersiaTrainingBatch {
         dense,
         embeddings,
         target,
@@ -668,8 +722,8 @@ impl PyForward {
         })
     }
 
-    fn launch(&mut self, device_id: i32, num_workers: usize) -> PyResult<()> {
-        self.inner.launch(device_id, num_workers)?;
+    fn launch(&mut self, num_workers: usize) -> PyResult<()> {
+        self.inner.launch(num_workers)?;
         Ok(())
     }
 

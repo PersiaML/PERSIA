@@ -1,5 +1,7 @@
 #![allow(clippy::needless_return)]
 
+#[cfg(feature = "cuda")]
+pub mod cuda;
 pub mod grad;
 pub mod message_queue;
 pub mod optim;
@@ -9,7 +11,7 @@ pub mod utils;
 use std::cmp::Ordering;
 use std::u64;
 
-use tensor::{DenseTensor, Tensor};
+use tensor::Tensor;
 
 use persia_libs::{
     half,
@@ -322,10 +324,9 @@ impl EmbeddingTensor {
 }
 #[derive(Readable, Writable, Debug)]
 pub struct PersiaBatchData {
-    pub dense_data: Vec<DenseTensor>,
+    pub dense_data: Vec<Tensor>,
     pub sparse_data: EmbeddingTensor,
-    pub target_data: Vec<DenseTensor>,
-    pub map_data: HashMap<String, Tensor>,
+    pub target_data: Vec<Tensor>,
     pub meta_data: Option<Vec<u8>>,
     pub batch_id: Option<usize>,
 }
@@ -336,7 +337,6 @@ impl Default for PersiaBatchData {
             dense_data: Vec::new(),
             sparse_data: EmbeddingTensor::Null,
             target_data: Vec::new(),
-            map_data: HashMap::new(),
             meta_data: None,
             batch_id: None,
         }

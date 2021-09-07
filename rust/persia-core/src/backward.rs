@@ -104,25 +104,15 @@ impl PythonGradientBatch {
     }
 }
 
-// fn convert_slice_to_gradient<T>(data: Vec<T>, shape: [usize]) {
-//     let gradients = if x.is_f16_gradient {
-//         Gradients::F16(
-//             ndarray::Array2::from_shape_vec(
-//                 x.shape,
-//                 data),
-//             )
-//             .unwrap(),
-//         )
-//     } else {
-//         Gradients::F32(
-//             ndarray::Array2::from_shape_vec(
-//                 x.shape,
-//                 memory_ptr.as_slice::<f32>(num_elements).to_vec(),
-//             )
-//             .unwrap(),
-//         )
-//     };
-// }
+struct MemoryPtr {
+    inner: *const std::os::raw::c_void,
+}
+
+impl MemoryPtr {
+    pub fn as_slice<T>(&self, element_num: usize) -> &[T] {
+        unsafe { std::slice::from_raw_parts(self.inner as *const T, element_num) }
+    }
+}
 
 struct EmbeddingBackwardStub {
     pub forward_id: u64,
@@ -158,7 +148,7 @@ impl Backward {
         }
     }
 
-    fn launch(&mut self, device_id: i32, num_backward_worker: usize) {
+    fn launch(&mut self, device_id: Option<i32>, num_backward_worker: usize) {
         if !self.launch {
             self.running.store(true, Ordering::Relaxed);
             self.spawn_backward_to_cpu_worker(device_id);
@@ -178,8 +168,9 @@ impl Backward {
 
         let running = self.running.clone();
         let handler = std::thread::spawn(move || {
+            #[cfg(feature = "cuda")]
             if let Some(device_id) = device_id {
-                use crate::cuda::set_device;
+                use persia_common::cuda::set_device;
 
                 set_device(device_id as i32);
             }
@@ -207,9 +198,43 @@ impl Backward {
                                     num_elements * std::mem::size_of::<f32>()
                                 };
 
+                                // #[cfg(feature = "cuda")]
+                                // {
+                                //     use crate::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
+                                //     use crate::cuda::utils::cuda_d2h;
+
+                                //     // judge the tensor with device
+                                //     let memory_ptr = if device_id.as_ref().is_some() {
+                                //         let host_ptr = PINNED_MEMORY_POOL.allocate(num_bytes);
+                                //         let event = cuda_d2h(
+                                //             num_bytes,
+                                //             x.data_ptr as *mut std::os::raw::c_void,
+                                //             host_ptr.inner,
+                                //         )
+                                //         .expect("cannot move tensor to host");
+
+                                //         event.synchronize();
+
+                                //         MemoryPtr {
+                                //             inner: host_ptr.inner,
+                                //         }
+                                //     } else {
+                                //         MemoryPtr {
+                                //             inner: x.data_ptr as *mut std::os::raw::c_void,
+                                //         }
+                                //     };
+                                // }
+
+                                // #[cfg(not(feature = "cuda"))]
+                                // {
+                                //     let memory_ptr = MemoryPtr {
+                                //         inner: x.data_ptr as *mut std::os::raw::c_void,
+                                //     };
+                                // }
+
                                 let memory_ptr = if cfg!(feature = "cuda") {
-                                    use crate::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
-                                    use crate::cuda::utils::cuda_d2h;
+                                    use persia_common::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
+                                    use persia_common::cuda::utils::cuda_d2h;
 
                                     // judge the tensor with device
                                     if device_id.as_ref().is_some() {
@@ -354,7 +379,7 @@ impl PyBackward {
         }
     }
 
-    pub fn launch(&mut self, device_id: i32, num_backward_worker: usize) {
+    pub fn launch(&mut self, device_id: Option<i32>, num_backward_worker: usize) {
         self.inner.launch(device_id, num_backward_worker);
     }
 

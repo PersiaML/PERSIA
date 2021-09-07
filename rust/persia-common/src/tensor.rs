@@ -1,115 +1,182 @@
-use persia_libs::{
-    itertools::Itertools,
-    ndarray::Array2,
-    ndarray::ShapeError,
-    serde::{self, Deserialize, Serialize},
-};
+use paste::paste;
+
+use persia_libs::{anyhow::Result, half::f16, thiserror};
+
+#[cfg(feature = "cuda")]
+use crate::cuda;
+
+#[cfg(feature = "cuda")]
+use cuda::GPUStorage;
 
 use persia_speedy::{Readable, Writable};
 
-#[derive(Debug)]
-pub enum TensorDtype {
-    F16,
-    F32,
+#[derive(Debug, thiserror::Error)]
+pub enum TensorError {
+    #[error("cpu storagea not found")]
+    CPUStorageNotFound,
+    #[error("gpu storage not found")]
+    GPUStorageNotFound,
 }
 
 #[derive(Readable, Writable, Debug)]
-pub enum BaseTensor {
+pub enum DType {
+    F16,
+    F32,
+    F64,
+    I32,
+    I64,
+    U32,
+    U64,
+    USIZE,
+}
+
+impl DType {
+    pub fn get_type_size(&self) -> usize {
+        match self {
+            DType::F32 => std::mem::size_of::<f32>(),
+            DType::F16 => std::mem::size_of::<f16>(),
+            DType::F64 => std::mem::size_of::<f64>(),
+            DType::I32 => std::mem::size_of::<i32>(),
+            DType::I64 => std::mem::size_of::<i64>(),
+            DType::U32 => std::mem::size_of::<u32>(),
+            DType::U64 => std::mem::size_of::<u64>(),
+            DType::USIZE => std::mem::size_of::<u64>(),
+        }
+    }
+}
+
+#[derive(Readable, Writable, Debug)]
+pub enum CPUStorage {
+    F16(Vec<f16>),
     F32(Vec<f32>),
     F64(Vec<f64>),
     I32(Vec<i32>),
     I64(Vec<i64>),
+    U32(Vec<u32>),
+    U64(Vec<u64>),
+    USIZE(Vec<usize>),
 }
 
-impl BaseTensor {
-    pub fn type_size(&self) -> usize {
-        match &self {
-            BaseTensor::F32(_) => std::mem::size_of::<f32>(),
-            BaseTensor::F64(_) => std::mem::size_of::<f64>(),
-            BaseTensor::I32(_) => std::mem::size_of::<i32>(),
-            BaseTensor::I64(_) => std::mem::size_of::<i64>(),
+impl CPUStorage {
+    pub fn get_dtype(&self) -> DType {
+        match self {
+            CPUStorage::F32(_) => DType::F32,
+            CPUStorage::F16(_) => DType::F16,
+            CPUStorage::F64(_) => DType::F64,
+            CPUStorage::I32(_) => DType::I32,
+            CPUStorage::I64(_) => DType::I64,
+            CPUStorage::U32(_) => DType::U32,
+            CPUStorage::U64(_) => DType::U64,
+            CPUStorage::USIZE(_) => DType::USIZE,
+        }
+    }
+
+    pub fn as_raw_ptr(&self) -> *const std::os::raw::c_void {
+        match self {
+            CPUStorage::F32(val) => val.as_ptr() as *const std::os::raw::c_void,
+            CPUStorage::F16(val) => val.as_ptr() as *const std::os::raw::c_void,
+            CPUStorage::F64(val) => val.as_ptr() as *const std::os::raw::c_void,
+            CPUStorage::I32(val) => val.as_ptr() as *const std::os::raw::c_void,
+            CPUStorage::I64(val) => val.as_ptr() as *const std::os::raw::c_void,
+            CPUStorage::U32(val) => val.as_ptr() as *const std::os::raw::c_void,
+            CPUStorage::U64(val) => val.as_ptr() as *const std::os::raw::c_void,
+            CPUStorage::USIZE(val) => val.as_ptr() as *const std::os::raw::c_void,
         }
     }
 }
 
+macro_rules! add_new_func2_cpu_storage {
+    ($(($typ:ty, $attr:ident)),*) => {
+        paste! {
+            impl CPUStorage {
+                    $(
+                        pub fn [<from_ $typ:lower>](data: Vec<$typ>) -> Self {
+                            CPUStorage::$attr(data)
+                        }
+                    )*
+            }
+        }
+    }
+}
+
+add_new_func2_cpu_storage!(
+    (f16, F16),
+    (f32, F32),
+    (f64, F64),
+    (i32, I32),
+    (i64, I64),
+    (usize, USIZE),
+    (u32, U32),
+    (u64, U64)
+);
+
 #[derive(Readable, Writable, Debug)]
-pub struct DenseTensor {
-    pub data: BaseTensor,
+pub enum Storage {
+    CPU(CPUStorage),
+
+    #[cfg(feature = "cuda")]
+    GPU(GPUStorage),
+}
+
+impl Storage {
+    pub fn take_cpu_storage(self) -> Result<CPUStorage, TensorError> {
+        match self {
+            Storage::CPU(val) => Ok(val),
+            _ => Err(TensorError::CPUStorageNotFound),
+        }
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn take_gpu_storage(self) -> Result<GPUStorage, TensorError> {
+        match self {
+            Storage::GPU(val) => Ok(val),
+            _ => Err(TensorError::GPUStorageNotFound),
+        }
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn gpu_storage_ref(&self) -> &GPUStorage {
+        match &self {
+            Storage::GPU(val) => val,
+            _ => unreachable!(),
+        }
+    }
+}
+#[derive(Readable, Writable, Debug)]
+pub struct Tensor {
+    pub storage: Storage,
     pub shape: Vec<usize>,
+    pub name: Option<String>,
+}
+
+impl Tensor {
+    pub fn new(storage: Storage, shape: Vec<usize>, name: Option<String>) -> Self {
+        Self {
+            storage,
+            shape,
+            name,
+        }
+    }
+    #[cfg(feature = "cuda")]
+    pub fn cuda(self) -> Tensor {
+        let shape = self.shape.clone();
+        let cpu_storage = self.storage.take_cpu_storage().unwrap();
+        let gpu_storage = GPUStorage::new(cpu_storage, shape).unwrap();
+
+        Tensor {
+            storage: Storage::GPU(gpu_storage),
+            shape: self.shape.clone(),
+            name: self.name.clone(),
+        }
+    }
+
+    // #[cfg(feature = "cuda")]
+    // pub fn cpu(&self) -> Result<Tensor> {}
 }
 
 #[derive(Readable, Writable, Debug)]
 pub struct SparseTensor {
-    pub data: BaseTensor,
+    pub data: Storage,
     pub offset: Vec<u64>,
-}
-#[derive(Readable, Writable, Debug)]
-pub enum Tensor {
-    Dense(DenseTensor),
-    Sparse(SparseTensor),
-}
-
-#[derive(Default, Serialize, Deserialize, Readable, Writable, Debug, Clone)]
-#[serde(crate = "self::serde")]
-pub struct PersiaDenseTensor<T> {
-    pub name: String,
-    pub dim: usize,
-    pub content: Vec<T>,
-}
-
-impl<T> PersiaDenseTensor<T> {
-    pub fn add_sample(&mut self, mut sample: Vec<T>) {
-        assert_eq!(sample.len(), self.dim);
-        self.content.append(&mut sample);
-    }
-
-    pub fn empty_like(&self) -> Self {
-        Self {
-            name: self.name.clone(),
-            dim: self.dim,
-            content: vec![],
-        }
-    }
-
-    pub fn get(&self, sample_idx: usize) -> &[T] {
-        &self.content[sample_idx * self.dim..(sample_idx + 1) * self.dim]
-    }
-}
-
-impl<T> std::convert::TryInto<Array2<T>> for PersiaDenseTensor<T> {
-    type Error = ShapeError;
-
-    fn try_into(self) -> Result<Array2<T>, Self::Error> {
-        Array2::<T>::from_shape_vec((self.content.len() / self.dim, self.dim), self.content)
-    }
-}
-
-impl<T> IntoIterator for PersiaDenseTensor<T> {
-    type Item = Vec<T>;
-    type IntoIter = PersiaDenseTensorSampleIterator<T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        assert_eq!(self.content.len() % self.dim, 0);
-        let mut chunks = self
-            .content
-            .into_iter()
-            .chunks(self.dim)
-            .into_iter()
-            .map(|chunk| chunk.collect_vec())
-            .collect_vec();
-        chunks.reverse();
-        PersiaDenseTensorSampleIterator { chunks }
-    }
-}
-
-pub struct PersiaDenseTensorSampleIterator<T> {
-    chunks: Vec<Vec<T>>,
-}
-
-impl<T> Iterator for PersiaDenseTensorSampleIterator<T> {
-    type Item = Vec<T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.chunks.pop()
-    }
+    pub name: Option<String>,
 }

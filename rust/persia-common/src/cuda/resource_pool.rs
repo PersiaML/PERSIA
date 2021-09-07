@@ -1,6 +1,6 @@
 use std::sync::atomic::Ordering;
 
-use persia_common::utils::ChannelPair;
+use crate::utils::ChannelPair;
 use persia_libs::tracing;
 
 pub trait Allocatable {
