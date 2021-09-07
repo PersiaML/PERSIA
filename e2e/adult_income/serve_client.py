@@ -35,7 +35,7 @@ def infer(stub, model_name, model_input):
         prediction = prediction[1:-1]
         prediction = [float(x) for x in prediction]
         return prediction
-    except grpc.RpcError as e:
+    except:
         exit(1)
 
 
@@ -49,7 +49,7 @@ if __name__ == "__main__":
     for (dense, batch_sparse_ids, target) in tqdm(loader, desc="gen batch data..."):
         batch_data = PyPersiaBatchData()
         batch_data.add_dense([dense])
-        batch_data.add_sparse(batch_sparse_ids)
+        batch_data.add_sparse(batch_sparse_ids, False)
 
         model_input = batch_data.to_bytes()
         prediction = infer(get_inference_stub(), "adult_income", model_input)

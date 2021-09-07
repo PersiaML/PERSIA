@@ -20,6 +20,4 @@ python -m grpc_tools.protoc \
 
 sleep 10s
 
-python serve_client.py
-
-torchserve --stop
+python serve_client.py && torchserve --stop
