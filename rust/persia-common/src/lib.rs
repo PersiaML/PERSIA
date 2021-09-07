@@ -265,7 +265,7 @@ pub struct SparseBatch {
 }
 
 impl SparseBatch {
-    pub fn new(batches: Vec<(String, Vec<&PyArray1<u64>>)>, requires_grad: Option<bool>) {
+    pub fn new(batches: Vec<(String, Vec<&PyArray1<u64>>)>, requires_grad: Option<bool>) -> Self {
         SparseBatch {
             requires_grad: requires_grad.unwrap_or(true),
             batches: batches
