@@ -462,7 +462,7 @@ class EmbeddingCtx(BaseCtx):
         self,
         dense: torch.nn.Module or torch.optim.Optimizer,
         src_filepath: str,
-    ) -> dict:
+    ):
         """Load the torch state dict from source file path.
 
         Arguments:
