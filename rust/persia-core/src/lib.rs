@@ -74,6 +74,10 @@ pub enum PersiaError {
     SendDataError,
     #[error("nats publisher not initialized")]
     NatsNotInitializedError,
+    #[error("LeaderDiscoveryStub not initialized")]
+    LeaderDiscoveryStubNotInitializedError,
+    #[error("leader addr input wrong")]
+    LeaderAddrInputError,
 }
 
 impl PersiaError {
@@ -87,6 +91,7 @@ static PERSIA_COMMON_CONTEXT: OnceCell<Arc<PersiaCommonContext>> = OnceCell::new
 struct PersiaCommonContext {
     pub rpc_client: Arc<PersiaRpcClient>,
     pub nats_publisher: Arc<RwLock<Option<nats::PersiaBatchFlowNatsStubPublisherWrapper>>>,
+    pub leader_discovery_service: Arc<RwLock<Option<nats::LeaderDiscoveryNatsServiceWrapper>>>,
     pub async_runtime: Arc<Runtime>,
 }
 
@@ -120,6 +125,7 @@ impl PersiaCommonContext {
         let common_context = Self {
             rpc_client,
             nats_publisher: Arc::new(RwLock::new(None)),
+            leader_discovery_service: Arc::new(RwLock::new(None)),
             async_runtime: runtime,
         };
 
@@ -144,16 +150,6 @@ impl PersiaCommonContext {
         let _ = self.rpc_client.get_client_by_addr(&addr);
         Ok(())
     }
-
-    pub fn init_nats_publisher(&self, world_size: Option<usize>) -> Result<(), PersiaError> {
-        let instance = nats::PersiaBatchFlowNatsStubPublisherWrapper::new(
-            world_size,
-            self.async_runtime.clone(),
-        );
-        let mut nats_publisher = self.nats_publisher.write();
-        *nats_publisher = Some(instance);
-        Ok(())
-    }
 }
 
 #[pyclass]
@@ -175,9 +171,39 @@ impl PyPersiaCommonContext {
     }
 
     pub fn init_nats_publisher(&self, world_size: Option<usize>) -> PyResult<()> {
-        self.inner
-            .init_nats_publisher(world_size)
-            .map_err(|e| e.to_py_runtime_err())
+        let instance = nats::PersiaBatchFlowNatsStubPublisherWrapper::new(
+            world_size,
+            self.inner.async_runtime.clone(),
+        );
+        let mut nats_publisher = self.inner.nats_publisher.write();
+        *nats_publisher = Some(instance);
+        Ok(())
+    }
+
+    pub fn init_leader_discovery_service(&self, leader_addr: Option<String>) -> PyResult<()> {
+        let replica_info = PersiaReplicaInfo::get().expect("not in persia context");
+        if replica_info.is_leader() == leader_addr.is_none() {
+            return Err(PersiaError::LeaderAddrInputError.to_py_runtime_err());
+        }
+        let instance = nats::LeaderDiscoveryNatsServiceWrapper::new(
+            leader_addr,
+            self.inner.async_runtime.clone(),
+        );
+        let mut leader_discovery_service = self.inner.leader_discovery_service.write();
+        *leader_discovery_service = Some(instance);
+        Ok(())
+    }
+
+    pub fn get_leader_addr(&self) -> PyResult<String> {
+        let leader_addr = self
+            .inner
+            .leader_discovery_service
+            .read()
+            .as_ref()
+            .ok_or_else(|| PersiaError::LeaderDiscoveryStubNotInitializedError)
+            .map_err(|e| e.to_py_runtime_err())?
+            .get_leader_addr();
+        Ok(leader_addr)
     }
 
     pub fn init_rpc_client_with_addr(&self, middleware_addr: String) -> PyResult<()> {
