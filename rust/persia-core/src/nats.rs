@@ -55,13 +55,13 @@ pub struct LeaderDiscoveryNatsServiceWrapper {
 
 impl LeaderDiscoveryNatsServiceWrapper {
     pub fn new(leader_addr: Option<String>, async_runtime: Arc<Runtime>) -> Self {
-        let stub = LeaderDiscoveryNatsService {
+        let service = LeaderDiscoveryNatsService {
             leader_addr: Arc::new(RwLock::new(leader_addr.clone())),
         };
         let _guard = async_runtime.enter();
         let instance = Self {
             publisher: LeaderDiscoveryNatsServicePublisher::new(),
-            _responder: LeaderDiscoveryNatsServiceResponder::new(stub),
+            _responder: LeaderDiscoveryNatsServiceResponder::new(service),
             leader_addr,
             async_runtime,
         };
