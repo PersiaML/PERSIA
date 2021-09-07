@@ -1815,6 +1815,7 @@ dependencies = [
  "persia-nats-marcos",
  "persia-rpc",
  "persia-speedy",
+ "persia-storage-visitor",
  "pyo3",
  "shadow-rs",
 ]

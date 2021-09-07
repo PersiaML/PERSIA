@@ -22,6 +22,7 @@ use crate::forward::{forward_directly, PythonTrainBatch};
 use crate::optim::PyOptimizerBase;
 use crate::rpc::PersiaRpcClient;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use persia_libs::{
@@ -43,6 +44,7 @@ use persia_common::PersiaBatchData;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaReplicaInfo};
 use persia_embedding_server::middleware_service::MiddlewareServerError;
 use persia_speedy::Readable;
+use persia_storage_visitor::PersiaStorageAdapter;
 
 #[derive(thiserror::Error, Debug)]
 pub enum PersiaError {
@@ -78,6 +80,8 @@ pub enum PersiaError {
     LeaderDiscoveryStubNotInitializedError,
     #[error("leader addr input wrong")]
     LeaderAddrInputError,
+    #[error("storage visit error {0}")]
+    StorageVisitError(String),
 }
 
 impl PersiaError {
@@ -92,6 +96,7 @@ struct PersiaCommonContext {
     pub rpc_client: Arc<PersiaRpcClient>,
     pub nats_publisher: Arc<RwLock<Option<nats::PersiaBatchFlowNatsStubPublisherWrapper>>>,
     pub leader_discovery_service: Arc<RwLock<Option<nats::LeaderDiscoveryNatsServiceWrapper>>>,
+    pub storage_visitor: Arc<PersiaStorageAdapter>,
     pub async_runtime: Arc<Runtime>,
 }
 
@@ -126,6 +131,7 @@ impl PersiaCommonContext {
             rpc_client,
             nats_publisher: Arc::new(RwLock::new(None)),
             leader_discovery_service: Arc::new(RwLock::new(None)),
+            storage_visitor: Arc::new(PersiaStorageAdapter::new()),
             async_runtime: runtime,
         };
 
@@ -340,6 +346,32 @@ impl PyPersiaCommonContext {
     ) -> PyResult<PythonTrainBatch> {
         let batch: PersiaBatchData = PersiaBatchData::read_from_buffer(batch.as_bytes()).unwrap();
         forward_directly(batch, device_id)
+    }
+
+    pub fn read_from_file<'a>(&self, file_path: String, py: Python<'a>) -> PyResult<&'a PyBytes> {
+        let file_path = PathBuf::from(file_path);
+        let content = self
+            .inner
+            .storage_visitor
+            .read_from_file(file_path)
+            .map_err(|e| PersiaError::StorageVisitError(format!("{:?}", &e)).to_py_runtime_err())?;
+
+        Ok(PyBytes::new(py, content.as_slice()))
+    }
+
+    pub fn dump_to_file(
+        &self,
+        content: &PyBytes,
+        file_dir: String,
+        file_name: String,
+    ) -> PyResult<()> {
+        let file_dir = PathBuf::from(file_dir);
+        let file_name = PathBuf::from(file_name);
+        let content = content.as_bytes();
+        self.inner
+            .storage_visitor
+            .dump_to_file(content, file_dir, file_name)
+            .map_err(|e| PersiaError::StorageVisitError(format!("{:?}", &e)).to_py_runtime_err())
     }
 }
 

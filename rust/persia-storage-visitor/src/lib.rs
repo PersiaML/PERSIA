@@ -30,7 +30,7 @@ pub trait PersiaStorageVisitor: Send + Sync {
 
     fn read_from_file_speedy(&self, file_path: PathBuf) -> Result<SpeedyObj>;
 
-    fn dump_to_file(&self, content: Vec<u8>, file_dir: PathBuf, file_name: PathBuf) -> Result<()>;
+    fn dump_to_file(&self, content: &[u8], file_dir: PathBuf, file_name: PathBuf) -> Result<()>;
 
     fn dump_to_file_speedy(
         &self,
@@ -76,13 +76,13 @@ impl PersiaStorageVisitor for PersiaDiskVisitor {
         Ok(content)
     }
 
-    fn dump_to_file(&self, content: Vec<u8>, file_dir: PathBuf, file_name: PathBuf) -> Result<()> {
+    fn dump_to_file(&self, content: &[u8], file_dir: PathBuf, file_name: PathBuf) -> Result<()> {
         let file_path = self.create_file(file_dir.clone(), file_name.clone())?;
 
         let out_file = File::open(file_path)?;
 
         let mut buffered = BufWriter::new(out_file);
-        buffered.write_all(content.as_ref())?;
+        buffered.write_all(content)?;
         buffered.flush()?;
 
         Ok(())
@@ -189,7 +189,7 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
         Ok(content)
     }
 
-    fn dump_to_file(&self, content: Vec<u8>, file_dir: PathBuf, file_name: PathBuf) -> Result<()> {
+    fn dump_to_file(&self, content: &[u8], file_dir: PathBuf, file_name: PathBuf) -> Result<()> {
         let file_path = self.create_file(file_dir.clone(), file_name)?;
         let mut append_cmd = Command::new("hdfs")
             .arg("dfs")
@@ -200,7 +200,7 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
             .spawn()?;
 
         let mut write_stream = BufWriter::new(append_cmd.stdin.as_mut().unwrap());
-        write_stream.write_all(content.as_slice())?;
+        write_stream.write_all(content)?;
         Ok(())
     }
 
@@ -346,7 +346,7 @@ impl PersiaStorageAdapter {
 
     pub fn dump_to_file(
         &self,
-        content: Vec<u8>,
+        content: &[u8],
         file_dir: PathBuf,
         file_name: PathBuf,
     ) -> Result<()> {
