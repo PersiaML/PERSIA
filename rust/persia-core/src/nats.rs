@@ -31,12 +31,12 @@ use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::Writable;
 
 #[derive(Clone)]
-pub struct LeaderDiscoveryNatsStub {
+pub struct LeaderDiscoveryNatsService {
     pub leader_addr: Arc<RwLock<Option<String>>>,
 }
 
 #[persia_nats_marcos::stub]
-impl LeaderDiscoveryNatsStub {
+impl LeaderDiscoveryNatsService {
     pub async fn get_leader_addr(&self, _placeholder: ()) -> String {
         self.leader_addr
             .read()
@@ -46,22 +46,22 @@ impl LeaderDiscoveryNatsStub {
     }
 }
 
-pub struct LeaderDiscoveryNatsStubWrapper {
-    publisher: LeaderDiscoveryNatsStubPublisher,
-    _responder: LeaderDiscoveryNatsStubResponder,
+pub struct LeaderDiscoveryNatsServiceWrapper {
+    publisher: LeaderDiscoveryNatsServicePublisher,
+    _responder: LeaderDiscoveryNatsServiceResponder,
     leader_addr: Option<String>,
     async_runtime: Arc<Runtime>,
 }
 
-impl LeaderDiscoveryNatsStubWrapper {
+impl LeaderDiscoveryNatsServiceWrapper {
     pub fn new(leader_addr: Option<String>, async_runtime: Arc<Runtime>) -> Self {
-        let stub = LeaderDiscoveryNatsStub {
+        let stub = LeaderDiscoveryNatsService {
             leader_addr: Arc::new(RwLock::new(leader_addr.clone())),
         };
         let _guard = async_runtime.enter();
         let instance = Self {
-            publisher: LeaderDiscoveryNatsStubPublisher::new(),
-            _responder: LeaderDiscoveryNatsStubResponder::new(stub),
+            publisher: LeaderDiscoveryNatsServicePublisher::new(),
+            _responder: LeaderDiscoveryNatsServiceResponder::new(stub),
             leader_addr,
             async_runtime,
         };

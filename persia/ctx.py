@@ -552,9 +552,9 @@ class TrainCtx(EmbeddingCtx):
             if rank_id == 0:
                 ip = socket.gethostbyname(socket.gethostname())
                 leader_addr = f"tcp://{ip}:{torch_distributed_port}"
-                self.common_context.init_leader_discovery_stub(leader_addr)
+                self.common_context.init_leader_discovery_service(leader_addr)
             else:
-                self.common_context.init_leader_discovery_stub(None)
+                self.common_context.init_leader_discovery_service(None)
                 leader_addr = self.common_context.get_leader_addr()
 
             _logger.info(f"leader addr is {leader_addr}")

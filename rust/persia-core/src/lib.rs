@@ -91,7 +91,7 @@ static PERSIA_COMMON_CONTEXT: OnceCell<Arc<PersiaCommonContext>> = OnceCell::new
 struct PersiaCommonContext {
     pub rpc_client: Arc<PersiaRpcClient>,
     pub nats_publisher: Arc<RwLock<Option<nats::PersiaBatchFlowNatsStubPublisherWrapper>>>,
-    pub leader_discovery_stub: Arc<RwLock<Option<nats::LeaderDiscoveryNatsStubWrapper>>>,
+    pub leader_discovery_service: Arc<RwLock<Option<nats::LeaderDiscoveryNatsServiceWrapper>>>,
     pub async_runtime: Arc<Runtime>,
 }
 
@@ -125,7 +125,7 @@ impl PersiaCommonContext {
         let common_context = Self {
             rpc_client,
             nats_publisher: Arc::new(RwLock::new(None)),
-            leader_discovery_stub: Arc::new(RwLock::new(None)),
+            leader_discovery_service: Arc::new(RwLock::new(None)),
             async_runtime: runtime,
         };
 
@@ -180,24 +180,24 @@ impl PyPersiaCommonContext {
         Ok(())
     }
 
-    pub fn init_leader_discovery_stub(&self, leader_addr: Option<String>) -> PyResult<()> {
+    pub fn init_leader_discovery_service(&self, leader_addr: Option<String>) -> PyResult<()> {
         let replica_info = PersiaReplicaInfo::get().expect("not in persia context");
         if replica_info.is_leader() == leader_addr.is_none() {
             return Err(PersiaError::LeaderAddrInputError.to_py_runtime_err());
         }
-        let instance = nats::LeaderDiscoveryNatsStubWrapper::new(
+        let instance = nats::LeaderDiscoveryNatsServiceWrapper::new(
             leader_addr,
             self.inner.async_runtime.clone(),
         );
-        let mut leader_discovery_stub = self.inner.leader_discovery_stub.write();
-        *leader_discovery_stub = Some(instance);
+        let mut leader_discovery_service = self.inner.leader_discovery_service.write();
+        *leader_discovery_service = Some(instance);
         Ok(())
     }
 
     pub fn get_leader_addr(&self) -> PyResult<String> {
         let leader_addr = self
             .inner
-            .leader_discovery_stub
+            .leader_discovery_service
             .read()
             .as_ref()
             .ok_or_else(|| PersiaError::LeaderDiscoveryStubNotInitializedError)
