@@ -27,6 +27,7 @@ def infer(stub, model_name, model_input):
     response = stub.Predictions(
         inference_pb2.PredictionsRequest(model_name=model_name, input=input_data)
     )
+    exit(1)
     try:
         prediction = response.prediction.decode("utf-8")
         prediction = prediction.splitlines()
