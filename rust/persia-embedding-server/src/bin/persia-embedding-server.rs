@@ -14,7 +14,7 @@ use persia_embedding_config::{
 };
 use persia_embedding_holder::PersiaEmbeddingHolder;
 use persia_embedding_server::embedding_service::{
-    EmbeddingServerNatsStub, EmbeddingServerNatsStubResponder, EmbeddingService,
+    EmbeddingServerNatsService, EmbeddingServerNatsServiceResponder, EmbeddingService,
     EmbeddingServiceInner,
 };
 use persia_full_amount_manager::FullAmountManager;
@@ -99,10 +99,10 @@ async fn main() -> Result<()> {
     let _responder = match job_type {
         PerisaJobType::Infer => None,
         _ => {
-            let nats_stub = EmbeddingServerNatsStub {
+            let nats_service = EmbeddingServerNatsService {
                 inner: inner.clone(),
             };
-            let responder = EmbeddingServerNatsStubResponder::new(nats_stub);
+            let responder = EmbeddingServerNatsServiceResponder::new(nats_service);
             Some(responder)
         }
     };

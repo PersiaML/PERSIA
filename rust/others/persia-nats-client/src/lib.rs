@@ -89,13 +89,13 @@ impl NatsClient {
 
     pub fn get_subject(
         &self,
-        stub_type: &str,
+        service_type: &str,
         fn_name: &str,
         replica_index: Option<usize>,
     ) -> String {
         match replica_index {
-            Some(idx) => format!("{}.{}.{}", stub_type, fn_name, idx),
-            None => format!("{}.{}", stub_type, fn_name),
+            Some(idx) => format!("{}.{}.{}", service_type, fn_name, idx),
+            None => format!("{}.{}", service_type, fn_name),
         }
     }
 }

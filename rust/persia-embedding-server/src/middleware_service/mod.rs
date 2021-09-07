@@ -1,5 +1,5 @@
 use crate::embedding_service::{
-    EmbeddingServerError, EmbeddingServerNatsStubPublisher, EmbeddingServiceClient,
+    EmbeddingServerError, EmbeddingServerNatsServicePublisher, EmbeddingServiceClient,
 };
 
 use std::ops::MulAssign;
@@ -114,12 +114,12 @@ pub enum MiddlewareServerError {
 
 pub struct AllEmbeddingServerClient {
     pub clients: RwLock<Vec<Arc<EmbeddingServiceClient>>>,
-    pub nats_publisher: Option<EmbeddingServerNatsStubPublisher>,
+    pub nats_publisher: Option<EmbeddingServerNatsServicePublisher>,
     pub dst_replica_size: usize,
 }
 
 impl AllEmbeddingServerClient {
-    pub fn with_nats(nats_publisher: EmbeddingServerNatsStubPublisher) -> Self {
+    pub fn with_nats(nats_publisher: EmbeddingServerNatsServicePublisher) -> Self {
         tracing::info!("trying to get replica info of embedding servers");
         let dst_replica_info: Result<PersiaReplicaInfo, _> =
             retry(Fixed::from_millis(5000), || {
@@ -218,7 +218,7 @@ impl AllEmbeddingServerClient {
     }
 
     pub async fn get_dst_replica_info(
-        nats_publisher: &EmbeddingServerNatsStubPublisher,
+        nats_publisher: &EmbeddingServerNatsServicePublisher,
     ) -> Result<PersiaReplicaInfo, MiddlewareServerError> {
         let dst_replica_info = nats_publisher.publish_get_replica_info(&(), None).await??;
         Ok(dst_replica_info)
@@ -1359,12 +1359,12 @@ impl MiddlewareServer {
 }
 
 #[derive(Clone)]
-pub struct MiddlewareNatsStub {
+pub struct MiddlewareNatsService {
     pub inner: Arc<MiddlewareServerInner>,
 }
 
-#[persia_nats_marcos::stub]
-impl MiddlewareNatsStub {
+#[persia_nats_marcos::service]
+impl MiddlewareNatsService {
     pub async fn ready_for_serving(&self, _req: ()) -> bool {
         self.inner.ready_for_serving().await
     }

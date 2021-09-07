@@ -13,10 +13,10 @@ use structopt::StructOpt;
 use persia_embedding_config::{
     EmbeddingConfig, PerisaJobType, PersiaCommonConfig, PersiaGlobalConfig, PersiaMiddlewareConfig,
 };
-use persia_embedding_server::embedding_service::EmbeddingServerNatsStubPublisher;
+use persia_embedding_server::embedding_service::EmbeddingServerNatsServicePublisher;
 use persia_embedding_server::middleware_service::{
-    AllEmbeddingServerClient, MiddlewareNatsStub, MiddlewareNatsStubResponder, MiddlewareServer,
-    MiddlewareServerInner,
+    AllEmbeddingServerClient, MiddlewareNatsService, MiddlewareNatsServiceResponder,
+    MiddlewareServer, MiddlewareServerInner,
 };
 
 #[derive(Debug, StructOpt, Clone)]
@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
             AllEmbeddingServerClient::with_addrs(servers)
         }
         _ => {
-            let nats_publisher = EmbeddingServerNatsStubPublisher::new();
+            let nats_publisher = EmbeddingServerNatsServicePublisher::new();
             AllEmbeddingServerClient::with_nats(nats_publisher)
         }
     };
@@ -94,10 +94,10 @@ async fn main() -> Result<()> {
     let _responder = match &common_config.job_type {
         PerisaJobType::Infer => None,
         _ => {
-            let nats_stub = MiddlewareNatsStub {
+            let nats_service = MiddlewareNatsService {
                 inner: inner.clone(),
             };
-            let responder = MiddlewareNatsStubResponder::new(nats_stub);
+            let responder = MiddlewareNatsServiceResponder::new(nats_service);
             Some(responder)
         }
     };
