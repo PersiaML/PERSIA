@@ -91,7 +91,7 @@ RUN  cd /workspace && \
         echo "install persiaml in cpu mode"; \ 
     fi && \
     pip3 install . -v --no-cache-dir && \
-    && rm -rf /workspace /cargo /rust
+    rm -rf /workspace /cargo /rust
 
 ENV LIBRARY_PATH="/usr/local/cuda/lib64/stubs/:/usr/local/lib64:/usr/local/lib:/usr/lib"
 ENV LD_LIBRARY_PATH="/opt/conda/lib/${PYTHON_VERSION}/site-packages/torch/lib/:/opt/conda/lib/"
