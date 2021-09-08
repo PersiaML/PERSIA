@@ -451,7 +451,9 @@ class EmbeddingCtx(BaseCtx):
         if not is_jit:
             torch.save(dense.state_dict(), buffer)
         else:
-            assert isinstance(dense, torch.nn.Module), "saving an optimizer as jit script"
+            assert isinstance(
+                dense, torch.nn.Module
+            ), "saving an optimizer as jit script"
             jit_model = torch.jit.script(dense)
             torch.jit.save(jit_model, buffer)
         buffer.seek(0)
