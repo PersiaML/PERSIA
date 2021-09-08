@@ -1,17 +1,11 @@
 #![allow(clippy::needless_return)]
 
-#[cfg(feature = "cuda")]
-pub mod cuda;
-pub mod grad;
 pub mod message_queue;
 pub mod optim;
-pub mod tensor;
 pub mod utils;
 
 use std::cmp::Ordering;
 use std::u64;
-
-use tensor::Tensor;
 
 use persia_libs::{
     half,
@@ -286,83 +280,6 @@ impl From<Vec<(String, Vec<&PyArray1<u64>>)>> for SparseBatch {
             enter_post_forward_buffer_time: None,
             batcher_idx: None,
         }
-    }
-}
-
-#[derive(Readable, Writable, Debug, Clone)]
-pub struct PreForwardStub {
-    pub middleware_addr: String,
-    pub forward_id: u64,
-    pub batcher_idx: usize,
-}
-
-impl Default for PreForwardStub {
-    fn default() -> Self {
-        Self {
-            middleware_addr: String::from(""),
-            forward_id: 0,
-            batcher_idx: 0,
-        }
-    }
-}
-
-#[derive(Readable, Writable, Debug)]
-pub enum EmbeddingTensor {
-    Null,
-    PreForwardStub(PreForwardStub),
-    SparseBatch(SparseBatch),
-}
-
-impl EmbeddingTensor {
-    pub fn to_forward_id(&self) -> (&str, u64) {
-        match &self {
-            EmbeddingTensor::PreForwardStub(stub) => (&stub.middleware_addr, stub.forward_id),
-            EmbeddingTensor::SparseBatch(_) => ("", 0u64),
-            _ => panic!("forward id not found on embedding tensor"),
-        }
-    }
-}
-#[derive(Readable, Writable, Debug)]
-pub struct PersiaBatchData {
-    pub dense_data: Vec<Tensor>,
-    pub sparse_data: EmbeddingTensor,
-    pub target_data: Vec<Tensor>,
-    pub meta_data: Option<Vec<u8>>,
-    pub batch_id: Option<usize>,
-}
-
-impl Default for PersiaBatchData {
-    fn default() -> Self {
-        PersiaBatchData {
-            dense_data: Vec::new(),
-            sparse_data: EmbeddingTensor::Null,
-            target_data: Vec::new(),
-            meta_data: None,
-            batch_id: None,
-        }
-    }
-}
-
-impl PartialEq for PersiaBatchData {
-    fn eq(&self, other: &Self) -> bool {
-        self.batch_id.unwrap_or(usize::MIN) == other.batch_id.unwrap_or(usize::MIN)
-    }
-}
-
-impl Eq for PersiaBatchData {}
-
-impl PartialOrd for PersiaBatchData {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for PersiaBatchData {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.batch_id
-            .unwrap_or(usize::MIN)
-            .cmp(&other.batch_id.unwrap_or(usize::MIN))
-            .reverse()
     }
 }
 

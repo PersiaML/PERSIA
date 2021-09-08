@@ -5,10 +5,87 @@ use pyo3::types::PyBytes;
 use persia_libs::numpy::{PyArray1, PyArray2};
 
 use persia_common::{
-    tensor::{CPUStorage, Storage, Tensor},
-    EmbeddingTensor, PersiaBatchData, SparseBatch,
+    SparseBatch,
 };
+use crate::tensor::{CPUStorage, Storage, Tensor},
 use persia_speedy::Writable;
+
+#[derive(Readable, Writable, Debug, Clone)]
+pub struct PreForwardStub {
+    pub middleware_addr: String,
+    pub forward_id: u64,
+    pub batcher_idx: usize,
+}
+
+impl Default for PreForwardStub {
+    fn default() -> Self {
+        Self {
+            middleware_addr: String::from(""),
+            forward_id: 0,
+            batcher_idx: 0,
+        }
+    }
+}
+
+#[derive(Readable, Writable, Debug)]
+pub enum EmbeddingTensor {
+    Null,
+    PreForwardStub(PreForwardStub),
+    SparseBatch(SparseBatch),
+}
+
+impl EmbeddingTensor {
+    pub fn to_forward_id(&self) -> (&str, u64) {
+        match &self {
+            EmbeddingTensor::PreForwardStub(stub) => (&stub.middleware_addr, stub.forward_id),
+            EmbeddingTensor::SparseBatch(_) => ("", 0u64),
+            _ => panic!("forward id not found on embedding tensor"),
+        }
+    }
+}
+#[derive(Readable, Writable, Debug)]
+pub struct PersiaBatchData {
+    pub dense_data: Vec<Tensor>,
+    pub sparse_data: EmbeddingTensor,
+    pub target_data: Vec<Tensor>,
+    pub meta_data: Option<Vec<u8>>,
+    pub batch_id: Option<usize>,
+}
+
+impl Default for PersiaBatchData {
+    fn default() -> Self {
+        PersiaBatchData {
+            dense_data: Vec::new(),
+            sparse_data: EmbeddingTensor::Null,
+            target_data: Vec::new(),
+            meta_data: None,
+            batch_id: None,
+        }
+    }
+}
+
+impl PartialEq for PersiaBatchData {
+    fn eq(&self, other: &Self) -> bool {
+        self.batch_id.unwrap_or(usize::MIN) == other.batch_id.unwrap_or(usize::MIN)
+    }
+}
+
+impl Eq for PersiaBatchData {}
+
+impl PartialOrd for PersiaBatchData {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for PersiaBatchData {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.batch_id
+            .unwrap_or(usize::MIN)
+            .cmp(&other.batch_id.unwrap_or(usize::MIN))
+            .reverse()
+    }
+}
 
 #[pyclass]
 pub struct PyPersiaBatchData {

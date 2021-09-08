@@ -102,6 +102,16 @@ impl PyEmbedding {
     }
 }
 
+pub trait He {
+    fn hehe() {}
+}
+
+impl He for Tensor {
+    fn hehe() {
+        println!("hehe");
+    }
+}
+
 #[pyclass]
 pub struct PyTensor {
     inner: Tensor,
@@ -402,7 +412,7 @@ impl Forward {
                     if self.reorder_buffer_channel_r.is_some() {
                         self.spawn_reorder_buffer_worker()?;
                     }
-                    self.spawn_to_gpu_worker();
+                    self.spawn_postprocess_worker();
                     self.spawn_forward_worker(num_workers);
                     self.launch = true;
                     Ok(())
@@ -436,7 +446,7 @@ impl Forward {
         Ok(())
     }
 
-    fn spawn_to_gpu_worker(&mut self) {
+    fn spawn_postprocess_worker(&mut self) {
         let channel_r = self.forwarded_channel_r.clone();
         let channel_s = self.gpu_forwarded_channel_s.clone();
 
@@ -652,8 +662,19 @@ impl Forward {
     }
 }
 
-pub fn forward_directly(batch: PersiaBatchData, device_id: i32) -> PyResult<PythonTrainBatch> {
-    set_device(device_id);
+pub fn forward_directly(
+    batch: PersiaBatchData,
+    device_id: Option<i32>,
+) -> PyResult<PythonTrainBatch> {
+
+    #[cfg(feature = "cuda")]
+    {
+        if let Some(device_id) = device_id {
+            {
+                set_device(device_id);
+            }
+        }
+    }
 
     let rpc_client = PersiaCommonContext::get().rpc_client.clone();
     let async_runtime = PersiaCommonContext::get().async_runtime.clone();

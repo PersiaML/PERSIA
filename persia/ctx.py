@@ -49,13 +49,24 @@ class BaseCtx:
     def __init__(
         self,
         threadpool_worker_size: int = 10,
+        device_id: int = -1,
     ):
         """
         Arguments:
             threadpool_worker_size (int): Rpc threadpool worker size.
+            device_id (int, optional): The CUDA device to use for this process.
         """
         self.origin_context = None
         self.world_size = env.get_world_size()
+
+        if device_id >= 0:
+            assert (
+                0 <= device_id < torch.cuda.device_count()
+            ), f"device_id: {device_id} invalid!"
+            torch.cuda.set_device(device_id)
+        else:
+            device_id = None
+        self.device_id = device_id
 
         if self.world_size == -1:
             replica_size = env.get_replica_size()
@@ -69,7 +80,7 @@ class BaseCtx:
         else:
             rank_id = env.get_rank()
             self.common_context = PyPersiaCommonContext(
-                threadpool_worker_size, rank_id, self.world_size, self.world_size
+                threadpool_worker_size, rank_id, self.world_size, self.world_size, self.device_id
             )
             _logger.info(
                 f"init trainer, world size: {self.world_size} rank_id: {rank_id}"
@@ -432,11 +443,11 @@ class EmbeddingCtx(BaseCtx):
         self.common_context.clear_embeddings()
 
     def get_embedding_from_data(
-        self, data: PyPersiaBatchData, device_id: int = 0
+        self, data: PyPersiaBatchData, device_id: Optional[int] = None
     ) -> PythonTrainBatch:
         """Get embeddings of the input batch data.
 
-         Arguments:
+        Arguments:
             data (PyPersiaBatchData): Input data without embeddings.
             device_id (int, optional): The CUDA device to use for this process.
 
@@ -446,11 +457,11 @@ class EmbeddingCtx(BaseCtx):
         return self.common_context.get_embedding_from_data(data, device_id)
 
     def get_embedding_from_bytes(
-        self, data: bytes, device_id: int = 0
+        self, data: bytes, device_id: Optional[int] = None
     ) -> PythonTrainBatch:
         """Get embeddings of the serialized input batch data.
 
-         Arguments:
+        Arguments:
             data (PyPersiaBatchData): Serialized input data without embeddings.
             device_id (int, optional): The CUDA device to use for this process.
 
@@ -485,7 +496,6 @@ class TrainCtx(EmbeddingCtx):
         self,
         sparse_optimizer: Optimizer,
         dense_optimizer: torch.optim.Optimizer,
-        device_id: int = 0,
         grad_scalar_update_factor: float = 4,
         backward_buffer_size: int = 10,
         backward_workers_size: int = 8,
@@ -497,7 +507,6 @@ class TrainCtx(EmbeddingCtx):
         Arguments:
             sparse_optimizer (persia.sparse.optim.Optimizer): Optimizer for the embeddings.
             dense_optimizer (torch.optim.Optimizer): Optimizer for dense parameters.
-            device_id (int, optional): The CUDA device to use for this process.
             grad_scalar_update_factor (float, optional): Update factor of ``Gradscalar`` to ensure loss scale finitely if set ``mixed_precision=True``.
             backward_buffer_size (int, optional): Max number of not updated gradients queued.
             backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
@@ -509,14 +518,9 @@ class TrainCtx(EmbeddingCtx):
         assert (
             sparse_optimizer is not None
         ), "Sparse_optimizer should not be none in train context"
-        assert (
-            0 <= device_id < torch.cuda.device_count()
-        ), f"device_id: {device_id} invalid!"
+
         assert grad_scalar_update_factor > 0, "grad scalar should greater than zero"
 
-        torch.cuda.set_device(device_id)
-
-        self.device_id = device_id
 
         self.update_times = 0
         self.grad_scalar_update_factor = grad_scalar_update_factor

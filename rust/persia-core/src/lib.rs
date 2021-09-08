@@ -10,9 +10,13 @@ mod metrics;
 mod nats;
 mod optim;
 mod rpc;
+mod tensor;
 mod utils;
 
-use crate::data::PyPersiaBatchData;
+#[cfg(feature = "cuda")]
+mod cuda;
+
+use crate::data::{PersiaBatchData, PyPersiaBatchData};
 use crate::forward::{forward_directly, PythonTrainBatch};
 use crate::optim::PyOptimizerBase;
 use crate::rpc::PersiaRpcClient;
@@ -33,10 +37,8 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::wrap_pyfunction;
 
-use persia_common::PersiaBatchData;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaReplicaInfo};
 use persia_embedding_server::middleware_service::MiddlewareServerError;
-use persia_speedy::Readable;
 
 #[derive(thiserror::Error, Debug)]
 pub enum PersiaError {
@@ -116,6 +118,15 @@ impl PersiaCommonContext {
             world_size,
             runtime.clone(),
         ));
+
+        if let Some(device_id) = device_id.as_ref() {
+            #[cfg(feature = "cuda")]
+            {
+                use persia_common::cuda::set_device;
+
+                set_device(*device_id);
+            }
+        }
 
         let common_context = Self {
             rpc_client,
@@ -268,7 +279,7 @@ impl PyPersiaCommonContext {
     pub fn get_embedding_from_data(
         &self,
         batch: &mut PyPersiaBatchData,
-        device_id: i32,
+        device_id: Option<i32>,
     ) -> PyResult<PythonTrainBatch> {
         let batch = std::mem::replace(&mut batch.inner, PersiaBatchData::default());
         forward_directly(batch, device_id)
@@ -278,7 +289,7 @@ impl PyPersiaCommonContext {
     pub fn get_embedding_from_bytes(
         &self,
         batch: &PyBytes,
-        device_id: i32,
+        device_id: Option<i32>,
     ) -> PyResult<PythonTrainBatch> {
         let batch: PersiaBatchData = PersiaBatchData::read_from_buffer(batch.as_bytes()).unwrap();
         forward_directly(batch, device_id)
