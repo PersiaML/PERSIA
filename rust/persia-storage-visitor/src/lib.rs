@@ -5,6 +5,7 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 
 use persia_libs::anyhow::{anyhow, Result};
+use persia_libs::tracing;
 
 use persia_common::HashMapEmbeddingEntry;
 use persia_speedy::{Readable, Writable};
@@ -79,7 +80,11 @@ impl PersiaStorageVisitor for PersiaDiskVisitor {
     fn dump_to_file(&self, content: &[u8], file_dir: PathBuf, file_name: PathBuf) -> Result<()> {
         let file_path = self.create_file(file_dir.clone(), file_name.clone())?;
 
-        let out_file = File::open(file_path)?;
+        let mut out_file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(file_path.to_str().unwrap())?;
+        tracing::info!("success to open file");
 
         let mut buffered = BufWriter::new(out_file);
         buffered.write_all(content)?;
