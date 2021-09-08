@@ -4,17 +4,17 @@ ARG USE_CUDA
 
 WORKDIR /workspace
 
-RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-11-jdk
+RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends wget openssh-server
 
-RUN /opt/conda/bin/conda install -y python=3.8 pip && \
-        /opt/conda/bin/conda install torchserve torch-model-archiver torch-workflow-archiver -c pytorch -y && \
-        /opt/conda/bin/conda clean -ya
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64/
 
-RUN /opt/conda/bin/pip install --no-cache-dir \ 
-    captum \
-    grpcio \
-    protobuf \
-    grpcio-tools
+RUN mkdir -p /opt/hadoop/ && \
+    cd /opt/hadoop/ && \
+    wget https://dlcdn.apache.org/hadoop/common/hadoop-3.3.1/hadoop-3.3.1.tar.gz && \
+    tar -zxvf hadoop-3.3.1.tar.gz && \
+    rm hadoop-3.3.1.tar.gz
+
+ENV PATH=/opt/hadoop/hadoop-3.3.1/bin/:$PATH
 
 COPY . .
 
