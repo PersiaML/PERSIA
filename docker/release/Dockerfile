@@ -38,7 +38,7 @@ RUN if [ -z "${CPU_ONLY}" ]; then \
     fi
 
 RUN /opt/conda/bin/conda install -y -c pytorch -c conda-forge pytorch=${PYTORCH_VERSION} torchvision ${CPU_ONLY} && \
-    /opt/conda/bin/conda clean -ya && \
+    /opt/conda/bin/conda clean -yapf && \
     /opt/conda/bin/pip install --no-cache-dir \ 
     pyyaml \
     remote-pdb \
@@ -61,13 +61,15 @@ ARG DEPLOY=false
 RUN if [ "${DEPLOY}" = true ]; then \
     echo "install deploy image requirement, openjdk and torch serve"; \
     /opt/conda/bin/conda install torchserve torch-model-archiver torch-workflow-archiver -c pytorch -y; \
-    /opt/conda/bin/conda clean -ya; \
+    /opt/conda/bin/conda clean -yapf; \
     /opt/conda/bin/pip install --no-cache-dir \ 
         captum \
         grpcio \
         protobuf \
         grpcio-tools; \
-        apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-11-jdk; \
+    apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-11-jdk; \
+    apt-get purge --auto-remove; \
+    apt-get clean; \
     fi
 
 ENV RUSTUP_HOME=/rust
@@ -88,7 +90,8 @@ RUN  cd /workspace && \
     else \
         echo "install persiaml in cpu mode"; \ 
     fi && \
-    pip3 install . -v && rm -rf /workspace
+    pip3 install . -v --no-cache-dir && \
+    && rm -rf /workspace /cargo /rust
 
 ENV LIBRARY_PATH="/usr/local/cuda/lib64/stubs/:/usr/local/lib64:/usr/local/lib:/usr/lib"
 ENV LD_LIBRARY_PATH="/opt/conda/lib/${PYTHON_VERSION}/site-packages/torch/lib/:/opt/conda/lib/"
