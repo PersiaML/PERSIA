@@ -10,7 +10,7 @@ services:
                 - adult_income/.test_env
             environment:
                 JOB_ID: 1
-            image: persiaml-test:latest
+            image: persiaml-test:zxf
             command: persia_launcher compose /workspace/data_compose.py
             volumes:
                 - ./adult_income:/workspace
@@ -22,8 +22,8 @@ services:
             environment:
                 JOB_ID: 1
                 GPU_NUM: 1
-            image: persiaml-test:latest
-            command:  persia_launcher trainer /workspace/train.py
+            image: persiaml-test:zxf
+            command: bash -c "hadoop/launch_hdfs.sh && persia_launcher trainer /workspace/train.py"
             depends_on:
                 - data_compose
                 - middleware
@@ -38,7 +38,7 @@ services:
                 - adult_income/.test_env
             environment:
                 JOB_ID: 1
-            image: persiaml-test:latest
+            image: persiaml-test:zxf
             command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
             volumes:
                 - ./adult_income:/workspace
@@ -48,7 +48,7 @@ services:
                 - adult_income/.test_env
             environment:
                 JOB_ID: 1
-            image: persiaml-test:latest
-            command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
+            image: persiaml-test:zxf
+            command: bash -c "hadoop/launch_hdfs.sh &&  persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml"
             volumes:
                 - ./adult_income:/workspace

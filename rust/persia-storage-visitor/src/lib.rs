@@ -84,7 +84,7 @@ impl PersiaStorageVisitor for PersiaDiskVisitor {
             .write(true)
             .create(true)
             .open(file_path.to_str().unwrap())?;
-        tracing::info!("success to open file");
+        tracing::debug!("success to open file");
 
         let mut buffered = BufWriter::new(out_file);
         buffered.write_all(content.as_slice())?;
@@ -271,7 +271,7 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
         }
         let mut file_list = Vec::new();
         for f in s.unwrap().split_whitespace() {
-            if f.starts_with(dir_path.to_str().unwrap()) {
+            if f.starts_with("hdfs://") {
                 file_list.push(PathBuf::from(f));
             }
         }

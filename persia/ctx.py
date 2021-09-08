@@ -372,7 +372,6 @@ class EmbeddingCtx(BaseCtx):
         assert (
             self.model is not None
         ), f"model not found, please init context with model"
-        os.makedirs(dst_dir, exist_ok=True)
 
         if with_jit_model:
             self.dump_dense(self.model, dst_dir, jit_dense_filename, True)
@@ -398,9 +397,6 @@ class EmbeddingCtx(BaseCtx):
         assert (
             self.model is not None
         ), f"model not found, please init context with model"
-        if not os.path.exists(src_dir):
-            _logger.warn(f"source directory: {src_dir} not exists")
-            return
 
         dense_model_filepath = os.path.join(src_dir, dense_filename)
         if os.path.exists(dense_model_filepath):
