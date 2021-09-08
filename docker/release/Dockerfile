@@ -5,6 +5,7 @@ ARG PYTHON_VERSION=3.8
 ARG PYTORCH_VERSION=1.7
 ARG MAGMA_CUDA_VERSION=magma-cuda110
 ARG CPU_ONLY
+ARG DEPLOY=false
 
 RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl \
     build-essential \
@@ -27,10 +28,8 @@ RUN curl -o ~/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest
     ~/miniconda.sh -b -p /opt/conda && \
     rm ~/miniconda.sh && \
     /opt/conda/bin/conda install -y python=${PYTHON_VERSION} numpy pyyaml scipy ipython mkl mkl-include ninja cython typing && \
-    /opt/conda/bin/conda install -y -c conda-forge mpi4py 
-
-# install cuda requirements
-RUN if [ -z "${CPU_ONLY}" ]; then \
+    /opt/conda/bin/conda install -y -c conda-forge mpi4py && \
+    if [ -z "${CPU_ONLY}" ]; then \
     echo "install pytorch in gpu mode and install the magma cuda requirement."; \
     /opt/conda/bin/conda install -y -c pytorch ${MAGMA_CUDA_VERSION};  \ 
     else \
@@ -42,8 +41,6 @@ RUN /opt/conda/bin/conda install -y -c pytorch -c conda-forge pytorch=${PYTORCH_
     /opt/conda/bin/pip install --no-cache-dir \ 
     pyyaml \
     remote-pdb \
-    msgpack \
-    msgpack-numpy \
     colorlog \
     pytest \
     tqdm \
@@ -55,9 +52,7 @@ RUN /opt/conda/bin/conda install -y -c pytorch -c conda-forge pytorch=${PYTORCH_
     apt-get clean && \
     update-alternatives --install /usr/bin/python3 python3 /opt/conda/bin/python${PYTHON_VERSION} 10 
 
-
 # install deploy requirements
-ARG DEPLOY=false
 RUN if [ "${DEPLOY}" = true ]; then \
     echo "install deploy image requirement, openjdk and torch serve"; \
     /opt/conda/bin/conda install torchserve torch-model-archiver torch-workflow-archiver -c pytorch -y; \
@@ -75,15 +70,15 @@ RUN if [ "${DEPLOY}" = true ]; then \
 ENV RUSTUP_HOME=/rust
 ENV CARGO_HOME=/cargo
 ENV PATH=/cargo/bin:/rust/bin:/opt/conda/bin:$PATH
+ENV LIBRARY_PATH="/usr/local/cuda/lib64/stubs/:/usr/local/lib64:/usr/local/lib:/usr/lib"
+ENV LD_LIBRARY_PATH="/opt/conda/lib/${PYTHON_VERSION}/site-packages/torch/lib/:/opt/conda/lib/"
 
-RUN curl -sSf https://sh.rustup.rs | sh -s -- --default-toolchain none -y --profile default --no-modify-path &&\
-    chown -R 1000:1000 /rust /cargo  && \
-    rustup install nightly-2021-06-01
-
-RUN mkdir /workspace
 WORKDIR /workspace
 COPY . /workspace
-RUN  cd /workspace && \
+RUN curl -sSf https://sh.rustup.rs | sh -s -- --default-toolchain none -y --profile default --no-modify-path && \
+    chown -R 1000:1000 /rust /cargo  && \
+    rustup install nightly-2021-06-01 && \
+    cd /workspace && \
     if [ -z "${CPU_ONLY}" ]; then \
         echo "install persiaml in gpu mode"; \ 
         export USE_CUDA=1; \
@@ -92,6 +87,3 @@ RUN  cd /workspace && \
     fi && \
     pip3 install . -v --no-cache-dir && \
     rm -rf /workspace /cargo /rust
-
-ENV LIBRARY_PATH="/usr/local/cuda/lib64/stubs/:/usr/local/lib64:/usr/local/lib:/usr/lib"
-ENV LD_LIBRARY_PATH="/opt/conda/lib/${PYTHON_VERSION}/site-packages/torch/lib/:/opt/conda/lib/"
