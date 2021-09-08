@@ -1779,7 +1779,6 @@ name = "persia-common"
 version = "0.1.0"
 dependencies = [
  "arr_macro",
- "cuda-runtime-sys",
  "hyper",
  "paste 1.0.5",
  "persia-embedding-config",
@@ -1807,6 +1806,7 @@ name = "persia-core"
 version = "0.1.0"
 dependencies = [
  "arr_macro",
+ "cuda-runtime-sys",
  "paste 1.0.5",
  "persia-common",
  "persia-embedding-config",

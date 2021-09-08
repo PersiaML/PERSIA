@@ -8,7 +8,6 @@ version = "0.1.0"
 
 [dependencies]
 arr_macro = "0.1"
-cuda-runtime-sys = {version = "0.3.0-alpha.1", optional = true}
 hyper = {version = "0.14", features = ["full"]}
 paste = "1.0"
 persia-embedding-config = {path = "../persia-embedding-config"}
@@ -16,6 +15,3 @@ persia-libs = {path = "../persia-libs"}
 persia-simd = {path = "../persia-simd"}
 persia-speedy = "0.9"
 url = "2.1"
-
-[features]
-cuda = ["cuda-runtime-sys"]

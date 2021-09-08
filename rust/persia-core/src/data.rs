@@ -1,14 +1,74 @@
+use std::cmp::Ordering;
+
+use crate::tensor::{CPUStorage, Storage, Tensor};
+
 use paste::paste;
+use persia_libs::numpy::{PyArray1, PyArray2};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use persia_libs::numpy::{PyArray1, PyArray2};
+use persia_common::{PreForwardStub, SparseBatch};
+use persia_speedy::{Readable, Writable};
 
-use persia_common::{
-    tensor::{CPUStorage, Storage, Tensor},
-    EmbeddingTensor, PersiaBatchData, SparseBatch,
-};
-use persia_speedy::Writable;
+#[derive(Readable, Writable, Debug)]
+pub enum EmbeddingTensor {
+    Null,
+    PreForwardStub(PreForwardStub),
+    SparseBatch(SparseBatch),
+}
+
+impl EmbeddingTensor {
+    pub fn to_forward_id(&self) -> (&str, u64) {
+        match &self {
+            EmbeddingTensor::PreForwardStub(stub) => (&stub.middleware_addr, stub.forward_id),
+            EmbeddingTensor::SparseBatch(_) => ("", 0u64),
+            _ => panic!("forward id not found on embedding tensor"),
+        }
+    }
+}
+#[derive(Readable, Writable, Debug)]
+pub struct PersiaBatchData {
+    pub dense_data: Vec<Tensor>,
+    pub sparse_data: EmbeddingTensor,
+    pub target_data: Vec<Tensor>,
+    pub meta_data: Option<Vec<u8>>,
+    pub batch_id: Option<usize>,
+}
+
+impl Default for PersiaBatchData {
+    fn default() -> Self {
+        PersiaBatchData {
+            dense_data: Vec::new(),
+            sparse_data: EmbeddingTensor::Null,
+            target_data: Vec::new(),
+            meta_data: None,
+            batch_id: None,
+        }
+    }
+}
+
+impl PartialEq for PersiaBatchData {
+    fn eq(&self, other: &Self) -> bool {
+        self.batch_id.unwrap_or(usize::MIN) == other.batch_id.unwrap_or(usize::MIN)
+    }
+}
+
+impl Eq for PersiaBatchData {}
+
+impl PartialOrd for PersiaBatchData {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for PersiaBatchData {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.batch_id
+            .unwrap_or(usize::MIN)
+            .cmp(&other.batch_id.unwrap_or(usize::MIN))
+            .reverse()
+    }
+}
 
 #[pyclass]
 pub struct PyPersiaBatchData {

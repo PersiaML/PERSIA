@@ -172,6 +172,8 @@ impl Tensor {
 
     // #[cfg(feature = "cuda")]
     // pub fn cpu(&self) -> Result<Tensor> {}
+
+    pub fn numpy(&self) {}
 }
 
 #[derive(Readable, Writable, Debug)]

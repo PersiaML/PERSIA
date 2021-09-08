@@ -1,6 +1,10 @@
-use crate::backward::PythonGradientBatch;
+#[cfg(feature = "cuda")]
+use crate::cuda::set_device;
 
+use crate::backward::PythonGradientBatch;
+use crate::data::{EmbeddingTensor, PersiaBatchData};
 use crate::metrics::MetricsHolder;
+use crate::tensor::{CPUStorage, Storage, Tensor};
 use crate::utils::PyPersiaBatchDataReceiver;
 use crate::PersiaCommonContext;
 
@@ -10,14 +14,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use persia_common::tensor::CPUStorage;
-use persia_common::{
-    tensor::{Storage, Tensor},
-    EmbeddingBatch, EmbeddingTensor, FeatureEmbeddingBatch, PersiaBatchData,
-};
-
-#[cfg(feature = "cuda")]
-use persia_common::cuda::set_device;
+use persia_common::{EmbeddingBatch, FeatureEmbeddingBatch};
 
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_server::middleware_service::MiddlewareServerError;
@@ -99,6 +96,16 @@ impl PyEmbedding {
         } else {
             panic!("AttrError: sum embedding can not convert to raw embedding")
         }
+    }
+}
+
+pub trait He {
+    fn hehe() {}
+}
+
+impl He for Tensor {
+    fn hehe() {
+        println!("hehe");
     }
 }
 
@@ -402,7 +409,7 @@ impl Forward {
                     if self.reorder_buffer_channel_r.is_some() {
                         self.spawn_reorder_buffer_worker()?;
                     }
-                    self.spawn_to_gpu_worker();
+                    self.spawn_postprocess_worker();
                     self.spawn_forward_worker(num_workers);
                     self.launch = true;
                     Ok(())
@@ -436,7 +443,7 @@ impl Forward {
         Ok(())
     }
 
-    fn spawn_to_gpu_worker(&mut self) {
+    fn spawn_postprocess_worker(&mut self) {
         let channel_r = self.forwarded_channel_r.clone();
         let channel_s = self.gpu_forwarded_channel_s.clone();
 
@@ -652,8 +659,18 @@ impl Forward {
     }
 }
 
-pub fn forward_directly(batch: PersiaBatchData, device_id: i32) -> PyResult<PythonTrainBatch> {
-    set_device(device_id);
+pub fn forward_directly(
+    batch: PersiaBatchData,
+    device_id: Option<i32>,
+) -> PyResult<PythonTrainBatch> {
+    #[cfg(feature = "cuda")]
+    {
+        if let Some(device_id) = device_id {
+            {
+                set_device(device_id);
+            }
+        }
+    }
 
     let rpc_client = PersiaCommonContext::get().rpc_client.clone();
     let async_runtime = PersiaCommonContext::get().async_runtime.clone();

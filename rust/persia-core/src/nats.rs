@@ -1,4 +1,4 @@
-use crate::data::PyPersiaBatchData;
+use crate::data::{EmbeddingTensor, PersiaBatchData, PyPersiaBatchData};
 use crate::optim::PyOptimizerBase;
 use crate::utils::PyPersiaBatchDataSender;
 use crate::{PersiaCommonContext, PersiaError};
@@ -18,7 +18,7 @@ use persia_libs::{
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
-use persia_common::{EmbeddingTensor, PersiaBatchData, PreForwardStub};
+use persia_common::PreForwardStub;
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,

@@ -28,6 +28,7 @@ if __name__ == "__main__":
         )
         cmdclass["build_ext"] = BuildExtension
 
+    features = None if not use_cuda else ["cuda"]
     rust_extensions = []
 
     rust_extensions.append(
@@ -46,10 +47,10 @@ if __name__ == "__main__":
             path="rust/persia-embedding-server/Cargo.toml",
             binding=Binding.Exec,
             native=True,
+            features=features,
         )
     )
 
-    features = None if not use_cuda else ["cuda"]
     rust_extensions.append(
         RustExtension(
             "persia_core",

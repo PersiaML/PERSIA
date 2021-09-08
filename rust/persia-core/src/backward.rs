@@ -170,7 +170,7 @@ impl Backward {
         let handler = std::thread::spawn(move || {
             #[cfg(feature = "cuda")]
             if let Some(device_id) = device_id {
-                use persia_common::cuda::set_device;
+                use crate::cuda::set_device;
 
                 set_device(device_id as i32);
             }
@@ -233,8 +233,8 @@ impl Backward {
                                 // }
 
                                 let memory_ptr = if cfg!(feature = "cuda") {
-                                    use persia_common::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
-                                    use persia_common::cuda::utils::cuda_d2h;
+                                    use crate::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
+                                    use crate::cuda::utils::cuda_d2h;
 
                                     // judge the tensor with device
                                     if device_id.as_ref().is_some() {
