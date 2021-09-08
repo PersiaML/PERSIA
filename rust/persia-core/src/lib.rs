@@ -367,7 +367,7 @@ impl PyPersiaCommonContext {
     ) -> PyResult<()> {
         let file_dir = PathBuf::from(file_dir);
         let file_name = PathBuf::from(file_name);
-        let content = content.as_bytes();
+        let content = content.as_bytes().to_vec();
         self.inner
             .storage_visitor
             .dump_to_file(content, file_dir, file_name)

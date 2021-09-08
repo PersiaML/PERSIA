@@ -31,7 +31,7 @@ pub trait PersiaStorageVisitor: Send + Sync {
 
     fn read_from_file_speedy(&self, file_path: PathBuf) -> Result<SpeedyObj>;
 
-    fn dump_to_file(&self, content: &[u8], file_dir: PathBuf, file_name: PathBuf) -> Result<()>;
+    fn dump_to_file(&self, content: Vec<u8>, file_dir: PathBuf, file_name: PathBuf) -> Result<()>;
 
     fn dump_to_file_speedy(
         &self,
@@ -77,17 +77,17 @@ impl PersiaStorageVisitor for PersiaDiskVisitor {
         Ok(content)
     }
 
-    fn dump_to_file(&self, content: &[u8], file_dir: PathBuf, file_name: PathBuf) -> Result<()> {
+    fn dump_to_file(&self, content: Vec<u8>, file_dir: PathBuf, file_name: PathBuf) -> Result<()> {
         let file_path = self.create_file(file_dir.clone(), file_name.clone())?;
 
-        let mut out_file = std::fs::OpenOptions::new()
+        let out_file = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
             .open(file_path.to_str().unwrap())?;
         tracing::info!("success to open file");
 
         let mut buffered = BufWriter::new(out_file);
-        buffered.write_all(content)?;
+        buffered.write_all(content.as_slice())?;
         buffered.flush()?;
 
         Ok(())
@@ -194,7 +194,7 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
         Ok(content)
     }
 
-    fn dump_to_file(&self, content: &[u8], file_dir: PathBuf, file_name: PathBuf) -> Result<()> {
+    fn dump_to_file(&self, content: Vec<u8>, file_dir: PathBuf, file_name: PathBuf) -> Result<()> {
         let file_path = self.create_file(file_dir.clone(), file_name)?;
         let mut append_cmd = Command::new("hdfs")
             .arg("dfs")
@@ -204,9 +204,17 @@ impl PersiaStorageVisitor for PersiaHdfsVisitor {
             .stdin(Stdio::piped())
             .spawn()?;
 
-        let mut write_stream = BufWriter::new(append_cmd.stdin.as_mut().unwrap());
-        write_stream.write_all(content)?;
-        Ok(())
+        let write_stream = BufWriter::new(append_cmd.stdin.as_mut().unwrap());
+        content.write_to_stream(write_stream)?;
+
+        drop(append_cmd.stdin.as_mut().unwrap());
+
+        let out = append_cmd.wait()?;
+        if out.success() {
+            return Ok(());
+        } else {
+            return Err(anyhow!("hdfs appendToFile error"));
+        }
     }
 
     fn dump_to_file_speedy(
@@ -351,7 +359,7 @@ impl PersiaStorageAdapter {
 
     pub fn dump_to_file(
         &self,
-        content: &[u8],
+        content: Vec<u8>,
         file_dir: PathBuf,
         file_name: PathBuf,
     ) -> Result<()> {
