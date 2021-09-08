@@ -1,6 +1,6 @@
 steps:
   - label: "Build docker ci image for latest persiaml framework"
-    command: docker build --build-arg USE_CUDA=1 -t persiaml-test:latest .
+    command: make build_test_image 
 
   - wait
 
