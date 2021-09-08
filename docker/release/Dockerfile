@@ -4,8 +4,9 @@ FROM ${BASE_IMAGE}
 ARG PYTHON_VERSION=3.8
 ARG PYTORCH_VERSION=1.7
 ARG MAGMA_CUDA_VERSION=magma-cuda110
-ARG CPU_ONLY
 ARG DEPLOY=false
+ARG CPU_ONLY
+ARG CI
 
 RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl \
     build-essential \
@@ -80,10 +81,13 @@ RUN curl -sSf https://sh.rustup.rs | sh -s -- --default-toolchain none -y --prof
     rustup install nightly-2021-06-01 && \
     cd /workspace && \
     if [ -z "${CPU_ONLY}" ]; then \
-        echo "install persiaml in gpu mode"; \ 
+        echo "install persiaml in gpu mode"; \
         export USE_CUDA=1; \
     else \
-        echo "install persiaml in cpu mode"; \ 
+        echo "install persiaml in cpu mode"; \
     fi && \
     pip3 install . -v --no-cache-dir && \
-    rm -rf /workspace /cargo /rust
+    rm -rf /workspace && \ 
+    if [ -z "${CI}" ]; then \
+        rm -rf /cargo /rust; \
+    fi

@@ -13,7 +13,7 @@ pytest:
 all: lint flake8 format pytest
 
 build_ci_image:
-	docker build --build-arg DEPLOY=true \
+	docker build --build-arg DEPLOY=true --build-arg CI=true \
 		--no-cache -f docker/release/Dockerfile -t persiaml/persia-ci:latest .
 
 build_cpu_image:
@@ -25,7 +25,8 @@ build_gpu_image:
 
 # default persia inference image is base on cuda runtime
 build_inference_image:
-	docker build --no-cache -f docker/release/Dockerfile -t persiaml/persia-inference-runtime:latest .
+	docker build --build-arg DEPLOY=true \
+		--no-cache -f docker/release/Dockerfile -t persiaml/persia-inference-runtime:latest .
 
 build_test_image:
 	docker build --build-arg USE_CUDA=1 --no-cache -f docker/dev/Dockerfile -t persiaml-test:latest .
