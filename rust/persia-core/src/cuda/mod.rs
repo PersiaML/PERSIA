@@ -32,7 +32,7 @@ pub struct GPUStorage {
     #[speedy(skip)]
     pub host_ptr: PinnedMemoryPtr,
     pub dtype: DType,
-    pub is_ready: bool
+    pub is_ready: bool,
 }
 
 impl GPUStorage {
@@ -75,7 +75,7 @@ impl GPUStorage {
                 host_ptr: pinned_host_ptr,
                 event,
                 dtype,
-                is_ready: false
+                is_ready: false,
             })
         }
     }
