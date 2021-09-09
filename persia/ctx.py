@@ -586,6 +586,8 @@ class TrainCtx(EmbeddingCtx):
         assert rank_id != -1, "RANK not set"
 
         if world_size > 1:
+            protocol = "nccl" if self.device_id is not None else "gloo"
+
             if rank_id == 0:
                 ip = socket.gethostbyname(socket.gethostname())
                 leader_addr = f"tcp://{ip}:{torch_distributed_port}"
@@ -597,7 +599,7 @@ class TrainCtx(EmbeddingCtx):
             _logger.info(f"leader addr is {leader_addr}")
 
             torch.distributed.init_process_group(
-                "nccl",
+                protocol,
                 init_method=leader_addr,
                 rank=rank_id,
                 world_size=world_size,
@@ -631,7 +633,7 @@ class TrainCtx(EmbeddingCtx):
         super()._enter()
 
         self.sparse_optimizer.apply()
-        self.backward_engine.launch(self.device_id, self.backward_workers_size)
+        self.backward_engine.launch(self.backward_workers_size)
 
     def _exit(self):
         super()._exit()

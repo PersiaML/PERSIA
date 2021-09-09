@@ -1,7 +1,7 @@
 #include <vector>
 
+// #include <c10/cuda/CUDAGuard.h>
 #include <c10/core/DeviceGuard.h>
-#include <c10/cuda/CUDAGuard.h>
 #include <c10/core/DeviceType.h>
 #include <c10/core/TensorOptions.h>
 

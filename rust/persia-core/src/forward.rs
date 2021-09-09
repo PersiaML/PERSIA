@@ -71,7 +71,6 @@ impl PyEmbedding {
         if let Embedding::Sum(sum_embedding) = self.inner.take().unwrap() {
             PyTensor {
                 inner: sum_embedding.tensor,
-                is_ready: false,
             }
         } else {
             panic!("AttrError: raw embedding can not convert to sum embedding")
@@ -83,15 +82,12 @@ impl PyEmbedding {
             (
                 PyTensor {
                     inner: raw_embedding.tensor,
-                    is_ready: false,
                 },
                 PyTensor {
                     inner: raw_embedding.index,
-                    is_ready: false,
                 },
                 PyTensor {
                     inner: raw_embedding.non_empty_index,
-                    is_ready: false,
                 },
                 raw_embedding.samples_id_num,
             )
@@ -120,34 +116,10 @@ impl PyDtype {
 #[pyclass]
 pub struct PyTensor {
     inner: Tensor,
-    is_ready: bool, // FIXME: remove this field
 }
 
 #[pymethods]
 impl PyTensor {
-    pub fn data_ptr(&mut self) -> u64 {
-        self.inner.data_ptr()
-    }
-
-    pub fn shape(&self) -> Vec<usize> {
-        self.inner.shape.clone()
-    }
-
-    #[cfg(feature = "cuda")]
-    pub fn num_bytes(&self) -> usize {
-        self.inner.storage.gpu_ref().ptr.num_bytes
-    }
-
-    pub fn device(&self) -> String {
-        self.inner.device()
-    }
-
-    pub fn dtype(&self) -> PyDtype {
-        PyDtype {
-            inner: self.inner.dtype(),
-        }
-    }
-
     #[new]
     pub fn from_numpy(data: &PyArray2<f32>) -> PyTensor {
         let shape = data.shape().to_vec();
@@ -160,8 +132,28 @@ impl PyTensor {
                 shape,
                 name: None,
             },
-            is_ready: true,
         }
+    }
+
+    #[getter]
+    pub fn data_ptr(&mut self) -> u64 {
+        self.inner.data_ptr()
+    }
+
+    #[getter]
+    pub fn get_shape(&self) -> Vec<usize> {
+        self.inner.shape.clone()
+    }
+
+    #[getter]
+    pub fn dtype(&self) -> PyDtype {
+        PyDtype {
+            inner: self.inner.dtype(),
+        }
+    }
+
+    pub fn device(&self) -> String {
+        self.inner.device()
     }
 
     // pub fn from_obj(data: &PyObject) -> PyResult<()> {
@@ -213,10 +205,7 @@ impl PythonTrainBatch {
     pub fn consume_all_dense_features(&mut self) -> Vec<PyTensor> {
         std::mem::replace(&mut self.inner.dense, vec![])
             .into_iter()
-            .map(|x| PyTensor {
-                inner: x,
-                is_ready: false,
-            })
+            .map(|x| PyTensor { inner: x })
             .collect()
     }
 
@@ -230,10 +219,7 @@ impl PythonTrainBatch {
     pub fn consume_all_targets(&mut self) -> Vec<PyTensor> {
         std::mem::replace(&mut self.inner.target, vec![])
             .into_iter()
-            .map(|x| PyTensor {
-                inner: x,
-                is_ready: false,
-            })
+            .map(|x| PyTensor { inner: x })
             .collect()
     }
 
