@@ -148,30 +148,8 @@ impl Storage {
             _ => Err(TensorError::CPUStorageNotFound),
         }
     }
-
-    #[cfg(feature = "cuda")]
-    pub fn take_gpu_storage(self) -> Result<GPUStorage, TensorError> {
-        match self {
-            Storage::GPU(val) => Ok(val),
-            _ => Err(TensorError::GPUStorageNotFound),
-        }
-    }
-
-    pub fn cpu_ref(&self) -> &CPUStorage {
-        match &self {
-            Storage::CPU(val) => val,
-            _ => unreachable!(),
-        }
-    }
-
-    #[cfg(feature = "cuda")]
-    pub fn gpu_ref(&self) -> &GPUStorage {
-        match &self {
-            Storage::GPU(val) => val,
-            _ => unreachable!(),
-        }
-    }
 }
+
 #[derive(Readable, Writable, Debug)]
 pub struct Tensor {
     pub storage: Storage,

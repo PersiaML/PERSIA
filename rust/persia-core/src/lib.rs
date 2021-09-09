@@ -133,15 +133,6 @@ impl PersiaCommonContext {
             }
         }
 
-        if let Some(device_id) = device_id.as_ref() {
-            #[cfg(feature = "cuda")]
-            {
-                use crate::cuda::set_device;
-
-                set_device(*device_id);
-            }
-        }
-
         let common_context = Self {
             rpc_client,
             nats_publisher: Arc::new(RwLock::new(None)),

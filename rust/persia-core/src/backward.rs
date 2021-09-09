@@ -160,10 +160,10 @@ impl Backward {
         }
     }
 
-    fn launch(&mut self, device_id: Option<i32>, num_backward_worker: usize) {
+    fn launch(&mut self, num_backward_worker: usize) {
         if !self.launch {
             self.running.store(true, Ordering::Relaxed);
-            self.spawn_backward_to_cpu_worker(device_id);
+            self.spawn_backward_to_cpu_worker();
             self.spawn_backward_worker(num_backward_worker);
             self.launch = true;
         }
@@ -174,17 +174,18 @@ impl Backward {
         self.running.store(false, Ordering::Relaxed);
     }
 
-    fn spawn_backward_to_cpu_worker(&mut self, device_id: Option<i32>) {
+    fn spawn_backward_to_cpu_worker(&mut self) {
         let channel_r = self.backward_channel_r.clone();
         let channel_s = self.cpu_backward_channel_s.clone();
 
         let running = self.running.clone();
+        let device_id = PersiaCommonContext::get().device_id.clone();
         let handler = std::thread::spawn(move || {
             #[cfg(feature = "cuda")]
-            if let Some(device_id) = device_id {
+            if let Some(device_id) = device_id.as_ref() {
                 use crate::cuda::set_device;
 
-                set_device(device_id as i32);
+                set_device(*device_id as i32);
             }
             loop {
                 if !running.load(Ordering::Acquire) {
@@ -349,8 +350,8 @@ impl PyBackward {
         }
     }
 
-    pub fn launch(&mut self, device_id: Option<i32>, num_backward_worker: usize) {
-        self.inner.launch(device_id, num_backward_worker);
+    pub fn launch(&mut self, num_backward_worker: usize) {
+        self.inner.launch(num_backward_worker);
     }
 
     pub fn shutdown(&mut self) {
