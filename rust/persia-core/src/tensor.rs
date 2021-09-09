@@ -138,7 +138,7 @@ impl Storage {
         match &self {
             Storage::CPU(val) => val,
             _ => unreachable!(),
-        }        
+        }
     }
 
     #[cfg(feature = "cuda")]

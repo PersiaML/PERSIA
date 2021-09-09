@@ -7,7 +7,7 @@ use persia_libs::numpy::{PyArray1, PyArray2};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use persia_common::{SparseBatchRemoteReference, SparseBatch};
+use persia_common::{SparseBatch, SparseBatchRemoteReference};
 use persia_speedy::{Readable, Writable};
 
 #[derive(Readable, Writable, Debug)]
