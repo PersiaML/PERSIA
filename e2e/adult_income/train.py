@@ -131,7 +131,7 @@ if __name__ == "__main__":
             if batch_idx % test_interval == 0 and batch_idx != 0:
                 test_auc, test_acc = test(model)
                 assert (
-                    test_auc == 0.88732482
+                    test_auc > 0.88732482
                 ), f"test_auc error, expect greater than 0.88732482 but got {test_auc}"
                 break
 
