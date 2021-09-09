@@ -1,6 +1,6 @@
 steps:
   - label: "Build docker ci image for latest persiaml framework"
-    command: docker build --build-arg USE_CUDA=1 -t persiaml-test:latest .
+    command: make build_test_image 
 
   - wait
 
@@ -17,9 +17,27 @@ steps:
           graceful-shutdown: true
 
 
-  - label: "upload the latest cuda-runtime image"
+  - label: "build and upload the latest ci image"
     branches: "main"
     command: 
       - docker login -u $$DOCKER_USER -p $$DOCKER_TOKEN
-      - docker tag persiaml-test:latest persiaml/persia-cuda-runtime:latest 
-      - docker push persiaml/persia-cuda-runtime:latest 
+      - make build_ci_image && docker push persiaml/persia-ci:latest 
+
+  - label: "build and upload the latest cuda image"
+    branches: "main"
+    command: 
+      - docker login -u $$DOCKER_USER -p $$DOCKER_TOKEN
+      - make build_cuda_image && docker push persiaml/persia-cuda-runtime:latest 
+
+  - label: "build and upload the latest cpu image"
+    branches: "main"
+    command: 
+      - docker login -u $$DOCKER_USER -p $$DOCKER_TOKEN
+      - make build_cpu_image && docker push persiaml/persia-cpu-runtime:latest 
+
+  - label: "build and upload the latest inference image"
+    branches: "main"
+    command: 
+      - docker login -u $$DOCKER_USER -p $$DOCKER_TOKEN
+      - make build_inference_image && docker push persiaml/persia-inference-runtime:latest
+
