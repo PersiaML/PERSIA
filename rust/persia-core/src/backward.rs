@@ -86,7 +86,7 @@ impl PythonGradientBatch {
         &mut self,
         slot_name: String,
         data_ptr: u64,
-        shape:[usize; 2],
+        shape: [usize; 2],
         is_f16_gradient: bool,
         scale_factor: f32,
     ) {
@@ -134,7 +134,8 @@ fn host_ptr2gradient(
 ) -> Gradients {
     if is_f16 {
         Gradients::F16(
-            ndarray::Array2::from_shape_vec(shape, ptr2vec::<half::f16>(ptr, num_elements)).unwrap(),
+            ndarray::Array2::from_shape_vec(shape, ptr2vec::<half::f16>(ptr, num_elements))
+                .unwrap(),
         )
     } else {
         Gradients::F32(
