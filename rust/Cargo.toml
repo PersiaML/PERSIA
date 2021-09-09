@@ -10,7 +10,7 @@ members = [
   "persia-eviction-map",
   "persia-model-manager",
   "persia-full-amount-manager",
-  "persia-storage-visitor",
+  "persia-storage",
   "persia-embedding-holder",
   "persia-metrics",
   "others/persia-common-benchmark",

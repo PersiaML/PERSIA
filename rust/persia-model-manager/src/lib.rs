@@ -22,7 +22,7 @@ use persia_embedding_config::{
 use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
 use persia_full_amount_manager::{FullAmountManager, PersiaFullAmountManagerError};
 use persia_speedy::{Readable, Writable};
-use persia_storage_visitor::{PersiaStorageAdapter, SpeedyObj};
+use persia_storage::{PersiaPath, SpeedyObj};
 
 #[derive(Readable, Writable, thiserror::Error, Debug)]
 pub enum PersistenceManagerError {
@@ -63,7 +63,6 @@ static MODEL_PERSISTENCE_MANAGER: OnceCell<Arc<PersiaPersistenceManager>> = Once
 
 #[derive(Clone)]
 pub struct PersiaPersistenceManager {
-    storage_visitor: Arc<PersiaStorageAdapter>,
     embedding_holder: PersiaEmbeddingHolder,
     full_amount_manager: Arc<FullAmountManager>,
     status: Arc<RwLock<PersiaPersistenceStatus>>,
@@ -83,10 +82,7 @@ impl PersiaPersistenceManager {
             let full_amount_manager = FullAmountManager::get()?;
             let replica_info = PersiaReplicaInfo::get()?;
 
-            let storage_visitor = Arc::new(PersiaStorageAdapter::new());
-
             let singleton = Arc::new(Self::new(
-                storage_visitor,
                 embedding_holder,
                 full_amount_manager,
                 server_config.num_persistence_workers,
@@ -105,7 +101,6 @@ impl PersiaPersistenceManager {
     }
 
     fn new(
-        storage_visitor: Arc<PersiaStorageAdapter>,
         embedding_holder: PersiaEmbeddingHolder,
         full_amount_manager: Arc<FullAmountManager>,
         concurrent_size: usize,
@@ -115,7 +110,6 @@ impl PersiaPersistenceManager {
         cur_task: PerisaJobType,
     ) -> Self {
         Self {
-            storage_visitor,
             embedding_holder,
             full_amount_manager,
             status: Arc::new(RwLock::new(PersiaPersistenceStatus::Idle)),
@@ -173,7 +167,8 @@ impl PersiaPersistenceManager {
         emb_dir: PathBuf,
     ) -> Result<(), PersistenceManagerError> {
         let done_file = self.get_done_file_name();
-        self.storage_visitor.create_file(emb_dir, done_file)?;
+        let done_path = PersiaPath::from_vec(vec![&emb_dir, &done_file]);
+        done_path.imple.create()?;
         Ok(())
     }
 
@@ -182,8 +177,8 @@ impl PersiaPersistenceManager {
         emb_dir: &PathBuf,
     ) -> Result<bool, PersistenceManagerError> {
         let done_file = self.get_done_file_name();
-        let done_path: PathBuf = [emb_dir, &done_file].iter().collect();
-        let res = self.storage_visitor.is_file(done_path)?;
+        let done_path = PersiaPath::from_vec(vec![emb_dir, &done_file]);
+        let res = done_path.imple.is_file()?;
         Ok(res)
     }
 
@@ -262,7 +257,8 @@ impl PersiaPersistenceManager {
 
                 let file_name = format!("{}_{}_{}.emb", date, manager.replica_index, file_index);
                 let file_name = PathBuf::from(file_name);
-                if let Err(e) = manager.storage_visitor.dump_to_file_speedy(speedy_content, dst_dir.clone(), file_name) {
+                let emb_path = PersiaPath::from_vec(vec![&dst_dir, &file_name]);
+                if let Err(e) = emb_path.imple.write_speedy(speedy_content) {
                     let msg = format!("{:?}", e);
                     tracing::error!("dump embedding error: {}", msg);
                     *manager.status.write() = PersiaPersistenceStatus::Failed(msg);
@@ -364,7 +360,8 @@ impl PersiaPersistenceManager {
         if !done {
             return Err(PersistenceManagerError::LoadingFromUncompeleteCheckpoint);
         }
-        let file_list = self.storage_visitor.list_dir(dst_dir.clone())?;
+        let dst_dir = PersiaPath::from_pathbuf(dst_dir);
+        let file_list = dst_dir.imple.list()?;
         tracing::debug!("file_list is {:?}", file_list);
 
         let file_list: Vec<PathBuf> = file_list
@@ -407,7 +404,8 @@ impl PersiaPersistenceManager {
             let manager = manager.clone();
             move || {
                 tracing::debug!("start to execute load embedding from {:?}", file_path);
-                let speedy_content = manager.storage_visitor.read_from_file_speedy(file_path);
+                let file_path = PersiaPath::from_pathbuf(file_path);
+                let speedy_content = file_path.imple.read_speedy();
                 if speedy_content.is_err() {
                     let msg = String::from("failed to read from file speedy");
                     tracing::error!("{}", msg);

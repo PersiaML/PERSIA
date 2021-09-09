@@ -13,4 +13,4 @@ persia-common = {path = "../persia-common"}
 persia-embedding-holder = {path = "../persia-embedding-holder"}
 persia-libs = {path = "../persia-libs"}
 persia-metrics = {path = "../persia-metrics"}
-persia-storage-visitor = {path = "../persia-storage-visitor"}
+persia-storage = {path = "../persia-storage"}

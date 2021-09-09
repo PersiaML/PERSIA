@@ -22,7 +22,7 @@ use persia_embedding_config::{
 };
 use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
 use persia_metrics::{Gauge, PersiaMetricsManager, PersiaMetricsManagerError};
-use persia_storage_visitor::{PerisaIncrementalPacket, PersiaStorageAdapter, SpeedyObj};
+use persia_storage::{PerisaIncrementalPacket, PersiaPath, SpeedyObj};
 
 #[derive(thiserror::Error, Debug)]
 pub enum IncrementalUpdateError {
@@ -64,7 +64,6 @@ pub fn current_unix_time() -> u64 {
 static INCREMENTAL_UPDATE_MANAGER: OnceCell<Arc<PerisaIncrementalUpdateManager>> = OnceCell::new();
 
 pub struct PerisaIncrementalUpdateManager {
-    storage_visitor: Arc<PersiaStorageAdapter>,
     embedding_holder: PersiaEmbeddingHolder,
     executors: Arc<ThreadPool>,
     sign_per_file: usize,
@@ -119,7 +118,6 @@ impl PerisaIncrementalUpdateManager {
                 .build()
                 .unwrap(),
         );
-        let storage_visitor = Arc::new(PersiaStorageAdapter::new());
         let buffer_channel_input: ChannelPair<Vec<(u64, Arc<RwLock<HashMapEmbeddingEntry>>)>> =
             ChannelPair::new(update_channel_capacity);
 
@@ -132,7 +130,6 @@ impl PerisaIncrementalUpdateManager {
         let background_threads = Arc::new(Mutex::new(vec![]));
 
         let instance = Arc::new(Self {
-            storage_visitor,
             embedding_holder,
             executors,
             sign_per_file,
@@ -194,10 +191,8 @@ impl PerisaIncrementalUpdateManager {
             timestamps: current_unix_time(),
         });
 
-        if let Err(e) =
-            self.storage_visitor
-                .dump_to_file_speedy(content, dst_dir.clone(), file_name.clone())
-        {
+        let emb_path = PersiaPath::from_vec(vec![&dst_dir, &file_name]);
+        if let Err(e) = emb_path.imple.write_speedy(content) {
             tracing::error!(
                 "failed to dump {:?} inc update packet to {:?}, because {:?}",
                 file_name,
@@ -209,7 +204,8 @@ impl PerisaIncrementalUpdateManager {
             let cur_dumped = dumped + segment_len;
             if cur_dumped >= num_total_signs {
                 let done_file = PathBuf::from("inc_done");
-                if let Err(e) = self.storage_visitor.create_file(dst_dir, done_file) {
+                let done_path = PersiaPath::from_vec(vec![&dst_dir, &done_file]);
+                if let Err(e) = done_path.imple.create() {
                     tracing::error!("failed to mark increment update done, {:?}", e);
                 }
             }
@@ -217,7 +213,8 @@ impl PerisaIncrementalUpdateManager {
     }
 
     fn load_embedding_from_file(&self, file_path: PathBuf) -> () {
-        if let Ok(speedy_content) = self.storage_visitor.read_from_file_speedy(file_path) {
+        let file_path = PersiaPath::from_pathbuf(file_path);
+        if let Ok(speedy_content) = file_path.imple.read_speedy() {
             match speedy_content {
                 SpeedyObj::PerisaIncrementalPacket(packet) => {
                     let delay = current_unix_time() - packet.timestamps;
@@ -318,7 +315,9 @@ impl PerisaIncrementalUpdateManager {
         tracing::info!("start to scan dir {:?}", inc_dir);
         let mut dir_set = std::collections::HashSet::new();
 
-        if let Ok(cur_inc_dirs) = self.storage_visitor.list_dir(inc_dir.clone()) {
+        let inc_dir = PersiaPath::from_pathbuf(inc_dir);
+
+        if let Ok(cur_inc_dirs) = inc_dir.imple.list() {
             cur_inc_dirs.into_iter().for_each(|d| {
                 if d.is_dir() {
                     dir_set.insert(d);
@@ -328,12 +327,14 @@ impl PerisaIncrementalUpdateManager {
 
         loop {
             std::thread::sleep(std::time::Duration::from_secs(10));
-            if let Ok(cur_inc_dirs) = self.storage_visitor.list_dir(inc_dir.clone()) {
+            if let Ok(cur_inc_dirs) = inc_dir.imple.list() {
                 cur_inc_dirs.into_iter().for_each(|d| {
                     if !dir_set.contains(&d) && d.is_dir() {
-                        let done_file = [d.clone(), PathBuf::from("inc_done")].iter().collect();
-                        if self.storage_visitor.is_file(done_file).unwrap_or(false) {
-                            if let Ok(file_list) = self.storage_visitor.list_dir(d.clone()) {
+                        let inc_done = PathBuf::from("inc_done");
+                        let done_file = PersiaPath::from_vec(vec![&d, &inc_done]);
+                        if done_file.imple.is_file().unwrap_or(false) {
+                            let done_dir = PersiaPath::from_pathbuf(d.clone());
+                            if let Ok(file_list) = done_dir.imple.list() {
                                 let file_list: Vec<PathBuf> = file_list
                                     .into_iter()
                                     .filter(|x| x.extension() == Some(OsStr::new("inc")))

@@ -44,7 +44,7 @@ use persia_common::PersiaBatchData;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaReplicaInfo};
 use persia_embedding_server::middleware_service::MiddlewareServerError;
 use persia_speedy::Readable;
-use persia_storage_visitor::PersiaStorageAdapter;
+use persia_storage::PersiaPath;
 
 #[derive(thiserror::Error, Debug)]
 pub enum PersiaError {
@@ -96,7 +96,6 @@ struct PersiaCommonContext {
     pub rpc_client: Arc<PersiaRpcClient>,
     pub nats_publisher: Arc<RwLock<Option<nats::PersiaBatchFlowNatsServicePublisherWrapper>>>,
     pub leader_discovery_service: Arc<RwLock<Option<nats::LeaderDiscoveryNatsServiceWrapper>>>,
-    pub storage_visitor: Arc<PersiaStorageAdapter>,
     pub async_runtime: Arc<Runtime>,
 }
 
@@ -131,7 +130,6 @@ impl PersiaCommonContext {
             rpc_client,
             nats_publisher: Arc::new(RwLock::new(None)),
             leader_discovery_service: Arc::new(RwLock::new(None)),
-            storage_visitor: Arc::new(PersiaStorageAdapter::new()),
             async_runtime: runtime,
         };
 
@@ -349,11 +347,10 @@ impl PyPersiaCommonContext {
     }
 
     pub fn read_from_file<'a>(&self, file_path: String, py: Python<'a>) -> PyResult<&'a PyBytes> {
-        let file_path = PathBuf::from(file_path);
-        let content = self
-            .inner
-            .storage_visitor
-            .read_from_file(file_path)
+        let file_path = PersiaPath::from_string(file_path);
+        let content = file_path
+            .imple
+            .read()
             .map_err(|e| PersiaError::StorageVisitError(format!("{:?}", &e)).to_py_runtime_err())?;
 
         Ok(PyBytes::new(py, content.as_slice()))
@@ -367,10 +364,11 @@ impl PyPersiaCommonContext {
     ) -> PyResult<()> {
         let file_dir = PathBuf::from(file_dir);
         let file_name = PathBuf::from(file_name);
+        let file_path = PersiaPath::from_vec(vec![&file_dir, &file_name]);
         let content = content.as_bytes().to_vec();
-        self.inner
-            .storage_visitor
-            .dump_to_file(content, file_dir, file_name)
+        file_path
+            .imple
+            .write(content)
             .map_err(|e| PersiaError::StorageVisitError(format!("{:?}", &e)).to_py_runtime_err())
     }
 }
