@@ -130,7 +130,9 @@ if __name__ == "__main__":
 
             if batch_idx % test_interval == 0 and batch_idx != 0:
                 test_auc, test_acc = test(model)
-                np.testing.assert_equal(np.array([test_auc]), np.array([0.8873248223053167]))
+                np.testing.assert_equal(
+                    np.array([test_auc]), np.array([0.8873248223053167])
+                )
                 break
 
         ctx.dump_checkpoint(eval_checkpoint_dir)
