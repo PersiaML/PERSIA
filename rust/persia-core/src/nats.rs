@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use persia_libs::{
+    async_lock::RwLock,
     flume,
     once_cell::sync::OnceCell,
     retry::{delay::Fixed, retry},
@@ -18,25 +19,76 @@ use persia_libs::{
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
-use persia_common::PreForwardStub;
+use persia_common::SparseBatchRemoteReference;
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
 };
 use persia_embedding_server::middleware_service::{
-    MiddlewareNatsStubPublisher, MiddlewareServerError,
+    MiddlewareNatsServicePublisher, MiddlewareServerError,
 };
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::Writable;
 
 #[derive(Clone)]
-pub struct PersiaBatchFlowNatsStub {
+pub struct LeaderDiscoveryNatsService {
+    pub leader_addr: Arc<RwLock<Option<String>>>,
+}
+
+#[persia_nats_marcos::service]
+impl LeaderDiscoveryNatsService {
+    pub async fn get_leader_addr(&self, _placeholder: ()) -> String {
+        self.leader_addr
+            .read()
+            .await
+            .clone()
+            .expect("lead addr not set")
+    }
+}
+
+pub struct LeaderDiscoveryNatsServiceWrapper {
+    publisher: LeaderDiscoveryNatsServicePublisher,
+    _responder: LeaderDiscoveryNatsServiceResponder,
+    leader_addr: Option<String>,
+    async_runtime: Arc<Runtime>,
+}
+
+impl LeaderDiscoveryNatsServiceWrapper {
+    pub fn new(leader_addr: Option<String>, async_runtime: Arc<Runtime>) -> Self {
+        let service = LeaderDiscoveryNatsService {
+            leader_addr: Arc::new(RwLock::new(leader_addr.clone())),
+        };
+        let _guard = async_runtime.enter();
+        let instance = Self {
+            publisher: LeaderDiscoveryNatsServicePublisher::new(),
+            _responder: LeaderDiscoveryNatsServiceResponder::new(service),
+            leader_addr,
+            async_runtime,
+        };
+        instance
+    }
+
+    pub fn get_leader_addr(&self) -> String {
+        if let Some(addr) = &self.leader_addr {
+            addr.clone()
+        } else {
+            let addr: Result<String, _> = retry(Fixed::from_millis(1000), || {
+                self.async_runtime
+                    .block_on(self.publisher.publish_get_leader_addr(&(), Some(0)))
+            });
+            addr.expect("failed to leader addr")
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct PersiaBatchFlowNatsService {
     pub output_channel: flume::Sender<PersiaBatchData>,
     pub world_size: usize,
 }
 
-#[persia_nats_marcos::stub]
-impl PersiaBatchFlowNatsStub {
+#[persia_nats_marcos::service]
+impl PersiaBatchFlowNatsService {
     pub async fn batch(&self, batch: PersiaBatchData) -> bool {
         let result = self.output_channel.try_send(batch);
         result.is_ok()
@@ -47,22 +99,22 @@ impl PersiaBatchFlowNatsStub {
     }
 }
 
-static RESPONDER: OnceCell<Arc<PersiaBatchFlowNatsStubResponder>> = OnceCell::new();
+static RESPONDER: OnceCell<Arc<PersiaBatchFlowNatsServiceResponder>> = OnceCell::new();
 
-pub struct PersiaBatchFlowNatsStubPublisherWrapper {
-    to_middleware: MiddlewareNatsStubPublisher,
+pub struct PersiaBatchFlowNatsServicePublisherWrapper {
+    to_middleware: MiddlewareNatsServicePublisher,
     num_middlewares: usize,
     cur_middleware_id: AtomicUsize,
     cur_batch_id: AtomicUsize,
     replica_info: Arc<PersiaReplicaInfo>,
-    to_trainer: PersiaBatchFlowNatsStubPublisher,
+    to_trainer: PersiaBatchFlowNatsServicePublisher,
     world_size: usize,
     async_runtime: Arc<Runtime>,
 }
 
-impl PersiaBatchFlowNatsStubPublisherWrapper {
+impl PersiaBatchFlowNatsServicePublisherWrapper {
     pub fn new(world_size: Option<usize>, async_runtime: Arc<Runtime>) -> Self {
-        let to_trainer = PersiaBatchFlowNatsStubPublisher::new();
+        let to_trainer = PersiaBatchFlowNatsServicePublisher::new();
         let world_size = world_size.unwrap_or_else(|| {
             retry(Fixed::from_millis(5000), || {
                 let resp = async_runtime.block_on(to_trainer.publish_get_world_size(&(), None));
@@ -74,7 +126,7 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
             .expect("failed to get world_size of trainer")
         });
 
-        let to_middleware = MiddlewareNatsStubPublisher::new();
+        let to_middleware = MiddlewareNatsServicePublisher::new();
         let num_middlewares = retry(Fixed::from_millis(5000), || {
             let resp: Result<usize, _> =
                 async_runtime.block_on(to_middleware.publish_get_replica_size(&(), None))?;
@@ -109,7 +161,7 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
     ) -> Result<(), PersiaError> {
         let start = std::time::Instant::now();
         match &mut batch.inner.sparse_data {
-            EmbeddingTensor::PreForwardStub(_) => {
+            EmbeddingTensor::SparseBatchRemoteReference(_) => {
                 tracing::error!("sparse data has already sent to middleware, you are calling sparse_to_middleware muti times");
                 return Err(PersiaError::MultipleSendError);
             }
@@ -119,10 +171,10 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
                 let op = || {
                     let cur_middleware_id = self.cur_middleware_id.fetch_add(1, Ordering::AcqRel);
                     let _gurad = self.async_runtime.enter();
-                    let result: Result<PreForwardStub, MiddlewareServerError> = self
+                    let result: Result<SparseBatchRemoteReference, MiddlewareServerError> = self
                         .async_runtime
                         .block_on(self.to_middleware.publish_forward_batched(
-                            sparse_batch,
+                            &sparse_batch,
                             Some(cur_middleware_id % self.num_middlewares),
                         ))?;
                     if result.is_err() {
@@ -139,9 +191,9 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
                     retry(Fixed::from_millis(1000).take(1), op)
                 };
 
-                let result = resp.map_err(|_| PersiaError::SendDataError)?;
+                let sparse_ref = resp.map_err(|_| PersiaError::SendDataError)?;
 
-                batch.inner.sparse_data = EmbeddingTensor::PreForwardStub(result);
+                batch.inner.sparse_data = EmbeddingTensor::SparseBatchRemoteReference(sparse_ref);
                 let local_batch_id = self.cur_batch_id.fetch_add(1, Ordering::AcqRel);
                 let batch_id = local_batch_id * self.replica_info.replica_size
                     + self.replica_info.replica_index;
@@ -265,12 +317,12 @@ impl PersiaBatchFlowNatsStubPublisherWrapper {
 pub fn init_responder(world_size: usize, channel: &PyPersiaBatchDataSender) -> PyResult<()> {
     let common_context = PersiaCommonContext::get();
     RESPONDER.get_or_init(|| {
-        let nats_stub = PersiaBatchFlowNatsStub {
+        let nats_service = PersiaBatchFlowNatsService {
             output_channel: channel.inner.clone(),
             world_size,
         };
         let _guard = common_context.async_runtime.enter();
-        Arc::new(PersiaBatchFlowNatsStubResponder::new(nats_stub))
+        Arc::new(PersiaBatchFlowNatsServiceResponder::new(nats_service))
     });
 
     Ok(())

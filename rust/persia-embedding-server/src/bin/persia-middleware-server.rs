@@ -13,10 +13,10 @@ use structopt::StructOpt;
 use persia_embedding_config::{
     EmbeddingConfig, PerisaJobType, PersiaCommonConfig, PersiaGlobalConfig, PersiaMiddlewareConfig,
 };
-use persia_embedding_server::embedding_service::EmbeddingServerNatsStubPublisher;
+use persia_embedding_server::embedding_service::EmbeddingServerNatsServicePublisher;
 use persia_embedding_server::middleware_service::{
-    AllEmbeddingServerClient, MiddlewareNatsStub, MiddlewareNatsStubResponder, MiddlewareServer,
-    MiddlewareServerInner,
+    AllEmbeddingServerClient, MiddlewareNatsService, MiddlewareNatsServiceResponder,
+    MiddlewareServer, MiddlewareServerInner,
 };
 
 #[derive(Debug, StructOpt, Clone)]
@@ -61,14 +61,14 @@ async fn main() -> Result<()> {
 
     EmbeddingConfig::set(&args.embedding_config)?;
 
-    let job_type = &PersiaCommonConfig::get()?.job_type;
-    let all_embedding_server_client = match job_type {
-        PerisaJobType::Infer(ref conf) => {
-            let servers = conf.servers.clone();
+    let common_config = PersiaCommonConfig::get()?;
+    let all_embedding_server_client = match &common_config.job_type {
+        PerisaJobType::Infer => {
+            let servers = common_config.infer_config.servers.clone();
             AllEmbeddingServerClient::with_addrs(servers)
         }
         _ => {
-            let nats_publisher = EmbeddingServerNatsStubPublisher::new();
+            let nats_publisher = EmbeddingServerNatsServicePublisher::new();
             AllEmbeddingServerClient::with_nats(nats_publisher)
         }
     };
@@ -91,13 +91,13 @@ async fn main() -> Result<()> {
         middleware_config,
     });
 
-    let _responder = match job_type {
-        PerisaJobType::Infer(_) => None,
+    let _responder = match &common_config.job_type {
+        PerisaJobType::Infer => None,
         _ => {
-            let nats_stub = MiddlewareNatsStub {
+            let nats_service = MiddlewareNatsService {
                 inner: inner.clone(),
             };
-            let responder = MiddlewareNatsStubResponder::new(nats_stub);
+            let responder = MiddlewareNatsServiceResponder::new(nats_service);
             Some(responder)
         }
     };

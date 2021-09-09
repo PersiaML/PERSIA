@@ -1,6 +1,6 @@
 FROM persiaml/persia-ci:latest
 
-ARG USE_CUDA
+ARG USE_CUDA=1
 
 WORKDIR /workspace
 

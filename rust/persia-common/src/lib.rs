@@ -244,11 +244,13 @@ pub enum FeatureEmbeddingBatch {
 #[serde(crate = "self::serde")]
 pub struct EmbeddingBatch {
     pub batches: Vec<FeatureEmbeddingBatch>,
+    pub backward_ref_id: Option<u64>,
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
 #[serde(crate = "self::serde")]
 pub struct SparseBatch {
+    pub requires_grad: bool,
     pub batches: Vec<FeatureBatch>,
     #[serde(skip)]
     pub enter_forward_id_buffer_time: Option<std::time::SystemTime>,
@@ -258,9 +260,10 @@ pub struct SparseBatch {
     pub batcher_idx: Option<usize>,
 }
 
-impl From<Vec<(String, Vec<&PyArray1<u64>>)>> for SparseBatch {
-    fn from(batches: Vec<(String, Vec<&PyArray1<u64>>)>) -> Self {
+impl SparseBatch {
+    pub fn new(batches: Vec<(String, Vec<&PyArray1<u64>>)>, requires_grad: Option<bool>) -> Self {
         SparseBatch {
+            requires_grad: requires_grad.unwrap_or(true),
             batches: batches
                 .into_iter()
                 .map(|(feature_name, batch)| {
@@ -284,17 +287,17 @@ impl From<Vec<(String, Vec<&PyArray1<u64>>)>> for SparseBatch {
 }
 
 #[derive(Readable, Writable, Debug, Clone)]
-pub struct PreForwardStub {
+pub struct SparseBatchRemoteReference {
     pub middleware_addr: String,
-    pub forward_id: u64,
+    pub ref_id: u64,
     pub batcher_idx: usize,
 }
 
-impl Default for PreForwardStub {
+impl Default for SparseBatchRemoteReference {
     fn default() -> Self {
         Self {
             middleware_addr: String::from(""),
-            forward_id: 0,
+            ref_id: 0,
             batcher_idx: 0,
         }
     }

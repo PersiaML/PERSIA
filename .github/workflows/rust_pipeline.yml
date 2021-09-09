@@ -1,6 +1,6 @@
-on: push
+name: rust fmt
 
-name: Rustfmt
+on: push
 
 jobs:
   format:

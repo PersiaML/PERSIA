@@ -7,25 +7,28 @@ use persia_libs::numpy::{PyArray1, PyArray2};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use persia_common::{PreForwardStub, SparseBatch};
+use persia_common::{SparseBatchRemoteReference, SparseBatch};
 use persia_speedy::{Readable, Writable};
 
 #[derive(Readable, Writable, Debug)]
 pub enum EmbeddingTensor {
     Null,
-    PreForwardStub(PreForwardStub),
     SparseBatch(SparseBatch),
+    SparseBatchRemoteReference(SparseBatchRemoteReference),
 }
 
 impl EmbeddingTensor {
     pub fn to_forward_id(&self) -> (&str, u64) {
         match &self {
-            EmbeddingTensor::PreForwardStub(stub) => (&stub.middleware_addr, stub.forward_id),
+            EmbeddingTensor::SparseBatchRemoteReference(sparse_ref) => {
+                (&sparse_ref.middleware_addr, sparse_ref.ref_id)
+            }
             EmbeddingTensor::SparseBatch(_) => ("", 0u64),
             _ => panic!("forward id not found on embedding tensor"),
         }
     }
 }
+
 #[derive(Readable, Writable, Debug)]
 pub struct PersiaBatchData {
     pub dense_data: Vec<Tensor>,
@@ -96,8 +99,13 @@ impl PyPersiaBatchData {
         });
     }
 
-    pub fn add_sparse(&mut self, sparse_data: Vec<(String, Vec<&PyArray1<u64>>)>) {
-        self.inner.sparse_data = EmbeddingTensor::SparseBatch(SparseBatch::from(sparse_data));
+    pub fn add_sparse(
+        &mut self,
+        sparse_data: Vec<(String, Vec<&PyArray1<u64>>)>,
+        requires_grad: Option<bool>,
+    ) {
+        self.inner.sparse_data =
+            EmbeddingTensor::SparseBatch(SparseBatch::new(sparse_data, requires_grad));
     }
 
     pub fn add_target(&mut self, target_data: &PyArray2<f32>) {

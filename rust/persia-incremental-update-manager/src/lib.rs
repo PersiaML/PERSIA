@@ -170,7 +170,7 @@ impl PerisaIncrementalUpdateManager {
                 });
                 handle_guard.push(handle);
             }
-            PerisaJobType::Infer(_) => {
+            PerisaJobType::Infer => {
                 let handle = std::thread::spawn({
                     let instance = instance.clone();
                     move || {
@@ -319,7 +319,7 @@ impl PerisaIncrementalUpdateManager {
     fn inc_dir_scan_thread(&self) -> () {
         let inc_dir = self.incremental_dir.clone();
         if !inc_dir.is_dir() {
-            tracing::error!("incremental_dir is not a dir");
+            tracing::warn!("incremental_dir is not a dir");
             return;
         }
         tracing::info!("start to scan dir {:?}", inc_dir);

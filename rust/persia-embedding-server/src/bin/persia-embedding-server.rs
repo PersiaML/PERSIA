@@ -14,7 +14,7 @@ use persia_embedding_config::{
 };
 use persia_embedding_holder::PersiaEmbeddingHolder;
 use persia_embedding_server::embedding_service::{
-    EmbeddingServerNatsStub, EmbeddingServerNatsStubResponder, EmbeddingService,
+    EmbeddingServerNatsService, EmbeddingServerNatsServiceResponder, EmbeddingService,
     EmbeddingServiceInner,
 };
 use persia_full_amount_manager::FullAmountManager;
@@ -95,21 +95,22 @@ async fn main() -> Result<()> {
             async move { Ok::<_, hyper::Error>(service) }
         }));
 
-    let job_type = inner.get_job_type()?;
+    let job_type = &inner.get_job_type()?;
     let _responder = match job_type {
-        PerisaJobType::Infer(_) => None,
+        PerisaJobType::Infer => None,
         _ => {
-            let nats_stub = EmbeddingServerNatsStub {
+            let nats_service = EmbeddingServerNatsService {
                 inner: inner.clone(),
             };
-            let responder = EmbeddingServerNatsStubResponder::new(nats_stub);
+            let responder = EmbeddingServerNatsServiceResponder::new(nats_service);
             Some(responder)
         }
     };
 
     match job_type {
-        PerisaJobType::Infer(ref conf) => {
-            let sparse_ckpt = conf.embedding_checkpoint.clone();
+        PerisaJobType::Infer => {
+            let common_config = PersiaCommonConfig::get()?;
+            let sparse_ckpt = common_config.infer_config.embedding_checkpoint.clone();
             inner.load(sparse_ckpt).await?;
         }
         _ => {}

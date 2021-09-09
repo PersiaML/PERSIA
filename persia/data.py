@@ -4,6 +4,8 @@ from typing import Optional
 import torch
 from torch.utils.data.dataset import IterableDataset as TorchIterableDataset
 
+import persia.env as env
+
 from persia.ctx import cnt_ctx
 from persia.logger import get_default_logger
 from persia.prelude import (
@@ -56,10 +58,8 @@ class StreamingDataset(IterableDataset):
 
     def __iter__(self):
         if not self.initialized:
-            current_ctx = cnt_ctx()
-            assert current_ctx is not None, "Current conext is None!"
-            world_size = current_ctx.world_size
-            assert world_size != -1, "world size not set"
+            world_size = env.get_world_size()
+            assert world_size != -1, "WORLD_SIZE not set"
             init_responder(world_size, self.sender)
 
             _logger.info("initialize the responder")

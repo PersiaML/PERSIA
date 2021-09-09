@@ -43,7 +43,7 @@ impl NatsSubject {
         }
     }
 
-    fn subscription(&self, stub_type_name: String) -> TokenStream2 {
+    fn subscription(&self, service_type_name: String) -> TokenStream2 {
         let subject_ident = self.subject_ident();
         let subject_string = subject_ident.to_string();
         let subscribe_ident = self.subscribe_subject_ident();
@@ -77,7 +77,7 @@ impl NatsSubject {
                 let nats_client = self.nats_client.clone();
                 let replica_info = PersiaReplicaInfo::get().expect("failed to get replica_info");
                 let subject = nats_client.get_subject(
-                    #stub_type_name,
+                    #service_type_name,
                     #subject_string,
                     Some(replica_info.replica_index),
                 );
@@ -85,7 +85,7 @@ impl NatsSubject {
                 #spawn_task
 
                 let subject = nats_client.get_subject(
-                    #stub_type_name,
+                    #service_type_name,
                     #subject_string,
                     None,
                 );
@@ -97,7 +97,7 @@ impl NatsSubject {
         }
     }
 
-    fn publishing(&self, stub_type_name: String) -> TokenStream2 {
+    fn publishing(&self, service_type_name: String) -> TokenStream2 {
         let subject_ident = self.subject_ident();
         let subject_string = subject_ident.to_string();
         let publish_ident = self.publish_subject_ident();
@@ -112,7 +112,7 @@ impl NatsSubject {
             ) -> Result<#resp_type, NatsError> {
                 let nats_client = self.nats_client.clone();
                 let subject = nats_client.get_subject(
-                    #stub_type_name,
+                    #service_type_name,
                     #subject_string,
                     dst_index,
                 );
@@ -134,19 +134,19 @@ impl NatsSubject {
     }
 }
 
-struct NatsStub {
+struct NatsService {
     subjects: Vec<NatsSubject>,
-    stub_type_name: String,
+    service_type_name: String,
 }
 
-impl NatsStub {
+impl NatsService {
     fn responder_impl(&self) -> TokenStream2 {
-        let stub_ident = quote::format_ident!("{}", self.stub_type_name);
-        let responder_ident = quote::format_ident!("{}Responder", self.stub_type_name);
+        let service_ident = quote::format_ident!("{}", self.service_type_name);
+        let responder_ident = quote::format_ident!("{}Responder", self.service_type_name);
         let subscriptions: Vec<_> = self
             .subjects
             .iter()
-            .map(|x| x.subscription(self.stub_type_name.clone()))
+            .map(|x| x.subscription(self.service_type_name.clone()))
             .collect();
         let subscribe_subjects: Vec<_> = self
             .subjects
@@ -161,14 +161,14 @@ impl NatsStub {
 
         quote::quote! {
             pub struct #responder_ident {
-                inner: #stub_ident,
+                inner: #service_ident,
                 nats_client: NatsClient,
             }
 
             impl #responder_ident {
-                pub fn new(stub: #stub_ident) -> Self {
+                pub fn new(service: #service_ident) -> Self {
                     let instance = Self {
-                        inner: stub,
+                        inner: service,
                         nats_client: NatsClient::get(),
                     };
                     instance.spawn_subscriptions().expect("failed to spawn nats subscriptions");
@@ -186,11 +186,11 @@ impl NatsStub {
     }
 
     fn publisher_impl(&self) -> TokenStream2 {
-        let publisher_ident = quote::format_ident!("{}Publisher", self.stub_type_name);
+        let publisher_ident = quote::format_ident!("{}Publisher", self.service_type_name);
         let publish: Vec<_> = self
             .subjects
             .iter()
-            .map(|x| x.publishing(self.stub_type_name.clone()))
+            .map(|x| x.publishing(self.service_type_name.clone()))
             .collect();
 
         quote::quote! {
@@ -211,9 +211,9 @@ impl NatsStub {
 }
 
 #[proc_macro_attribute]
-pub fn stub(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
+pub fn service(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
     let item = syn::parse_macro_input!(tokens as syn::ItemImpl);
-    let stub_type_name = item.self_ty.clone().into_token_stream().to_string();
+    let service_type_name = item.self_ty.clone().into_token_stream().to_string();
     let subjects: Vec<NatsSubject> = item
         .items
         .iter()
@@ -252,13 +252,13 @@ pub fn stub(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
         })
         .collect();
 
-    let stub = NatsStub {
+    let service = NatsService {
         subjects,
-        stub_type_name,
+        service_type_name,
     };
 
-    let responder_impl = stub.responder_impl();
-    let publisher_impl = stub.publisher_impl();
+    let responder_impl = service.responder_impl();
+    let publisher_impl = service.publisher_impl();
 
     (quote::quote! {
         #item
