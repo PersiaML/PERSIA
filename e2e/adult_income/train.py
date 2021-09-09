@@ -130,9 +130,7 @@ if __name__ == "__main__":
 
             if batch_idx % test_interval == 0 and batch_idx != 0:
                 test_auc, test_acc = test(model)
-                assert (
-                    test_auc == 0.8873248223053167
-                ), f"test_auc error, expect equal with 0.8873248223053167 but got {test_auc}"
+                np.testing.assert_equal(np.array([test_auc]), np.array([0.8873248223053167]))
                 break
 
         ctx.dump_checkpoint(eval_checkpoint_dir)
@@ -146,8 +144,7 @@ if __name__ == "__main__":
         assert num_ids == 0, f"clear embedding failed"
 
     eval_auc, eval_acc = test(model, eval_checkpoint_dir)
-    auc_diff = abs(eval_auc - test_auc)
-    assert auc_diff == 0, f"eval error, expect auc diff is 0 but got {auc_diff}"
+    np.testing.assert_equal(np.array([test_auc]), np.array([eval_auc]))
 
     result_filepath = os.environ["RESULT_FILE_PATH"]
     result = {
