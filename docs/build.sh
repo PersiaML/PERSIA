@@ -3,6 +3,7 @@
 set -euo pipefail
 
 python3 -m pip install -r docs/doc-requirements.txt
+git fetch
 git checkout self-hosted-docs
 git pull --unshallow
 python3 -m sphinx_multiversion docs build/html
