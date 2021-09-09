@@ -116,7 +116,9 @@ if __name__ == "__main__":
         device_id=device_id,
         embedding_config=embedding_config,
     ) as ctx:
-        train_dataloader = Dataloder(StreamingDataset(buffer_size))
+        train_dataloader = Dataloder(
+            StreamingDataset(buffer_size), reproducible=True, embedding_staleness=1
+        )
         for (batch_idx, data) in enumerate(train_dataloader):
             (output, target) = ctx.forward(data)
             loss = loss_fn(output, target)
@@ -129,8 +131,8 @@ if __name__ == "__main__":
             if batch_idx % test_interval == 0 and batch_idx != 0:
                 test_auc, test_acc = test(model)
                 assert (
-                    test_auc > 0.8
-                ), f"test_auc error, expect greater than 0.8 but got {test_auc}"
+                    test_auc == 0.88732482
+                ), f"test_auc error, expect greater than 0.88732482 but got {test_auc}"
                 break
 
         ctx.dump_checkpoint(eval_checkpoint_dir)
