@@ -20,6 +20,8 @@ use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_server::middleware_service::MiddlewareServerError;
 use persia_libs::{
     flume,
+    half::prelude::*,
+    numpy::PyArray,
     tokio::{
         self,
         sync::{OwnedSemaphorePermit, Semaphore},
@@ -99,16 +101,6 @@ impl PyEmbedding {
     }
 }
 
-pub trait He {
-    fn hehe() {}
-}
-
-impl He for Tensor {
-    fn hehe() {
-        println!("hehe");
-    }
-}
-
 #[pyclass]
 pub struct PyTensor {
     inner: Tensor,
@@ -120,7 +112,7 @@ impl PyTensor {
     #[cfg(feature = "cuda")]
     pub fn sync_event(&mut self) {
         if !self.is_ready {
-            self.inner.storage.gpu_storage_ref().event.synchronize();
+            self.inner.storage.gpu_ref().event.synchronize();
             self.is_ready = true;
         }
     }
@@ -128,20 +120,47 @@ impl PyTensor {
     #[cfg(feature = "cuda")]
     pub fn data_ptr(&mut self) -> u64 {
         self.sync_event();
-        self.inner.storage.gpu_storage_ref().ptr.inner as u64
+        self.inner.storage.gpu_ref().ptr.inner as u64
     }
 
-    #[cfg(feature = "cuda")]
     pub fn shape(&self) -> Vec<usize> {
         self.inner.shape.clone()
     }
 
     #[cfg(feature = "cuda")]
     pub fn num_bytes(&self) -> usize {
-        self.inner.storage.gpu_storage_ref().ptr.num_bytes
+        self.inner.storage.gpu_ref().ptr.num_bytes
     }
 
-    pub fn numpy(&self) {}
+    pub fn numpy(&self, py: Python) -> PyResult<PyObject> {
+        if let Storage::CPU(storage) = &self.inner.storage {
+            // PyArray::from_array(py, arr)
+            let py_obj = match &storage {
+                CPUStorage::F16(val) => {
+                    // TODO:
+                    // * Implement half array to avoid convert half to f32. current workaround
+                    //   due to rust numpy no implement half, convert the half to f32 is needed.
+                    //   https://github.com/PyO3/rust-numpy/issues/201
+                    // * Use PyArrayDyn to implement dynamic shape of ndarray to avoid reshape ndarray at
+                    //   python side, current corruption is due to persia-speedy is not compatible with
+                    //   ndarray 0.14.0
+                    PyArray::from_vec(py, val.as_slice().to_f32_vec()).into_py(py)
+                }
+                CPUStorage::F32(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
+                CPUStorage::F64(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
+                CPUStorage::I32(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
+                CPUStorage::I64(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
+                CPUStorage::USIZE(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
+                CPUStorage::U32(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
+                CPUStorage::U64(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
+            };
+            Ok(py_obj)
+        } else {
+            Err(PyRuntimeError::new_err(
+                "cast gpu tensor to cpu tensor before convert the tesnor to numpy, ",
+            ))
+        }
+    }
 }
 
 #[pyclass(dict)]

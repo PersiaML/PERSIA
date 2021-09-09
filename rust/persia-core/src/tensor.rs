@@ -134,8 +134,15 @@ impl Storage {
         }
     }
 
+    pub fn cpu_ref(&self) -> &CPUStorage {
+        match &self {
+            Storage::CPU(val) => val,
+            _ => unreachable!(),
+        }        
+    }
+
     #[cfg(feature = "cuda")]
-    pub fn gpu_storage_ref(&self) -> &GPUStorage {
+    pub fn gpu_ref(&self) -> &GPUStorage {
         match &self {
             Storage::GPU(val) => val,
             _ => unreachable!(),
