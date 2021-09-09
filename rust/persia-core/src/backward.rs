@@ -86,7 +86,7 @@ impl PythonGradientBatch {
         &mut self,
         slot_name: String,
         data_ptr: u64,
-        shape: [usize; 2],
+        shape:[usize; 2],
         is_f16_gradient: bool,
         scale_factor: f32,
     ) {
@@ -101,16 +101,6 @@ impl PythonGradientBatch {
                 is_f16_gradient,
                 scale_factor,
             }));
-    }
-}
-
-struct MemoryPtr {
-    inner: *const std::os::raw::c_void,
-}
-
-impl MemoryPtr {
-    pub fn as_slice<T>(&self, element_num: usize) -> &[T] {
-        unsafe { std::slice::from_raw_parts(self.inner as *const T, element_num) }
     }
 }
 
@@ -130,6 +120,27 @@ struct Backward {
     pub std_handles: Vec<JoinHandle<()>>,
     pub tokio_handles: Vec<TokioJoinHandle<()>>,
     pub running: Arc<AtomicBool>,
+}
+
+fn ptr2vec<T: Clone>(ptr: *mut std::os::raw::c_void, element_num: usize) -> Vec<T> {
+    unsafe { std::slice::from_raw_parts(ptr as *const T, element_num).to_vec() }
+}
+
+fn host_ptr2gradient(
+    ptr: *mut std::os::raw::c_void,
+    shape: [usize; 2],
+    num_elements: usize,
+    is_f16: bool,
+) -> Gradients {
+    if is_f16 {
+        Gradients::F16(
+            ndarray::Array2::from_shape_vec(shape, ptr2vec::<half::f16>(ptr, num_elements)).unwrap(),
+        )
+    } else {
+        Gradients::F32(
+            ndarray::Array2::from_shape_vec(shape, ptr2vec::<f32>(ptr, num_elements)).unwrap(),
+        )
+    }
 }
 
 impl Backward {
@@ -198,41 +209,7 @@ impl Backward {
                                     num_elements * std::mem::size_of::<f32>()
                                 };
 
-                                // #[cfg(feature = "cuda")]
-                                // {
-                                //     use crate::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
-                                //     use crate::cuda::utils::cuda_d2h;
-
-                                //     // judge the tensor with device
-                                //     let memory_ptr = if device_id.as_ref().is_some() {
-                                //         let host_ptr = PINNED_MEMORY_POOL.allocate(num_bytes);
-                                //         let event = cuda_d2h(
-                                //             num_bytes,
-                                //             x.data_ptr as *mut std::os::raw::c_void,
-                                //             host_ptr.inner,
-                                //         )
-                                //         .expect("cannot move tensor to host");
-
-                                //         event.synchronize();
-
-                                //         MemoryPtr {
-                                //             inner: host_ptr.inner,
-                                //         }
-                                //     } else {
-                                //         MemoryPtr {
-                                //             inner: x.data_ptr as *mut std::os::raw::c_void,
-                                //         }
-                                //     };
-                                // }
-
-                                // #[cfg(not(feature = "cuda"))]
-                                // {
-                                //     let memory_ptr = MemoryPtr {
-                                //         inner: x.data_ptr as *mut std::os::raw::c_void,
-                                //     };
-                                // }
-
-                                let memory_ptr = if cfg!(feature = "cuda") {
+                                let gradients = if cfg!(feature = "cuda") {
                                     use crate::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
                                     use crate::cuda::utils::cuda_d2h;
 
@@ -248,37 +225,29 @@ impl Backward {
 
                                         event.synchronize();
 
-                                        MemoryPtr {
-                                            inner: host_ptr.inner,
-                                        }
+                                        host_ptr2gradient(
+                                            host_ptr.inner,
+                                            x.shape,
+                                            num_elements,
+                                            x.is_f16_gradient,
+                                        )
                                     } else {
-                                        MemoryPtr {
-                                            inner: x.data_ptr as *mut std::os::raw::c_void,
-                                        }
+                                        host_ptr2gradient(
+                                            x.data_ptr as *mut std::os::raw::c_void,
+                                            x.shape,
+                                            num_elements,
+                                            x.is_f16_gradient,
+                                        )
                                     }
                                 } else {
-                                    MemoryPtr {
-                                        inner: x.data_ptr as *mut std::os::raw::c_void,
-                                    }
+                                    host_ptr2gradient(
+                                        x.data_ptr as *mut std::os::raw::c_void,
+                                        x.shape,
+                                        num_elements,
+                                        x.is_f16_gradient,
+                                    )
                                 };
 
-                                let gradients = if x.is_f16_gradient {
-                                    Gradients::F16(
-                                        ndarray::Array2::from_shape_vec(
-                                            x.shape,
-                                            memory_ptr.as_slice::<half::f16>(num_elements).to_vec(),
-                                        )
-                                        .unwrap(),
-                                    )
-                                } else {
-                                    Gradients::F32(
-                                        ndarray::Array2::from_shape_vec(
-                                            x.shape,
-                                            memory_ptr.as_slice::<f32>(num_elements).to_vec(),
-                                        )
-                                        .unwrap(),
-                                    )
-                                };
                                 SkippableFeatureEmbeddingGradientBatch::GradientBatch(
                                     FeatureEmbeddingGradientBatch {
                                         feature_name: x.slot_name,

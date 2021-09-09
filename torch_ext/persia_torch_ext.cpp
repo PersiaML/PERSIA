@@ -9,21 +9,18 @@
 #include <ATen/Functions.h>
 #include <pybind11/pybind11.h>
 
-
 torch::Tensor pointer_to_tensor_f32(uint64_t data_ptr, std::vector<int64_t> shape,
-                                    bool requires_grad)
+                                    bool requires_grad, bool on_cuda)
 {
-    auto options = at::TensorOptions()
-                       .device(at::kCUDA)
-                       .dtype(at::kFloat)
-                       .requires_grad(requires_grad);
+    auto device = on_cuda ? at::kCPU : at::kCPU;
+    auto options = at::TensorOptions().device(device).dtype(at::kFloat).requires_grad(requires_grad);
     return torch::from_blob(reinterpret_cast<void *>(data_ptr),
                             at::IntList(shape), options);
 }
 
 std::vector<torch::Tensor> pointers_to_tensors_f32(
     const std::vector<std::tuple<uint64_t, std::vector<int64_t> > > &entries,
-    bool requires_grad)
+    bool requires_grad, bool on_cuda)
 {
     std::vector<torch::Tensor> outputs;
     uint64_t data_ptr;
@@ -31,25 +28,24 @@ std::vector<torch::Tensor> pointers_to_tensors_f32(
     for (auto entry : entries)
     {
         std::tie(data_ptr, shape) = entry;
-        outputs.push_back(pointer_to_tensor_f32(data_ptr, shape, requires_grad));
+        outputs.push_back(pointer_to_tensor_f32(data_ptr, shape, requires_grad, on_cuda));
     }
     return outputs;
 }
 
 torch::Tensor pointer_to_tensor_f16(uint64_t data_ptr,
                                     std::vector<int64_t> shape,
-                                    bool requires_grad)
+                                    bool requires_grad, bool on_cuda)
 {
-    auto options =
-        at::TensorOptions().device(at::kCUDA).dtype(at::kHalf).requires_grad(
-            requires_grad);
+    auto device = on_cuda ? at::kCPU : at::kCPU; 
+    auto options = at::TensorOptions().device(device).dtype(at::kHalf).requires_grad(requires_grad);
     return torch::from_blob(reinterpret_cast<void *>(data_ptr),
                             at::IntList(shape), options);
 }
 
 std::vector<torch::Tensor> pointers_to_tensors_f16(
     const std::vector<std::tuple<uint64_t, std::vector<int64_t> > > &entries,
-    bool requires_grad)
+    bool requires_grad, bool on_cuda)
 {
     std::vector<torch::Tensor> outputs;
     uint64_t data_ptr;
@@ -57,19 +53,20 @@ std::vector<torch::Tensor> pointers_to_tensors_f16(
     for (auto entry : entries)
     {
         std::tie(data_ptr, shape) = entry;
-        outputs.push_back(pointer_to_tensor_f16(data_ptr, shape, requires_grad));
+        outputs.push_back(pointer_to_tensor_f16(data_ptr, shape, requires_grad, on_cuda));
     }
     return outputs;
 }
 
-torch::Tensor pointer_to_tensor_long(uint64_t data_ptr, std::vector<int64_t> shape)
+torch::Tensor pointer_to_tensor_long(uint64_t data_ptr, std::vector<int64_t> shape, bool on_cuda)
 {
-    auto options = at::TensorOptions().device(at::kCUDA).dtype(at::kLong).requires_grad(false);
+    auto device = on_cuda ? at::kCPU : at::kCPU;
+    auto options = at::TensorOptions().device(device).dtype(at::kLong).requires_grad(false);
     return torch::from_blob(reinterpret_cast<void *>(data_ptr), at::IntList(shape), options);
 }
 
 std::vector<torch::Tensor> pointers_to_tensors_long(
-    const std::vector<std::tuple<uint64_t, std::vector<int64_t> > > &entries)
+    const std::vector<std::tuple<uint64_t, std::vector<int64_t> > > &entries, bool on_cuda)
 {
     std::vector<torch::Tensor> outputs;
     uint64_t data_ptr;
@@ -77,19 +74,20 @@ std::vector<torch::Tensor> pointers_to_tensors_long(
     for (auto entry : entries)
     {
         std::tie(data_ptr, shape) = entry;
-        outputs.push_back(pointer_to_tensor_long(data_ptr, shape));
+        outputs.push_back(pointer_to_tensor_long(data_ptr, shape, on_cuda));
     }
     return outputs;
 }
 
-torch::Tensor pointer_to_tensor_i32(uint64_t data_ptr, std::vector<int64_t> shape)
+torch::Tensor pointer_to_tensor_i32(uint64_t data_ptr, std::vector<int64_t> shape, bool on_cuda)
 {
-    auto options = at::TensorOptions().device(at::kCUDA).dtype(at::kInt).requires_grad(false);
+    auto device = on_cuda ? at::kCPU : at::kCPU;
+    auto options = at::TensorOptions().device(device).dtype(at::kInt).requires_grad(false);
     return torch::from_blob(reinterpret_cast<void *>(data_ptr), at::IntList(shape), options);
 }
 
 std::vector<torch::Tensor> pointers_to_tensors_i32(
-    const std::vector<std::tuple<uint64_t, std::vector<int64_t> > > &entries)
+    const std::vector<std::tuple<uint64_t, std::vector<int64_t> > > &entries, bool on_cuda)
 {
     std::vector<torch::Tensor> outputs;
     uint64_t data_ptr;
@@ -97,7 +95,7 @@ std::vector<torch::Tensor> pointers_to_tensors_i32(
     for (auto entry : entries)
     {
         std::tie(data_ptr, shape) = entry;
-        outputs.push_back(pointer_to_tensor_i32(data_ptr, shape));
+        outputs.push_back(pointer_to_tensor_i32(data_ptr, shape, on_cuda));
     }
     return outputs;
 }

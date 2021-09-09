@@ -4,7 +4,7 @@ use crate::cuda::set_device;
 use crate::backward::PythonGradientBatch;
 use crate::data::{EmbeddingTensor, PersiaBatchData};
 use crate::metrics::MetricsHolder;
-use crate::tensor::{CPUStorage, Storage, Tensor};
+use crate::tensor::{CPUStorage, DType, Storage, Tensor};
 use crate::utils::PyPersiaBatchDataReceiver;
 use crate::PersiaCommonContext;
 
@@ -21,7 +21,7 @@ use persia_embedding_server::middleware_service::MiddlewareServerError;
 use persia_libs::{
     flume,
     half::prelude::*,
-    numpy::PyArray,
+    numpy::{PyArray, PyArray2},
     tokio::{
         self,
         sync::{OwnedSemaphorePermit, Semaphore},
@@ -101,36 +101,32 @@ impl PyEmbedding {
     }
 }
 
-pub trait He {
-    fn hehe() {}
+#[pyclass]
+pub struct PyDtype {
+    inner: DType,
 }
 
-impl He for Tensor {
-    fn hehe() {
-        println!("hehe");
+#[pymethods]
+impl PyDtype {
+    pub fn type_id(&self) -> u8 {
+        *&self.inner as u8
+    }
+
+    pub fn type_name(&self) -> &str {
+        self.inner.get_type_name()
     }
 }
 
 #[pyclass]
 pub struct PyTensor {
     inner: Tensor,
-    is_ready: bool,
+    is_ready: bool, // FIXME: remove this field
 }
 
 #[pymethods]
 impl PyTensor {
-    #[cfg(feature = "cuda")]
-    pub fn sync_event(&mut self) {
-        if !self.is_ready {
-            self.inner.storage.gpu_ref().event.synchronize();
-            self.is_ready = true;
-        }
-    }
-
-    #[cfg(feature = "cuda")]
     pub fn data_ptr(&mut self) -> u64 {
-        self.sync_event();
-        self.inner.storage.gpu_ref().ptr.inner as u64
+        self.inner.data_ptr()
     }
 
     pub fn shape(&self) -> Vec<usize> {
@@ -141,6 +137,36 @@ impl PyTensor {
     pub fn num_bytes(&self) -> usize {
         self.inner.storage.gpu_ref().ptr.num_bytes
     }
+
+    pub fn device(&self) -> String {
+        self.inner.device()
+    }
+
+    pub fn dtype(&self) -> PyDtype {
+        PyDtype {
+            inner: self.inner.dtype(),
+        }
+    }
+
+    #[new]
+    pub fn from_numpy(data: &PyArray2<f32>) -> PyTensor {
+        let shape = data.shape().to_vec();
+
+        PyTensor {
+            inner: Tensor {
+                storage: Storage::CPU(CPUStorage::F32(
+                    data.to_vec().expect("convert ndarray to vec failed"),
+                )),
+                shape,
+                name: None,
+            },
+            is_ready: true,
+        }
+    }
+
+    // pub fn from_obj(data: &PyObject) -> PyResult<()> {
+    //     let data.into()
+    // }
 
     pub fn numpy(&self, py: Python) -> PyResult<PyObject> {
         if let Storage::CPU(storage) = &self.inner.storage {
@@ -842,6 +868,7 @@ impl PyForward {
 pub fn init_module(super_module: &PyModule, py: Python) -> PyResult<()> {
     let module = PyModule::new(py, "forward")?;
     module.add_class::<PyForward>()?;
+    module.add_class::<PyTensor>()?;
     super_module.add_submodule(module)?;
     Ok(())
 }

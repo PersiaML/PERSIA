@@ -26,22 +26,20 @@ pub fn set_device(card_index: i32) {
 pub struct GPUStorage {
     #[speedy(skip)]
     pub ptr: CudaMallocPtr,
-
     pub shape: Vec<usize>,
-
     #[speedy(skip)]
     pub event: CudaEventPtr,
-
     #[speedy(skip)]
     pub host_ptr: PinnedMemoryPtr,
-
     pub dtype: DType,
+    pub is_ready: bool
 }
 
 impl GPUStorage {
     pub fn new(storage: CPUStorage, shape: Vec<usize>) -> Result<Self> {
         unsafe {
             let stream = CUDA_STREAM_POOL.allocate(0);
+            let mut storage = storage;
             let dtype = storage.get_dtype();
             let byte_count = shape.iter().product::<usize>() * dtype.get_type_size();
 
@@ -77,7 +75,24 @@ impl GPUStorage {
                 host_ptr: pinned_host_ptr,
                 event,
                 dtype,
+                is_ready: false
             })
         }
+    }
+
+    pub fn sync_event(&mut self) {
+        if !self.is_ready {
+            self.event.synchronize();
+            self.is_ready = true;
+        }
+    }
+
+    pub fn data_ptr(&mut self) -> u64 {
+        self.sync_event();
+        self.ptr.inner as u64
+    }
+
+    pub fn get_dtype(&self) -> DType {
+        self.dtype.clone()
     }
 }

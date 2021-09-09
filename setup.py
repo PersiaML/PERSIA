@@ -47,7 +47,6 @@ if __name__ == "__main__":
             path="rust/persia-embedding-server/Cargo.toml",
             binding=Binding.Exec,
             native=True,
-            features=features,
         )
     )
 

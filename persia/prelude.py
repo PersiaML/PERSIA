@@ -47,8 +47,7 @@ from persia_core.utils import (
 )
 from persia_core.nats import init_responder  # noqa
 
-if is_cuda_feature_available():
-    from persia_core.backward import PyBackward
-    from persia_core.forward import PyForward  # noqa
+from persia_core.backward import PyBackward
+from persia_core.forward import PyForward, PyTensor # noqa
 
 # pytype: enable=import-error

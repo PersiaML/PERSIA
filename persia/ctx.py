@@ -1,7 +1,7 @@
 import os
 import socket
 
-from enum import Enum
+from enum import Enum, IntEnum
 from queue import Queue
 from typing import List, Tuple, Optional, NewType
 
@@ -11,7 +11,7 @@ import persia.env as env
 
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
-from persia.prelude import PyPersiaCommonContext, PyPersiaBatchData
+from persia.prelude import PyPersiaCommonContext, PyPersiaBatchData, PyTensor
 
 _CURRENT_CXT = None
 
@@ -29,6 +29,39 @@ def _check_finite(tensors: List[torch.Tensor]) -> bool:
     Returns: Whether all the tensors is finite or is None.
     """
     return all([torch.isfinite(t).all() if t is not None else True for t in tensors])
+
+
+class DType(IntEnum):
+    F16 = 1
+    F32 = 2
+    F64 = 3
+    I32 = 4
+    I64 = 5
+    U32 = 6
+    U64 = 7
+    USIZE = 8
+
+
+def _cast_persia_tensor2torch_tensor(
+    raw_tensor: PyTensor, requires_grad: bool = False
+) -> torch.Tensor:
+    if raw_tensor.device() == "cpu":
+        torch.from_numpy(raw_tensor.numpy()).reshape(raw_tensor.shape())
+    else:
+        import persia_torch_ext as pte  # pytype: disable=import-error
+
+        type_id = raw_tensor.get_dtype()
+
+        if type_id == DType.F32:
+            pte.ptr_to_tensor_f32(
+                raw_tensor.data_ptr(), raw_tensor.shape(), requires_grad
+            )
+        elif type_id == DType.F16:
+            pte.ptr_to_tensor_f32(
+                raw_tensor.data_ptr(), raw_tensor.shape(), requires_grad
+            )
+        else:
+            raise Exception("not support")
 
 
 class PreprocessMode(Enum):
@@ -256,8 +289,6 @@ class EmbeddingCtx(BaseCtx):
         Returns:
             the tuple of dense data, list of sparse data and target data.
         """
-        import persia_torch_ext as pte  # pytype: disable=import-error
-
         if self.preprocess_mode == PreprocessMode.INFERENCE:
             batch.target_tensor = None
         else:
@@ -267,8 +298,8 @@ class EmbeddingCtx(BaseCtx):
             assert len(batch.target) == 1
             batch.target = batch.target[0]
 
-            batch.target_tensor = pte.ptr_to_tensor_f32(
-                batch.target.data_ptr(), batch.target.shape(), False
+            batch.target_tensor = _cast_persia_tensor2torch_tensor(
+                batch.target, requires_grad=False
             )
 
         is_training = self.preprocess_mode == PreprocessMode.TRAIN  # cache property
@@ -277,8 +308,8 @@ class EmbeddingCtx(BaseCtx):
         batch.dense = batch.consume_all_dense_features()
         # pytype: enable=attribute-error
         batch.dense = batch.dense[0]
-        batch.dense_tensor = pte.ptr_to_tensor_f32(
-            batch.dense.data_ptr(), batch.dense.shape(), False
+        batch.dense_tensor = _cast_persia_tensor2torch_tensor(
+            batch.dense, requires_grad=False
         )
 
         # pytype: disable=attribute-error
@@ -542,7 +573,6 @@ class TrainCtx(EmbeddingCtx):
         assert (
             sparse_optimizer is not None
         ), "Sparse_optimizer should not be none in train context"
-<<<<<<< HEAD
         assert grad_scalar_update_factor > 0, "grad scalar should greater than zero"
         assert (
             self.model is not None
@@ -577,18 +607,13 @@ class TrainCtx(EmbeddingCtx):
 
             self.model = torch.nn.parallel.DistributedDataParallel(
                 self.model,
-                device_ids=[device_id],
-                output_device=device_id,
+                device_ids=[self.device_id],
+                output_device=self.device_id,
                 find_unused_parameters=True,
             )
 
         self.common_context.init_nats_publisher(world_size)
         self.common_context.wait_servers_ready()
-=======
-
-        assert grad_scalar_update_factor > 0, "grad scalar should greater than zero"
->>>>>>> 9a4a75a2d4dc3d794ce5aa75f1009ecb904707f3
-
 
         self.update_times = 0
         self.grad_scalar_update_factor = grad_scalar_update_factor
@@ -599,7 +624,6 @@ class TrainCtx(EmbeddingCtx):
 
         from persia.prelude import PyBackward
 
-        # dynamic import the PyForward due to conditional compilation
         self.grad_queue = Queue(grad_update_buffer_size)
         self.backward_engine = PyBackward(backward_buffer_size)
 

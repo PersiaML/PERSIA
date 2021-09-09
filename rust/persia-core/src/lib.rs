@@ -396,6 +396,7 @@ fn persia_core(py: Python, m: &PyModule) -> PyResult<()> {
     utils::init_module(m, py)?;
     optim::init_module(m, py)?;
     nats::init_module(m, py)?;
+    
     m.add_function(wrap_pyfunction!(is_cuda_feature_available, m)?)?;
 
     #[cfg(feature = "cuda")]
