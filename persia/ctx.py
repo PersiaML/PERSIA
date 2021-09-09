@@ -45,23 +45,27 @@ class DType(IntEnum):
 def _cast_persia_tensor2torch_tensor(
     raw_tensor: PyTensor, requires_grad: bool = False
 ) -> torch.Tensor:
-    if raw_tensor.device() == "cpu":
-        torch.from_numpy(raw_tensor.numpy()).reshape(raw_tensor.shape())
+    import persia_torch_ext as pte  # pytype: disable=import-error
+
+    type_id = raw_tensor.dtype
+    on_cuda = raw_tensor.device.startswith("cuda")
+
+    if type_id == DType.F32:
+        tensor = pte.ptr_to_tensor_f32(
+            raw_tensor.data_ptr, raw_tensor.shape, requires_grad, on_cuda
+        )
+    elif type_id == DType.F16:
+        tensor = pte.ptr_to_tensor_f16(
+            raw_tensor.data_ptr, raw_tensor.shape, requires_grad, on_cuda
+        )
+    elif type_id in [DType.USIZE, DType.U64]:
+        tensor = pte.ptr_to_tensor_long(
+            raw_tensor.data_ptr, raw_tensor.shape, requires_grad, on_cuda
+        )
     else:
-        import persia_torch_ext as pte  # pytype: disable=import-error
+        raise Exception("persia tensor convert to torch tensor failed")
 
-        type_id = raw_tensor.get_dtype()
-
-        if type_id == DType.F32:
-            pte.ptr_to_tensor_f32(
-                raw_tensor.data_ptr(), raw_tensor.shape(), requires_grad
-            )
-        elif type_id == DType.F16:
-            pte.ptr_to_tensor_f32(
-                raw_tensor.data_ptr(), raw_tensor.shape(), requires_grad
-            )
-        else:
-            raise Exception("not support")
+    return tensor
 
 
 class PreprocessMode(Enum):
@@ -81,9 +85,7 @@ class BaseCtx:
     """
 
     def __init__(
-        self,
-        threadpool_worker_size: int = 10,
-        device_id: int = -1,
+        self, threadpool_worker_size: int = 10, device_id: Optional[int] = None
     ):
         """
         Arguments:
@@ -92,13 +94,15 @@ class BaseCtx:
         """
         self.origin_context = None
 
-        if device_id >= 0:
+        if device_id is not None and device_id >= 0:
             assert (
                 0 <= device_id < torch.cuda.device_count()
             ), f"device_id: {device_id} invalid!"
+
             torch.cuda.set_device(device_id)
         else:
             device_id = None
+
         self.device_id = device_id
 
         replica_index = (
@@ -331,13 +335,9 @@ class EmbeddingCtx(BaseCtx):
                 ) = emb.get_raw_embedding()
 
                 batch.emb_slot.append([raw_embedding, index, non_empty_index])
-
-                distinct_id_tensor = pte.ptr_to_tensor_f16(
-                    raw_embedding.data_ptr(), raw_embedding.shape(), False
-                )
-                index_tensor = pte.ptr_to_tensor_long(
-                    index.data_ptr(),
-                    index.shape(),
+                distinct_id_tensor = _cast_persia_tensor2torch_tensor(raw_embedding)
+                index_tensor = _cast_persia_tensor2torch_tensor(
+                    index
                 )  # tensor shape (1, batch_size * sample_fixed_size)
                 max_index = index_tensor.max()
                 size_of_distinct_id_tensor = distinct_id_tensor.shape[0]
@@ -346,8 +346,9 @@ class EmbeddingCtx(BaseCtx):
                 assert (
                     max_index < size_of_distinct_id_tensor
                 ), "raw embedding select index larger than tensor"
-                non_empty_index_tensor = pte.ptr_to_tensor_long(
-                    non_empty_index.data_ptr(), non_empty_index.shape()
+
+                non_empty_index_tensor = _cast_persia_tensor2torch_tensor(
+                    non_empty_index
                 )  # tensor shape (-1), variable length
 
                 batch_size = len(sample_id_num)
@@ -380,10 +381,7 @@ class EmbeddingCtx(BaseCtx):
             else:
                 emb = emb.get_sum_embedding()
                 batch.emb_slot.append([emb])
-
-                sum_tensor = pte.ptr_to_tensor_f16(
-                    emb.data_ptr(), emb.shape(), is_training
-                )
+                sum_tensor = _cast_persia_tensor2torch_tensor(emb, is_training)
                 forward_tensors.append(sum_tensor)
                 emb_tensors.append((emb.name(), None, None, None, sum_tensor))
 

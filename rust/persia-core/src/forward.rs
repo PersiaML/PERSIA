@@ -136,7 +136,7 @@ impl PyTensor {
     }
 
     #[getter]
-    pub fn data_ptr(&mut self) -> u64 {
+    pub fn get_data_ptr(&mut self) -> u64 {
         self.inner.data_ptr()
     }
 
@@ -146,19 +146,16 @@ impl PyTensor {
     }
 
     #[getter]
-    pub fn dtype(&self) -> PyDtype {
+    pub fn get_dtype(&self) -> PyDtype {
         PyDtype {
             inner: self.inner.dtype(),
         }
     }
 
-    pub fn device(&self) -> String {
+    #[getter]
+    pub fn get_device(&self) -> String {
         self.inner.device()
     }
-
-    // pub fn from_obj(data: &PyObject) -> PyResult<()> {
-    //     let data.into()
-    // }
 
     pub fn numpy(&self, py: Python) -> PyResult<PyObject> {
         if let Storage::CPU(storage) = &self.inner.storage {
