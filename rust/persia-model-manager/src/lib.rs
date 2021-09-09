@@ -385,6 +385,8 @@ impl PersiaPersistenceManager {
             self.load_embedding_from_file(file, num_loaded_files.clone(), num_total_files)?;
         }
 
+        *self.status.write() = PersiaPersistenceStatus::Loading(0.0);
+
         Ok(())
     }
 

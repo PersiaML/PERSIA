@@ -52,7 +52,7 @@ class TestDataset(PersiaDataset):
         return self.loader_size
 
 
-def test(model: torch.nn.Module, checkpoint_dir: Optional[str] = None):
+def test(model: torch.nn.Module, clear_embeddings: bool = False,checkpoint_dir: Optional[str] = None):
     logger.info("start to test...")
     model.eval()
 
@@ -74,9 +74,10 @@ def test(model: torch.nn.Module, checkpoint_dir: Optional[str] = None):
             accuracies.append(accuracy)
             losses.append(float(loss))
 
-        ctx.clear_embeddings()
-        num_ids = sum(ctx.get_embedding_size())
-        assert num_ids == 0, f"clear embedding failed"
+        if clear_embeddings:
+            ctx.clear_embeddings()
+            num_ids = sum(ctx.get_embedding_size())
+            assert num_ids == 0, f"clear embedding failed"
 
         all_pred, all_target = np.concatenate(all_pred), np.concatenate(all_target)
 
@@ -151,11 +152,11 @@ if __name__ == "__main__":
         num_ids = sum(ctx.get_embedding_size())
         assert num_ids == 0, f"clear embedding failed"
 
-    eval_auc, eval_acc = test(model, eval_checkpoint_dir)
+    eval_auc, eval_acc = test(model, True, eval_checkpoint_dir)
     auc_diff = abs(eval_auc - test_auc)
     assert auc_diff == 0, f"eval error, expect auc diff is 0 but got {auc_diff}"
 
-    eval_auc, eval_acc = test(model, hdfs_checkpoint_dir)
+    eval_auc, eval_acc = test(model, True, hdfs_checkpoint_dir)
     auc_diff = abs(eval_auc - test_auc)
     assert auc_diff == 0, f"eval error, expect auc diff is 0 but got {auc_diff}"
 
