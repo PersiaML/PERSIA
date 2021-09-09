@@ -20,7 +20,7 @@ build_cpu_image:
 	docker build --build-arg BASE_IMAGE=ubuntu:20.04 --build-arg CPU_ONLY=cpuonly \
 		--no-cache -f docker/release/Dockerfile -t persiaml/persia-cpu-runtime:latest .
 
-build_gpu_image:
+build_cuda_image:
 	docker build --no-cache -f docker/release/Dockerfile -t persiaml/persia-cuda-runtime:latest .
 
 # default persia inference image is base on cuda runtime
