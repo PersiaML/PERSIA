@@ -22,7 +22,10 @@ RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-
     net-tools \
     apt-utils \
     rlwrap \
-    telnet 
+    telnet \
+    openjdk-11-jdk \
+    openssh-server \
+    wget
 
 RUN curl -o ~/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
     chmod +x ~/miniconda.sh && \
@@ -53,6 +56,16 @@ RUN /opt/conda/bin/conda install -y -c pytorch -c conda-forge pytorch=${PYTORCH_
     apt-get clean && \
     update-alternatives --install /usr/bin/python3 python3 /opt/conda/bin/python${PYTHON_VERSION} 10 
 
+# install hdfs requirement
+RUN mkdir -p /opt/hadoop/ && \
+    cd /opt/hadoop/ && \
+    wget https://dlcdn.apache.org/hadoop/common/hadoop-3.3.1/hadoop-3.3.1.tar.gz && \
+    tar -zxvf hadoop-3.3.1.tar.gz && \
+    rm hadoop-3.3.1.tar.gz && \
+    cd -
+ENV JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64/"
+ENV PATH=/opt/hadoop/hadoop-3.3.1/bin/:$PATH
+
 # install deploy requirements
 RUN if [ "${DEPLOY}" = true ]; then \
     echo "install deploy image requirement, openjdk and torch serve"; \
@@ -63,7 +76,6 @@ RUN if [ "${DEPLOY}" = true ]; then \
         grpcio \
         protobuf \
         grpcio-tools; \
-    apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-11-jdk; \
     apt-get purge --auto-remove; \
     apt-get clean; \
     fi
