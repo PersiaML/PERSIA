@@ -101,6 +101,16 @@ impl PyEmbedding {
     }
 }
 
+pub trait He {
+    fn hehe() {}
+}
+
+impl He for Tensor {
+    fn hehe() {
+        println!("hehe");
+    }
+}
+
 #[pyclass]
 pub struct PyTensor {
     inner: Tensor,

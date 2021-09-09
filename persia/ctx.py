@@ -542,6 +542,7 @@ class TrainCtx(EmbeddingCtx):
         assert (
             sparse_optimizer is not None
         ), "Sparse_optimizer should not be none in train context"
+<<<<<<< HEAD
         assert grad_scalar_update_factor > 0, "grad scalar should greater than zero"
         assert (
             self.model is not None
@@ -583,8 +584,11 @@ class TrainCtx(EmbeddingCtx):
 
         self.common_context.init_nats_publisher(world_size)
         self.common_context.wait_servers_ready()
+=======
 
-        self.device_id = device_id
+        assert grad_scalar_update_factor > 0, "grad scalar should greater than zero"
+>>>>>>> 9a4a75a2d4dc3d794ce5aa75f1009ecb904707f3
+
 
         self.update_times = 0
         self.grad_scalar_update_factor = grad_scalar_update_factor
