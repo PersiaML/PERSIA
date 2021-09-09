@@ -52,7 +52,11 @@ class TestDataset(PersiaDataset):
         return self.loader_size
 
 
-def test(model: torch.nn.Module, clear_embeddings: bool = False,checkpoint_dir: Optional[str] = None):
+def test(
+    model: torch.nn.Module,
+    clear_embeddings: bool = False,
+    checkpoint_dir: Optional[str] = None,
+):
     logger.info("start to test...")
     model.eval()
 
