@@ -7,6 +7,7 @@ ARG MAGMA_CUDA_VERSION=magma-cuda110
 ARG DEPLOY=false
 ARG CPU_ONLY
 ARG CI
+ARG HDFS
 
 RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl \
     build-essential \
@@ -22,10 +23,7 @@ RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-
     net-tools \
     apt-utils \
     rlwrap \
-    telnet \
-    openjdk-11-jdk \
-    openssh-server \
-    wget
+    telnet
 
 RUN curl -o ~/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
     chmod +x ~/miniconda.sh && \
@@ -57,12 +55,17 @@ RUN /opt/conda/bin/conda install -y -c pytorch -c conda-forge pytorch=${PYTORCH_
     update-alternatives --install /usr/bin/python3 python3 /opt/conda/bin/python${PYTHON_VERSION} 10 
 
 # install hdfs requirement
-RUN mkdir -p /opt/hadoop/ && \
-    cd /opt/hadoop/ && \
-    wget https://dlcdn.apache.org/hadoop/common/hadoop-3.3.1/hadoop-3.3.1.tar.gz && \
-    tar -zxvf hadoop-3.3.1.tar.gz && \
-    rm hadoop-3.3.1.tar.gz && \
-    cd -
+RUN if [ "${HDFS}" = true ]; then \
+    apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-11-jdk \
+    openssh-server \
+    wget; \
+    mkdir -p /opt/hadoop/; \
+    cd /opt/hadoop/; \
+    wget https://dlcdn.apache.org/hadoop/common/hadoop-3.3.1/hadoop-3.3.1.tar.gz; \
+    tar -zxvf hadoop-3.3.1.tar.gz; \
+    rm hadoop-3.3.1.tar.gz; \
+    cd -; \
+    fi
 ENV JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64/"
 ENV PATH=/opt/hadoop/hadoop-3.3.1/bin/:$PATH
 
@@ -76,6 +79,7 @@ RUN if [ "${DEPLOY}" = true ]; then \
         grpcio \
         protobuf \
         grpcio-tools; \
+    apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-11-jdk; \
     apt-get purge --auto-remove; \
     apt-get clean; \
     fi
