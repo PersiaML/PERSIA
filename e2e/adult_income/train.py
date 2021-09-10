@@ -158,10 +158,14 @@ if __name__ == "__main__":
         num_ids = sum(ctx.get_embedding_size())
         assert num_ids == 0, f"clear embedding failed"
 
-    eval_auc, eval_acc = test(model, eval_checkpoint_dir)
+    eval_auc, eval_acc = test(
+        model, clear_embeddings=True, checkpoint_dir=eval_checkpoint_dir
+    )
     np.testing.assert_equal(np.array([test_auc]), np.array([eval_auc]))
 
-    eval_auc, eval_acc = test(model, hdfs_checkpoint_dir)
+    eval_auc, eval_acc = test(
+        model, clear_embeddings=True, checkpoint_dir=hdfs_checkpoint_dir
+    )
     np.testing.assert_equal(np.array([test_auc]), np.array([eval_auc]))
 
     result_filepath = os.environ["RESULT_FILE_PATH"]
