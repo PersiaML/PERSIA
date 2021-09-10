@@ -4,7 +4,7 @@ import socket
 
 from enum import Enum
 from queue import Queue
-from typing import List, Tuple, Optional, NewType
+from typing import List, Tuple, Optional, NewType, Union
 
 import torch
 
@@ -430,7 +430,7 @@ class EmbeddingCtx(BaseCtx):
 
     def dump_dense(
         self,
-        dense: torch.nn.Module or torch.optim.Optimizer,
+        dense: Union[torch.nn.Module, torch.optim.Optimizer],
         dst_dir: str,
         file_name: str,
         is_jit: bool = False,
@@ -452,13 +452,12 @@ class EmbeddingCtx(BaseCtx):
             ), "saving an optimizer as jit script"
             jit_model = torch.jit.script(dense)
             torch.jit.save(jit_model, buffer)
-        buffer.seek(0)
-        bytes_model = buffer.read()
+        bytes_model = buffer.getvalue()
         self.common_context.dump_to_file(bytes_model, dst_dir, file_name)
 
     def load_dense(
         self,
-        dense: torch.nn.Module or torch.optim.Optimizer,
+        dense: Union[torch.nn.Module, torch.optim.Optimizer],
         src_filepath: str,
     ):
         """Load the torch state dict from source file path.
