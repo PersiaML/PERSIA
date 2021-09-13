@@ -89,7 +89,7 @@ impl GPUStorage {
 
     pub fn get_raw_ptr(&mut self) -> *mut std::os::raw::c_void {
         self.sync_event();
-        self.ptr.inner 
+        self.ptr.inner
     }
 
     pub fn get_dtype(&self) -> DType {

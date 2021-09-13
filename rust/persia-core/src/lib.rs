@@ -5,12 +5,12 @@ extern crate shadow_rs;
 
 mod backward;
 mod data;
+mod dlpack;
 mod forward;
 mod metrics;
 mod nats;
 mod optim;
 mod rpc;
-mod dlpack;
 mod tensor;
 mod utils;
 
