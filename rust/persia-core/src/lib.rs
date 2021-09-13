@@ -10,6 +10,7 @@ mod metrics;
 mod nats;
 mod optim;
 mod rpc;
+mod dlpack;
 mod tensor;
 mod utils;
 

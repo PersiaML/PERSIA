@@ -1,12 +1,12 @@
+use std::fmt;
+
 use paste::paste;
 
 use persia_libs::{anyhow::Result, half::f16, thiserror};
 
 #[cfg(feature = "cuda")]
-use crate::cuda;
-
-#[cfg(feature = "cuda")]
-use cuda::GPUStorage;
+use crate::cuda::GPUStorage;
+use crate::dlpack::*;
 
 use persia_speedy::{Readable, Writable};
 
@@ -30,36 +30,65 @@ pub enum DType {
     F16 = 1,
     F32 = 2,
     F64 = 3,
-    I32 = 4,
-    I64 = 5,
-    U32 = 6,
-    U64 = 7,
-    USIZE = 8,
+    I8 = 4,
+    I16 = 5,
+    I32 = 6,
+    I64 = 7,
+    U8 = 8,
+    U16 = 9,
+    U32 = 10,
+    U64 = 11,
+    USIZE = 12,
+}
+
+impl fmt::Display for DType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl DType {
     pub fn get_type_size(&self) -> usize {
         match self {
-            DType::F32 => std::mem::size_of::<f32>(),
             DType::F16 => std::mem::size_of::<f16>(),
+            DType::F32 => std::mem::size_of::<f32>(),
             DType::F64 => std::mem::size_of::<f64>(),
+            DType::I8 => std::mem::size_of::<i8>(),
+            DType::I16 => std::mem::size_of::<i16>(),
             DType::I32 => std::mem::size_of::<i32>(),
             DType::I64 => std::mem::size_of::<i64>(),
+            DType::U8 => std::mem::size_of::<u8>(),
+            DType::U16 => std::mem::size_of::<u16>(),
             DType::U32 => std::mem::size_of::<u32>(),
             DType::U64 => std::mem::size_of::<u64>(),
-            DType::USIZE => std::mem::size_of::<u64>(),
+            DType::USIZE => std::mem::size_of::<usize>(),
         }
     }
-    pub fn get_type_name(&self) -> &str {
-        match self {
-            DType::F32 => "f32",
-            DType::F16 => "f16",
-            DType::F64 => "f64",
-            DType::I32 => "i32",
-            DType::I64 => "i64",
-            DType::U32 => "u32",
-            DType::U64 => "u64",
-            DType::USIZE => "usize",
+
+    pub fn get_type_name(&self) -> String {
+        self.to_string()
+    }
+
+    pub fn to_dldtype(&self) -> DLDataType {
+        let (code, bits) = match self {
+            DType::F16 => (*&DLDataTypeCode::kDLFloat, 16),
+            DType::F32 => (*&DLDataTypeCode::kDLFloat, 32),
+            DType::F64 => (*&DLDataTypeCode::kDLFloat, 64),
+            DType::I8 => (*&DLDataTypeCode::kDLInt, 8),
+            DType::I16 => (*&DLDataTypeCode::kDLInt, 16),
+            DType::I32 => (*&DLDataTypeCode::kDLInt, 32),
+            DType::I64 => (*&DLDataTypeCode::kDLInt, 64),
+            DType::U8 => (*&DLDataTypeCode::kDLUInt, 8),
+            DType::U16 => (*&DLDataTypeCode::kDLUInt, 16),
+            DType::U32 => (*&DLDataTypeCode::kDLUInt, 32),
+            DType::U64 => (*&DLDataTypeCode::kDLUInt, 64),
+            DType::USIZE => (*&DLDataTypeCode::kDLUInt, 64),
+        };
+
+        DLDataType {
+            code,
+            bits,
+            lanes: 1,
         }
     }
 }
@@ -90,16 +119,16 @@ impl CPUStorage {
         }
     }
 
-    pub fn as_raw_ptr(&mut self) -> *const std::os::raw::c_void {
+    pub fn get_raw_ptr(&mut self) -> *mut std::os::raw::c_void {
         match self {
-            CPUStorage::F32(val) => val.as_ptr() as *const std::os::raw::c_void,
-            CPUStorage::F16(val) => val.as_ptr() as *const std::os::raw::c_void,
-            CPUStorage::F64(val) => val.as_ptr() as *const std::os::raw::c_void,
-            CPUStorage::I32(val) => val.as_ptr() as *const std::os::raw::c_void,
-            CPUStorage::I64(val) => val.as_ptr() as *const std::os::raw::c_void,
-            CPUStorage::U32(val) => val.as_ptr() as *const std::os::raw::c_void,
-            CPUStorage::U64(val) => val.as_ptr() as *const std::os::raw::c_void,
-            CPUStorage::USIZE(val) => val.as_ptr() as *const std::os::raw::c_void,
+            CPUStorage::F32(val) => val.as_ptr() as *mut std::os::raw::c_void,
+            CPUStorage::F16(val) => val.as_ptr() as *mut std::os::raw::c_void,
+            CPUStorage::F64(val) => val.as_ptr() as *mut std::os::raw::c_void,
+            CPUStorage::I32(val) => val.as_ptr() as *mut std::os::raw::c_void,
+            CPUStorage::I64(val) => val.as_ptr() as *mut std::os::raw::c_void,
+            CPUStorage::U32(val) => val.as_ptr() as *mut std::os::raw::c_void,
+            CPUStorage::U64(val) => val.as_ptr() as *mut std::os::raw::c_void,
+            CPUStorage::USIZE(val) => val.as_ptr() as *mut std::os::raw::c_void,
         }
     }
 
@@ -151,22 +180,101 @@ impl Storage {
 }
 
 #[derive(Readable, Writable, Debug)]
+pub enum DeviceType {
+    CPU,
+    GPU,
+}
+
+#[derive(Readable, Writable, Debug)]
+struct Device {
+    device_type: DeviceType,
+    device_id: Option<i32>,
+}
+
+impl Device {
+    fn with_device_id_opt(device_id: &Option<i32>) -> Self {
+        match device_id {
+            Some(device_id) => Device {
+                device_type: DeviceType::GPU,
+                device_id: Some(*device_id),
+            },
+            None => Device {
+                device_type: DeviceType::CPU,
+                device_id: None,
+            },
+        }
+    }
+
+    fn with_device_id(device_id: i32) -> Self {
+        Device {
+            device_id: Some(device_id),
+            device_type: DeviceType::GPU,
+        }
+    }
+
+    fn to_dldevicetype(&self) -> DLDevice {
+        match self.device_type {
+            DeviceType::CPU => DLDevice {
+                device_id: 0i32,
+                device_type: DLDeviceType::kDLCPU,
+            },
+            DeviceType::GPU => DLDevice {
+                device_id: *self.device_id.as_ref().unwrap(),
+                device_type: DLDeviceType::kDLCUDA,
+            },
+        }
+    }
+}
+
+impl Default for Device {
+    fn default() -> Self {
+        Device {
+            device_type: DeviceType::CPU,
+            device_id: None,
+        }
+    }
+}
+
+pub fn get_stride_by_shape(shape: &[usize]) -> Vec<i64> {
+    let dim = shape.len();
+    let mut result = vec![1i64; dim];
+
+    for i in 1..dim {
+        let cnt_idx = dim - i - 1;
+        result[dim - i] = result[dim - i] * shape[dim - i] as i64;
+    }
+    result
+}
+
+#[derive(Readable, Writable, Debug)]
 pub struct Tensor {
     pub storage: Storage,
     pub shape: Vec<usize>,
+    pub stride: Vec<i64>,
     pub name: Option<String>,
+    pub device: Device,
 }
 
 impl Tensor {
-    pub fn new(storage: Storage, shape: Vec<usize>, name: Option<String>) -> Self {
+    pub fn new(
+        storage: Storage,
+        shape: Vec<usize>,
+        name: Option<String>,
+        device_id: &Option<i32>,
+    ) -> Self {
+        let stride = get_stride_by_shape(shape.as_slice());
+        let device = Device::with_device_id_opt(device_id);
+
         Self {
             storage,
             shape,
+            stride,
             name,
+            device,
         }
     }
     #[cfg(feature = "cuda")]
-    pub fn cuda(self) -> Tensor {
+    pub fn cuda(self, device_id: i32) -> Tensor {
         let shape = self.shape.clone();
         let cpu_storage = self.storage.take_cpu_storage().unwrap();
         let gpu_storage = GPUStorage::new(cpu_storage, shape).unwrap();
@@ -174,7 +282,9 @@ impl Tensor {
         Tensor {
             storage: Storage::GPU(gpu_storage),
             shape: self.shape.clone(),
+            stride: self.stride.clone(),
             name: self.name.clone(),
+            device: Device::with_device_id(device_id),
         }
     }
 
@@ -186,13 +296,16 @@ impl Tensor {
         }
     }
 
-    pub fn data_ptr(&mut self) -> u64 {
-        // TODO: refactor with trait and move data_ptr is_ready field in tensor struct
+    pub fn raw_data_ptr(&mut self) -> *mut std::os::raw::c_void {
         match &mut self.storage {
-            Storage::CPU(val) => val.data_ptr(),
+            Storage::CPU(val) => val.get_raw_ptr(),
             #[cfg(feature = "cuda")]
-            Storage::GPU(val) => val.data_ptr(),
+            Storage::GPU(val) => val.get_raw_ptr(),
         }
+    }
+
+    pub fn data_ptr(&mut self) -> u64 {
+        self.raw_data_ptr() as u64
     }
 
     pub fn dtype(&self) -> DType {
@@ -200,6 +313,24 @@ impl Tensor {
             Storage::CPU(val) => val.get_dtype(),
             #[cfg(feature = "cuda")]
             Storage::GPU(val) => val.get_dtype(),
+        }
+    }
+
+    pub fn dlpack(&self) -> DLManagedTensor {
+        let dl_tensor = DLTensor {
+            data: self.raw_data_ptr(),
+            dtype: self.dtype().to_dldtype(),
+            device: self.device.to_dldevicetype(),
+            ndim: self.shape.len() as i32,
+            shape: self.shape.as_mut_ptr() as *mut i64,
+            strides: self.stride.as_mut_ptr(),
+            byte_offset: 0u64,
+        };
+
+        DLManagedTensor {
+            dl_tensor,
+            manager_ctx: std::ptr::null_mut(),
+            deleter: None,
         }
     }
 }

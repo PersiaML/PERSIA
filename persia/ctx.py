@@ -63,7 +63,7 @@ def _cast_persia_tensor2torch_tensor(
             raw_tensor.data_ptr, raw_tensor.shape, requires_grad, on_cuda
         )
     else:
-        raise Exception("persia tensor convert to torch tensor failed")
+        raise Exception(f"type_id: {type_id} not found, persia tensor convert to torch tensor failed")
 
     return tensor
 

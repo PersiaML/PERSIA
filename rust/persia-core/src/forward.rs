@@ -104,11 +104,13 @@ pub struct PyDtype {
 
 #[pymethods]
 impl PyDtype {
+    #[getter]
     pub fn type_id(&self) -> u8 {
         *&self.inner as u8
     }
 
-    pub fn type_name(&self) -> &str {
+    #[getter]
+    pub fn type_name(&self) -> String {
         self.inner.get_type_name()
     }
 }
@@ -150,6 +152,28 @@ impl PyTensor {
         PyDtype {
             inner: self.inner.dtype(),
         }
+    }
+
+    #[getter]
+    pub fn dlpack(&self, py: Python) -> PyResult<PyObject> {
+        let dlpack_managed_tensor = Box::new(self.inner.dlpack());
+        let capsule = unsafe {
+            let ptr = pyo3::ffi::PyCapsule_New(
+                std::mem::transmute(dlpack_managed_tensor),
+                std::ptr::null(),
+                None,
+            );
+
+            if ptr.is_null() {
+                return Err(PyRuntimeError::new_err(
+                    "convert dlpack pointer to  capsule object failed",
+                ));
+            }
+
+            PyObject::from_owned_ptr(py, ptr)
+        };
+        Box::leak(dlpack_managed_tensor);
+        Ok(capsule)
     }
 
     #[getter]

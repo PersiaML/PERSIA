@@ -87,9 +87,9 @@ impl GPUStorage {
         }
     }
 
-    pub fn data_ptr(&mut self) -> u64 {
+    pub fn get_raw_ptr(&mut self) -> *mut std::os::raw::c_void {
         self.sync_event();
-        self.ptr.inner as u64
+        self.ptr.inner 
     }
 
     pub fn get_dtype(&self) -> DType {
