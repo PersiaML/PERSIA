@@ -154,6 +154,7 @@ impl EmbeddingServiceInner {
         is_training: bool,
     ) -> Result<Vec<f32>, EmbeddingServerError> {
         let num_elements: usize = req.iter().map(|x| x.1).sum();
+
         let mut embeddings = Vec::with_capacity(num_elements);
 
         let mut index_miss_count: usize = 0;
@@ -189,8 +190,10 @@ impl EmbeddingServiceInner {
                                     // convert to f32 vec for opt initializati
                                     let mut f32_vec = emb_entry.to_owned_f32_vec();
                                     optimizer.state_initialization(f32_vec.as_mut_slice(), *dim);
-                                    
-                                    embeddings.extend_from_slice(&f32_vec.as_slice()[..*dim]);
+
+                                    let slice = &f32_vec.as_slice()[..*dim];
+                                    assert_eq!(slice.len(), *dim, "dimension not match! 1");
+                                    embeddings.extend_from_slice(slice);
                                     emb_entry.update_by_f32_vec(f32_vec);
 
                                     let evcited = self.embedding
@@ -202,6 +205,7 @@ impl EmbeddingServiceInner {
 
                                     index_miss_count += 1;
                                 } else {
+
                                     embeddings.extend_from_slice(vec![0f32; *dim].as_slice());
                                 }
                             }
@@ -216,7 +220,11 @@ impl EmbeddingServiceInner {
                                             0,
                                             *sign,
                                         );
-                                        embeddings.extend_from_slice(entry.to_owned_f32_vec().as_slice());
+                                        let vec_f32 = entry.to_owned_f32_vec();
+                                        let slice = &vec_f32.as_slice()[..*dim];
+                                        assert_eq!(slice.len(), *dim, "dimension not match! 2");
+                                        embeddings.extend_from_slice(slice);
+
                                         let evcited = self
                                             .embedding
                                             .insert(*sign, Arc::new(parking_lot::RwLock::new(entry)));
@@ -224,12 +232,16 @@ impl EmbeddingServiceInner {
                                             evcited_ids.push(sign.clone());
                                         }
                                     } else {
-                                        embeddings.extend_from_slice(entry.read().to_owned_f32_vec().as_slice());
+                                        let vec_f32= entry.read().to_owned_f32_vec();
+                                        let slice = &vec_f32.as_slice()[..*dim];
+                                        assert_eq!(slice.len(), *dim, "dimension not match! 3");
+                                        embeddings.extend_from_slice(&slice);
                                     }
                                 }
                             }
                         }
                     });
+
                 if let Err(_) = self.full_amount_manager.try_commit_evicted_ids(evcited_ids) {
                     tracing::warn!(
                             "commit to full_amount_manager failed, it is ok when dumping emb, otherwise, 
@@ -254,7 +266,8 @@ impl EmbeddingServiceInner {
                                             sign, entry_dim, dim);
                                         embeddings.extend_from_slice(vec![0f32; *dim].as_slice());
                                     } else {
-                                        embeddings.extend_from_slice(entry.read().to_owned_f32_vec().as_slice());
+                                        let vec_f32= entry.read().to_owned_f32_vec();
+                                        embeddings.extend_from_slice(&vec_f32.as_slice()[..*dim]);
                                     }
                                 }
                             }
