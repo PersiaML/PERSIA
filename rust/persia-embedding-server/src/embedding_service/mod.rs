@@ -186,8 +186,11 @@ impl EmbeddingServiceInner {
                                         optimizer.require_space(*dim),
                                         *sign,
                                     );
+                                    // convert to f32 vec for opt initializati
+                                    let f32_vec = emb_entry.to_owned_f32_vec();
+                                    optimizer.state_initialization(f32_vec.as_mut_slice(), *dim);
+                                    emb_entry.update_by_f32_vec(f32_vec);
 
-                                    optimizer.state_initialization(emb_entry.as_mut_emb_entry_slice(), *dim);
                                     embeddings.extend_from_slice(&emb_entry.as_emb_entry_slice()[..*dim]);
                                     let evcited = self.embedding
                                         .insert(*sign, Arc::new(parking_lot::RwLock::new(emb_entry)));
@@ -397,17 +400,26 @@ impl EmbeddingServiceInner {
 
                         {
                             let mut entry = entry.write();
-                            let emb_entry_slice = entry.as_mut_emb_entry_slice();
-                            optimizer.update(emb_entry_slice, grad, entry_dim, &batch_level_state);
+                            // let emb_entry_slice = entry.as_mut_emb_entry_slice();
+                            let mut emb_vec = entry.to_owned_f32_vec();
+
+                            optimizer.update(
+                                emb_vec.as_mut_slice(),
+                                grad,
+                                entry_dim,
+                                &batch_level_state,
+                            );
 
                             if conf.enable_weight_bound {
                                 unsafe {
                                     persia_simd::weight_bound(
-                                        &mut emb_entry_slice[..entry_dim],
+                                        &mut emb_vec.as_mut_slice()[..entry_dim],
                                         conf.weight_bound,
                                     );
                                 }
                             }
+
+                            entry.update_by_f32_vec(emb_vec)
                         }
 
                         indices_to_commit.push((sign, entry.clone()));

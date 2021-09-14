@@ -6,23 +6,30 @@ ARG PYTORCH_VERSION=1.7
 ARG MAGMA_CUDA_VERSION=magma-cuda110
 ARG DEPLOY=false
 ARG CPU_ONLY
+ARG WITHOUT_BAGUA
 ARG CI
 
 RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl \
     build-essential \
-    cmake \
     ca-certificates \
     git \
     libgfortran-8-dev \
     vim \
     zsh \
+    wget \
     ssh \
     iputils-ping \
     procps \
     net-tools \
     apt-utils \
     rlwrap \
-    telnet 
+    telnet \
+    libhwloc-dev \
+    software-properties-common \
+    libssl-dev && \
+    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
+    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main' && \ 
+    apt remove --purge cmake -y && apt-get update && apt-get install -y --no-install-recommends cmake
 
 RUN curl -o ~/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
     chmod +x ~/miniconda.sh && \
@@ -37,6 +44,14 @@ RUN curl -o ~/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest
     echo "install pytorch in cpu mode."; \
     fi
 
+ENV RUSTUP_HOME=/rust
+ENV CARGO_HOME=/cargo
+ENV PATH=/cargo/bin:/rust/bin:/opt/conda/bin:$PATH
+
+RUN curl -sSf https://sh.rustup.rs | sh -s -- --default-toolchain none -y --profile default --no-modify-path && \
+    chown -R 1000:1000 /rust /cargo  && \
+    rustup install nightly-2021-06-01 
+
 RUN /opt/conda/bin/conda install -y -c pytorch -c conda-forge pytorch=${PYTORCH_VERSION} torchvision ${CPU_ONLY} && \
     /opt/conda/bin/conda clean -yapf && \
     /opt/conda/bin/pip install --no-cache-dir \ 
@@ -50,8 +65,15 @@ RUN /opt/conda/bin/conda install -y -c pytorch -c conda-forge pytorch=${PYTORCH_
     ipython && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get purge --auto-remove && \
-    apt-get clean && \
-    update-alternatives --install /usr/bin/python3 python3 /opt/conda/bin/python${PYTHON_VERSION} 10 
+    apt-get clean 
+    # update-alternatives --install /usr/bin/python3 python3 /opt/conda/bin/python${PYTHON_VERSION} 10 
+
+RUN if [ -z "${WITHOUT_BAGUA}" ]; then \
+    git clone https://github.com/BaguaSys/bagua.git; \
+    /opt/conda/bin/pip install setuptools-rust colorama tqdm wheel; \
+    cd bagua; \
+    /opt/conda/bin/pip install . -v; \
+    fi
 
 # install deploy requirements
 RUN if [ "${DEPLOY}" = true ]; then \
@@ -68,18 +90,12 @@ RUN if [ "${DEPLOY}" = true ]; then \
     apt-get clean; \
     fi
 
-ENV RUSTUP_HOME=/rust
-ENV CARGO_HOME=/cargo
-ENV PATH=/cargo/bin:/rust/bin:/opt/conda/bin:$PATH
 ENV LIBRARY_PATH="/usr/local/cuda/lib64/stubs/:/usr/local/lib64:/usr/local/lib:/usr/lib"
 ENV LD_LIBRARY_PATH="/opt/conda/lib/${PYTHON_VERSION}/site-packages/torch/lib/:/opt/conda/lib/"
 
 WORKDIR /workspace
 COPY . /workspace
-RUN curl -sSf https://sh.rustup.rs | sh -s -- --default-toolchain none -y --profile default --no-modify-path && \
-    chown -R 1000:1000 /rust /cargo  && \
-    rustup install nightly-2021-06-01 && \
-    cd /workspace && \
+RUN cd /workspace && \
     if [ -z "${CPU_ONLY}" ]; then \
         echo "install persiaml in gpu mode"; \
         export USE_CUDA=1; \

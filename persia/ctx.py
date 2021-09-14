@@ -513,6 +513,8 @@ class TrainCtx(EmbeddingCtx):
         backward_workers_size: int = 8,
         grad_update_buffer_size: int = 60,
         torch_distributed_port: int = 23456,
+        sync_params_in_asynchronous_mode: bool = False,
+        async_sync_interval: int = 500,
         *args,
         **kwargs,
     ):
@@ -527,6 +529,8 @@ class TrainCtx(EmbeddingCtx):
             grad_tensor_cache_size(int, optional): Number of reference cache , hold the gradient tensor reference to avoid
                 meet dangle data in gradient backward phase.
             torch_distributed_port(int, optional): tcp Port when init torch distributed process group.
+            sync_params_in_asynchronous_mode(bool, optional): Apply Bagua to average the model parameters in asynchronous mode.
+            async_sync_interval(int, optional): Interval of time that Bagua do model synchronize
         """
         super(TrainCtx, self).__init__(PreprocessMode.TRAIN, *args, **kwargs)
 
@@ -568,12 +572,21 @@ class TrainCtx(EmbeddingCtx):
 
             _logger.info("torch ddp init process group done")
 
-            self.model = torch.nn.parallel.DistributedDataParallel(
-                self.model,
-                device_ids=[device_id],
-                output_device=device_id,
-                find_unused_parameters=True,
-            )
+            if not sync_params_in_asynchronous_mode:
+                self.model = torch.nn.parallel.DistributedDataParallel(
+                    self.model,
+                    device_ids=[device_id],
+                    output_device=device_id,
+                    find_unused_parameters=True,
+                )
+            else:
+                from bagua.torch_api.algorithms import async_model_average
+
+                algorithm = async_model_average.AsyncModelAverageAlgorithm(
+                    sync_interval_ms=async_sync_interval
+                )
+
+                self.model = self.model.with_bagua([dense_optimizer], algorithm)
 
         self.common_context.init_nats_publisher(world_size)
         self.common_context.wait_servers_ready()
