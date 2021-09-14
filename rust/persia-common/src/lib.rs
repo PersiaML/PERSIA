@@ -82,12 +82,12 @@ impl HashMapEmbeddingEntry {
         }
     }
 
-    pub fn new_empty(dim: usize, require_space: usize) -> Self {
-        Self {
-            inner: vec![0f32; dim + require_space],
-            embedding_dim: dim,
-        }
-    }
+    // pub fn new_empty(dim: usize, require_space: usize) -> Self {
+    //     Self {
+    //         inner: vec![0f32; dim + require_space],
+    //         embedding_dim: dim,
+    //     }
+    // }
 
     pub fn from_emb(emb: Vec<f32>) -> Self {
         let embedding_dim = emb.len();
@@ -98,26 +98,26 @@ impl HashMapEmbeddingEntry {
         }
     }
 
-    pub fn from_emb_and_opt(emb: Vec<f32>, opt: &[f32]) -> Self {
-        let embedding_dim = emb.len();
-        let mut inner = Vec::from_f32_slice(emb.as_slice());
-        let opt = Vec::from_f32_slice(opt.as_slice());
-        inner.extend_from_slice(opt.as_slice());
-        Self {
-            inner,
-            embedding_dim,
-        }
-    }
+    // pub fn from_emb_and_opt(emb: Vec<f32>, opt: &[f32]) -> Self {
+    //     let embedding_dim = emb.len();
+    //     let mut inner = Vec::from_f32_slice(emb.as_slice());
+    //     let opt = Vec::from_f32_slice(opt.as_slice());
+    //     inner.extend_from_slice(opt.as_slice());
+    //     Self {
+    //         inner,
+    //         embedding_dim,
+    //     }
+    // }
 
-    pub fn copy_from_other(&mut self, other: &Self) -> bool {
-        if self.embedding_dim() != other.embedding_dim() {
-            return false;
-        }
-        for (dst, src) in self.inner.iter_mut().zip(other.inner.iter()) {
-            *dst = *src;
-        }
-        return true;
-    }
+    // pub fn copy_from_other(&mut self, other: &Self) -> bool {
+    //     if self.embedding_dim() != other.embedding_dim() {
+    //         return false;
+    //     }
+    //     for (dst, src) in self.inner.iter_mut().zip(other.inner.iter()) {
+    //         *dst = *src;
+    //     }
+    //     return true;
+    // }
 
     pub fn to_owned_f32_vec(&self) -> Vec<f32> {
         self.inner.to_f32_vec()
@@ -147,32 +147,32 @@ impl HashMapEmbeddingEntry {
         self.embedding_dim
     }
 
-    pub fn emb(&self) -> &[f32] {
-        &self.inner[..self.embedding_dim()]
-    }
+    // pub fn emb(&self) -> &[f32] {
+    //     &self.inner[..self.embedding_dim()]
+    // }
 
-    pub fn emb_mut(&mut self) -> &mut [f32] {
-        let dim = self.embedding_dim();
-        &mut self.inner[..dim]
-    }
+    // pub fn emb_mut(&mut self) -> &mut [f32] {
+    //     let dim = self.embedding_dim();
+    //     &mut self.inner[..dim]
+    // }
 
     pub fn boxed(self) -> Box<Self> {
         Box::new(self)
     }
 
-    pub fn opt(&self) -> &[f32] {
-        &self.inner[self.embedding_dim()..]
-    }
+    // pub fn opt(&self) -> &[f32] {
+    //     &self.inner[self.embedding_dim()..]
+    // }
 
-    pub fn opt_mut(&mut self) -> &mut [f32] {
-        let dim = self.embedding_dim();
-        &mut self.inner[dim..]
-    }
+    // pub fn opt_mut(&mut self) -> &mut [f32] {
+    //     let dim = self.embedding_dim();
+    //     &mut self.inner[dim..]
+    // }
 
-    pub fn emb_and_opt_mut(&mut self) -> (&mut [f32], &mut [f32]) {
-        let dim = self.embedding_dim();
-        self.inner.split_at_mut(dim)
-    }
+    // pub fn emb_and_opt_mut(&mut self) -> (&mut [f32], &mut [f32]) {
+    //     let dim = self.embedding_dim();
+    //     self.inner.split_at_mut(dim)
+    // }
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
