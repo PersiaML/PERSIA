@@ -187,11 +187,12 @@ impl EmbeddingServiceInner {
                                         *sign,
                                     );
                                     // convert to f32 vec for opt initializati
-                                    let f32_vec = emb_entry.to_owned_f32_vec();
+                                    let mut f32_vec = emb_entry.to_owned_f32_vec();
                                     optimizer.state_initialization(f32_vec.as_mut_slice(), *dim);
+                                    
+                                    embeddings.extend_from_slice(&f32_vec.as_slice()[..*dim]);
                                     emb_entry.update_by_f32_vec(f32_vec);
 
-                                    embeddings.extend_from_slice(&emb_entry.as_emb_entry_slice()[..*dim]);
                                     let evcited = self.embedding
                                         .insert(*sign, Arc::new(parking_lot::RwLock::new(emb_entry)));
 
@@ -215,7 +216,7 @@ impl EmbeddingServiceInner {
                                             0,
                                             *sign,
                                         );
-                                        embeddings.extend_from_slice(entry.emb());
+                                        embeddings.extend_from_slice(entry.to_owned_f32_vec().as_slice());
                                         let evcited = self
                                             .embedding
                                             .insert(*sign, Arc::new(parking_lot::RwLock::new(entry)));
@@ -223,7 +224,7 @@ impl EmbeddingServiceInner {
                                             evcited_ids.push(sign.clone());
                                         }
                                     } else {
-                                        embeddings.extend_from_slice(entry.read().emb());
+                                        embeddings.extend_from_slice(entry.read().to_owned_f32_vec().as_slice());
                                     }
                                 }
                             }
@@ -253,7 +254,7 @@ impl EmbeddingServiceInner {
                                             sign, entry_dim, dim);
                                         embeddings.extend_from_slice(vec![0f32; *dim].as_slice());
                                     } else {
-                                        embeddings.extend_from_slice(entry.read().emb());
+                                        embeddings.extend_from_slice(entry.read().to_owned_f32_vec().as_slice());
                                     }
                                 }
                             }

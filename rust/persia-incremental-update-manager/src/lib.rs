@@ -288,7 +288,7 @@ impl PerisaIncrementalUpdateManager {
                 for (file_index, segment) in embeddings.chunks(self.sign_per_file).enumerate() {
                     let emb_without_opt = segment
                         .iter()
-                        .map(|x| (x.0, x.1.read().emb().to_vec()))
+                        .map(|x| (x.0, x.1.read().to_owned_f32_vec()))
                         .collect();
 
                     let inc_dir_name =

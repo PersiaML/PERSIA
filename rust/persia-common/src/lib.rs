@@ -6,7 +6,6 @@ pub mod optim;
 pub mod tensor;
 pub mod utils;
 
-use core::slice::SlicePattern;
 use std::cmp::Ordering;
 use std::u64;
 

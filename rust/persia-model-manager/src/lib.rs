@@ -482,7 +482,7 @@ impl PersiaPersistenceManager {
             let emb: Vec<(u64, HashMapEmbeddingEntry)> = content
                 .into_iter()
                 .map(|(id, entry)| {
-                    let emb_entry = HashMapEmbeddingEntry::from_emb(entry.emb().to_vec());
+                    let emb_entry = HashMapEmbeddingEntry::from_emb(entry.to_owned_f32_vec());
                     (id, emb_entry)
                 })
                 .collect();
