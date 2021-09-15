@@ -572,6 +572,8 @@ class TrainCtx(EmbeddingCtx):
 
             _logger.info("torch ddp init process group done")
 
+            ip, port = leader_addr.replace("tcp://", "").split(":")
+            
             if not sync_params_in_asynchronous_mode:
                 self.model = torch.nn.parallel.DistributedDataParallel(
                     self.model,
@@ -582,6 +584,10 @@ class TrainCtx(EmbeddingCtx):
             else:
                 from bagua.torch_api.algorithms import async_model_average
 
+                os.environ["MASTER_ADDR"] = ip
+                os.environ["MASTER_PORT"] = port
+                os.environ["BAGUA_SERVICE_PORT"] = str(6666)
+                os.environ["BAGUA_AUTOTUNE"] = str(0)
                 algorithm = async_model_average.AsyncModelAverageAlgorithm(
                     sync_interval_ms=async_sync_interval
                 )
