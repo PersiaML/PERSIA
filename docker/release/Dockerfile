@@ -73,6 +73,10 @@ RUN if [ -z "${WITHOUT_BAGUA}" ]; then \
     /opt/conda/bin/pip install setuptools-rust colorama tqdm wheel; \
     cd bagua; \
     /opt/conda/bin/pip install . -v; \
+    git clone https://github.com/BaguaSys/bagua-core.git;  \
+    cd bagua-core;  \
+    git submodule update --init --recursive; \
+    pip3 install .; \
     fi
 
 # install deploy requirements
