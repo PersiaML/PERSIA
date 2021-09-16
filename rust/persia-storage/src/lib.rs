@@ -1,3 +1,4 @@
+use std::default::Default;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
@@ -7,7 +8,7 @@ use persia_libs::anyhow::{anyhow, Result};
 use persia_libs::tracing;
 
 use persia_common::HashMapEmbeddingEntry;
-use persia_speedy::{Readable, Writable};
+use persia_speedy::{Context, LittleEndian, Readable, Writable};
 
 const INIT_BUFFER_SIZE: usize = 1000;
 
@@ -84,6 +85,19 @@ impl PersiaPath {
 struct PersiaDiskPathImpl {
     inner: PathBuf,
 }
+
+// impl PersiaDiskPathImpl {
+//     fn read_speedy_test<C: Context>(&self) -> Result<impl Readable<C>> {
+//         let content = Readable::read_from_file(self.inner.clone())?;
+//         Ok(content)
+//     }
+
+//     fn write_speedy_test<C: Context + Default>(&self, content: impl Writable<C>) -> Result<()> {
+//         let res = content.write_to_file_with_ctx(C::default(), &self.inner);
+//         // content.write_to_file(&self.inner);
+//         Ok(())
+//     }
+// }
 
 impl PersiaPathImpl for PersiaDiskPathImpl {
     fn parent(&self) -> Result<PathBuf> {
