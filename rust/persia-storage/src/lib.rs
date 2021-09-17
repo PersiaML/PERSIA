@@ -1,4 +1,3 @@
-use std::default::Default;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
@@ -8,7 +7,7 @@ use persia_libs::anyhow::{anyhow, Result};
 use persia_libs::tracing;
 
 use persia_common::HashMapEmbeddingEntry;
-use persia_speedy::{Context, LittleEndian, Readable, Writable};
+use persia_speedy::{LittleEndian, Readable, Writable};
 
 const INIT_BUFFER_SIZE: usize = 1000;
 
@@ -33,11 +32,15 @@ pub trait PersiaPathImpl {
 
     fn read(&self) -> Result<Vec<u8>>;
 
-    fn read_speedy(&self) -> Result<SpeedyObj>;
+    fn read_speedy<'a, R>(&self) -> Result<R>
+    where
+        R: Readable<'a, LittleEndian>;
 
     fn write(&self, content: Vec<u8>) -> Result<()>;
 
-    fn write_speedy(&self, content: SpeedyObj) -> Result<()>;
+    fn write_speedy<W>(&self, content: W) -> Result<()>
+    where
+        W: Writable<LittleEndian>;
 
     fn list(&self) -> Result<Vec<PathBuf>>;
 
@@ -82,22 +85,9 @@ impl PersiaPath {
     }
 }
 
-struct PersiaDiskPathImpl {
+pub struct PersiaDiskPathImpl {
     inner: PathBuf,
 }
-
-// impl PersiaDiskPathImpl {
-//     fn read_speedy_test<C: Context>(&self) -> Result<impl Readable<C>> {
-//         let content = Readable::read_from_file(self.inner.clone())?;
-//         Ok(content)
-//     }
-
-//     fn write_speedy_test<C: Context + Default>(&self, content: impl Writable<C>) -> Result<()> {
-//         let res = content.write_to_file_with_ctx(C::default(), &self.inner);
-//         // content.write_to_file(&self.inner);
-//         Ok(())
-//     }
-// }
 
 impl PersiaPathImpl for PersiaDiskPathImpl {
     fn parent(&self) -> Result<PathBuf> {
@@ -132,8 +122,11 @@ impl PersiaPathImpl for PersiaDiskPathImpl {
         Ok(buffer)
     }
 
-    fn read_speedy(&self) -> Result<SpeedyObj> {
-        let content: SpeedyObj = SpeedyObj::read_from_file(self.inner.clone())?;
+    fn read_speedy<'a, R>(&self) -> Result<R>
+    where
+        R: Readable<'a, LittleEndian>,
+    {
+        let content = R::read_from_file(self.inner.clone())?;
         Ok(content)
     }
 
@@ -152,7 +145,10 @@ impl PersiaPathImpl for PersiaDiskPathImpl {
         Ok(())
     }
 
-    fn write_speedy(&self, content: SpeedyObj) -> Result<()> {
+    fn write_speedy<W>(&self, content: W) -> Result<()>
+    where
+        W: Writable<LittleEndian>,
+    {
         self.create()?;
         content.write_to_file(&self.inner)?;
         Ok(())
@@ -184,7 +180,7 @@ impl PersiaPathImpl for PersiaDiskPathImpl {
     }
 }
 
-struct PersiaHdfsPathImpl {
+pub struct PersiaHdfsPathImpl {
     inner: PathBuf,
 }
 
@@ -252,7 +248,10 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
         Ok(result)
     }
 
-    fn read_speedy(&self) -> Result<SpeedyObj> {
+    fn read_speedy<'a, R>(&self) -> Result<R>
+    where
+        R: Readable<'a, LittleEndian>,
+    {
         let text_cmd = Command::new("hadoop")
             .arg("fs")
             .arg("-text")
@@ -261,7 +260,7 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
             .spawn()?;
 
         let stdout = text_cmd.stdout.unwrap();
-        let content: SpeedyObj = SpeedyObj::read_from_stream_buffered(BufReader::new(stdout))?;
+        let content: R = R::read_from_stream_buffered(BufReader::new(stdout))?;
 
         Ok(content)
     }
@@ -290,7 +289,10 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
         }
     }
 
-    fn write_speedy(&self, content: SpeedyObj) -> Result<()> {
+    fn write_speedy<W>(&self, content: W) -> Result<()>
+    where
+        W: Writable<LittleEndian>,
+    {
         self.create()?;
         let mut append_cmd = Command::new("hdfs")
             .arg("dfs")
