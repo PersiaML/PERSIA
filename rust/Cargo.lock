@@ -704,6 +704,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "enum_dispatch"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd53b3fde38a39a06b2e66dc282f3e86191e53bd04cc499929c15742beae3df8"
+dependencies = [
+ "once_cell",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "event-listener"
 version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1908,6 +1920,7 @@ dependencies = [
  "persia-embedding-holder",
  "persia-libs",
  "persia-metrics",
+ "persia-speedy",
  "persia-storage",
 ]
 
@@ -2055,6 +2068,7 @@ dependencies = [
 name = "persia-storage"
 version = "0.1.0"
 dependencies = [
+ "enum_dispatch",
  "persia-common",
  "persia-libs",
  "persia-speedy",

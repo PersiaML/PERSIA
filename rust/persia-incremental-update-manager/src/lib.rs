@@ -22,7 +22,14 @@ use persia_embedding_config::{
 };
 use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
 use persia_metrics::{Gauge, PersiaMetricsManager, PersiaMetricsManagerError};
-use persia_storage::{PerisaIncrementalPacket, PersiaPath, SpeedyObj};
+use persia_speedy::{Readable, Writable};
+use persia_storage::{PersiaPath, PersiaPathImpl};
+
+#[derive(Readable, Writable, Debug)]
+pub struct PerisaIncrementalPacket {
+    pub content: Vec<(u64, Vec<f32>)>,
+    pub timestamps: u64,
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum IncrementalUpdateError {
@@ -186,13 +193,13 @@ impl PerisaIncrementalUpdateManager {
         let segment_len = segment.len();
         let file_name = PathBuf::from(format!("{}_{}.inc", self.replica_index, file_index));
 
-        let content = SpeedyObj::PerisaIncrementalPacket(PerisaIncrementalPacket {
+        let content = PerisaIncrementalPacket {
             content: segment,
             timestamps: current_unix_time(),
-        });
+        };
 
         let emb_path = PersiaPath::from_vec(vec![&dst_dir, &file_name]);
-        if let Err(e) = emb_path.imple.write_speedy(content) {
+        if let Err(e) = emb_path.write_speedy(content) {
             tracing::error!(
                 "failed to dump {:?} inc update packet to {:?}, because {:?}",
                 file_name,
@@ -205,7 +212,7 @@ impl PerisaIncrementalUpdateManager {
             if cur_dumped >= num_total_signs {
                 let done_file = PathBuf::from("inc_done");
                 let done_path = PersiaPath::from_vec(vec![&dst_dir, &done_file]);
-                if let Err(e) = done_path.imple.create() {
+                if let Err(e) = done_path.create() {
                     tracing::error!("failed to mark increment update done, {:?}", e);
                 }
             }
@@ -214,24 +221,18 @@ impl PerisaIncrementalUpdateManager {
 
     fn load_embedding_from_file(&self, file_path: PathBuf) -> () {
         let file_path = PersiaPath::from_pathbuf(file_path);
-        if let Ok(speedy_content) = file_path.imple.read_speedy() {
-            match speedy_content {
-                SpeedyObj::PerisaIncrementalPacket(packet) => {
-                    let delay = current_unix_time() - packet.timestamps;
-                    if let Ok(m) = MetricsHolder::get() {
-                        m.inc_update_delay.set(delay as f64);
-                    }
-                    tracing::debug!("loading inc packet, delay is {}s", delay);
-                    packet.content.into_iter().for_each(|(id, emb)| {
-                        self.embedding_holder.insert(
-                            id,
-                            Arc::new(RwLock::new(HashMapEmbeddingEntry::from_emb(emb))),
-                        );
-                    });
-                }
-                _ => {}
-            }
+        let packet: PerisaIncrementalPacket = file_path.read_speedy().unwrap();
+        let delay = current_unix_time() - packet.timestamps;
+        if let Ok(m) = MetricsHolder::get() {
+            m.inc_update_delay.set(delay as f64);
         }
+        tracing::debug!("loading inc packet, delay is {}s", delay);
+        packet.content.into_iter().for_each(|(id, emb)| {
+            self.embedding_holder.insert(
+                id,
+                Arc::new(RwLock::new(HashMapEmbeddingEntry::from_emb(emb))),
+            );
+        });
     }
 
     pub fn try_commit_incremental(
@@ -317,7 +318,7 @@ impl PerisaIncrementalUpdateManager {
 
         let inc_dir = PersiaPath::from_pathbuf(inc_dir);
 
-        if let Ok(cur_inc_dirs) = inc_dir.imple.list() {
+        if let Ok(cur_inc_dirs) = inc_dir.list() {
             cur_inc_dirs.into_iter().for_each(|d| {
                 if d.is_dir() {
                     dir_set.insert(d);
@@ -327,14 +328,14 @@ impl PerisaIncrementalUpdateManager {
 
         loop {
             std::thread::sleep(std::time::Duration::from_secs(10));
-            if let Ok(cur_inc_dirs) = inc_dir.imple.list() {
+            if let Ok(cur_inc_dirs) = inc_dir.list() {
                 cur_inc_dirs.into_iter().for_each(|d| {
                     if !dir_set.contains(&d) && d.is_dir() {
                         let inc_done = PathBuf::from("inc_done");
                         let done_file = PersiaPath::from_vec(vec![&d, &inc_done]);
-                        if done_file.imple.is_file().unwrap_or(false) {
+                        if done_file.is_file().unwrap_or(false) {
                             let done_dir = PersiaPath::from_pathbuf(d.clone());
-                            if let Ok(file_list) = done_dir.imple.list() {
+                            if let Ok(file_list) = done_dir.list() {
                                 let file_list: Vec<PathBuf> = file_list
                                     .into_iter()
                                     .filter(|x| x.extension() == Some(OsStr::new("inc")))

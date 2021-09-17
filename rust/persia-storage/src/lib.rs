@@ -4,25 +4,43 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use persia_libs::anyhow::{anyhow, Result};
-use persia_libs::tracing;
-
-use persia_common::HashMapEmbeddingEntry;
 use persia_speedy::{LittleEndian, Readable, Writable};
+
+use enum_dispatch::enum_dispatch;
 
 const INIT_BUFFER_SIZE: usize = 1000;
 
-#[derive(Readable, Writable, Debug)]
-pub struct PerisaIncrementalPacket {
-    pub content: Vec<(u64, Vec<f32>)>,
-    pub timestamps: u64,
+#[enum_dispatch]
+pub enum PersiaPath {
+    Disk(PersiaDiskPathImpl),
+    Hdfs(PersiaHdfsPathImpl),
 }
 
-#[derive(Readable, Writable, Debug)]
-pub enum SpeedyObj {
-    EmbeddingVec(Vec<(u64, HashMapEmbeddingEntry)>),
-    PerisaIncrementalPacket(PerisaIncrementalPacket),
+impl PersiaPath {
+    pub fn from_pathbuf(path: PathBuf) -> Self {
+        match path.starts_with("hdfs://") {
+            true => PersiaHdfsPathImpl { inner: path }.into(),
+            false => PersiaDiskPathImpl { inner: path }.into(),
+        }
+    }
+
+    pub fn from_string(s: String) -> Self {
+        let path = PathBuf::from(s);
+        Self::from_pathbuf(path)
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        let path = PathBuf::from(s);
+        Self::from_pathbuf(path)
+    }
+
+    pub fn from_vec(v: Vec<&PathBuf>) -> Self {
+        let path: PathBuf = v.iter().collect();
+        Self::from_pathbuf(path)
+    }
 }
 
+#[enum_dispatch(PersiaPath)]
 pub trait PersiaPathImpl {
     fn create(&self) -> Result<()>;
 
@@ -47,42 +65,6 @@ pub trait PersiaPathImpl {
     fn remove(&self) -> Result<()>;
 
     fn append(&self, line: String) -> Result<()>;
-}
-
-pub struct PersiaPath {
-    pub imple: Box<dyn PersiaPathImpl>,
-}
-
-impl PersiaPath {
-    pub fn from_pathbuf(path: PathBuf) -> Self {
-        match path.starts_with("hdfs://") {
-            true => Self {
-                imple: Box::new(PersiaHdfsPathImpl {
-                    inner: path.clone(),
-                }),
-            },
-            false => Self {
-                imple: Box::new(PersiaDiskPathImpl {
-                    inner: path.clone(),
-                }),
-            },
-        }
-    }
-
-    pub fn from_string(s: String) -> Self {
-        let path = PathBuf::from(s);
-        Self::from_pathbuf(path)
-    }
-
-    pub fn from_str(s: &str) -> Self {
-        let path = PathBuf::from(s);
-        Self::from_pathbuf(path)
-    }
-
-    pub fn from_vec(v: Vec<&PathBuf>) -> Self {
-        let path: PathBuf = v.iter().collect();
-        Self::from_pathbuf(path)
-    }
 }
 
 pub struct PersiaDiskPathImpl {

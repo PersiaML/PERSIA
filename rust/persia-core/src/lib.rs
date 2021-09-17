@@ -44,7 +44,7 @@ use persia_common::PersiaBatchData;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaReplicaInfo};
 use persia_embedding_server::middleware_service::MiddlewareServerError;
 use persia_speedy::Readable;
-use persia_storage::PersiaPath;
+use persia_storage::{PersiaPath, PersiaPathImpl};
 
 #[derive(thiserror::Error, Debug)]
 pub enum PersiaError {
@@ -349,7 +349,6 @@ impl PyPersiaCommonContext {
     pub fn read_from_file<'a>(&self, file_path: String, py: Python<'a>) -> PyResult<&'a PyBytes> {
         let file_path = PersiaPath::from_string(file_path);
         let content = file_path
-            .imple
             .read()
             .map_err(|e| PersiaError::StorageVisitError(format!("{:?}", &e)).to_py_runtime_err())?;
 
@@ -367,7 +366,6 @@ impl PyPersiaCommonContext {
         let file_path = PersiaPath::from_vec(vec![&file_dir, &file_name]);
         let content = content.as_bytes().to_vec();
         file_path
-            .imple
             .write(content)
             .map_err(|e| PersiaError::StorageVisitError(format!("{:?}", &e)).to_py_runtime_err())
     }

@@ -22,7 +22,7 @@ use persia_embedding_config::{
 use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
 use persia_full_amount_manager::{FullAmountManager, PersiaFullAmountManagerError};
 use persia_speedy::{Readable, Writable};
-use persia_storage::{PersiaPath, SpeedyObj};
+use persia_storage::{PersiaPath, PersiaPathImpl};
 
 #[derive(Readable, Writable, thiserror::Error, Debug)]
 pub enum PersistenceManagerError {
@@ -168,7 +168,7 @@ impl PersiaPersistenceManager {
     ) -> Result<(), PersistenceManagerError> {
         let done_file = self.get_done_file_name();
         let done_path = PersiaPath::from_vec(vec![&emb_dir, &done_file]);
-        done_path.imple.create()?;
+        done_path.create()?;
         Ok(())
     }
 
@@ -178,7 +178,7 @@ impl PersiaPersistenceManager {
     ) -> Result<bool, PersistenceManagerError> {
         let done_file = self.get_done_file_name();
         let done_path = PersiaPath::from_vec(vec![emb_dir, &done_file]);
-        let res = done_path.imple.is_file()?;
+        let res = done_path.is_file()?;
         Ok(res)
     }
 
@@ -250,7 +250,6 @@ impl PersiaPersistenceManager {
                     })
                     .collect();
 
-                let speedy_content = SpeedyObj::EmbeddingVec(segment_content);
                 let date = chrono::Local::now()
                     .format("%Y-%m-%d-%H-%M-%S")
                     .to_string();
@@ -258,7 +257,7 @@ impl PersiaPersistenceManager {
                 let file_name = format!("{}_{}_{}.emb", date, manager.replica_index, file_index);
                 let file_name = PathBuf::from(file_name);
                 let emb_path = PersiaPath::from_vec(vec![&dst_dir, &file_name]);
-                if let Err(e) = emb_path.imple.write_speedy(speedy_content) {
+                if let Err(e) = emb_path.write_speedy(segment_content) {
                     let msg = format!("{:?}", e);
                     tracing::error!("dump embedding error: {}", msg);
                     *manager.status.write() = PersiaPersistenceStatus::Failed(msg);
@@ -361,7 +360,7 @@ impl PersiaPersistenceManager {
             return Err(PersistenceManagerError::LoadingFromUncompeleteCheckpoint);
         }
         let dst_dir = PersiaPath::from_pathbuf(dst_dir);
-        let file_list = dst_dir.imple.list()?;
+        let file_list = dst_dir.list()?;
         tracing::debug!("file_list is {:?}", file_list);
 
         let file_list: Vec<PathBuf> = file_list
@@ -405,56 +404,44 @@ impl PersiaPersistenceManager {
             move || {
                 tracing::debug!("start to execute load embedding from {:?}", file_path);
                 let file_path = PersiaPath::from_pathbuf(file_path);
-                let speedy_content = file_path.imple.read_speedy();
-                if speedy_content.is_err() {
+                let content: Result<Vec<(u64, HashMapEmbeddingEntry)>, _> = file_path.read_speedy();
+                // let speedy_content = file_path.read_speedy();
+                if content.is_err() {
                     let msg = String::from("failed to read from file speedy");
                     tracing::error!("{}", msg);
                     *manager.status.write() = PersiaPersistenceStatus::Failed(msg);
                 } else {
-                    let speedy_content = speedy_content.unwrap();
-                    match speedy_content {
-                        SpeedyObj::EmbeddingVec(content) => {
-                            let load_opt = match manager.cur_task {
-                                PerisaJobType::Train | PerisaJobType::Eval => true,
-                                PerisaJobType::Infer => false,
-                            };
-                            let embeddings = manager.wrap_embeddings(content, load_opt);
+                    let content = content.unwrap();
+                    let load_opt = match manager.cur_task {
+                        PerisaJobType::Train | PerisaJobType::Eval => true,
+                        PerisaJobType::Infer => false,
+                    };
+                    let embeddings = manager.wrap_embeddings(content, load_opt);
 
-                            let weak_ptrs = embeddings
-                                .iter()
-                                .map(|(k, v)| (k.clone(), Arc::downgrade(v)))
-                                .collect();
-                            if let Ok(_) = manager.full_amount_manager.commit_weak_ptrs(weak_ptrs) {
-                                for (id, entry) in embeddings.into_iter() {
-                                    manager.embedding_holder.insert(id, entry);
-                                }
-
-                                let cur_loaded_files =
-                                    num_loaded_files.fetch_add(1, Ordering::AcqRel);
-                                let cur_loaded_files = cur_loaded_files + 1;
-
-                                let loading_progress =
-                                    (cur_loaded_files as f32) / (num_total_files as f32);
-                                *manager.status.write() =
-                                    PersiaPersistenceStatus::Loading(loading_progress);
-                                tracing::debug!("load embedding progress is {}", loading_progress);
-
-                                if num_total_files == cur_loaded_files {
-                                    *manager.status.write() = PersiaPersistenceStatus::Idle;
-                                }
-                            } else {
-                                let msg = String::from(
-                                    "failed to commit embedding to full amount manager",
-                                );
-                                tracing::error!("{}", msg);
-                                *manager.status.write() = PersiaPersistenceStatus::Failed(msg);
-                            }
+                    let weak_ptrs = embeddings
+                        .iter()
+                        .map(|(k, v)| (k.clone(), Arc::downgrade(v)))
+                        .collect();
+                    if let Ok(_) = manager.full_amount_manager.commit_weak_ptrs(weak_ptrs) {
+                        for (id, entry) in embeddings.into_iter() {
+                            manager.embedding_holder.insert(id, entry);
                         }
-                        _ => {
-                            let msg = String::from("wrong embedding file type");
-                            tracing::error!("{}", msg);
-                            *manager.status.write() = PersiaPersistenceStatus::Failed(msg);
+
+                        let cur_loaded_files = num_loaded_files.fetch_add(1, Ordering::AcqRel);
+                        let cur_loaded_files = cur_loaded_files + 1;
+
+                        let loading_progress = (cur_loaded_files as f32) / (num_total_files as f32);
+                        *manager.status.write() =
+                            PersiaPersistenceStatus::Loading(loading_progress);
+                        tracing::debug!("load embedding progress is {}", loading_progress);
+
+                        if num_total_files == cur_loaded_files {
+                            *manager.status.write() = PersiaPersistenceStatus::Idle;
                         }
+                    } else {
+                        let msg = String::from("failed to commit embedding to full amount manager");
+                        tracing::error!("{}", msg);
+                        *manager.status.write() = PersiaPersistenceStatus::Failed(msg);
                     }
                 }
             }
