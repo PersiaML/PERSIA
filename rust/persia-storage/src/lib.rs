@@ -42,21 +42,21 @@ impl PersiaPath {
 
 #[enum_dispatch(PersiaPath)]
 pub trait PersiaPathImpl {
-    fn create(&self) -> Result<()>;
+    fn create(&self, p: bool) -> Result<()>;
 
     fn parent(&self) -> Result<PathBuf>;
 
     fn is_file(&self) -> Result<bool>;
 
-    fn read(&self) -> Result<Vec<u8>>;
+    fn read_to_end(&self) -> Result<Vec<u8>>;
 
-    fn read_speedy<'a, R>(&self) -> Result<R>
+    fn read_to_end_speedy<'a, R>(&self) -> Result<R>
     where
         R: Readable<'a, LittleEndian>;
 
-    fn write(&self, content: Vec<u8>) -> Result<()>;
+    fn write_all(&self, content: Vec<u8>) -> Result<()>;
 
-    fn write_speedy<W>(&self, content: W) -> Result<()>
+    fn write_all_speedy<W>(&self, content: W) -> Result<()>
     where
         W: Writable<LittleEndian>;
 
@@ -80,10 +80,10 @@ impl PersiaPathImpl for PersiaDiskPathImpl {
         Ok(PathBuf::from(path))
     }
 
-    fn create(&self) -> Result<()> {
+    fn create(&self, p: bool) -> Result<()> {
         let parent = self.parent()?;
         std::fs::create_dir_all(parent)?;
-        if self.is_file()? {
+        if self.is_file()? && !p {
             return Err(anyhow!("file already exist"));
         }
         let _out_file = File::create(self.inner.clone())?;
@@ -95,7 +95,7 @@ impl PersiaPathImpl for PersiaDiskPathImpl {
         Ok(self.inner.is_file())
     }
 
-    fn read(&self) -> Result<Vec<u8>> {
+    fn read_to_end(&self) -> Result<Vec<u8>> {
         let mut f = File::open(&self.inner)?;
         let metadata = std::fs::metadata(&self.inner)?;
         let mut buffer = vec![0; metadata.len() as usize];
@@ -104,7 +104,7 @@ impl PersiaPathImpl for PersiaDiskPathImpl {
         Ok(buffer)
     }
 
-    fn read_speedy<'a, R>(&self) -> Result<R>
+    fn read_to_end_speedy<'a, R>(&self) -> Result<R>
     where
         R: Readable<'a, LittleEndian>,
     {
@@ -112,9 +112,8 @@ impl PersiaPathImpl for PersiaDiskPathImpl {
         Ok(content)
     }
 
-    fn write(&self, content: Vec<u8>) -> Result<()> {
-        self.create()?;
-
+    fn write_all(&self, content: Vec<u8>) -> Result<()> {
+        self.create(false)?;
         let out_file = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
@@ -127,11 +126,11 @@ impl PersiaPathImpl for PersiaDiskPathImpl {
         Ok(())
     }
 
-    fn write_speedy<W>(&self, content: W) -> Result<()>
+    fn write_all_speedy<W>(&self, content: W) -> Result<()>
     where
         W: Writable<LittleEndian>,
     {
-        self.create()?;
+        self.create(false)?;
         content.write_to_file(&self.inner)?;
         Ok(())
     }
@@ -167,7 +166,7 @@ pub struct PersiaHdfsPathImpl {
 }
 
 impl PersiaPathImpl for PersiaHdfsPathImpl {
-    fn create(&self) -> Result<()> {
+    fn create(&self, p: bool) -> Result<()> {
         let parent = self.parent()?;
         let mkdir_out = Command::new("hdfs")
             .arg("dfs")
@@ -179,7 +178,7 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
             return Err(anyhow!("hdfs mkdir error"));
         }
 
-        if self.is_file()? {
+        if self.is_file()? && !p {
             return Err(anyhow!("file already exist"));
         }
 
@@ -216,7 +215,7 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
         Ok(res)
     }
 
-    fn read(&self) -> Result<Vec<u8>> {
+    fn read_to_end(&self) -> Result<Vec<u8>> {
         let text_cmd = Command::new("hadoop")
             .arg("fs")
             .arg("-text")
@@ -230,7 +229,7 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
         Ok(result)
     }
 
-    fn read_speedy<'a, R>(&self) -> Result<R>
+    fn read_to_end_speedy<'a, R>(&self) -> Result<R>
     where
         R: Readable<'a, LittleEndian>,
     {
@@ -247,8 +246,8 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
         Ok(content)
     }
 
-    fn write(&self, content: Vec<u8>) -> Result<()> {
-        self.create()?;
+    fn write_all(&self, content: Vec<u8>) -> Result<()> {
+        self.create(false)?;
 
         let mut append_cmd = Command::new("hdfs")
             .arg("dfs")
@@ -271,11 +270,11 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
         }
     }
 
-    fn write_speedy<W>(&self, content: W) -> Result<()>
+    fn write_all_speedy<W>(&self, content: W) -> Result<()>
     where
         W: Writable<LittleEndian>,
     {
-        self.create()?;
+        self.create(false)?;
         let mut append_cmd = Command::new("hdfs")
             .arg("dfs")
             .arg("-appendToFile")
@@ -332,7 +331,7 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
     }
 
     fn append(&self, line: String) -> Result<()> {
-        self.create()?;
+        self.create(true)?;
 
         let mut append_cmd = Command::new("hdfs")
             .arg("dfs")

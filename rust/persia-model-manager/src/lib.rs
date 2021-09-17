@@ -168,7 +168,7 @@ impl PersiaPersistenceManager {
     ) -> Result<(), PersistenceManagerError> {
         let done_file = self.get_done_file_name();
         let done_path = PersiaPath::from_vec(vec![&emb_dir, &done_file]);
-        done_path.create()?;
+        done_path.create(false)?;
         Ok(())
     }
 
@@ -257,7 +257,7 @@ impl PersiaPersistenceManager {
                 let file_name = format!("{}_{}_{}.emb", date, manager.replica_index, file_index);
                 let file_name = PathBuf::from(file_name);
                 let emb_path = PersiaPath::from_vec(vec![&dst_dir, &file_name]);
-                if let Err(e) = emb_path.write_speedy(segment_content) {
+                if let Err(e) = emb_path.write_all_speedy(segment_content) {
                     let msg = format!("{:?}", e);
                     tracing::error!("dump embedding error: {}", msg);
                     *manager.status.write() = PersiaPersistenceStatus::Failed(msg);
@@ -404,8 +404,9 @@ impl PersiaPersistenceManager {
             move || {
                 tracing::debug!("start to execute load embedding from {:?}", file_path);
                 let file_path = PersiaPath::from_pathbuf(file_path);
-                let content: Result<Vec<(u64, HashMapEmbeddingEntry)>, _> = file_path.read_speedy();
-                // let speedy_content = file_path.read_speedy();
+                let content: Result<Vec<(u64, HashMapEmbeddingEntry)>, _> =
+                    file_path.read_to_end_speedy();
+                // let speedy_content = file_path.read_to_end_speedy();
                 if content.is_err() {
                     let msg = String::from("failed to read from file speedy");
                     tracing::error!("{}", msg);

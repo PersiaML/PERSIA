@@ -199,7 +199,7 @@ impl PerisaIncrementalUpdateManager {
         };
 
         let emb_path = PersiaPath::from_vec(vec![&dst_dir, &file_name]);
-        if let Err(e) = emb_path.write_speedy(content) {
+        if let Err(e) = emb_path.write_all_speedy(content) {
             tracing::error!(
                 "failed to dump {:?} inc update packet to {:?}, because {:?}",
                 file_name,
@@ -212,7 +212,7 @@ impl PerisaIncrementalUpdateManager {
             if cur_dumped >= num_total_signs {
                 let done_file = PathBuf::from("inc_done");
                 let done_path = PersiaPath::from_vec(vec![&dst_dir, &done_file]);
-                if let Err(e) = done_path.create() {
+                if let Err(e) = done_path.create(false) {
                     tracing::error!("failed to mark increment update done, {:?}", e);
                 }
             }
@@ -221,7 +221,7 @@ impl PerisaIncrementalUpdateManager {
 
     fn load_embedding_from_file(&self, file_path: PathBuf) -> () {
         let file_path = PersiaPath::from_pathbuf(file_path);
-        let packet: PerisaIncrementalPacket = file_path.read_speedy().unwrap();
+        let packet: PerisaIncrementalPacket = file_path.read_to_end_speedy().unwrap();
         let delay = current_unix_time() - packet.timestamps;
         if let Ok(m) = MetricsHolder::get() {
             m.inc_update_delay.set(delay as f64);

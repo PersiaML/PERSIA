@@ -349,7 +349,7 @@ impl PyPersiaCommonContext {
     pub fn read_from_file<'a>(&self, file_path: String, py: Python<'a>) -> PyResult<&'a PyBytes> {
         let file_path = PersiaPath::from_string(file_path);
         let content = file_path
-            .read()
+            .read_to_end()
             .map_err(|e| PersiaError::StorageVisitError(format!("{:?}", &e)).to_py_runtime_err())?;
 
         Ok(PyBytes::new(py, content.as_slice()))
@@ -366,7 +366,7 @@ impl PyPersiaCommonContext {
         let file_path = PersiaPath::from_vec(vec![&file_dir, &file_name]);
         let content = content.as_bytes().to_vec();
         file_path
-            .write(content)
+            .write_all(content)
             .map_err(|e| PersiaError::StorageVisitError(format!("{:?}", &e)).to_py_runtime_err())
     }
 }
