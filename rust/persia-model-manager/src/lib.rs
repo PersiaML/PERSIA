@@ -158,7 +158,7 @@ impl PersiaPersistenceManager {
         Ok(res)
     }
 
-    pub fn get_done_file_name(&self) -> PathBuf {
+    pub fn get_emb_dump_done_file_name(&self) -> PathBuf {
         PathBuf::from("embedding_dump_done")
     }
 
@@ -166,9 +166,9 @@ impl PersiaPersistenceManager {
         &self,
         emb_dir: PathBuf,
     ) -> Result<(), PersistenceManagerError> {
-        let done_file = self.get_done_file_name();
-        let done_path = PersiaPath::from_vec(vec![&emb_dir, &done_file]);
-        done_path.create(false)?;
+        let emb_dump_done_file = self.get_emb_dump_done_file_name();
+        let emb_dump_done_path = PersiaPath::from_vec(vec![&emb_dir, &emb_dump_done_file]);
+        emb_dump_done_path.create(false)?;
         Ok(())
     }
 
@@ -176,9 +176,9 @@ impl PersiaPersistenceManager {
         &self,
         emb_dir: &PathBuf,
     ) -> Result<bool, PersistenceManagerError> {
-        let done_file = self.get_done_file_name();
-        let done_path = PersiaPath::from_vec(vec![emb_dir, &done_file]);
-        let res = done_path.is_file()?;
+        let emb_dump_done_file = self.get_emb_dump_done_file_name();
+        let emb_dump_done_path = PersiaPath::from_vec(vec![emb_dir, &emb_dump_done_file]);
+        let res = emb_dump_done_path.is_file()?;
         Ok(res)
     }
 

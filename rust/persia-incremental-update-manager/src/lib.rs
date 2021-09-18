@@ -210,9 +210,9 @@ impl PerisaIncrementalUpdateManager {
             let dumped = num_dumped_signs.fetch_add(segment_len, Ordering::AcqRel);
             let cur_dumped = dumped + segment_len;
             if cur_dumped >= num_total_signs {
-                let done_file = PathBuf::from("inc_done");
-                let done_path = PersiaPath::from_vec(vec![&dst_dir, &done_file]);
-                if let Err(e) = done_path.create(false) {
+                let inc_update_done_file = PathBuf::from("inc_update_done");
+                let inc_update_done_path = PersiaPath::from_vec(vec![&dst_dir, &done_file]);
+                if let Err(e) = inc_update_done_path.create(false) {
                     tracing::error!("failed to mark increment update done, {:?}", e);
                 }
             }
@@ -331,11 +331,11 @@ impl PerisaIncrementalUpdateManager {
             if let Ok(cur_inc_dirs) = inc_dir.list() {
                 cur_inc_dirs.into_iter().for_each(|d| {
                     if !dir_set.contains(&d) && d.is_dir() {
-                        let inc_done = PathBuf::from("inc_done");
-                        let done_file = PersiaPath::from_vec(vec![&d, &inc_done]);
-                        if done_file.is_file().unwrap_or(false) {
-                            let done_dir = PersiaPath::from_pathbuf(d.clone());
-                            if let Ok(file_list) = done_dir.list() {
+                        let inc_update_done = PathBuf::from("inc_update_done");
+                        let inc_update_done_file = PersiaPath::from_vec(vec![&d, &inc_update_done]);
+                        if inc_update_done_file.is_file().unwrap_or(false) {
+                            let inc_dir = PersiaPath::from_pathbuf(d.clone());
+                            if let Ok(file_list) = inc_dir.list() {
                                 let file_list: Vec<PathBuf> = file_list
                                     .into_iter()
                                     .filter(|x| x.extension() == Some(OsStr::new("inc")))
