@@ -211,7 +211,8 @@ impl PerisaIncrementalUpdateManager {
             let cur_dumped = dumped + segment_len;
             if cur_dumped >= num_total_signs {
                 let inc_update_done_file = PathBuf::from("inc_update_done");
-                let inc_update_done_path = PersiaPath::from_vec(vec![&dst_dir, &done_file]);
+                let inc_update_done_path =
+                    PersiaPath::from_vec(vec![&dst_dir, &inc_update_done_file]);
                 if let Err(e) = inc_update_done_path.create(false) {
                     tracing::error!("failed to mark increment update done, {:?}", e);
                 }
