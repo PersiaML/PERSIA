@@ -65,9 +65,10 @@ RUN if [ "${HDFS}" = true ]; then \
     tar -zxvf hadoop-3.3.1.tar.gz; \
     rm hadoop-3.3.1.tar.gz; \
     cd -; \
-    echo "JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64/" >> /root/.bashrc; \
-    echo "PATH=/opt/hadoop/hadoop-3.3.1/bin/:$PATH" >> /root/.bashrc; \
     fi
+
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64/
+ENV PATH=/opt/hadoop/hadoop-3.3.1/bin/:$PATH
 
 # install deploy requirements
 RUN if [ "${DEPLOY}" = true ]; then \
