@@ -1,6 +1,6 @@
 common_config:
   metrics_config:
-    enable_metrics: true
+    enable_metrics: false
     push_interval_sec: 10
   job_type: Train
 embedding_server_config:

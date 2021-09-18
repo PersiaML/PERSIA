@@ -23,6 +23,7 @@ persia-metrics = {path = "../persia-metrics"}
 persia-model-manager = {path = "../persia-model-manager"}
 persia-nats-client = {path = "../others/persia-nats-client"}
 persia-nats-marcos = {path = "../others/persia-nats-marcos"}
+persia-storage = {path = "../persia-storage"}
 persia-rpc = "0.6"
 persia-speedy = "0.9"
 shadow-rs = "0.7"

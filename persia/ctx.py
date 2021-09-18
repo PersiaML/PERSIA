@@ -1,9 +1,10 @@
 import os
+import io
 import socket
 
 from enum import Enum
 from queue import Queue
-from typing import List, Tuple, Optional, NewType
+from typing import List, Tuple, Optional, NewType, Union
 
 import torch
 
@@ -371,15 +372,10 @@ class EmbeddingCtx(BaseCtx):
         assert (
             self.model is not None
         ), f"model not found, please init context with model"
-        os.makedirs(dst_dir, exist_ok=True)
 
         if with_jit_model:
-            jit_model_filepath = os.path.join(dst_dir, jit_dense_filename)
-            jit_model = torch.jit.script(self.model)
-            jit_model.save(jit_model_filepath)
-
-        dense_model_filepath = os.path.join(dst_dir, dense_filename)
-        torch.save(self.model.state_dict(), dense_model_filepath)
+            self.dump_dense(self.model, dst_dir, jit_dense_filename, True)
+        self.dump_dense(self.model, dst_dir, dense_filename)
 
         self.dump_embedding(dst_dir, blocking=blocking)
 
@@ -401,14 +397,10 @@ class EmbeddingCtx(BaseCtx):
         assert (
             self.model is not None
         ), f"model not found, please init context with model"
-        if not os.path.exists(src_dir):
-            _logger.warn(f"source directory: {src_dir} not exists")
-            return
 
         dense_model_filepath = os.path.join(src_dir, dense_filename)
         if os.path.exists(dense_model_filepath):
-            dense_state_dict = torch.load(dense_model_filepath, map_location)
-            self.model.load_state_dict(dense_state_dict)
+            self.load_dense(self.model, dense_model_filepath)
 
         self.load_embedding(src_dir, blocking=blocking)
 
@@ -435,6 +427,50 @@ class EmbeddingCtx(BaseCtx):
         self.common_context.load(src_dir)
         if blocking:
             self.wait_for_load_embedding()
+
+    def dump_dense(
+        self,
+        dense: Union[torch.nn.Module, torch.optim.Optimizer],
+        dst_dir: str,
+        file_name: str,
+        is_jit: bool = False,
+    ):
+        """Dump torch model or optimizer to ``dst_dir`` as ``file_name``.
+
+        Arguments:
+            dense (torch.nn.Module or torch.optim.Optimizer): dense model or optimizer to be dumped.
+            dst_dir (str): Destination directory.
+            file_name (str): Destination filename.
+            is_jit (bool, optional): whether to dump model as jit script.
+        """
+        buffer = io.BytesIO()
+        if not is_jit:
+            torch.save(dense.state_dict(), buffer)
+        else:
+            assert isinstance(
+                dense, torch.nn.Module
+            ), "saving an optimizer as jit script"
+            jit_model = torch.jit.script(dense)
+            torch.jit.save(jit_model, buffer)
+        bytes_model = buffer.getvalue()
+        self.common_context.dump_to_file(bytes_model, dst_dir, file_name)
+
+    def load_dense(
+        self,
+        dense: Union[torch.nn.Module, torch.optim.Optimizer],
+        src_filepath: str,
+    ):
+        """Load the torch state dict from source file path.
+
+        Arguments:
+            dense (torch.nn.Module or torch.optim.Optimizer): dense model or optimizer to restore.
+            src_filepath (str): Source file path.
+        """
+        dense_bytes = self.common_context.read_from_file(src_filepath)
+        buffer = io.BytesIO(dense_bytes)
+        buffer.seek(0)
+        state_dict = torch.load(buffer)
+        dense.load_state_dict(state_dict)
 
     def wait_for_dump_embedding(self):
         """Wait for the embedding dump process."""
@@ -729,8 +765,7 @@ class TrainCtx(EmbeddingCtx):
             with_jit_model=with_jit_model,
         )
 
-        optimizer_filepath = os.path.join(dst_dir, opt_filename)
-        torch.save(self.dense_optimizer.state_dict(), optimizer_filepath)
+        self.dump_dense(self.dense_optimizer, dst_dir, opt_filename)
 
     def load_checkpoint(
         self,
@@ -758,8 +793,7 @@ class TrainCtx(EmbeddingCtx):
 
         optimizer_filepath = os.path.join(src_dir, opt_filename)
         if os.path.exists(optimizer_filepath):
-            optimizer_state_dict = torch.load(optimizer_filepath, map_location)
-            self.dense_optimizer.load_state_dict(optimizer_state_dict)
+            self.load_dense(self.dense_optimizer, optimizer_filepath)
 
 
 def cnt_ctx() -> Optional[BaseCtx]:

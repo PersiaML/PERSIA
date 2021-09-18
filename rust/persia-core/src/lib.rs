@@ -22,6 +22,7 @@ use crate::forward::{forward_directly, PythonTrainBatch};
 use crate::optim::PyOptimizerBase;
 use crate::rpc::PersiaRpcClient;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use persia_libs::{
@@ -43,6 +44,7 @@ use persia_common::PersiaBatchData;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaReplicaInfo};
 use persia_embedding_server::middleware_service::MiddlewareServerError;
 use persia_speedy::Readable;
+use persia_storage::{PersiaPath, PersiaPathImpl};
 
 #[derive(thiserror::Error, Debug)]
 pub enum PersiaError {
@@ -78,6 +80,8 @@ pub enum PersiaError {
     LeaderDiscoveryServiceNotInitializedError,
     #[error("leader addr input wrong")]
     LeaderAddrInputError,
+    #[error("storage visit error {0}")]
+    StorageVisitError(String),
 }
 
 impl PersiaError {
@@ -340,6 +344,30 @@ impl PyPersiaCommonContext {
     ) -> PyResult<PythonTrainBatch> {
         let batch: PersiaBatchData = PersiaBatchData::read_from_buffer(batch.as_bytes()).unwrap();
         forward_directly(batch, device_id)
+    }
+
+    pub fn read_from_file<'a>(&self, file_path: String, py: Python<'a>) -> PyResult<&'a PyBytes> {
+        let file_path = PersiaPath::from_string(file_path);
+        let content = file_path
+            .read_to_end()
+            .map_err(|e| PersiaError::StorageVisitError(format!("{:?}", &e)).to_py_runtime_err())?;
+
+        Ok(PyBytes::new(py, content.as_slice()))
+    }
+
+    pub fn dump_to_file(
+        &self,
+        content: &PyBytes,
+        file_dir: String,
+        file_name: String,
+    ) -> PyResult<()> {
+        let file_dir = PathBuf::from(file_dir);
+        let file_name = PathBuf::from(file_name);
+        let file_path = PersiaPath::from_vec(vec![&file_dir, &file_name]);
+        let content = content.as_bytes().to_vec();
+        file_path
+            .write_all(content)
+            .map_err(|e| PersiaError::StorageVisitError(format!("{:?}", &e)).to_py_runtime_err())
     }
 }
 

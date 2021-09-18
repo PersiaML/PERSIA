@@ -52,7 +52,11 @@ class TestDataset(PersiaDataset):
         return self.loader_size
 
 
-def test(model: torch.nn.Module, checkpoint_dir: Optional[str] = None):
+def test(
+    model: torch.nn.Module,
+    clear_embeddings: bool = False,
+    checkpoint_dir: Optional[str] = None,
+):
     logger.info("start to test...")
     model.eval()
 
@@ -73,6 +77,11 @@ def test(model: torch.nn.Module, checkpoint_dir: Optional[str] = None):
             accuracy = (torch.round(output) == target).sum() / target.shape[0]
             accuracies.append(accuracy)
             losses.append(float(loss))
+
+        if clear_embeddings:
+            ctx.clear_embeddings()
+            num_ids = sum(ctx.get_embedding_size())
+            assert num_ids == 0, f"clear embedding failed"
 
         all_pred, all_target = np.concatenate(all_pred), np.concatenate(all_target)
 
@@ -105,6 +114,7 @@ if __name__ == "__main__":
 
     eval_checkpoint_dir = os.environ["EVAL_CHECKPOINT_DIR"]
     infer_checkpoint_dir = os.environ["INFER_CHECKPOINT_DIR"]
+    hdfs_checkpoint_dir = os.environ["HDFS_CHECKPOINT_DIR"]
     test_interval = 254
     buffer_size = 10
 
@@ -138,6 +148,9 @@ if __name__ == "__main__":
         ctx.dump_checkpoint(eval_checkpoint_dir)
         logger.info(f"dump checkpoint to {eval_checkpoint_dir}")
 
+        ctx.dump_checkpoint(hdfs_checkpoint_dir)
+        logger.info(f"dump checkpoint to {hdfs_checkpoint_dir}")
+
         ctx.dump_checkpoint(infer_checkpoint_dir, with_jit_model=True)
         logger.info(f"dump checkpoint to {infer_checkpoint_dir}")
 
@@ -145,7 +158,14 @@ if __name__ == "__main__":
         num_ids = sum(ctx.get_embedding_size())
         assert num_ids == 0, f"clear embedding failed"
 
-    eval_auc, eval_acc = test(model, eval_checkpoint_dir)
+    eval_auc, eval_acc = test(
+        model, clear_embeddings=True, checkpoint_dir=eval_checkpoint_dir
+    )
+    np.testing.assert_equal(np.array([test_auc]), np.array([eval_auc]))
+
+    eval_auc, eval_acc = test(
+        model, clear_embeddings=True, checkpoint_dir=hdfs_checkpoint_dir
+    )
     np.testing.assert_equal(np.array([test_auc]), np.array([eval_auc]))
 
     result_filepath = os.environ["RESULT_FILE_PATH"]

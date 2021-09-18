@@ -13,7 +13,7 @@ pytest:
 all: lint flake8 format pytest
 
 build_ci_image:
-	docker build --build-arg DEPLOY=true --build-arg CI=true \
+	docker build --build-arg DEPLOY=true --build-arg CI=true --build-arg HDFS=true \
 		--no-cache -f docker/release/Dockerfile -t persiaml/persia-ci:latest .
 
 build_cpu_image:
