@@ -406,7 +406,6 @@ impl PersiaPersistenceManager {
                 let file_path = PersiaPath::from_pathbuf(file_path);
                 let content: Result<Vec<(u64, HashMapEmbeddingEntry)>, _> =
                     file_path.read_to_end_speedy();
-                // let speedy_content = file_path.read_to_end_speedy();
                 if content.is_err() {
                     let msg = String::from("failed to read from file speedy");
                     tracing::error!("{}", msg);
