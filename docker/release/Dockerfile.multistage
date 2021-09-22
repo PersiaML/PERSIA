@@ -1,0 +1,57 @@
+ARG BASE_IMAGE=nvidia/cuda:11.2.0-devel-ubuntu20.04
+FROM ${BASE_IMAGE} AS base
+
+RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl \
+    build-essential \
+    ca-certificates \
+    git \
+    libgfortran-8-dev \
+    vim \
+    zsh \
+    wget \
+    ssh \
+    iputils-ping \
+    procps \
+    net-tools \
+    apt-utils \
+    rlwrap \
+    telnet \
+    libhwloc-dev \
+    software-properties-common \
+    libssl-dev && \
+    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
+    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main' && \ 
+    apt remove --purge cmake -y && apt-get update && apt-get install -y --no-install-recommends cmake
+
+RUN curl -o ~/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
+    chmod +x ~/miniconda.sh && \
+    ~/miniconda.sh -b -p /opt/conda && \
+    rm ~/miniconda.sh && \
+    /opt/conda/bin/conda install -y python=${PYTHON_VERSION} numpy pyyaml scipy ipython mkl mkl-include ninja cython typing && \
+    /opt/conda/bin/conda install -y -c conda-forge mpi4py && \
+    if [ -z "${CPU_ONLY}" ]; then \
+    echo "install pytorch in gpu mode and install the magma cuda requirement."; \
+    else \
+    echo "install pytorch in cpu mode."; \
+    fi
+
+FROM base AS builder
+
+ENV RUSTUP_HOME=/rust
+ENV CARGO_HOME=/cargo
+ENV PATH=/cargo/bin:/rust/bin:/opt/conda/bin:$PATH
+
+FROM builder AS cpu-builder
+
+FROM biulder AS gpu-builder
+RUN  /opt/conda/bin/conda install -y -c pytorch ${MAGMA_CUDA_VERSION}; 
+
+FROM base AS base-runtime
+
+FROM base AS cuda-runtime
+
+FROM base AS cpu-runtime
+
+FROM base AS inference-runtime
+
+FROM base AS ci

@@ -65,8 +65,8 @@ RUN /opt/conda/bin/conda install -y -c pytorch -c conda-forge pytorch=${PYTORCH_
     ipython && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get purge --auto-remove && \
-    apt-get clean 
-    # update-alternatives --install /usr/bin/python3 python3 /opt/conda/bin/python${PYTHON_VERSION} 10 
+    apt-get clean  && \
+    ln -s /usr/share/pyshared /opt/conda/lib/python${PYTHON_VERSION}/site-packages
 
 RUN if [ -z "${WITHOUT_BAGUA}" ]; then \
     git clone https://github.com/BaguaSys/bagua.git; \
