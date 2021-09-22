@@ -124,7 +124,7 @@ impl PersiaCommonContext {
                 .unwrap(),
         );
 
-        let rpc_client = Arc::new(PersiaRpcClient::new(runtime.clone()));
+        let rpc_client = Arc::new(PersiaRpcClient::new());
 
         let common_context = Self {
             rpc_client,
@@ -229,50 +229,57 @@ impl PyPersiaCommonContext {
 
     pub fn get_embedding_size(&self) -> PyResult<Vec<usize>> {
         self.inner
-            .rpc_client
-            .get_embedding_size()
+            .async_runtime
+            .block_on(self.inner.rpc_client.get_embedding_size())
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn clear_embeddings(&self) -> PyResult<()> {
         self.inner
-            .rpc_client
-            .clear_embeddings()
+            .async_runtime
+            .block_on(self.inner.rpc_client.clear_embeddings())
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn dump(&self, dst_dir: String) -> PyResult<()> {
         self.inner
-            .rpc_client
-            .dump(dst_dir)
+            .async_runtime
+            .block_on(self.inner.rpc_client.dump(dst_dir))
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn load(&self, src_dir: String) -> PyResult<()> {
         self.inner
-            .rpc_client
-            .load(src_dir)
+            .async_runtime
+            .block_on(self.inner.rpc_client.load(src_dir))
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn wait_for_serving(&self) -> PyResult<()> {
         self.inner
-            .rpc_client
-            .wait_for_serving()
+            .async_runtime
+            .block_on(self.inner.rpc_client.wait_for_serving())
+            .map_err(|e| e.to_py_runtime_err())
+    }
+
+    pub fn wait_for_emb_loading(&self) -> PyResult<()> {
+        self.inner
+            .async_runtime
+            .block_on(self.inner.rpc_client.wait_for_emb_loading())
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn wait_for_emb_dumping(&self) -> PyResult<()> {
         self.inner
-            .rpc_client
-            .wait_for_emb_dumping()
+            .async_runtime
+            .block_on(self.inner.rpc_client.wait_for_emb_dumping())
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn shutdown_servers(&self) -> PyResult<()> {
         self.inner
-            .rpc_client
-            .shutdown()
+            .async_runtime
+            .block_on(self.inner.rpc_client.shutdown())
             .map_err(|e| e.to_py_runtime_err())
     }
 

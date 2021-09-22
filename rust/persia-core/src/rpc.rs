@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use persia_libs::{
-    anyhow::Result, hashbrown::HashMap, parking_lot::RwLock, rand, tokio::runtime::Runtime, tracing,
+    anyhow::Result, futures, hashbrown::HashMap, parking_lot::RwLock, rand, tracing,
 };
 
 use persia_embedding_server::middleware_service::MiddlewareServerClient;
@@ -13,15 +13,13 @@ use persia_model_manager::PersiaPersistenceStatus;
 pub struct PersiaRpcClient {
     pub clients: RwLock<HashMap<String, Arc<MiddlewareServerClient>>>,
     pub middleware_addrs: RwLock<Vec<String>>,
-    pub async_runtime: Arc<Runtime>,
 }
 
 impl PersiaRpcClient {
-    pub fn new(async_runtime: Arc<Runtime>) -> Self {
+    pub fn new() -> Self {
         Self {
             clients: RwLock::new(HashMap::new()),
             middleware_addrs: RwLock::new(vec![]),
-            async_runtime,
         }
     }
 
@@ -40,7 +38,6 @@ impl PersiaRpcClient {
         if self.clients.read().contains_key(middleware_addr) {
             self.clients.read().get(middleware_addr).unwrap().clone()
         } else {
-            let _guard = self.async_runtime.enter();
             let rpc_client = persia_rpc::RpcClient::new(middleware_addr).unwrap();
             let client = Arc::new(MiddlewareServerClient::new(rpc_client));
 
@@ -57,57 +54,45 @@ impl PersiaRpcClient {
     }
 
     // TODO(zhuxuefeng): move to nats
-    pub fn get_embedding_size(&self) -> Result<Vec<usize>, PersiaError> {
-        let runtime = self.async_runtime.clone();
-        let _guard = runtime.enter();
-        let res = runtime.block_on(self.get_random_client().get_embedding_size(&()))??;
+    pub async fn get_embedding_size(&self) -> Result<Vec<usize>, PersiaError> {
+        let res = self.get_random_client().get_embedding_size(&()).await??;
         Ok(res)
     }
 
     // TODO(zhuxuefeng): move to nats
-    pub fn clear_embeddings(&self) -> Result<(), PersiaError> {
-        let runtime = self.async_runtime.clone();
-        let _guard = runtime.enter();
-        runtime.block_on(self.get_random_client().clear_embeddings(&()))??;
+    pub async fn clear_embeddings(&self) -> Result<(), PersiaError> {
+        self.get_random_client().clear_embeddings(&()).await??;
         Ok(())
     }
 
     // TODO(zhuxuefeng): move to nats
-    pub fn dump(&self, dst_dir: String) -> Result<(), PersiaError> {
-        let runtime = self.async_runtime.clone();
-        let _guard = runtime.enter();
-        runtime.block_on(
-            self.clients
-                .read()
-                .iter()
-                .next()
-                .expect("clients not initialized")
-                .1
-                .dump(&dst_dir),
-        )??;
+    pub async fn dump(&self, dst_dir: String) -> Result<(), PersiaError> {
+        self.clients
+            .read()
+            .iter()
+            .next()
+            .expect("clients not initialized")
+            .1
+            .dump(&dst_dir)
+            .await??;
         Ok(())
     }
 
     // TODO(zhuxuefeng): move to nats
-    pub fn load(&self, src_dir: String) -> Result<(), PersiaError> {
-        let runtime = self.async_runtime.clone();
-        let _guard = runtime.enter();
-        runtime.block_on(
-            self.clients
-                .read()
-                .iter()
-                .next()
-                .expect("clients not initialized")
-                .1
-                .load(&src_dir),
-        )??;
+    pub async fn load(&self, src_dir: String) -> Result<(), PersiaError> {
+        self.clients
+            .read()
+            .iter()
+            .next()
+            .expect("clients not initialized")
+            .1
+            .load(&src_dir)
+            .await??;
         Ok(())
     }
 
     // TODO(zhuxuefeng): move to nats
-    pub fn wait_for_serving(&self) -> Result<(), PersiaError> {
-        let runtime = self.async_runtime.clone();
-        let _guard = runtime.enter();
+    pub async fn wait_for_serving(&self) -> Result<(), PersiaError> {
         let client = self
             .clients
             .read()
@@ -118,13 +103,35 @@ impl PersiaRpcClient {
             .clone();
 
         loop {
-            if let Ok(ready) = runtime.block_on(client.ready_for_serving(&())) {
+            if let Ok(ready) = client.ready_for_serving(&()).await {
+                if ready {
+                    return Ok(());
+                }
+            } else {
+                tracing::warn!("failed to get sparse model status, retry later");
+                std::thread::sleep(Duration::from_secs(5));
+            }
+        }
+    }
+
+    pub async fn wait_for_emb_loading(&self) -> Result<(), PersiaError> {
+        let client = self
+            .clients
+            .read()
+            .iter()
+            .next()
+            .expect("clients not initialized")
+            .1
+            .clone();
+
+        loop {
+            if let Ok(ready) = client.ready_for_serving(&()).await {
                 if ready {
                     return Ok(());
                 }
                 std::thread::sleep(Duration::from_secs(5));
                 let status: Vec<PersiaPersistenceStatus> =
-                    runtime.block_on(client.model_manager_status(&())).unwrap();
+                    client.model_manager_status(&()).await.unwrap();
 
                 match self.process_status(status) {
                     Ok(_) => {}
@@ -138,22 +145,20 @@ impl PersiaRpcClient {
         }
     }
 
-    pub fn shutdown(&self) -> Result<(), PersiaError> {
-        let runtime = self.async_runtime.clone();
-        let _guard = runtime.enter();
-
+    pub async fn shutdown(&self) -> Result<(), PersiaError> {
         let client = self.get_random_client();
 
-        match runtime.block_on(client.shutdown_server(&())) {
+        match client.shutdown_server(&()).await {
             Ok(response) => match response {
                 Ok(_) => {
                     let clients = self.clients.read();
-                    let mut futs = clients
+                    let futs = clients
                         .iter()
-                        .map(|client| runtime.block_on(client.1.shutdown(&())));
+                        .map(|client| async move { client.1.shutdown(&()).await });
 
-                    let middleware_shutdown_status = futs.all(|x| x.is_ok());
-                    if middleware_shutdown_status {
+                    let result = futures::future::try_join_all(futs).await;
+
+                    if result.is_ok() {
                         Ok(())
                     } else {
                         Err(PersiaError::ShutdownError(String::from(
@@ -174,10 +179,7 @@ impl PersiaRpcClient {
     }
 
     // TODO(zhuxuefeng): move to nats
-    pub fn wait_for_emb_dumping(&self) -> Result<(), PersiaError> {
-        let runtime = self.async_runtime.clone();
-        let _guard = runtime.enter();
-
+    pub async fn wait_for_emb_dumping(&self) -> Result<(), PersiaError> {
         let client = self
             .clients
             .read()
@@ -190,7 +192,7 @@ impl PersiaRpcClient {
         loop {
             std::thread::sleep(Duration::from_secs(5));
             let status: Result<Vec<PersiaPersistenceStatus>, _> =
-                runtime.block_on(client.model_manager_status(&()));
+                client.model_manager_status(&()).await;
             if let Ok(status) = status {
                 if status.iter().any(|s| match s {
                     PersiaPersistenceStatus::Loading(_) => true,

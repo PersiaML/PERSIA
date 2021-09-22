@@ -478,7 +478,7 @@ class EmbeddingCtx(BaseCtx):
 
     def wait_for_load_embedding(self):
         """Wait for the embedding load process."""
-        self.common_context.wait_for_serving()
+        self.common_context.wait_for_emb_loading()
 
     def get_embedding_size(self) -> List[int]:
         """Get number of ids on all embedding servers."""
