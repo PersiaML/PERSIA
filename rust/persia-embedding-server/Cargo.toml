@@ -8,7 +8,7 @@ version = "0.1.0"
 [dependencies]
 crossbeam = "0.8"
 farmhash = "1"
-hyper = "0.14.2"
+hyper = "0.14.13"
 hyperloglogplus = "0.4"
 lz4 = "1.23"
 persia-common = {path = "../persia-common", default-features = false}
