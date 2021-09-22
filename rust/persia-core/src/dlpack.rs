@@ -59,7 +59,7 @@ pub struct DLTensor {
 
 impl Drop for DLTensor {
     fn drop(&mut self) {
-        tracing::debug!("drop dltensor...");
+        tracing::info!("drop dltensor...");
     }
 }
 

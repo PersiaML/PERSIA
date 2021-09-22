@@ -84,6 +84,7 @@ impl DType {
             DType::U64 => (*&DLDataTypeCode::kDLUInt, 64),
             DType::USIZE => (*&DLDataTypeCode::kDLUInt, 64),
         };
+        let code = code as u8;
 
         DLDataType {
             code,
@@ -133,7 +134,7 @@ impl CPUStorage {
     }
 
     pub fn data_ptr(&mut self) -> u64 {
-        self.as_raw_ptr() as u64
+        self.get_raw_ptr() as u64
     }
 }
 

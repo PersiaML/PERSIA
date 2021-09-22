@@ -172,7 +172,8 @@ impl PyTensor {
 
             PyObject::from_owned_ptr(py, ptr)
         };
-        Box::leak(dlpack_managed_tensor);
+        // Box::leak(dlpack_managed_tensor);
+        // Box::from_raw
         Ok(capsule)
     }
 
