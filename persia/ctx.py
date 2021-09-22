@@ -226,7 +226,7 @@ class EmbeddingCtx(BaseCtx):
 
     def _enter(self):
         if self.embedding_config is not None:
-            self.common_context.configure_embedding_servers(self.embedding_config)
+            self.configure_embedding_servers(self.embedding_config)
 
     @retry(wait_fixed=2000)
     def configure_embedding_servers(
