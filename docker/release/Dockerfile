@@ -8,6 +8,7 @@ ARG DEPLOY=false
 ARG CPU_ONLY
 ARG WITHOUT_BAGUA
 ARG CI
+ARG HDFS
 
 RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl \
     build-essential \
@@ -78,6 +79,22 @@ RUN if [ -z "${WITHOUT_BAGUA}" ]; then \
     git submodule update --init --recursive; \
     pip3 install .; \
     fi
+
+# install hdfs requirement
+RUN if [ "${HDFS}" = true ]; then \
+    apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-11-jdk \
+    openssh-server \
+    wget; \
+    mkdir -p /opt/hadoop/; \
+    cd /opt/hadoop/; \
+    wget https://dlcdn.apache.org/hadoop/common/hadoop-3.3.1/hadoop-3.3.1.tar.gz; \
+    tar -zxvf hadoop-3.3.1.tar.gz; \
+    rm hadoop-3.3.1.tar.gz; \
+    cd -; \
+    fi
+
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64/
+ENV PATH=/opt/hadoop/hadoop-3.3.1/bin/:$PATH
 
 # install deploy requirements
 RUN if [ "${DEPLOY}" = true ]; then \
