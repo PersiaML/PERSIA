@@ -6,15 +6,7 @@ use crate::{PersiaCommonContext, PersiaError};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use persia_libs::{
-    async_lock::RwLock,
-    flume,
-    once_cell::sync::OnceCell,
-    retry::{delay::Fixed, retry},
-    tokio,
-    tokio::runtime::Runtime,
-    tracing,
-};
+use persia_libs::{async_lock::RwLock, flume, once_cell::sync::OnceCell, tokio, tracing};
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -24,9 +16,7 @@ use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
 };
-use persia_embedding_server::middleware_service::{
-    MiddlewareNatsServicePublisher, MiddlewareServerError,
-};
+use persia_embedding_server::middleware_service::MiddlewareNatsServicePublisher;
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::Writable;
 
@@ -50,33 +40,27 @@ pub struct LeaderDiscoveryNatsServiceWrapper {
     publisher: LeaderDiscoveryNatsServicePublisher,
     _responder: LeaderDiscoveryNatsServiceResponder,
     leader_addr: Option<String>,
-    async_runtime: Arc<Runtime>,
 }
 
 impl LeaderDiscoveryNatsServiceWrapper {
-    pub fn new(leader_addr: Option<String>, async_runtime: Arc<Runtime>) -> Self {
+    pub fn new(leader_addr: Option<String>) -> Self {
         let service = LeaderDiscoveryNatsService {
             leader_addr: Arc::new(RwLock::new(leader_addr.clone())),
         };
-        let _guard = async_runtime.enter();
         let instance = Self {
             publisher: LeaderDiscoveryNatsServicePublisher::new(),
             _responder: LeaderDiscoveryNatsServiceResponder::new(service),
             leader_addr,
-            async_runtime,
         };
         instance
     }
 
-    pub fn get_leader_addr(&self) -> String {
+    pub async fn get_leader_addr(&self) -> Result<String, PersiaError> {
         if let Some(addr) = &self.leader_addr {
-            addr.clone()
+            Ok(addr.clone())
         } else {
-            let addr: Result<String, _> = retry(Fixed::from_millis(1000), || {
-                self.async_runtime
-                    .block_on(self.publisher.publish_get_leader_addr(&(), Some(0)))
-            });
-            addr.expect("failed to leader addr")
+            let addr = self.publisher.publish_get_leader_addr(&(), Some(0)).await?;
+            Ok(addr)
         }
     }
 }
@@ -89,9 +73,13 @@ pub struct PersiaBatchFlowNatsService {
 
 #[persia_nats_marcos::service]
 impl PersiaBatchFlowNatsService {
-    pub async fn batch(&self, batch: PersiaBatchData) -> bool {
+    pub async fn batch(&self, batch: PersiaBatchData) -> Result<(), PersiaError> {
         let result = self.output_channel.try_send(batch);
-        result.is_ok()
+        if !result.is_ok() {
+            Err(PersiaError::SendDataError)
+        } else {
+            Ok(())
+        }
     }
 
     pub async fn get_world_size(&self, _placeholder: ()) -> usize {
@@ -109,55 +97,36 @@ pub struct PersiaBatchFlowNatsServicePublisherWrapper {
     replica_info: Arc<PersiaReplicaInfo>,
     to_trainer: PersiaBatchFlowNatsServicePublisher,
     world_size: usize,
-    async_runtime: Arc<Runtime>,
 }
 
 impl PersiaBatchFlowNatsServicePublisherWrapper {
-    pub fn new(world_size: Option<usize>, async_runtime: Arc<Runtime>) -> Self {
+    pub async fn new(world_size: Option<usize>) -> Result<Self, PersiaError> {
         let to_trainer = PersiaBatchFlowNatsServicePublisher::new();
-        let world_size = world_size.unwrap_or_else(|| {
-            retry(Fixed::from_millis(5000), || {
-                let resp = async_runtime.block_on(to_trainer.publish_get_world_size(&(), None));
-                if resp.is_err() {
-                    tracing::warn!("failed to get world size of trainer, due to {:?}", resp);
-                }
-                resp
-            })
-            .expect("failed to get world_size of trainer")
-        });
+
+        let world_size = match world_size {
+            Some(w) => Ok(w),
+            None => to_trainer.publish_get_world_size(&(), None).await,
+        }?;
 
         let to_middleware = MiddlewareNatsServicePublisher::new();
-        let num_middlewares = retry(Fixed::from_millis(5000), || {
-            let resp: Result<usize, _> =
-                async_runtime.block_on(to_middleware.publish_get_replica_size(&(), None))?;
-            if resp.is_err() {
-                tracing::warn!(
-                    "failed to get world replica of middleware, due to {:?}",
-                    resp
-                );
-            }
-            resp
-        });
-        let num_middlewares = num_middlewares.expect("failed to get replica size of middleware");
+        let num_middlewares: usize = to_middleware.publish_get_replica_size(&(), None).await??;
 
         let replica_info = PersiaReplicaInfo::get().expect("NOT in persia context");
 
-        Self {
+        Ok(Self {
             to_trainer,
             to_middleware,
             num_middlewares,
             cur_middleware_id: AtomicUsize::new(0),
-            world_size,
+            world_size: world_size,
             cur_batch_id: AtomicUsize::new(0),
             replica_info,
-            async_runtime,
-        }
+        })
     }
 
-    pub fn send_sparse_to_middleware(
+    pub async fn send_sparse_to_middleware(
         &self,
         batch: &mut PyPersiaBatchData,
-        block: bool,
     ) -> Result<(), PersiaError> {
         let start = std::time::Instant::now();
         match &mut batch.inner.sparse_data {
@@ -168,30 +137,15 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
             EmbeddingTensor::SparseBatch(sparse_batch) => {
                 let replica_index = self.replica_info.replica_index;
                 sparse_batch.batcher_idx = Some(replica_index);
-                let op = || {
-                    let cur_middleware_id = self.cur_middleware_id.fetch_add(1, Ordering::AcqRel);
-                    let _gurad = self.async_runtime.enter();
-                    let result: Result<SparseBatchRemoteReference, MiddlewareServerError> = self
-                        .async_runtime
-                        .block_on(self.to_middleware.publish_forward_batched(
-                            sparse_batch,
-                            Some(cur_middleware_id % self.num_middlewares),
-                        ))?;
-                    if result.is_err() {
-                        tracing::warn!(
-                            "fail to send sparse data to middleware due to {:?}",
-                            result
-                        );
-                    }
-                    result
-                };
-                let resp = if block {
-                    retry(Fixed::from_millis(1000), op)
-                } else {
-                    retry(Fixed::from_millis(1000).take(1), op)
-                };
 
-                let sparse_ref = resp.map_err(|_| PersiaError::SendDataError)?;
+                let cur_middleware_id = self.cur_middleware_id.fetch_add(1, Ordering::AcqRel);
+                let sparse_ref: SparseBatchRemoteReference = self
+                    .to_middleware
+                    .publish_forward_batched(
+                        sparse_batch,
+                        Some(cur_middleware_id % self.num_middlewares),
+                    )
+                    .await??;
 
                 batch.inner.sparse_data = EmbeddingTensor::SparseBatchRemoteReference(sparse_ref);
                 let local_batch_id = self.cur_batch_id.fetch_add(1, Ordering::AcqRel);
@@ -211,10 +165,9 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
         }
     }
 
-    pub fn send_dense_to_trainer(
+    pub async fn send_dense_to_trainer(
         &self,
         batch: &PyPersiaBatchData,
-        block: bool,
     ) -> Result<(), PersiaError> {
         let start = std::time::Instant::now();
         if batch.inner.batch_id.is_none() {
@@ -222,25 +175,9 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
             return Err(PersiaError::NullBatchIdError);
         }
         let rank_id = batch.inner.batch_id.unwrap() % self.world_size;
-        let op = || {
-            let _gurad = self.async_runtime.enter();
-            let result: Result<bool, _> = self
-                .async_runtime
-                .block_on(self.to_trainer.publish_batch(&batch.inner, Some(rank_id)));
-            if result.is_ok() && result.unwrap() {
-                Ok(())
-            } else {
-                tracing::warn!("failed to send dense to trainer {}, retrying...", rank_id);
-                Err(())
-            }
-        };
-        let result = if block {
-            retry(Fixed::from_millis(1000), op)
-        } else {
-            retry(Fixed::from_millis(1000).take(1), op)
-        };
-
-        result.map_err(|_| PersiaError::SendDataError)?;
+        self.to_trainer
+            .publish_batch(&batch.inner, Some(rank_id))
+            .await??;
 
         tracing::debug!(
             "send_dense_to_trainer {} time cost {} ms",
@@ -250,7 +187,7 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
         Ok(())
     }
 
-    pub fn configure_embedding_servers(
+    pub async fn configure_embedding_servers(
         &self,
         initialize_lower: f32,
         initialize_upper: f32,
@@ -274,41 +211,29 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
             enable_weight_bound,
         };
 
-        let _gurad = self.async_runtime.enter();
-        self.async_runtime.block_on(
-            self.to_middleware
-                .publish_configure_embedding_servers(&config, None),
-        )??;
+        self.to_middleware
+            .publish_configure_embedding_servers(&config, None)
+            .await??;
 
         Ok(())
     }
 
-    pub fn register_optimizer(&self, opt: &PyOptimizerBase) -> Result<(), PersiaError> {
+    pub async fn register_optimizer(&self, opt: &PyOptimizerBase) -> Result<(), PersiaError> {
         let optimizer = opt.get_inner();
         if optimizer.is_none() {
             return Err(PersiaError::NullOptimizerError);
         }
         let optimizer = optimizer.unwrap();
-        let _gurad = self.async_runtime.enter();
-        self.async_runtime.block_on(
-            self.to_middleware
-                .publish_register_optimizer(&optimizer, None),
-        )??;
+
+        self.to_middleware
+            .publish_register_optimizer(&optimizer, None)
+            .await??;
 
         Ok(())
     }
 
-    pub fn wait_servers_ready(&self) -> Result<String, PersiaError> {
-        let addr: Result<String, _> = retry(Fixed::from_millis(5000), || {
-            let resp = self
-                .async_runtime
-                .block_on(self.to_middleware.publish_get_address(&(), None))?;
-            if resp.is_err() {
-                tracing::warn!("waiting for servers ready...")
-            }
-            resp
-        });
-        let addr = addr.expect("failed to wait server ready");
+    pub async fn wait_servers_ready(&self) -> Result<String, PersiaError> {
+        let addr = self.to_middleware.publish_get_address(&(), None).await??;
         Ok(addr)
     }
 }

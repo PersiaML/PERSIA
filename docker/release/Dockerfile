@@ -43,6 +43,7 @@ RUN /opt/conda/bin/conda install -y -c pytorch -c conda-forge pytorch=${PYTORCH_
     /opt/conda/bin/pip install --no-cache-dir \ 
     pyyaml \
     remote-pdb \
+    retrying \
     colorlog \
     pytest \
     tqdm \
