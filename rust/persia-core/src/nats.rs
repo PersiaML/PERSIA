@@ -80,7 +80,7 @@ impl LeaderDiscoveryNatsServiceWrapper {
     }
 }
 
-pub mod persia_batch_flow_service {
+pub mod persia_dataflow_service {
     use persia_common::PersiaBatchData;
     use persia_embedding_config::PersiaReplicaInfo;
     use persia_libs::{flume, thiserror, tokio, tracing};
@@ -119,7 +119,7 @@ pub mod persia_batch_flow_service {
     }
 }
 
-static RESPONDER: OnceCell<Arc<persia_batch_flow_service::ServiceResponder>> = OnceCell::new();
+static RESPONDER: OnceCell<Arc<persia_dataflow_service::ServiceResponder>> = OnceCell::new();
 
 pub struct PersiaBatchFlowNatsServicePublisherWrapper {
     preforward_sparse_publish_service: MiddlewareNatsServicePublisher,
@@ -127,18 +127,18 @@ pub struct PersiaBatchFlowNatsServicePublisherWrapper {
     cur_middleware_id: AtomicUsize,
     cur_batch_id: AtomicUsize,
     replica_info: Arc<PersiaReplicaInfo>,
-    batch_flow_publish_service: persia_batch_flow_service::ServicePublisher,
+    dataflow_publish_service: persia_dataflow_service::ServicePublisher,
     world_size: usize,
 }
 
 impl PersiaBatchFlowNatsServicePublisherWrapper {
     pub async fn new(world_size: Option<usize>) -> Result<Self, PersiaError> {
-        let batch_flow_publish_service = persia_batch_flow_service::ServicePublisher::new();
+        let dataflow_publish_service = persia_dataflow_service::ServicePublisher::new();
 
         let world_size = match world_size {
             Some(w) => Ok(w),
             None => {
-                batch_flow_publish_service
+                dataflow_publish_service
                     .publish_get_world_size(&(), None)
                     .await
             }
@@ -152,7 +152,7 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
         let replica_info = PersiaReplicaInfo::get().expect("NOT in persia context");
 
         Ok(Self {
-            batch_flow_publish_service,
+            dataflow_publish_service,
             preforward_sparse_publish_service,
             num_middlewares,
             cur_middleware_id: AtomicUsize::new(0),
@@ -213,7 +213,7 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
             return Err(PersiaError::NullBatchIdError);
         }
         let rank_id = batch.inner.batch_id.unwrap() % self.world_size;
-        self.batch_flow_publish_service
+        self.dataflow_publish_service
             .publish_batch(&batch.inner, Some(rank_id))
             .await??;
 
@@ -283,14 +283,12 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
 pub fn init_responder(world_size: usize, channel: &PyPersiaBatchDataSender) -> PyResult<()> {
     let common_context = PersiaCommonContext::get();
     RESPONDER.get_or_init(|| {
-        let nats_service = persia_batch_flow_service::Service {
+        let nats_service = persia_dataflow_service::Service {
             output_channel: channel.inner.clone(),
             world_size,
         };
         let _guard = common_context.async_runtime.enter();
-        Arc::new(persia_batch_flow_service::ServiceResponder::new(
-            nats_service,
-        ))
+        Arc::new(persia_dataflow_service::ServiceResponder::new(nats_service))
     });
 
     Ok(())
