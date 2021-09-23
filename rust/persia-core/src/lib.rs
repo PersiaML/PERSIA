@@ -82,6 +82,10 @@ pub enum PersiaError {
     LeaderAddrInputError,
     #[error("storage visit error {0}")]
     StorageVisitError(String),
+    #[error("leader discovery error: {0}")]
+    LeaderDiscoveryError(#[from] nats::leader_discovery_service::Error),
+    #[error("batch flow error: {0}")]
+    PersiaBatchFlowError(#[from] nats::persia_dataflow_service::Error),
 }
 
 impl PersiaError {
@@ -124,7 +128,7 @@ impl PersiaCommonContext {
                 .unwrap(),
         );
 
-        let rpc_client = Arc::new(PersiaRpcClient::new(runtime.clone()));
+        let rpc_client = Arc::new(PersiaRpcClient::new());
 
         let common_context = Self {
             rpc_client,
@@ -143,11 +147,13 @@ impl PersiaCommonContext {
     }
 
     pub fn register_optimizer(&self, opt: &PyOptimizerBase) -> Result<(), PersiaError> {
-        self.nats_publisher
-            .read()
-            .as_ref()
-            .ok_or_else(|| PersiaError::NatsNotInitializedError)?
-            .register_optimizer(opt)
+        self.async_runtime.block_on(
+            self.nats_publisher
+                .read()
+                .as_ref()
+                .ok_or_else(|| PersiaError::NatsNotInitializedError)?
+                .register_optimizer(opt),
+        )
     }
 
     pub fn init_rpc_client_with_addr(&self, addr: String) -> Result<(), PersiaError> {
@@ -175,39 +181,50 @@ impl PyPersiaCommonContext {
     }
 
     pub fn init_nats_publisher(&self, world_size: Option<usize>) -> PyResult<()> {
-        let instance = nats::PersiaBatchFlowNatsServicePublisherWrapper::new(
-            world_size,
-            self.inner.async_runtime.clone(),
-        );
+        if self.inner.nats_publisher.read().is_some() {
+            return Ok(());
+        }
+        let instance = self
+            .inner
+            .async_runtime
+            .block_on(nats::PersiaBatchFlowNatsServicePublisherWrapper::new(
+                world_size,
+            ))
+            .map_err(|e| e.to_py_runtime_err())?;
+
         let mut nats_publisher = self.inner.nats_publisher.write();
         *nats_publisher = Some(instance);
         Ok(())
     }
 
     pub fn init_leader_discovery_service(&self, leader_addr: Option<String>) -> PyResult<()> {
+        if self.inner.leader_discovery_service.read().is_some() {
+            return Ok(());
+        }
         let replica_info = PersiaReplicaInfo::get().expect("not in persia context");
         if replica_info.is_leader() == leader_addr.is_none() {
             return Err(PersiaError::LeaderAddrInputError.to_py_runtime_err());
         }
-        let instance = nats::LeaderDiscoveryNatsServiceWrapper::new(
-            leader_addr,
-            self.inner.async_runtime.clone(),
-        );
+        let _guard = self.inner.async_runtime.enter();
+        let instance = nats::LeaderDiscoveryNatsServiceWrapper::new(leader_addr);
         let mut leader_discovery_service = self.inner.leader_discovery_service.write();
         *leader_discovery_service = Some(instance);
         Ok(())
     }
 
     pub fn get_leader_addr(&self) -> PyResult<String> {
-        let leader_addr = self
-            .inner
-            .leader_discovery_service
-            .read()
-            .as_ref()
-            .ok_or_else(|| PersiaError::LeaderDiscoveryServiceNotInitializedError)
-            .map_err(|e| e.to_py_runtime_err())?
-            .get_leader_addr();
-        Ok(leader_addr)
+        self.inner
+            .async_runtime
+            .block_on(
+                self.inner
+                    .leader_discovery_service
+                    .read()
+                    .as_ref()
+                    .ok_or_else(|| PersiaError::LeaderDiscoveryServiceNotInitializedError)
+                    .map_err(|e| e.to_py_runtime_err())?
+                    .get_leader_addr(),
+            )
+            .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn init_rpc_client_with_addr(&self, middleware_addr: String) -> PyResult<()> {
@@ -218,87 +235,102 @@ impl PyPersiaCommonContext {
 
     pub fn wait_servers_ready(&self) -> PyResult<String> {
         self.inner
-            .nats_publisher
-            .read()
-            .as_ref()
-            .ok_or_else(|| PersiaError::NatsNotInitializedError)
-            .map_err(|e| e.to_py_runtime_err())?
-            .wait_servers_ready()
+            .async_runtime
+            .block_on(
+                self.inner
+                    .nats_publisher
+                    .read()
+                    .as_ref()
+                    .ok_or_else(|| PersiaError::NatsNotInitializedError)
+                    .map_err(|e| e.to_py_runtime_err())?
+                    .wait_servers_ready(),
+            )
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn get_embedding_size(&self) -> PyResult<Vec<usize>> {
         self.inner
-            .rpc_client
-            .get_embedding_size()
+            .async_runtime
+            .block_on(self.inner.rpc_client.get_embedding_size())
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn clear_embeddings(&self) -> PyResult<()> {
         self.inner
-            .rpc_client
-            .clear_embeddings()
+            .async_runtime
+            .block_on(self.inner.rpc_client.clear_embeddings())
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn dump(&self, dst_dir: String) -> PyResult<()> {
         self.inner
-            .rpc_client
-            .dump(dst_dir)
+            .async_runtime
+            .block_on(self.inner.rpc_client.dump(dst_dir))
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn load(&self, src_dir: String) -> PyResult<()> {
         self.inner
-            .rpc_client
-            .load(src_dir)
+            .async_runtime
+            .block_on(self.inner.rpc_client.load(src_dir))
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn wait_for_serving(&self) -> PyResult<()> {
         self.inner
-            .rpc_client
-            .wait_for_serving()
+            .async_runtime
+            .block_on(self.inner.rpc_client.wait_for_serving())
+            .map_err(|e| e.to_py_runtime_err())
+    }
+
+    pub fn wait_for_emb_loading(&self) -> PyResult<()> {
+        self.inner
+            .async_runtime
+            .block_on(self.inner.rpc_client.wait_for_emb_loading())
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn wait_for_emb_dumping(&self) -> PyResult<()> {
         self.inner
-            .rpc_client
-            .wait_for_emb_dumping()
+            .async_runtime
+            .block_on(self.inner.rpc_client.wait_for_emb_dumping())
             .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn shutdown_servers(&self) -> PyResult<()> {
         self.inner
-            .rpc_client
-            .shutdown()
+            .async_runtime
+            .block_on(self.inner.rpc_client.shutdown())
             .map_err(|e| e.to_py_runtime_err())
     }
 
-    pub fn send_sparse_to_middleware(
-        &self,
-        batch: &mut PyPersiaBatchData,
-        block: bool,
-    ) -> PyResult<()> {
+    pub fn send_sparse_to_middleware(&self, batch: &mut PyPersiaBatchData) -> PyResult<()> {
         self.inner
-            .nats_publisher
-            .read()
-            .as_ref()
-            .ok_or_else(|| PersiaError::NatsNotInitializedError)
-            .map_err(|e| e.to_py_runtime_err())?
-            .send_sparse_to_middleware(batch, block)
+            .async_runtime
+            .block_on(
+                self.inner
+                    .nats_publisher
+                    .read()
+                    .as_ref()
+                    .ok_or_else(|| PersiaError::NatsNotInitializedError)
+                    .map_err(|e| e.to_py_runtime_err())?
+                    .send_sparse_to_middleware(batch),
+            )
             .map_err(|e| e.to_py_runtime_err())
     }
 
-    pub fn send_dense_to_trainer(&self, batch: &PyPersiaBatchData, block: bool) -> PyResult<()> {
+    pub fn send_dense_to_trainer(&self, batch: &PyPersiaBatchData) -> PyResult<()> {
         self.inner
-            .nats_publisher
-            .read()
-            .as_ref()
-            .ok_or_else(|| PersiaError::NatsNotInitializedError)
-            .map_err(|e| e.to_py_runtime_err())?
-            .send_dense_to_trainer(batch, block)
+            .async_runtime
+            .block_on(
+                self.inner
+                    .nats_publisher
+                    .read()
+                    .as_ref()
+                    .ok_or_else(|| PersiaError::NatsNotInitializedError)
+                    .map_err(|e| e.to_py_runtime_err())?
+                    .send_dense_to_trainer(batch),
+            )
             .map_err(|e| e.to_py_runtime_err())
     }
 
@@ -311,17 +343,21 @@ impl PyPersiaCommonContext {
         weight_bound: f32,
     ) -> PyResult<()> {
         self.inner
-            .nats_publisher
-            .read()
-            .as_ref()
-            .ok_or_else(|| PersiaError::NatsNotInitializedError)
-            .map_err(|e| e.to_py_runtime_err())?
-            .configure_embedding_servers(
-                initialize_lower,
-                initialize_upper,
-                admit_probability,
-                enable_weight_bound,
-                weight_bound,
+            .async_runtime
+            .block_on(
+                self.inner
+                    .nats_publisher
+                    .read()
+                    .as_ref()
+                    .ok_or_else(|| PersiaError::NatsNotInitializedError)
+                    .map_err(|e| e.to_py_runtime_err())?
+                    .configure_embedding_servers(
+                        initialize_lower,
+                        initialize_upper,
+                        admit_probability,
+                        enable_weight_bound,
+                        weight_bound,
+                    ),
             )
             .map_err(|e| e.to_py_runtime_err())
     }
