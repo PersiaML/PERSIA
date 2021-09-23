@@ -6,7 +6,9 @@ use crate::{PersiaCommonContext, PersiaError};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use persia_libs::{async_lock::RwLock, flume, once_cell::sync::OnceCell, tokio, tracing, thiserror};
+use persia_libs::{
+    async_lock::RwLock, flume, once_cell::sync::OnceCell, thiserror, tokio, tracing,
+};
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;

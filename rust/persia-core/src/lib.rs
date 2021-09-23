@@ -43,7 +43,7 @@ use pyo3::wrap_pyfunction;
 use persia_common::PersiaBatchData;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaReplicaInfo};
 use persia_embedding_server::middleware_service::MiddlewareServerError;
-use persia_speedy::{Readable};
+use persia_speedy::Readable;
 use persia_storage::{PersiaPath, PersiaPathImpl};
 
 #[derive(thiserror::Error, Debug)]
