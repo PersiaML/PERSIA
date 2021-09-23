@@ -118,7 +118,7 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
             to_middleware,
             num_middlewares,
             cur_middleware_id: AtomicUsize::new(0),
-            world_size: world_size,
+            world_size,
             cur_batch_id: AtomicUsize::new(0),
             replica_info,
         })
