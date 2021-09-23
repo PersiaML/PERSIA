@@ -122,32 +122,38 @@ pub mod persia_batch_flow_service {
 static RESPONDER: OnceCell<Arc<persia_batch_flow_service::ServiceResponder>> = OnceCell::new();
 
 pub struct PersiaBatchFlowNatsServicePublisherWrapper {
-    to_middleware: MiddlewareNatsServicePublisher,
+    preforward_sparse_publish_service: MiddlewareNatsServicePublisher,
     num_middlewares: usize,
     cur_middleware_id: AtomicUsize,
     cur_batch_id: AtomicUsize,
     replica_info: Arc<PersiaReplicaInfo>,
-    to_trainer: persia_batch_flow_service::ServicePublisher,
+    batch_flow_publish_service: persia_batch_flow_service::ServicePublisher,
     world_size: usize,
 }
 
 impl PersiaBatchFlowNatsServicePublisherWrapper {
     pub async fn new(world_size: Option<usize>) -> Result<Self, PersiaError> {
-        let to_trainer = persia_batch_flow_service::ServicePublisher::new();
+        let batch_flow_publish_service = persia_batch_flow_service::ServicePublisher::new();
 
         let world_size = match world_size {
             Some(w) => Ok(w),
-            None => to_trainer.publish_get_world_size(&(), None).await,
+            None => {
+                batch_flow_publish_service
+                    .publish_get_world_size(&(), None)
+                    .await
+            }
         }?;
 
-        let to_middleware = MiddlewareNatsServicePublisher::new();
-        let num_middlewares: usize = to_middleware.publish_get_replica_size(&(), None).await??;
+        let preforward_sparse_publish_service = MiddlewareNatsServicePublisher::new();
+        let num_middlewares: usize = preforward_sparse_publish_service
+            .publish_get_replica_size(&(), None)
+            .await??;
 
         let replica_info = PersiaReplicaInfo::get().expect("NOT in persia context");
 
         Ok(Self {
-            to_trainer,
-            to_middleware,
+            batch_flow_publish_service,
+            preforward_sparse_publish_service,
             num_middlewares,
             cur_middleware_id: AtomicUsize::new(0),
             world_size,
@@ -163,7 +169,7 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
         let start = std::time::Instant::now();
         match &mut batch.inner.sparse_data {
             EmbeddingTensor::SparseBatchRemoteReference(_) => {
-                tracing::error!("sparse data has already sent to middleware, you are calling sparse_to_middleware muti times");
+                tracing::error!("sparse data has already sent to middleware, you are calling send_sparse_to_middleware muti times");
                 return Err(PersiaError::MultipleSendError);
             }
             EmbeddingTensor::SparseBatch(sparse_batch) => {
@@ -172,7 +178,7 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
 
                 let cur_middleware_id = self.cur_middleware_id.fetch_add(1, Ordering::AcqRel);
                 let sparse_ref: SparseBatchRemoteReference = self
-                    .to_middleware
+                    .preforward_sparse_publish_service
                     .publish_forward_batched(
                         sparse_batch,
                         Some(cur_middleware_id % self.num_middlewares),
@@ -207,7 +213,7 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
             return Err(PersiaError::NullBatchIdError);
         }
         let rank_id = batch.inner.batch_id.unwrap() % self.world_size;
-        self.to_trainer
+        self.batch_flow_publish_service
             .publish_batch(&batch.inner, Some(rank_id))
             .await??;
 
@@ -243,7 +249,7 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
             enable_weight_bound,
         };
 
-        self.to_middleware
+        self.preforward_sparse_publish_service
             .publish_configure_embedding_servers(&config, None)
             .await??;
 
@@ -257,7 +263,7 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
         }
         let optimizer = optimizer.unwrap();
 
-        self.to_middleware
+        self.preforward_sparse_publish_service
             .publish_register_optimizer(&optimizer, None)
             .await??;
 
@@ -265,7 +271,10 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
     }
 
     pub async fn wait_servers_ready(&self) -> Result<String, PersiaError> {
-        let addr = self.to_middleware.publish_get_address(&(), None).await??;
+        let addr = self
+            .preforward_sparse_publish_service
+            .publish_get_address(&(), None)
+            .await??;
         Ok(addr)
     }
 }

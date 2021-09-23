@@ -4,7 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use persia_libs::{
-    anyhow::Result, futures, hashbrown::HashMap, parking_lot::RwLock, rand, tracing,
+    anyhow::Result, futures, hashbrown::HashMap, itertools::Itertools, parking_lot::RwLock, rand,
+    tracing,
 };
 
 use persia_embedding_server::middleware_service::MiddlewareServerClient;
@@ -32,6 +33,12 @@ impl PersiaRpcClient {
 
     pub fn get_random_client(&self) -> Arc<MiddlewareServerClient> {
         return self.get_random_client_with_addr().1;
+    }
+
+    pub fn get_first_client(&self) -> Arc<MiddlewareServerClient> {
+        let addrs = self.middleware_addrs.read();
+        let addr = addrs.first().expect("clients not initialized");
+        self.get_client_by_addr(addr)
     }
 
     pub fn get_client_by_addr(&self, middleware_addr: &str) -> Arc<MiddlewareServerClient> {
@@ -67,40 +74,19 @@ impl PersiaRpcClient {
 
     // TODO(zhuxuefeng): move to nats
     pub async fn dump(&self, dst_dir: String) -> Result<(), PersiaError> {
-        self.clients
-            .read()
-            .iter()
-            .next()
-            .expect("clients not initialized")
-            .1
-            .dump(&dst_dir)
-            .await??;
+        self.get_first_client().dump(&dst_dir).await??;
         Ok(())
     }
 
     // TODO(zhuxuefeng): move to nats
     pub async fn load(&self, src_dir: String) -> Result<(), PersiaError> {
-        self.clients
-            .read()
-            .iter()
-            .next()
-            .expect("clients not initialized")
-            .1
-            .load(&src_dir)
-            .await??;
+        self.get_first_client().load(&src_dir).await??;
         Ok(())
     }
 
     // TODO(zhuxuefeng): move to nats
     pub async fn wait_for_serving(&self) -> Result<(), PersiaError> {
-        let client = self
-            .clients
-            .read()
-            .iter()
-            .next()
-            .expect("clients not initialized")
-            .1
-            .clone();
+        let client = self.get_first_client().clone();
 
         loop {
             if let Ok(ready) = client.ready_for_serving(&()).await {
@@ -115,14 +101,7 @@ impl PersiaRpcClient {
     }
 
     pub async fn wait_for_emb_loading(&self) -> Result<(), PersiaError> {
-        let client = self
-            .clients
-            .read()
-            .iter()
-            .next()
-            .expect("clients not initialized")
-            .1
-            .clone();
+        let client = self.get_first_client().clone();
 
         loop {
             if let Ok(ready) = client.ready_for_serving(&()).await {
@@ -180,14 +159,7 @@ impl PersiaRpcClient {
 
     // TODO(zhuxuefeng): move to nats
     pub async fn wait_for_emb_dumping(&self) -> Result<(), PersiaError> {
-        let client = self
-            .clients
-            .read()
-            .iter()
-            .next()
-            .expect("clients not initialized")
-            .1
-            .clone();
+        let client = self.get_first_client().clone();
 
         loop {
             std::thread::sleep(Duration::from_secs(5));
