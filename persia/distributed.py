@@ -10,7 +10,7 @@ from persia.logger import get_default_logger
 _logger = get_default_logger()
 
 
-class DistributedOption(ABC):
+class DistributedBaseOption(ABC):
     def __init__(self, master_port: int, master_addr: str = None) -> None:
         self.master_addr = master_addr
         self.master_port = master_port
@@ -32,16 +32,13 @@ class DistributedOption(ABC):
     def init_with_env_file(self) -> bool:
         ...
 
-    def is_master_addr_exists(self) -> bool:
-        return self.master_addr is not None
-
 _ddp_backend_support_list = ["nccl"]
 _ddp_init_method_list = ["tcp", "file"]
 
 
-class DDPOption(DistributedOption):
+class DDPOption(DistributedBaseOption):
     def __init__(self, init_method: str = "tcp", backend: str = "nccl", **options) -> None:
-        super(DDPOption, self).__init__(options.pop("master_addr", None), options.pop("master_port", 23456))
+        super(DDPOption, self).__init__(options.pop("master_port", 23456), options.pop("master_addr", None))
 
         assert (
             backend in _ddp_backend_support_list
@@ -144,12 +141,11 @@ def _select_bagua_algorithm(
     return algorithm, optimizer
 
 
-class BaguaOption(DistributedOption):
-    def __init__(self, algorithm: str, *args, **options) -> None:
-        super(DDPOption, self).__init__(options.pop("master_addr", None), options.pop("master_port", 23456))
+class BaguaDistributedOption(DistributedBaseOption):
+    def __init__(self, algorithm: str, **options) -> None:
+        super(BaguaDistributedOption, self).__init__(options.pop("master_port", 23456), options.pop("master_addr", None))
 
         self.algorithm = algorithm
-        self.args = args
         self.options = options
 
     def convert2distributed_model(
@@ -168,15 +164,14 @@ class BaguaOption(DistributedOption):
                 "Import Bagua Error, instasll Bagua before use BaguaOption, you should build the persia docker image with Bagua before task start."
             )
             raise e
-        import torch
-        torch.distributed.launch
+
         current_env = os.environ
         # current_env["WORLD_SIZE"] = str(world_size)
         # current_env["LOCAL_WORLD_SIZE"] = str(local_world_size)
         # current_env["RANK"] = str(rank_id)
         # current_env["LOCAL_RANK"] = str(device_id)
         current_env["MASTER_ADDR"] = self.master_addr or master_addr
-        current_env["MASTER_PORT"] = self.master_port
+        current_env["MASTER_PORT"] = str(self.master_port)
         current_env["BAGUA_DEFAULT_BUCKET_SIZE"] = str(self.options.pop("default_bucket_size", 10 * 1024 ** 2))
 
         # autotune option 
@@ -216,7 +211,7 @@ class BaguaOption(DistributedOption):
             optimizer = algorithm_optimizer
             
 
-        return self.model.with_bagua([optimizer], algorithm), optimizer
+        return model.with_bagua([optimizer], algorithm), optimizer
 
     def init_with_env_file(self) -> bool:
         return False

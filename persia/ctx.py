@@ -12,7 +12,7 @@ import persia.env as env
 
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
-from persia.distributed import DistributedOption, get_default_distributed_option
+from persia.distributed import DistributedBaseOption, get_default_distributed_option
 from persia.prelude import PyPersiaCommonContext, PyPersiaBatchData
 
 _CURRENT_CXT = None
@@ -126,7 +126,7 @@ class DataCtx(BaseCtx):
         **kwargs,
     ):
         super(DataCtx, self).__init__(*args, **kwargs)
-
+        _logger.info("done")
         self.common_context.init_nats_publisher(None)
         self.common_context.wait_servers_ready()
 
@@ -549,7 +549,7 @@ class TrainCtx(EmbeddingCtx):
         backward_buffer_size: int = 10,
         backward_workers_size: int = 8,
         grad_update_buffer_size: int = 60,
-        distributed_option: Optional[DistributedOption]= None,
+        distributed_option: Optional[DistributedBaseOption]= None,
         *args,
         **kwargs,
     ):
@@ -588,22 +588,25 @@ class TrainCtx(EmbeddingCtx):
         
         if world_size > 1:
             distributed_option = distributed_option or get_default_distributed_option()
-
             if not distributed_option.init_with_env_file() and not distributed_option.master_addr:
                 if rank_id == 0:
                     master_addr = socket.gethostbyname(socket.gethostname())
                     self.common_context.init_master_discovery_service(master_addr)
+                    _logger.info(f"init addr is {master_addr}")
                 else:
                     self.common_context.init_master_discovery_service(None)
                     master_addr = self.common_context.master_addr
+                    _logger.info(f"master addr is {master_addr}")
             else:
                 master_addr = None
-            _logger.info(f"master addr is {master_addr}")
 
             model, dense_optimizer  = distributed_option.convert2distributed_model(
                 self.model, world_size, rank_id, device_id, master_addr=master_addr, optimizer=dense_optimizer
             )
             self.model = model
+            _logger.info("Distributed training context init done.")
+        else:
+            _logger.info("SingleMachine training context init done.")
 
         self.dense_optimizer = dense_optimizer
         self.sparse_optimizer = sparse_optimizer

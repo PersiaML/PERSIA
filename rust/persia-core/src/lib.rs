@@ -184,13 +184,13 @@ impl PyPersiaCommonContext {
         Ok(())
     }
 
-    pub fn init_master_discovery_service(&self, master_service: Option<String>) -> PyResult<()> {
+    pub fn init_master_discovery_service(&self, master_addr: Option<String>) -> PyResult<()> {
         let replica_info = PersiaReplicaInfo::get().expect("not in persia context");
-        if replica_info.is_master() && master_service.is_none() {
+        if replica_info.is_master() && master_addr.is_none() {
             return Err(PersiaError::MasterServiceEmpty.to_py_runtime_err());
         }
         let instance = nats::MasterDiscoveryNatsServiceWrapper::new(
-            master_service,
+            master_addr,
             self.inner.async_runtime.clone(),
         );
         let mut master_discovery_service = self.inner.master_discovery_service.write();

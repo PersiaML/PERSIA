@@ -112,5 +112,5 @@ RUN git clone https://github.com/BaguaSys/bagua.git; \
     cd bagua-core;  \
     git submodule update --init --recursive; \
     pip3 install .; \
-    fi \
+    cd ..; \
     rm -rf bagua bagua-core
