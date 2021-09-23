@@ -1794,7 +1794,6 @@ dependencies = [
  "persia-libs",
  "persia-simd",
  "persia-speedy",
- "url",
 ]
 
 [[package]]
@@ -1826,6 +1825,7 @@ dependencies = [
  "persia-nats-client",
  "persia-nats-marcos",
  "persia-rpc",
+ "persia-rpc-macro",
  "persia-speedy",
  "persia-storage",
  "pyo3",
@@ -1859,9 +1859,6 @@ version = "0.1.0"
 dependencies = [
  "crossbeam",
  "farmhash",
- "hyper",
- "hyperloglogplus",
- "lz4",
  "persia-common",
  "persia-embedding-config",
  "persia-embedding-holder",
@@ -1874,6 +1871,7 @@ dependencies = [
  "persia-nats-client",
  "persia-nats-marcos",
  "persia-rpc",
+ "persia-rpc-macro",
  "persia-simd",
  "persia-speedy",
  "rand 0.8.4",
@@ -1937,8 +1935,11 @@ dependencies = [
  "futures",
  "half",
  "hashbrown 0.11.2",
+ "hyper",
+ "hyperloglogplus",
  "indexmap",
  "itertools",
+ "lz4",
  "ndarray 0.14.0",
  "ndarray-rand",
  "numpy",
@@ -1956,6 +1957,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -2003,28 +2005,18 @@ dependencies = [
 
 [[package]]
 name = "persia-rpc"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5abf4ac194af15cee79b762f1f3c4d8412e260c40a25af5b3e5df16bfdb3113b"
+version = "0.1.0"
 dependencies = [
- "bytes",
- "futures",
- "hyper",
- "lz4",
- "persia-rpc-macro",
+ "persia-libs",
  "persia-speedy",
  "reqwest",
  "snafu",
- "tokio",
  "tracing",
- "url",
 ]
 
 [[package]]
 name = "persia-rpc-macro"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83cabe192eefa8ffd2b9394521a6ab1144c51926d3d7971f5b9509b529a77726"
+version = "0.1.0"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
