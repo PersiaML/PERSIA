@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use hyperloglogplus::HyperLogLog;
-use persia_libs::{hashbrown, once_cell, parking_lot, tracing};
+use persia_libs::hyperloglogplus::HyperLogLog;
+use persia_libs::{hashbrown, hyperloglogplus, once_cell, parking_lot, tracing};
 
 use persia_common::{utils::ChannelPair, SingleSignInFeatureBatch};
 use persia_metrics::{GaugeVec, PersiaMetricsManager, PersiaMetricsManagerError};
