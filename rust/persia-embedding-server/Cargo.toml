@@ -28,7 +28,7 @@ persia-simd = {path = "../persia-simd"}
 shadow-rs = "0.7"
 snafu = "0.6"
 structopt = "0.3"
-tokio = {version = "1.11", features = ["full"]}
+tokio = {version = "1.12", features = ["full"]}
 tracing = "0.1"
 
 [dev-dependencies]
