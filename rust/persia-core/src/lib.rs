@@ -43,10 +43,10 @@ use pyo3::wrap_pyfunction;
 use persia_common::PersiaBatchData;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaReplicaInfo};
 use persia_embedding_server::middleware_service::MiddlewareServerError;
-use persia_speedy::{Readable, Writable};
+use persia_speedy::{Readable};
 use persia_storage::{PersiaPath, PersiaPathImpl};
 
-#[derive(thiserror::Error, Debug, Readable, Writable)]
+#[derive(thiserror::Error, Debug)]
 pub enum PersiaError {
     #[error("Persia context NOT initialized")]
     NotInitializedError,
@@ -61,7 +61,7 @@ pub enum PersiaError {
     #[error("server side error: {0}")]
     ServerSideError(#[from] MiddlewareServerError),
     #[error("rpc error: {0}")]
-    RpcError(String),
+    RpcError(#[from] persia_rpc::PersiaRpcError),
     #[error("nats error: {0}")]
     NatsError(#[from] persia_nats_client::NatsError),
     #[error("send sparse data to middleware server multi times")]
@@ -82,12 +82,10 @@ pub enum PersiaError {
     LeaderAddrInputError,
     #[error("storage visit error {0}")]
     StorageVisitError(String),
-}
-
-impl From<persia_rpc::PersiaRpcError> for PersiaError {
-    fn from(e: persia_rpc::PersiaRpcError) -> Self {
-        Self::RpcError(format!("{:?}", &e))
-    }
+    #[error("leader discovery error: {0}")]
+    LeaderDiscoveryError(#[from] nats::LeaderDiscoveryError),
+    #[error("batch flow error: {0}")]
+    PersiaBatchFlowError(#[from] nats::PersiaBatchFlowError),
 }
 
 impl PersiaError {

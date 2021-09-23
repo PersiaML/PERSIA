@@ -6,7 +6,7 @@ use crate::{PersiaCommonContext, PersiaError};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use persia_libs::{async_lock::RwLock, flume, once_cell::sync::OnceCell, tokio, tracing};
+use persia_libs::{async_lock::RwLock, flume, once_cell::sync::OnceCell, tokio, tracing, thiserror};
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -18,7 +18,13 @@ use persia_embedding_config::{
 };
 use persia_embedding_server::middleware_service::MiddlewareNatsServicePublisher;
 use persia_nats_client::{NatsClient, NatsError};
-use persia_speedy::Writable;
+use persia_speedy::{Readable, Writable};
+
+#[derive(thiserror::Error, Debug, Readable, Writable)]
+pub enum LeaderDiscoveryError {
+    #[error("addr not set error")]
+    AddrNotSet,
+}
 
 #[derive(Clone)]
 pub struct LeaderDiscoveryNatsService {
@@ -27,12 +33,12 @@ pub struct LeaderDiscoveryNatsService {
 
 #[persia_nats_marcos::service]
 impl LeaderDiscoveryNatsService {
-    pub async fn get_leader_addr(&self, _placeholder: ()) -> String {
+    pub async fn get_leader_addr(&self, _placeholder: ()) -> Result<String, LeaderDiscoveryError> {
         self.leader_addr
             .read()
             .await
             .clone()
-            .expect("lead addr not set")
+            .ok_or_else(|| LeaderDiscoveryError::AddrNotSet)
     }
 }
 
@@ -59,10 +65,19 @@ impl LeaderDiscoveryNatsServiceWrapper {
         if let Some(addr) = &self.leader_addr {
             Ok(addr.clone())
         } else {
-            let addr = self.publisher.publish_get_leader_addr(&(), Some(0)).await?;
+            let addr = self
+                .publisher
+                .publish_get_leader_addr(&(), Some(0))
+                .await??;
             Ok(addr)
         }
     }
+}
+
+#[derive(thiserror::Error, Debug, Readable, Writable)]
+pub enum PersiaBatchFlowError {
+    #[error("trainer buffer full error")]
+    TrainerBufferFullError,
 }
 
 #[derive(Clone)]
@@ -73,10 +88,12 @@ pub struct PersiaBatchFlowNatsService {
 
 #[persia_nats_marcos::service]
 impl PersiaBatchFlowNatsService {
-    pub async fn batch(&self, batch: PersiaBatchData) -> Result<(), PersiaError> {
-        let result = self.output_channel.try_send(batch);
+    pub async fn batch(&self, batch: PersiaBatchData) -> Result<(), PersiaBatchFlowError> {
+        let result = self
+            .output_channel
+            .send_timeout(batch, std::time::Duration::from_millis(500));
         if !result.is_ok() {
-            Err(PersiaError::SendDataError)
+            Err(PersiaBatchFlowError::TrainerBufferFullError)
         } else {
             Ok(())
         }
