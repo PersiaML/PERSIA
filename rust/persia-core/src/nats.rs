@@ -31,52 +31,52 @@ use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::Writable;
 
 #[derive(Clone)]
-pub struct LeaderDiscoveryNatsService {
-    pub leader_addr: Arc<RwLock<Option<String>>>,
+pub struct MasterDiscoveryNatsService {
+    pub master_addr: Arc<RwLock<Option<String>>>,
 }
 
 #[persia_nats_marcos::service]
-impl LeaderDiscoveryNatsService {
-    pub async fn get_leader_addr(&self, _placeholder: ()) -> String {
-        self.leader_addr
+impl MasterDiscoveryNatsService {
+    pub async fn get_master_addr(&self, _placeholder: ()) -> String {
+        self.master_addr
             .read()
             .await
             .clone()
-            .expect("lead addr not set")
+            .expect("Master service not set")
     }
 }
 
-pub struct LeaderDiscoveryNatsServiceWrapper {
-    publisher: LeaderDiscoveryNatsServicePublisher,
-    _responder: LeaderDiscoveryNatsServiceResponder,
-    leader_addr: Option<String>,
+pub struct MasterDiscoveryNatsServiceWrapper {
+    publisher: MasterDiscoveryNatsServicePublisher,
+    _responder: MasterDiscoveryNatsServiceResponder,
+    master_addr: Option<String>,
     async_runtime: Arc<Runtime>,
 }
 
-impl LeaderDiscoveryNatsServiceWrapper {
-    pub fn new(leader_addr: Option<String>, async_runtime: Arc<Runtime>) -> Self {
-        let service = LeaderDiscoveryNatsService {
-            leader_addr: Arc::new(RwLock::new(leader_addr.clone())),
+impl MasterDiscoveryNatsServiceWrapper {
+    pub fn new(master_addr: Option<String>, async_runtime: Arc<Runtime>) -> Self {
+        let service = MasterDiscoveryNatsService {
+            master_addr: Arc::new(RwLock::new(master_addr.clone())),
         };
         let _guard = async_runtime.enter();
         let instance = Self {
-            publisher: LeaderDiscoveryNatsServicePublisher::new(),
-            _responder: LeaderDiscoveryNatsServiceResponder::new(service),
-            leader_addr,
+            publisher: MasterDiscoveryNatsServicePublisher::new(),
+            _responder: MasterDiscoveryNatsServiceResponder::new(service),
+            master_addr,
             async_runtime,
         };
         instance
     }
 
-    pub fn get_leader_addr(&self) -> String {
-        if let Some(addr) = &self.leader_addr {
-            addr.clone()
+    pub fn get_master_addr(&self) -> String {
+        if let Some(master_addr) = self.master_addr.as_ref() {
+            master_addr.clone()
         } else {
-            let addr: Result<String, _> = retry(Fixed::from_millis(1000), || {
+            let master_addr: Result<String, _> = retry(Fixed::from_millis(1000), || {
                 self.async_runtime
-                    .block_on(self.publisher.publish_get_leader_addr(&(), Some(0)))
+                    .block_on(self.publisher.publish_get_master_addr(&(), Some(0)))
             });
-            addr.expect("failed to leader addr")
+            master_addr.expect("failed to get master addr")
         }
     }
 }

@@ -33,3 +33,19 @@ build_test_image:
 
 build_dev_image:
 	docker build --build-arg USE_CUDA=1 --no-cache -f docker/dev/Dockerfile -t persiaml/persia-cuda-runtime:dev .
+
+build_cuda_runtime_image:
+	docker build --build-arg DEVICE=cuda --no-cache -f docker/release/Dockerfile.multistage \
+	-t "persiaml/persia-cuda-runtime" --target runtime .
+
+build_cuda_runtime_image_with_bagua:
+	docker build --build-arg DEVICE=cuda --no-cache -f docker/release/Dockerfile.multistage \
+	-t "persiaml/persia-cuda-runtime:bagua" --target bagua .
+
+build_inference_runtime_image:
+	docker build --build-arg DEVICE=cuda --no-cache -f docker/release/Dockerfile.multistage \
+	-t "persiaml/persia-inference-runtime" --target inference-runtime.
+
+build_cpu_runtime_image:
+	docker build --build-arg DEVICE=cpu --build-arg BASE_IMAGE="ubuntu:20.04" --no-cache -f docker/release/Dockerfile.multistage \
+	-t "persiaml/persia-cpu-runtime" --target runtime .
