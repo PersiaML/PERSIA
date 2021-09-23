@@ -6,58 +6,62 @@ use crate::{PersiaCommonContext, PersiaError};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use persia_libs::{
-    async_lock::RwLock, flume, once_cell::sync::OnceCell, thiserror, tokio, tracing,
-};
+use persia_libs::{async_lock::RwLock, once_cell::sync::OnceCell, tracing};
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
-use persia_common::{EmbeddingTensor, PersiaBatchData, SparseBatchRemoteReference};
+use persia_common::{EmbeddingTensor, SparseBatchRemoteReference};
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
 };
 use persia_embedding_server::middleware_service::MiddlewareNatsServicePublisher;
-use persia_nats_client::{NatsClient, NatsError};
-use persia_speedy::{Readable, Writable};
 
-#[derive(thiserror::Error, Debug, Readable, Writable)]
-pub enum LeaderDiscoveryError {
-    #[error("addr not set error")]
-    AddrNotSet,
-}
+pub mod leader_discovery_service {
+    use persia_embedding_config::PersiaReplicaInfo;
+    use persia_libs::{async_lock::RwLock, thiserror, tokio, tracing};
+    use persia_nats_client::{NatsClient, NatsError};
+    use persia_speedy::{Readable, Writable};
+    use std::sync::Arc;
 
-#[derive(Clone)]
-pub struct LeaderDiscoveryNatsService {
-    pub leader_addr: Arc<RwLock<Option<String>>>,
-}
+    #[derive(thiserror::Error, Debug, Readable, Writable)]
+    pub enum Error {
+        #[error("addr not set error")]
+        AddrNotSet,
+    }
 
-#[persia_nats_marcos::service]
-impl LeaderDiscoveryNatsService {
-    pub async fn get_leader_addr(&self, _placeholder: ()) -> Result<String, LeaderDiscoveryError> {
-        self.leader_addr
-            .read()
-            .await
-            .clone()
-            .ok_or_else(|| LeaderDiscoveryError::AddrNotSet)
+    #[derive(Clone)]
+    pub struct Service {
+        pub leader_addr: Arc<RwLock<Option<String>>>,
+    }
+
+    #[persia_nats_marcos::service]
+    impl Service {
+        pub async fn get_leader_addr(&self, _placeholder: ()) -> Result<String, Error> {
+            self.leader_addr
+                .read()
+                .await
+                .clone()
+                .ok_or_else(|| Error::AddrNotSet)
+        }
     }
 }
 
 pub struct LeaderDiscoveryNatsServiceWrapper {
-    publisher: LeaderDiscoveryNatsServicePublisher,
-    _responder: LeaderDiscoveryNatsServiceResponder,
+    publisher: leader_discovery_service::ServicePublisher,
+    _responder: leader_discovery_service::ServiceResponder,
     leader_addr: Option<String>,
 }
 
 impl LeaderDiscoveryNatsServiceWrapper {
     pub fn new(leader_addr: Option<String>) -> Self {
-        let service = LeaderDiscoveryNatsService {
+        let service = leader_discovery_service::Service {
             leader_addr: Arc::new(RwLock::new(leader_addr.clone())),
         };
         let instance = Self {
-            publisher: LeaderDiscoveryNatsServicePublisher::new(),
-            _responder: LeaderDiscoveryNatsServiceResponder::new(service),
+            publisher: leader_discovery_service::ServicePublisher::new(),
+            _responder: leader_discovery_service::ServiceResponder::new(service),
             leader_addr,
         };
         instance
@@ -76,37 +80,46 @@ impl LeaderDiscoveryNatsServiceWrapper {
     }
 }
 
-#[derive(thiserror::Error, Debug, Readable, Writable)]
-pub enum PersiaBatchFlowError {
-    #[error("trainer buffer full error")]
-    TrainerBufferFullError,
-}
+pub mod persia_batch_flow_service {
+    use persia_common::PersiaBatchData;
+    use persia_embedding_config::PersiaReplicaInfo;
+    use persia_libs::{flume, thiserror, tokio, tracing};
 
-#[derive(Clone)]
-pub struct PersiaBatchFlowNatsService {
-    pub output_channel: flume::Sender<PersiaBatchData>,
-    pub world_size: usize,
-}
+    use persia_nats_client::{NatsClient, NatsError};
+    use persia_speedy::{Readable, Writable};
 
-#[persia_nats_marcos::service]
-impl PersiaBatchFlowNatsService {
-    pub async fn batch(&self, batch: PersiaBatchData) -> Result<(), PersiaBatchFlowError> {
-        let result = self
-            .output_channel
-            .send_timeout(batch, std::time::Duration::from_millis(500));
-        if !result.is_ok() {
-            Err(PersiaBatchFlowError::TrainerBufferFullError)
-        } else {
-            Ok(())
+    #[derive(thiserror::Error, Debug, Readable, Writable)]
+    pub enum Error {
+        #[error("trainer buffer full error")]
+        TrainerBufferFullError,
+    }
+
+    #[derive(Clone)]
+    pub struct Service {
+        pub output_channel: flume::Sender<PersiaBatchData>,
+        pub world_size: usize,
+    }
+
+    #[persia_nats_marcos::service]
+    impl Service {
+        pub async fn batch(&self, batch: PersiaBatchData) -> Result<(), Error> {
+            let result = self
+                .output_channel
+                .send_timeout(batch, std::time::Duration::from_millis(500));
+            if !result.is_ok() {
+                Err(Error::TrainerBufferFullError)
+            } else {
+                Ok(())
+            }
+        }
+
+        pub async fn get_world_size(&self, _placeholder: ()) -> usize {
+            self.world_size
         }
     }
-
-    pub async fn get_world_size(&self, _placeholder: ()) -> usize {
-        self.world_size
-    }
 }
 
-static RESPONDER: OnceCell<Arc<PersiaBatchFlowNatsServiceResponder>> = OnceCell::new();
+static RESPONDER: OnceCell<Arc<persia_batch_flow_service::ServiceResponder>> = OnceCell::new();
 
 pub struct PersiaBatchFlowNatsServicePublisherWrapper {
     to_middleware: MiddlewareNatsServicePublisher,
@@ -114,13 +127,13 @@ pub struct PersiaBatchFlowNatsServicePublisherWrapper {
     cur_middleware_id: AtomicUsize,
     cur_batch_id: AtomicUsize,
     replica_info: Arc<PersiaReplicaInfo>,
-    to_trainer: PersiaBatchFlowNatsServicePublisher,
+    to_trainer: persia_batch_flow_service::ServicePublisher,
     world_size: usize,
 }
 
 impl PersiaBatchFlowNatsServicePublisherWrapper {
     pub async fn new(world_size: Option<usize>) -> Result<Self, PersiaError> {
-        let to_trainer = PersiaBatchFlowNatsServicePublisher::new();
+        let to_trainer = persia_batch_flow_service::ServicePublisher::new();
 
         let world_size = match world_size {
             Some(w) => Ok(w),
@@ -261,12 +274,14 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
 pub fn init_responder(world_size: usize, channel: &PyPersiaBatchDataSender) -> PyResult<()> {
     let common_context = PersiaCommonContext::get();
     RESPONDER.get_or_init(|| {
-        let nats_service = PersiaBatchFlowNatsService {
+        let nats_service = persia_batch_flow_service::Service {
             output_channel: channel.inner.clone(),
             world_size,
         };
         let _guard = common_context.async_runtime.enter();
-        Arc::new(PersiaBatchFlowNatsServiceResponder::new(nats_service))
+        Arc::new(persia_batch_flow_service::ServiceResponder::new(
+            nats_service,
+        ))
     });
 
     Ok(())

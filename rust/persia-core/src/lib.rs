@@ -83,9 +83,9 @@ pub enum PersiaError {
     #[error("storage visit error {0}")]
     StorageVisitError(String),
     #[error("leader discovery error: {0}")]
-    LeaderDiscoveryError(#[from] nats::LeaderDiscoveryError),
+    LeaderDiscoveryError(#[from] nats::leader_discovery_service::Error),
     #[error("batch flow error: {0}")]
-    PersiaBatchFlowError(#[from] nats::PersiaBatchFlowError),
+    PersiaBatchFlowError(#[from] nats::persia_batch_flow_service::Error),
 }
 
 impl PersiaError {
