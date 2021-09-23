@@ -4,7 +4,7 @@ use std::ops::Add;
 use std::sync::Arc;
 
 use hyper::{self, Body, Request, Response};
-use persia_libs::{thiserror, tokio, tracing};
+use persia_libs::{thiserror, tokio, tracing, url};
 
 #[derive(thiserror::Error, Debug)]
 pub enum PersiaMessageQueueError {

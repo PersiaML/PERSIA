@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use persia_libs::{
-    anyhow::Result, color_eyre, hashbrown::HashMap, rand, tracing, tracing_subscriber,
+    anyhow::Result, color_eyre, hashbrown::HashMap, hyper, rand, tracing, tracing_subscriber,
 };
 
 use structopt::StructOpt;

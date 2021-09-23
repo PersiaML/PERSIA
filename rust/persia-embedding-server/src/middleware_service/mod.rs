@@ -11,8 +11,9 @@ use persia_libs::{
     async_lock::RwLock,
     bytes, futures,
     hashbrown::HashMap,
+    hyper,
     itertools::Itertools,
-    ndarray, once_cell,
+    lz4, ndarray, once_cell,
     retry::{delay::Fixed, retry},
     smol::block_on,
     thiserror, tokio, tracing,
@@ -1249,7 +1250,7 @@ pub struct MiddlewareServer {
         Arc<persia_libs::async_lock::RwLock<Option<tokio::sync::oneshot::Sender<()>>>>,
 }
 
-#[persia_rpc::service]
+#[persia_rpc_macro::service]
 impl MiddlewareServer {
     pub async fn ready_for_serving(&self, _req: ()) -> bool {
         self.inner.ready_for_serving().await

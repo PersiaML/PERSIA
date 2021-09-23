@@ -16,4 +16,6 @@ members = [
   "others/persia-common-benchmark",
   "others/persia-nats-client",
   "others/persia-nats-marcos",
+  "others/persia-rpc",
+  "others/persia-rpc-macro"
 ]

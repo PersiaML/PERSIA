@@ -5,7 +5,7 @@ extern crate shadow_rs;
 
 use std::{path::PathBuf, sync::Arc};
 
-use persia_libs::{anyhow::Result, color_eyre, tracing, tracing_subscriber};
+use persia_libs::{anyhow::Result, color_eyre, hyper, tracing, tracing_subscriber};
 use structopt::StructOpt;
 
 use persia_embedding_config::{
