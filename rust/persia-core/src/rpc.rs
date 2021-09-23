@@ -4,8 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use persia_libs::{
-    anyhow::Result, futures, hashbrown::HashMap, itertools::Itertools, parking_lot::RwLock, rand,
-    tracing,
+    anyhow::Result, futures, hashbrown::HashMap, parking_lot::RwLock, rand, tracing,
 };
 
 use persia_embedding_server::middleware_service::MiddlewareServerClient;
