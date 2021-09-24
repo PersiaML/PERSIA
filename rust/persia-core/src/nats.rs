@@ -36,7 +36,6 @@ pub mod master_discovery_service {
         pub master_addr: Arc<RwLock<Option<String>>>,
     }
 
-
     #[persia_nats_marcos::service]
     impl Service {
         pub async fn get_master_addr(&self, _placeholder: ()) -> Result<String, Error> {
@@ -81,7 +80,6 @@ impl MasterDiscoveryNatsServiceWrapper {
         }
     }
 }
-
 
 pub mod persia_dataflow_service {
     use persia_common::PersiaBatchData;

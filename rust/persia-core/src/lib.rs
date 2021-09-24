@@ -205,9 +205,7 @@ impl PyPersiaCommonContext {
         if replica_info.is_master() && master_addr.is_none() {
             return Err(PersiaError::MasterServiceEmpty.to_py_runtime_err());
         }
-        let instance = nats::MasterDiscoveryNatsServiceWrapper::new(
-            master_addr,
-        );
+        let instance = nats::MasterDiscoveryNatsServiceWrapper::new(master_addr);
         let mut master_discovery_service = self.inner.master_discovery_service.write();
         *master_discovery_service = Some(instance);
         Ok(())
@@ -216,17 +214,17 @@ impl PyPersiaCommonContext {
     #[getter]
     pub fn master_addr(&self) -> PyResult<String> {
         self.inner
-        .async_runtime
-        .block_on(
-            self.inner
-                .master_discovery_service
-                .read()
-                .as_ref()
-                .ok_or_else(|| PersiaError::MasterDiscoveryServiceNotInitializedError)
-                .map_err(|e| e.to_py_runtime_err())?
-                .get_master_addr(),
-        )
-        .map_err(|e| e.to_py_runtime_err())
+            .async_runtime
+            .block_on(
+                self.inner
+                    .master_discovery_service
+                    .read()
+                    .as_ref()
+                    .ok_or_else(|| PersiaError::MasterDiscoveryServiceNotInitializedError)
+                    .map_err(|e| e.to_py_runtime_err())?
+                    .get_master_addr(),
+            )
+            .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn init_rpc_client_with_addr(&self, middleware_addr: String) -> PyResult<()> {
