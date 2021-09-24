@@ -563,8 +563,7 @@ class TrainCtx(EmbeddingCtx):
             backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
             grad_tensor_cache_size(int, optional): Number of reference cache , hold the gradient tensor reference to avoid
                 meet dangle data in gradient backward phase.
-            distributed_option ()
-            torch_distributed_port(int, optional): tcp Port when init torch distributed process group.
+            distributed_option (DistributedBaseOption, optional): DistributedOption to converted model to dataparallel model.
         """
         super(TrainCtx, self).__init__(PreprocessMode.TRAIN, *args, **kwargs)
 
