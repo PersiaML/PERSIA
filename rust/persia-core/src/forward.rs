@@ -493,7 +493,7 @@ impl Forward {
                                 err,
                                 middleware_addr
                             );
-                            rpc_client.wait_for_serving().unwrap();
+                            rpc_client.wait_for_serving().await.unwrap();
                             continue;
                         }
                         let embedding_batch = embeddings_rpc_result.unwrap();
@@ -527,7 +527,7 @@ impl Forward {
                             }
                             Err(MiddlewareServerError::EmbeddingServerError(_))
                             | Err(MiddlewareServerError::RpcError(_)) => {
-                                match rpc_client.wait_for_serving() {
+                                match rpc_client.wait_for_serving().await {
                                     Ok(_) => {
                                         tracing::debug!("wait for serving success");
                                     }

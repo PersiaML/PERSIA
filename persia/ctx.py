@@ -8,6 +8,8 @@ from typing import List, Tuple, Optional, NewType, Union
 
 import torch
 
+from retrying import retry
+
 import persia.env as env
 
 from persia.logger import get_default_logger
@@ -120,6 +122,7 @@ class DataCtx(BaseCtx):
         >>>         ctx.send_data(batch_data)
     """
 
+    @retry(wait_fixed=2000)
     def __init__(
         self,
         *args,
@@ -130,15 +133,32 @@ class DataCtx(BaseCtx):
         self.common_context.init_nats_publisher(None)
         self.common_context.wait_servers_ready()
 
-    def send_data(self, data: PyPersiaBatchData, blocking: bool = True):
+    @retry(wait_fixed=2000)
+    def send_sparse_to_middleware(self, data: PyPersiaBatchData):
+        """Send PersiaBatchData from data compose to middleware side.
+
+        Arguments:
+            data (PyPersiaBatchData): PersiaBatchData that haven't been process.
+        """
+        self.common_context.send_sparse_to_middleware(data)
+
+    @retry(wait_fixed=2000)
+    def send_dense_to_trainer(self, data: PyPersiaBatchData):
+        """Send PersiaBatchData from data compose to trainer side.
+
+        Arguments:
+            data (PyPersiaBatchData): PersiaBatchData that have been sent to middleware.
+        """
+        self.common_context.send_dense_to_trainer(data)
+
+    def send_data(self, data: PyPersiaBatchData):
         """Send PersiaBatchData from data compose to trainer and middleware side.
 
         Arguments:
             data (PyPersiaBatchData): PersiaBatchData that haven't been process.
-            blocking (bool, optional): Wait util the data send successfully.
         """
-        self.common_context.send_sparse_to_middleware(data, blocking)
-        self.common_context.send_dense_to_trainer(data, blocking)
+        self.send_sparse_to_middleware(data)
+        self.send_dense_to_trainer(data)
 
 
 class EmbeddingConfig:
@@ -208,13 +228,24 @@ class EmbeddingCtx(BaseCtx):
 
     def _enter(self):
         if self.embedding_config is not None:
-            self.common_context.configure_embedding_servers(
-                self.embedding_config.emb_initialization[0],
-                self.embedding_config.emb_initialization[1],
-                self.embedding_config.admit_probability,
-                self.embedding_config.weight_bound > 0,
-                self.embedding_config.weight_bound,
-            )
+            self.configure_embedding_servers(self.embedding_config)
+
+    @retry(wait_fixed=2000)
+    def configure_embedding_servers(
+        self,
+        embedding_config: EmbeddingConfig,
+    ):
+        """Apply Embedding config to embedding servers.
+        Arguments:
+            embedding_config (EmbeddingConfig): The configuration about embedding that will be sent to the embedding server.
+        """
+        self.common_context.configure_embedding_servers(
+            embedding_config.emb_initialization[0],
+            embedding_config.emb_initialization[1],
+            embedding_config.admit_probability,
+            embedding_config.weight_bound > 0,
+            embedding_config.weight_bound,
+        )
 
     def forward(
         self, batch: PythonTrainBatch
@@ -479,7 +510,7 @@ class EmbeddingCtx(BaseCtx):
 
     def wait_for_load_embedding(self):
         """Wait for the embedding load process."""
-        self.common_context.wait_for_serving()
+        self.common_context.wait_for_emb_loading()
 
     def get_embedding_size(self) -> List[int]:
         """Get number of ids on all embedding servers."""
@@ -489,6 +520,7 @@ class EmbeddingCtx(BaseCtx):
         """Clear all embeddings on all embedding servers."""
         self.common_context.clear_embeddings()
 
+    @retry(wait_fixed=2000)
     def get_embedding_from_data(
         self, data: PyPersiaBatchData, device_id: int = 0
     ) -> PythonTrainBatch:
@@ -503,6 +535,7 @@ class EmbeddingCtx(BaseCtx):
         """
         return self.common_context.get_embedding_from_data(data, device_id)
 
+    @retry(wait_fixed=2000)
     def get_embedding_from_bytes(
         self, data: bytes, device_id: int = 0
     ) -> PythonTrainBatch:
@@ -610,8 +643,7 @@ class TrainCtx(EmbeddingCtx):
         self.dense_optimizer = dense_optimizer
         self.sparse_optimizer = sparse_optimizer
 
-        self.common_context.init_nats_publisher(world_size)
-        self.common_context.wait_servers_ready()
+        self.wait_servers_ready()
 
         self.device_id = device_id
 
@@ -635,6 +667,25 @@ class TrainCtx(EmbeddingCtx):
         super()._exit()
 
         self.backward_engine.shutdown()
+
+    @retry(wait_fixed=2000)
+    def get_leader_addr(self):
+        """Get leader(rank 0) ip address."""
+        if self.rank_id == 0:
+            ip = socket.gethostbyname(socket.gethostname())
+            leader_addr = f"tcp://{ip}:{self.torch_distributed_port}"
+            self.common_context.init_leader_discovery_service(leader_addr)
+        else:
+            self.common_context.init_leader_discovery_service(None)
+            leader_addr = self.common_context.get_leader_addr()
+        return leader_addr
+
+    @retry(wait_fixed=2000)
+    def wait_servers_ready(self):
+        """query embedding server to check if servers are ready"""
+
+        self.common_context.init_nats_publisher(self.world_size)
+        self.common_context.wait_servers_ready()
 
     def backward(
         self, loss: torch.Tensor, embedding_gradient_check_frequency: int = 20

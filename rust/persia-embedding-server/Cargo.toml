@@ -8,9 +8,6 @@ version = "0.1.0"
 [dependencies]
 crossbeam = "0.8"
 farmhash = "1"
-hyper = "0.14.2"
-hyperloglogplus = "0.4"
-lz4 = "1.23"
 persia-common = {path = "../persia-common", default-features = false}
 persia-embedding-config = {path = "../persia-embedding-config"}
 persia-embedding-holder = {path = "../persia-embedding-holder"}
@@ -22,13 +19,14 @@ persia-metrics = {path = "../persia-metrics"}
 persia-model-manager = {path = "../persia-model-manager"}
 persia-nats-client = {path = "../others/persia-nats-client"}
 persia-nats-marcos = {path = "../others/persia-nats-marcos"}
-persia-rpc = "0.6"
+persia-rpc = {path = "../others/persia-rpc"}
+persia-rpc-macro = {path = "../others/persia-rpc-macro"}
 persia-speedy = "0.9"
 persia-simd = {path = "../persia-simd"}
 shadow-rs = "0.7"
 snafu = "0.6"
 structopt = "0.3"
-tokio = {version = "1.11", features = ["full"]}
+tokio = {version = "1.12", features = ["full"]}
 tracing = "0.1"
 
 [dev-dependencies]
