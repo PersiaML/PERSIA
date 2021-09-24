@@ -22,7 +22,7 @@ ndarray = {version = "0.14", features = ["serde"]}
 ndarray-rand = "0.13"
 numpy = "0.13"
 once_cell = "1.3"
-parking_lot = "0.11"
+parking_lot = {version = "0.11", features = ["deadlock_detection"]}
 rand = {version = "0.8", features = ["small_rng"]}
 rayon = "1.5.1"
 retry = "1.2.1"

@@ -5,7 +5,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use persia_libs::{
-    anyhow::Result, color_eyre, hashbrown::HashMap, hyper, rand, tracing, tracing_subscriber,
+    anyhow::Result, color_eyre, hashbrown::HashMap, hyper, parking_lot, rand, tracing,
+    tracing_subscriber,
 };
 
 use structopt::StructOpt;
@@ -126,6 +127,26 @@ async fn main() -> Result<()> {
     } else {
         tracing::info!("middleware exited successfully");
     }
+
+    std::thread::spawn(move || {
+        tracing::info!("deadlock detection thread started");
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(60));
+            let deadlocks = parking_lot::deadlock::check_deadlock();
+            if deadlocks.is_empty() {
+                continue;
+            }
+
+            tracing::error!("{} deadlocks detected", deadlocks.len());
+            for (i, threads) in deadlocks.iter().enumerate() {
+                tracing::error!("Deadlock #{}", i);
+                for t in threads {
+                    tracing::error!("Thread Id {:#?}", t.thread_id());
+                    tracing::error!("{:#?}", t.backtrace());
+                }
+            }
+        }
+    });
 
     Ok(())
 }

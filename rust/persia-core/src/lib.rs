@@ -29,6 +29,7 @@ use persia_libs::{
     anyhow::Result,
     color_eyre,
     once_cell::sync::OnceCell,
+    parking_lot,
     parking_lot::RwLock,
     thiserror,
     tokio::{self, runtime::Runtime},
@@ -451,6 +452,26 @@ fn persia_core(py: Python, m: &PyModule) -> PyResult<()> {
     eprintln!("build_os: {}", build::BUILD_OS);
     eprintln!("rust_version: {}", build::RUST_VERSION);
     eprintln!("build_time: {}", build::BUILD_TIME);
+
+    std::thread::spawn(move || {
+        tracing::info!("deadlock detection thread started");
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(60));
+            let deadlocks = parking_lot::deadlock::check_deadlock();
+            if deadlocks.is_empty() {
+                continue;
+            }
+
+            tracing::error!("{} deadlocks detected", deadlocks.len());
+            for (i, threads) in deadlocks.iter().enumerate() {
+                tracing::error!("Deadlock #{}", i);
+                for t in threads {
+                    tracing::error!("Thread Id {:#?}", t.thread_id());
+                    tracing::error!("{:#?}", t.backtrace());
+                }
+            }
+        }
+    });
 
     Ok(())
 }

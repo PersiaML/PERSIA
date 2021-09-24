@@ -5,7 +5,7 @@ extern crate shadow_rs;
 
 use std::{path::PathBuf, sync::Arc};
 
-use persia_libs::{anyhow::Result, color_eyre, hyper, tracing, tracing_subscriber};
+use persia_libs::{anyhow::Result, color_eyre, hyper, parking_lot, tracing, tracing_subscriber};
 use structopt::StructOpt;
 
 use persia_embedding_config::{
@@ -124,5 +124,26 @@ async fn main() -> Result<()> {
     } else {
         tracing::info!("embedding server exited successfully");
     }
+
+    std::thread::spawn(move || {
+        tracing::info!("deadlock detection thread started");
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(60));
+            let deadlocks = parking_lot::deadlock::check_deadlock();
+            if deadlocks.is_empty() {
+                continue;
+            }
+
+            tracing::error!("{} deadlocks detected", deadlocks.len());
+            for (i, threads) in deadlocks.iter().enumerate() {
+                tracing::error!("Deadlock #{}", i);
+                for t in threads {
+                    tracing::error!("Thread Id {:#?}", t.thread_id());
+                    tracing::error!("{:#?}", t.backtrace());
+                }
+            }
+        }
+    });
+
     Ok(())
 }
