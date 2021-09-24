@@ -213,7 +213,7 @@ impl PyPersiaCommonContext {
         Ok(())
     }
 
-    #[getter] 
+    #[getter]
     pub fn master_addr(&self) -> PyResult<String> {
         self.inner
         .async_runtime
