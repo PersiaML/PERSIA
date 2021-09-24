@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
-use persia_libs::{hashbrown::HashMap, parking_lot::RwLock};
+use persia_libs::{hashbrown::HashMap, ndarray, parking_lot::RwLock};
 
 use persia_embedding_config::EmbeddingConfig;
-use persia_simd::{adam_avx2, decayed_adagrad_avx2, decayed_sgd_avx2};
+use persia_simd::{
+    adam_avx2, add_assign_avx2, decayed_adagrad_avx2, decayed_adagrad_vectorwise_shared_avx2,
+    decayed_sgd_avx2,
+};
 use persia_speedy::{Readable, Writable};
 
 #[derive(Readable, Writable, Debug, Clone)]
@@ -34,6 +37,7 @@ pub struct AdagradConfig {
     pub g_square_momentum: f32,
     pub initialization: f32,
     pub eps: f32,
+    pub vectorwise_shared: bool,
 }
 
 pub enum Optimizer {
@@ -233,7 +237,10 @@ pub struct Adagrad {
 impl Optimizable for Adagrad {
     #[inline]
     fn require_space(&self, dim: usize) -> usize {
-        dim
+        match self.config.vectorwise_shared {
+            true => 1,
+            false => dim,
+        }
     }
 
     #[inline]
@@ -245,15 +252,36 @@ impl Optimizable for Adagrad {
         _batch_level_status: &Option<Vec<f32>>,
     ) {
         let (emb, adagrad_state) = emb_entry.split_at_mut(dim);
-        unsafe {
-            decayed_adagrad_avx2(
-                adagrad_state,
-                emb,
-                grad,
-                self.config.g_square_momentum,
-                self.config.lr,
-                self.config.eps,
-            )
+        if self.config.vectorwise_shared {
+            let adagrad_state = adagrad_state.first_mut().expect("adagrad state is empty");
+            unsafe {
+                decayed_adagrad_vectorwise_shared_avx2(
+                    *adagrad_state,
+                    emb,
+                    grad,
+                    self.config.lr,
+                    self.config.eps,
+                )
+            }
+
+            let mut gradients = ndarray::Array1::<f32>::zeros(dim);
+            unsafe {
+                add_assign_avx2(gradients.as_slice_mut().unwrap(), grad);
+            }
+
+            let gradient_squares = gradients.dot(&gradients) / gradients.len() as f32;
+            *adagrad_state = *adagrad_state * self.config.g_square_momentum + gradient_squares;
+        } else {
+            unsafe {
+                decayed_adagrad_avx2(
+                    adagrad_state,
+                    emb,
+                    grad,
+                    self.config.g_square_momentum,
+                    self.config.lr,
+                    self.config.eps,
+                )
+            }
         }
     }
 
