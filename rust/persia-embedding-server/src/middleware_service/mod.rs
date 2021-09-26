@@ -9,12 +9,12 @@ use std::time::{Duration, Instant, SystemTime};
 
 use persia_libs::{
     async_lock::RwLock,
+    backoff::{future::retry, ExponentialBackoff},
     bytes, futures,
     hashbrown::HashMap,
     hyper,
     itertools::Itertools,
     lz4, ndarray, once_cell,
-    retry::{delay::Fixed, retry},
     smol::block_on,
     thiserror, tokio, tracing,
 };
@@ -120,13 +120,11 @@ pub struct AllEmbeddingServerClient {
 }
 
 impl AllEmbeddingServerClient {
-    pub fn with_nats(nats_publisher: EmbeddingServerNatsServicePublisher) -> Self {
+    pub async fn with_nats(nats_publisher: EmbeddingServerNatsServicePublisher) -> Self {
         tracing::info!("trying to get replica info of embedding servers");
         let dst_replica_info: Result<PersiaReplicaInfo, _> =
-            retry(Fixed::from_millis(5000), || {
-                let resp = block_on(AllEmbeddingServerClient::get_dst_replica_info(
-                    &nats_publisher,
-                ));
+            retry(ExponentialBackoff::default(), || async {
+                let resp = AllEmbeddingServerClient::get_dst_replica_info(&nats_publisher).await;
                 if resp.is_err() {
                     tracing::warn!(
                         "failed to get replica info of embedding servers, due to {:?}, retrying",
@@ -138,8 +136,10 @@ impl AllEmbeddingServerClient {
                         resp
                     );
                 }
-                resp
-            });
+                Ok(resp?)
+            })
+            .await;
+
         let dst_replica_info =
             dst_replica_info.expect("failed to get replica info of embedding server");
 
@@ -151,16 +151,18 @@ impl AllEmbeddingServerClient {
 
         let servers = instance
             .get_all_addresses()
+            .await
             .expect("failed to get ips of servers");
 
         instance
             .update_rpc_clients(servers)
+            .await
             .expect("failed to init rpc client for embedding server");
 
         instance
     }
 
-    pub fn with_addrs(servers: Vec<String>) -> Self {
+    pub async fn with_addrs(servers: Vec<String>) -> Self {
         tracing::info!(
             "AllEmbeddingServerClient::with_addrs, servers are {:?}",
             servers
@@ -173,13 +175,14 @@ impl AllEmbeddingServerClient {
 
         instance
             .update_rpc_clients(servers)
+            .await
             .expect("failed to init rpc client for embedding server");
 
         instance
     }
 
     pub async fn ready_for_serving(&self) -> bool {
-        let clients = block_on(self.clients.read());
+        let clients = self.clients.read().await;
         let futs = clients.iter().map(|client| async move {
             let resp = client.ready_for_serving(&()).await;
             if let Ok(x) = resp {
@@ -194,7 +197,7 @@ impl AllEmbeddingServerClient {
     }
 
     pub async fn model_manager_status(&self) -> Vec<PersiaPersistenceStatus> {
-        let clients = block_on(self.clients.read());
+        let clients = self.clients.read().await;
         let futs = clients
             .iter()
             .map(|client| async move { client.model_manager_status(&()).await });
@@ -235,39 +238,38 @@ impl AllEmbeddingServerClient {
         Ok(addr)
     }
 
-    pub fn get_all_addresses(&self) -> Result<Vec<String>, MiddlewareServerError> {
-        let servers: Vec<_> = (0..self.dst_replica_size)
-            .map(|replica_index| {
-                tracing::info!("trying to get ip address of server {}", replica_index);
-                retry(Fixed::from_millis(1000), || {
-                    let addr = block_on(self.get_address(replica_index));
-                    if addr.is_err() {
-                        tracing::warn!(
-                            "failed to get address of server {}, due to {:?}, retrying",
-                            replica_index,
-                            addr
-                        );
-                    } else {
-                        tracing::info!(
-                            "succeed to get address of embedding server {}, {:?}",
-                            replica_index,
-                            addr
-                        );
-                    }
-                    addr
-                })
+    pub async fn get_all_addresses(&self) -> Result<Vec<String>, MiddlewareServerError> {
+        let futs = (0..self.dst_replica_size).map(|replica_index| async move {
+            tracing::info!("trying to get ip address of server {}", replica_index);
+            retry(ExponentialBackoff::default(), || async {
+                let addr = self.get_address(replica_index).await;
+                if addr.is_err() {
+                    tracing::warn!(
+                        "failed to get address of server {}, due to {:?}, retrying",
+                        replica_index,
+                        addr
+                    );
+                } else {
+                    tracing::info!(
+                        "succeed to get address of embedding server {}, {:?}",
+                        replica_index,
+                        addr
+                    );
+                }
+                Ok(addr?)
             })
-            .collect();
+            .await
+        });
 
-        if servers.iter().any(|x| x.is_err()) {
-            return Err(MiddlewareServerError::LookupIpAddressError);
-        }
-        let servers = servers.into_iter().map(|x| x.unwrap()).collect();
+        let servers: Vec<_> = futures::future::try_join_all(futs).await?;
         Ok(servers)
     }
 
-    pub fn update_rpc_clients(&self, servers: Vec<String>) -> Result<(), MiddlewareServerError> {
-        let mut clients = block_on(self.clients.write());
+    pub async fn update_rpc_clients(
+        &self,
+        servers: Vec<String>,
+    ) -> Result<(), MiddlewareServerError> {
+        let mut clients = self.clients.write().await;
         clients.clear();
 
         for server_addr in servers {
@@ -276,18 +278,15 @@ impl AllEmbeddingServerClient {
             clients.push(Arc::new(client));
         }
 
-        clients.sort_by_key(|c| {
-            let replica_index = retry(Fixed::from_millis(100), || block_on(c.replica_index(&())));
-            let replica_index = replica_index.expect("failed to call replica_index via rpc");
-            replica_index
-        });
-
         for (i, c) in clients.iter().enumerate() {
-            match block_on(c.replica_index(&())) {
+            tracing::info!("start to call replica_index");
+            match c.replica_index(&()).await {
                 Ok(idx) => {
                     if idx != i {
                         tracing::error!("replica index wrong");
                         return Err(MiddlewareServerError::ReplicaIdxNotMatchError);
+                    } else {
+                        tracing::info!("succeed to call replica_index");
                     }
                 }
                 Err(e) => {
@@ -1203,8 +1202,10 @@ impl MiddlewareServerInner {
     ) -> Result<(), MiddlewareServerError> {
         match err {
             MiddlewareServerError::RpcError(_) => {
-                let servers = self.all_embedding_server_client.get_all_addresses()?;
-                self.all_embedding_server_client.update_rpc_clients(servers)
+                let servers = self.all_embedding_server_client.get_all_addresses().await?;
+                self.all_embedding_server_client
+                    .update_rpc_clients(servers)
+                    .await
             }
             _ => Ok(()),
         }
@@ -1313,7 +1314,7 @@ impl MiddlewareServer {
     ) -> Result<EmbeddingBatch, MiddlewareServerError> {
         let resp = self.inner.forward_batch_id(req).await;
         if resp.is_err() {
-            self.inner.error_handle(resp.as_ref().unwrap_err()).await?
+            self.inner.error_handle(resp.as_ref().unwrap_err()).await?;
         }
         resp
     }
@@ -1331,7 +1332,7 @@ impl MiddlewareServer {
     ) -> Result<(), MiddlewareServerError> {
         let resp = self.inner.update_gradient_batched(req).await;
         if resp.is_err() {
-            self.inner.error_handle(resp.as_ref().unwrap_err()).await?
+            self.inner.error_handle(resp.as_ref().unwrap_err()).await?;
         }
         resp
     }

@@ -1,5 +1,6 @@
 pub use anyhow;
 pub use async_lock;
+pub use backoff;
 pub use bytes;
 pub use chrono;
 pub use color_eyre;

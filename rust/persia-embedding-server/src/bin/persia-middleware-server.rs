@@ -65,11 +65,11 @@ async fn main() -> Result<()> {
     let all_embedding_server_client = match &common_config.job_type {
         PerisaJobType::Infer => {
             let servers = common_config.infer_config.servers.clone();
-            AllEmbeddingServerClient::with_addrs(servers)
+            AllEmbeddingServerClient::with_addrs(servers).await
         }
         _ => {
             let nats_publisher = EmbeddingServerNatsServicePublisher::new();
-            AllEmbeddingServerClient::with_nats(nats_publisher)
+            AllEmbeddingServerClient::with_nats(nats_publisher).await
         }
     };
 
