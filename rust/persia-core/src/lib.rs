@@ -205,6 +205,8 @@ impl PyPersiaCommonContext {
         if replica_info.is_master() && master_addr.is_none() {
             return Err(PersiaError::MasterServiceEmpty.to_py_runtime_err());
         }
+        
+        let _guard = self.inner.async_runtime.enter();
         let instance = nats::MasterDiscoveryNatsServiceWrapper::new(
             master_addr,
         );

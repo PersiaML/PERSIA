@@ -46,7 +46,7 @@ RUN /opt/conda/bin/pip install --no-cache-dir \
     tqdm \
     retrying \
     pandas \
-    scikit-learn \
+    scikit-learn==0.24.2 \
     ipython && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get purge --auto-remove && \
@@ -96,7 +96,7 @@ RUN echo "install deploy image requirement, openjdk and torch serve"; \
     apt-get purge --auto-remove; \
     apt-get clean
 
-FROM runtime AS bagua
+FROM builder AS bagua-builder
 RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libhwloc-dev \
     software-properties-common \
     libssl-dev && \
@@ -107,11 +107,18 @@ RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-
 RUN git clone https://github.com/BaguaSys/bagua.git; \
     /opt/conda/bin/pip install setuptools-rust colorama tqdm wheel; \
     cd bagua; \
-    /opt/conda/bin/pip install . -v; \
-    cd ..; \
-    git clone https://github.com/BaguaSys/bagua-core.git;  \
-    cd bagua-core;  \
     git submodule update --init --recursive; \
-    pip3 install .; \
+    python setup.py bdist_wheel --dist-dir=/root/bagua-dist; \
     cd ..; \
-    rm -rf bagua bagua-core
+    rm -rf bagua
+
+FROM runtime AS bagua-runtime
+RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libhwloc-dev \
+    software-properties-common \
+    libssl-dev && \
+    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
+    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main' && \ 
+    apt remove --purge cmake -y && apt-get update && apt-get install -y --no-install-recommends cmake && mkdir /root/bagua-dist /root/bagua-core-dist
+
+COPY --from=bagua-builder /root/bagua-dist /root/bagua-dist
+RUN pip3 install /root/bagua-dist/*.whl && rm -rf /root/bagua-*

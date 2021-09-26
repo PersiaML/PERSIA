@@ -259,9 +259,7 @@ class EmbeddingCtx(BaseCtx):
         Returns:
             the tuple of output data and target data.
         """
-        assert (
-            self.model is not None
-        ), f"model not found, please init context with model"
+        assert self.model is not None, "model not found, please init context with model"
         dense, sparse, target = self.prepare_features(batch)
         output = self.model(dense, sparse)
         return (output, target)
@@ -401,9 +399,7 @@ class EmbeddingCtx(BaseCtx):
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
             with_jit_model (bool, optional): Dump jit script dense checkpoint or not.
         """
-        assert (
-            self.model is not None
-        ), f"model not found, please init context with model"
+        assert self.model is not None, "model not found, please init context with model"
 
         if with_jit_model:
             self.dump_dense(self.model, dst_dir, jit_dense_filename, True)
@@ -426,9 +422,7 @@ class EmbeddingCtx(BaseCtx):
             dense_filename (str, optional): Dense checkpoint filename.
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
         """
-        assert (
-            self.model is not None
-        ), f"model not found, please init context with model"
+        assert self.model is not None, "model not found, please init context with model"
 
         dense_model_filepath = os.path.join(src_dir, dense_filename)
         if os.path.exists(dense_model_filepath):
@@ -582,7 +576,7 @@ class TrainCtx(EmbeddingCtx):
         backward_buffer_size: int = 10,
         backward_workers_size: int = 8,
         grad_update_buffer_size: int = 60,
-        distributed_option: Optional[DistributedBaseOption]= None,
+        distributed_option: Optional[DistributedBaseOption] = None,
         *args,
         **kwargs,
     ):
@@ -609,7 +603,7 @@ class TrainCtx(EmbeddingCtx):
         assert grad_scalar_update_factor > 0, "grad scalar should greater than zero"
         assert (
             self.model is not None
-        ), f"Model not found, please init context with pytorch model"
+        ), "Model not found, please init context with pytorch model"
 
         torch.cuda.set_device(device_id)
 
@@ -617,23 +611,24 @@ class TrainCtx(EmbeddingCtx):
         assert world_size != -1, "WORLD_SIZE not set"
         rank_id = env.get_rank()
         assert rank_id != -1, "RANK not set"
-        
+
         if world_size > 1:
             distributed_option = distributed_option or get_default_distributed_option()
-            if not distributed_option.init_with_env_file() and not distributed_option.master_addr:
-                if rank_id == 0:
-                    master_addr = socket.gethostbyname(socket.gethostname())
-                    self.common_context.init_master_discovery_service(master_addr)
-                    _logger.info(f"init addr is {master_addr}")
-                else:
-                    self.common_context.init_master_discovery_service(None)
-                    master_addr = self.common_context.master_addr
-                    _logger.info(f"master addr is {master_addr}")
+            if (
+                not distributed_option.init_with_env_file()
+                and not distributed_option.master_addr
+            ):
+                master_addr = self.get_master_addr()
             else:
                 master_addr = None
 
-            model, dense_optimizer  = distributed_option.convert2distributed_model(
-                self.model, world_size, rank_id, device_id, master_addr=master_addr, optimizer=dense_optimizer
+            model, dense_optimizer = distributed_option.convert2distributed_model(
+                self.model,
+                world_size,
+                rank_id,
+                device_id,
+                master_addr=master_addr,
+                optimizer=dense_optimizer,
             )
             self.model = model
             _logger.info("Distributed training context init done.")
@@ -669,16 +664,17 @@ class TrainCtx(EmbeddingCtx):
         self.backward_engine.shutdown()
 
     @retry(wait_fixed=2000)
-    def get_leader_addr(self):
+    def get_master_addr(self):
         """Get leader(rank 0) ip address."""
         if self.rank_id == 0:
-            ip = socket.gethostbyname(socket.gethostname())
-            leader_addr = f"tcp://{ip}:{self.torch_distributed_port}"
-            self.common_context.init_leader_discovery_service(leader_addr)
+            master_addr = socket.gethostbyname(socket.gethostname())
+            self.common_context.init_master_discovery_service(master_addr)
+            _logger.info(f"init addr is {master_addr}")
         else:
-            self.common_context.init_leader_discovery_service(None)
-            leader_addr = self.common_context.get_leader_addr()
-        return leader_addr
+            self.common_context.init_master_discovery_service(None)
+            master_addr = self.common_context.master_addr
+            _logger.info(f"master addr is {master_addr}")
+        return master_addr
 
     @retry(wait_fixed=2000)
     def wait_servers_ready(self):

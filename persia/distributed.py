@@ -13,11 +13,11 @@ _logger = get_default_logger()
 class DistributedBaseOption(ABC):
     """Distributed option to converted torch model to dataparallel model."""
 
-    def __init__(self, master_port: int, master_addr: str = None) -> None:
+    def __init__(self, master_port: int, master_addr: Optional[str] = None) -> None:
         """
         Arguments:
             master_port (int): Master of collective communication ip address.
-            master_addr (str): Master of collective communication service port.
+            master_addr (str, optional): Master of collective communication service port.
         """
         self.master_addr = master_addr
         self.master_port = master_port
@@ -173,6 +173,7 @@ def _select_bagua_algorithm(
     """
     optimizer = None
 
+    # pytype: disable=import-error
     if algorithm == "gradient_allreduce":
         from bagua.torch_api.algorithms import gradient_allreduce
 
@@ -204,6 +205,7 @@ def _select_bagua_algorithm(
     else:
         _logger.error(f"Bagua algorithm not found, {algorithm} not implement.")
         raise NotImplementedError
+    # pytype: enable=import-error
 
     return algorithm, optimizer
 
@@ -244,7 +246,12 @@ class BaguaDistributedOption(DistributedBaseOption):
         """
 
         try:
-            from bagua.torch_api import init_process_group
+            # pytype: disable=import-error
+            from bagua.torch_api import (
+                init_process_group,
+            )
+
+            # pytype: enable=import-error
         except ImportError as e:
             _logger.error(
                 "Import Bagua Error, instasll Bagua before use BaguaOption, you should build the persia docker image with Bagua before task start."
