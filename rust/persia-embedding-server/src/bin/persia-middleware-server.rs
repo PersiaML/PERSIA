@@ -53,6 +53,26 @@ async fn main() -> Result<()> {
     eprintln!("build_time: {}", build::BUILD_TIME);
     let args: Cli = Cli::from_args();
 
+    std::thread::spawn(move || {
+        tracing::info!("deadlock detection thread started");
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(60));
+            let deadlocks = parking_lot::deadlock::check_deadlock();
+            if deadlocks.is_empty() {
+                continue;
+            }
+
+            tracing::error!("{} deadlocks detected", deadlocks.len());
+            for (i, threads) in deadlocks.iter().enumerate() {
+                tracing::error!("Deadlock #{}", i);
+                for t in threads {
+                    tracing::error!("Thread Id {:#?}", t.thread_id());
+                    tracing::error!("{:#?}", t.backtrace());
+                }
+            }
+        }
+    });
+
     PersiaGlobalConfig::set_configures(
         &args.global_config,
         args.port,
@@ -127,26 +147,6 @@ async fn main() -> Result<()> {
     } else {
         tracing::info!("middleware exited successfully");
     }
-
-    std::thread::spawn(move || {
-        tracing::info!("deadlock detection thread started");
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(60));
-            let deadlocks = parking_lot::deadlock::check_deadlock();
-            if deadlocks.is_empty() {
-                continue;
-            }
-
-            tracing::error!("{} deadlocks detected", deadlocks.len());
-            for (i, threads) in deadlocks.iter().enumerate() {
-                tracing::error!("Deadlock #{}", i);
-                for t in threads {
-                    tracing::error!("Thread Id {:#?}", t.thread_id());
-                    tracing::error!("{:#?}", t.backtrace());
-                }
-            }
-        }
-    });
 
     Ok(())
 }
