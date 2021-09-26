@@ -218,17 +218,17 @@ impl PyPersiaCommonContext {
     #[getter]
     pub fn master_addr(&self) -> PyResult<String> {
         self.inner
-        .async_runtime
-        .block_on(
-            self.inner
-                .master_discovery_service
-                .read()
-                .as_ref()
-                .ok_or_else(|| PersiaError::MasterDiscoveryServiceNotInitializedError)
-                .map_err(|e| e.to_py_runtime_err())?
-                .get_master_addr(),
-        )
-        .map_err(|e| e.to_py_runtime_err())
+            .async_runtime
+            .block_on(
+                self.inner
+                    .master_discovery_service
+                    .read()
+                    .as_ref()
+                    .ok_or_else(|| PersiaError::MasterDiscoveryServiceNotInitializedError)
+                    .map_err(|e| e.to_py_runtime_err())?
+                    .get_master_addr(),
+            )
+            .map_err(|e| e.to_py_runtime_err())
     }
 
     pub fn init_rpc_client_with_addr(&self, middleware_addr: String) -> PyResult<()> {
