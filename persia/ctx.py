@@ -122,14 +122,19 @@ class DataCtx(BaseCtx):
         >>>         ctx.send_data(batch_data)
     """
 
-    @retry(wait_fixed=2000)
     def __init__(
         self,
         *args,
         **kwargs,
     ):
         super(DataCtx, self).__init__(*args, **kwargs)
-        _logger.info("done")
+        self.prepare()
+        _logger.info("Data ctx prepare done.")
+
+    @retry(wait_fixed=2000)
+    def prepare(self):
+        """Do some preparation to init `DataCtx`."""
+
         self.common_context.init_nats_publisher(None)
         self.common_context.wait_servers_ready()
 
@@ -555,7 +560,7 @@ class TrainCtx(EmbeddingCtx):
         >>> dense_optimizer = torch.optim.SGD(lr=1e-3)
         >>> loss_fn = torch.nn.BCELoss(reduction="mean")
         >>> with TrainCtx(
-        >>>     model=model,
+        >>>     model=modela
         >>>     sparse_optimizer,
         >>>     dense_optimizer,
         >>>     mixed_precision=True
@@ -611,6 +616,9 @@ class TrainCtx(EmbeddingCtx):
         assert world_size != -1, "WORLD_SIZE not set"
         rank_id = env.get_rank()
         assert rank_id != -1, "RANK not set"
+
+        self.world_size = world_size
+        self.rank_id = rank_id
 
         if world_size > 1:
             distributed_option = distributed_option or get_default_distributed_option()

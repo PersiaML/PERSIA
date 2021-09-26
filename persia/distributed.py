@@ -67,16 +67,16 @@ _ddp_init_method_list = ["tcp", "file"]
 
 
 class DDPOption(DistributedBaseOption):
-    """Implementation of pytorch distributed dataparallel option"""
+    """Implementation of pytorch distributed dataparallel option."""
 
     def __init__(
         self, init_method: str = "tcp", backend: str = "nccl", **options
     ) -> None:
         """
         Arguments:
-            init_method (str): ...
-            backend (str): ...
-            options (dict): ...
+            init_method (str): Pytorch distributed init method, support tcp and file currently.
+            backend (str): Backend of collective communication. Currently support nccl.
+            options (dict): Options that include the master_port or master_addr.
         """
         super(DDPOption, self).__init__(
             options.pop("master_port", 23456), options.pop("master_addr", None)
@@ -216,8 +216,8 @@ class BaguaDistributedOption(DistributedBaseOption):
     def __init__(self, algorithm: str, **options) -> None:
         """
         Arguments:
-            algorithm (str): Name of bagua algorithm.
-            options (dict): Options for bagua algorithm
+            algorithm (str): Name of Bagua algorithm.
+            options (dict): Options for Bagua algorithm
         """
         super(BaguaDistributedOption, self).__init__(
             options.pop("master_port", 23456), options.pop("master_addr", None)
