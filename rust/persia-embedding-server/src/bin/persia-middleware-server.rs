@@ -5,12 +5,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use persia_libs::{
-    anyhow::Result, color_eyre, hashbrown::HashMap, hyper, parking_lot, rand, tracing,
+    anyhow::Result, color_eyre, hashbrown::HashMap, hyper, rand, tracing,
     tracing_subscriber,
 };
 
 use structopt::StructOpt;
 
+use persia_common::utils::start_deadlock_detection_thread;
 use persia_embedding_config::{
     EmbeddingConfig, PerisaJobType, PersiaCommonConfig, PersiaGlobalConfig, PersiaMiddlewareConfig,
 };
@@ -53,25 +54,7 @@ async fn main() -> Result<()> {
     eprintln!("build_time: {}", build::BUILD_TIME);
     let args: Cli = Cli::from_args();
 
-    std::thread::spawn(move || {
-        tracing::info!("deadlock detection thread started");
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(60));
-            let deadlocks = parking_lot::deadlock::check_deadlock();
-            if deadlocks.is_empty() {
-                continue;
-            }
-
-            tracing::error!("{} deadlocks detected", deadlocks.len());
-            for (i, threads) in deadlocks.iter().enumerate() {
-                tracing::error!("Deadlock #{}", i);
-                for t in threads {
-                    tracing::error!("Thread Id {:#?}", t.thread_id());
-                    tracing::error!("{:#?}", t.backtrace());
-                }
-            }
-        }
-    });
+    start_deadlock_detection_thread();
 
     PersiaGlobalConfig::set_configures(
         &args.global_config,

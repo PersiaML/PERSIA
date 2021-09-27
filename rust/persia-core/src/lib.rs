@@ -29,7 +29,6 @@ use persia_libs::{
     anyhow::Result,
     color_eyre,
     once_cell::sync::OnceCell,
-    parking_lot,
     parking_lot::RwLock,
     thiserror,
     tokio::{self, runtime::Runtime},
@@ -41,6 +40,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::wrap_pyfunction;
 
+use persia_common::utils::start_deadlock_detection_thread;
 use persia_common::PersiaBatchData;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaReplicaInfo};
 use persia_embedding_server::middleware_service::MiddlewareServerError;
@@ -453,25 +453,7 @@ fn persia_core(py: Python, m: &PyModule) -> PyResult<()> {
     eprintln!("rust_version: {}", build::RUST_VERSION);
     eprintln!("build_time: {}", build::BUILD_TIME);
 
-    std::thread::spawn(move || {
-        tracing::info!("deadlock detection thread started");
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(60));
-            let deadlocks = parking_lot::deadlock::check_deadlock();
-            if deadlocks.is_empty() {
-                continue;
-            }
-
-            tracing::error!("{} deadlocks detected", deadlocks.len());
-            for (i, threads) in deadlocks.iter().enumerate() {
-                tracing::error!("Deadlock #{}", i);
-                for t in threads {
-                    tracing::error!("Thread Id {:#?}", t.thread_id());
-                    tracing::error!("{:#?}", t.backtrace());
-                }
-            }
-        }
-    });
+    start_deadlock_detection_thread();
 
     Ok(())
 }
