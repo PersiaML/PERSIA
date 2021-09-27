@@ -89,8 +89,8 @@ class Adagrad(Optimizer):
         self.optimizer_base.init_adagrad(
             self.lr,
             self.weight_decay,
-            self.initial_accumulator_value,
             self.g_square_momentum,
+            self.initial_accumulator_value,
             self.eps,
             self.vectorwise_shared,
         )
