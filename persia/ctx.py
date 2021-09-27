@@ -560,10 +560,8 @@ class TrainCtx(EmbeddingCtx):
         >>> dense_optimizer = torch.optim.SGD(lr=1e-3)
         >>> loss_fn = torch.nn.BCELoss(reduction="mean")
         >>> with TrainCtx(
-        >>>     model=modela
         >>>     sparse_optimizer,
         >>>     dense_optimizer,
-        >>>     mixed_precision=True
         >>> ) as ctx:
         >>>     for batch_data in dataloder:
         >>>         dense, sparse, target = ctx.prepare_features(data)
