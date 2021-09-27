@@ -1446,6 +1446,7 @@ mod lookup_batched_all_slots_preprocess_tests {
         let feature_name = "Test".to_string();
         let feature_batch = FeatureBatch::new(feature_name.clone(), raw_batch);
         let mut sparse_batch = SparseBatch {
+            requires_grad: false,
             batches: vec![feature_batch],
             enter_forward_id_buffer_time: None,
             enter_post_forward_buffer_time: None,
@@ -1494,6 +1495,7 @@ mod lookup_batched_all_slots_preprocess_tests {
         let feature_name = "feature1".to_string();
         let feature_batch = FeatureBatch::new(feature_name.clone(), raw_batch.clone());
         let mut sparse_batch = SparseBatch {
+            requires_grad: false,
             batches: vec![feature_batch],
             enter_forward_id_buffer_time: None,
             enter_post_forward_buffer_time: None,
