@@ -1530,7 +1530,6 @@ dependencies = [
  "num-integer",
  "num-traits",
  "rawpointer",
- "serde",
 ]
 
 [[package]]
@@ -1544,6 +1543,7 @@ dependencies = [
  "num-integer",
  "num-traits",
  "rawpointer",
+ "serde",
 ]
 
 [[package]]
@@ -1949,7 +1949,7 @@ dependencies = [
  "indexmap",
  "itertools",
  "lz4",
- "ndarray 0.14.0",
+ "ndarray 0.15.3",
  "ndarray-rand",
  "numpy",
  "once_cell",
