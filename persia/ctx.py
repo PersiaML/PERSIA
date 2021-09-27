@@ -622,10 +622,9 @@ class TrainCtx(EmbeddingCtx):
 
         if world_size > 1:
             distributed_option = distributed_option or get_default_distributed_option()
-            if (
-                not distributed_option.init_with_env_file()
-                and not distributed_option.master_addr
-            ):
+            not_env_file = not distributed_option.init_with_env_file()
+            not_exists_master_addr = not distributed_option.master_addr
+            if not_env_file and not_exists_master_addr:
                 master_addr = self.get_master_addr()
             else:
                 master_addr = None
