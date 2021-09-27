@@ -206,7 +206,10 @@ impl PyPersiaCommonContext {
             return Err(PersiaError::LeaderAddrInputError.to_py_runtime_err());
         }
         let _guard = self.inner.async_runtime.enter();
-        let instance = nats::LeaderDiscoveryNatsServiceWrapper::new(leader_addr);
+        let instance = self
+            .inner
+            .async_runtime
+            .block_on(nats::LeaderDiscoveryNatsServiceWrapper::new(leader_addr));
         let mut leader_discovery_service = self.inner.leader_discovery_service.write();
         *leader_discovery_service = Some(instance);
         Ok(())

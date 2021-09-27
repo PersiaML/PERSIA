@@ -20,7 +20,6 @@ pub use once_cell;
 pub use parking_lot;
 pub use rand;
 pub use rayon;
-pub use retry;
 pub use serde;
 pub use serde_bytes;
 pub use serde_yaml;

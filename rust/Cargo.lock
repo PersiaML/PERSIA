@@ -1962,7 +1962,6 @@ dependencies = [
  "parking_lot",
  "rand 0.8.4",
  "rayon",
- "retry",
  "serde",
  "serde_bytes",
  "serde_yaml",
@@ -2507,15 +2506,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "winreg",
-]
-
-[[package]]
-name = "retry"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d7cf7a37d3ec90193e5a553d7f5ce283665a29c5e7e3973ceb08568c902dc07"
-dependencies = [
- "rand 0.7.3",
 ]
 
 [[package]]

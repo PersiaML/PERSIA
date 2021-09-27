@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
             AllEmbeddingServerClient::with_addrs(servers).await
         }
         _ => {
-            let nats_publisher = EmbeddingServerNatsServicePublisher::new();
+            let nats_publisher = EmbeddingServerNatsServicePublisher::new().await;
             AllEmbeddingServerClient::with_nats(nats_publisher).await
         }
     };
@@ -97,7 +97,7 @@ async fn main() -> Result<()> {
             let nats_service = MiddlewareNatsService {
                 inner: inner.clone(),
             };
-            let responder = MiddlewareNatsServiceResponder::new(nats_service);
+            let responder = MiddlewareNatsServiceResponder::new(nats_service).await;
             Some(responder)
         }
     };

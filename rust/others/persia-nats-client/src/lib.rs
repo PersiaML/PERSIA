@@ -2,9 +2,10 @@ use std::time::Duration;
 
 use async_nats::{Connection, Subscription};
 use persia_libs::{
-    once_cell::sync::OnceCell,
-    retry::{delay::Fixed, retry},
-    smol, thiserror, tracing,
+    backoff::{future::retry, ExponentialBackoff},
+    thiserror,
+    tokio::sync::OnceCell,
+    tracing,
 };
 
 use persia_speedy::{Readable, Writable};
@@ -26,7 +27,7 @@ impl From<std::io::Error> for NatsError {
     }
 }
 
-static NATS_CLIRNT: OnceCell<NatsClient> = OnceCell::new();
+static NATS_CLIRNT: OnceCell<NatsClient> = OnceCell::const_new();
 
 #[derive(Debug, Clone)]
 pub struct NatsClient {
@@ -35,22 +36,25 @@ pub struct NatsClient {
 }
 
 impl NatsClient {
-    pub fn get() -> Self {
-        NATS_CLIRNT.get_or_init(|| NatsClient::new()).clone()
+    pub async fn get() -> Self {
+        let instance = NATS_CLIRNT.get_or_init(|| NatsClient::new()).await;
+        instance.clone()
     }
-    fn new() -> Self {
+
+    async fn new() -> NatsClient {
         let nats_url = std::env::var("PERSIA_NATS_IP")
             .unwrap_or(String::from("nats://persia_nats_service:4222"));
-        let nc = retry(Fixed::from_millis(5000), || {
-            let res = smol::block_on(async_nats::connect(nats_url.as_str()));
+        let nc = retry(ExponentialBackoff::default(), || async {
+            let res = async_nats::connect(nats_url.as_str()).await;
             if res.is_err() {
                 tracing::warn!("failed to connect nats server, {:?}", res);
             }
-            res
+            Ok(res?)
         })
+        .await
         .expect("failed to init nats connection");
 
-        Self {
+        NatsClient {
             nc,
             timeout: Duration::from_secs(10),
         }

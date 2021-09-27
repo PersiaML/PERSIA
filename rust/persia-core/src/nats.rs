@@ -55,13 +55,13 @@ pub struct LeaderDiscoveryNatsServiceWrapper {
 }
 
 impl LeaderDiscoveryNatsServiceWrapper {
-    pub fn new(leader_addr: Option<String>) -> Self {
+    pub async fn new(leader_addr: Option<String>) -> Self {
         let service = leader_discovery_service::Service {
             leader_addr: Arc::new(RwLock::new(leader_addr.clone())),
         };
         let instance = Self {
-            publisher: leader_discovery_service::ServicePublisher::new(),
-            _responder: leader_discovery_service::ServiceResponder::new(service),
+            publisher: leader_discovery_service::ServicePublisher::new().await,
+            _responder: leader_discovery_service::ServiceResponder::new(service).await,
             leader_addr,
         };
         instance
@@ -133,7 +133,7 @@ pub struct PersiaBatchFlowNatsServicePublisherWrapper {
 
 impl PersiaBatchFlowNatsServicePublisherWrapper {
     pub async fn new(world_size: Option<usize>) -> Result<Self, PersiaError> {
-        let dataflow_publish_service = persia_dataflow_service::ServicePublisher::new();
+        let dataflow_publish_service = persia_dataflow_service::ServicePublisher::new().await;
 
         let world_size = match world_size {
             Some(w) => Ok(w),
@@ -144,7 +144,7 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
             }
         }?;
 
-        let preforward_sparse_publish_service = MiddlewareNatsServicePublisher::new();
+        let preforward_sparse_publish_service = MiddlewareNatsServicePublisher::new().await;
         let num_middlewares: usize = preforward_sparse_publish_service
             .publish_get_replica_size(&(), None)
             .await??;
@@ -287,8 +287,11 @@ pub fn init_responder(world_size: usize, channel: &PyPersiaBatchDataSender) -> P
             output_channel: channel.inner.clone(),
             world_size,
         };
-        let _guard = common_context.async_runtime.enter();
-        Arc::new(persia_dataflow_service::ServiceResponder::new(nats_service))
+        Arc::new(
+            common_context
+                .async_runtime
+                .block_on(persia_dataflow_service::ServiceResponder::new(nats_service)),
+        )
     });
 
     Ok(())
