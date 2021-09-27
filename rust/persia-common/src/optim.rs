@@ -4,8 +4,7 @@ use persia_libs::{hashbrown::HashMap, ndarray, parking_lot::RwLock};
 
 use persia_embedding_config::EmbeddingConfig;
 use persia_simd::{
-    adam_avx2, add_assign_avx2, decayed_adagrad_avx2, decayed_adagrad_vectorwise_shared_avx2,
-    decayed_sgd_avx2,
+    adam_avx2, decayed_adagrad_avx2, decayed_adagrad_vectorwise_shared_avx2, decayed_sgd_avx2,
 };
 use persia_speedy::{Readable, Writable};
 
@@ -264,10 +263,7 @@ impl Optimizable for Adagrad {
                 )
             }
 
-            let mut gradients = ndarray::Array1::<f32>::zeros(dim);
-            unsafe {
-                add_assign_avx2(gradients.as_slice_mut().unwrap(), grad);
-            }
+            let gradients = ndarray::ArrayView1::<f32>::from(grad);
 
             let gradient_squares = gradients.dot(&gradients) / gradients.len() as f32;
             *adagrad_state = *adagrad_state * self.config.g_square_momentum + gradient_squares;
