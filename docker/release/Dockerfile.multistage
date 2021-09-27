@@ -21,6 +21,7 @@ RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-
     net-tools \
     apt-utils \
     rlwrap \
+    ethtool \
     telnet && \
     apt-get purge --auto-remove && apt-get clean
 
