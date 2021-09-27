@@ -1548,11 +1548,11 @@ dependencies = [
 
 [[package]]
 name = "ndarray-rand"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da0304fe3b974aab28f3087347328061d71d3d6348b57a7f4694c20f8a551d21"
+checksum = "65608f937acc725f5b164dcf40f4f0bc5d67dc268ab8a649d3002606718c4588"
 dependencies = [
- "ndarray 0.14.0",
+ "ndarray 0.15.3",
  "rand 0.8.4",
  "rand_distr",
 ]
