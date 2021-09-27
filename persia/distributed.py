@@ -13,7 +13,7 @@ _logger = get_default_logger()
 class DistributedBaseOption(ABC):
     """Distributed option to converted torch model to dataparallel model."""
 
-    def __init__(self, master_port: int, master_addr: Optional[str] = None) -> None:
+    def __init__(self, master_port: int, master_addr: Optional[str] = None):
         """
         Arguments:
             master_port (int): Master of collective communication ip address.
@@ -69,9 +69,7 @@ _ddp_init_method_list = ["tcp", "file"]
 class DDPOption(DistributedBaseOption):
     """Implementation of pytorch distributed dataparallel option."""
 
-    def __init__(
-        self, init_method: str = "tcp", backend: str = "nccl", **options
-    ) -> None:
+    def __init__(self, init_method: str = "tcp", backend: str = "nccl", **options):
         """
         Arguments:
             init_method (str): Pytorch distributed init method, support tcp and file currently.
@@ -213,7 +211,7 @@ def _select_bagua_algorithm(
 class BaguaDistributedOption(DistributedBaseOption):
     """Implementation of bagua distributed dataparallel option"""
 
-    def __init__(self, algorithm: str, **options) -> None:
+    def __init__(self, algorithm: str, **options):
         """
         Arguments:
             algorithm (str): Name of Bagua algorithm.
