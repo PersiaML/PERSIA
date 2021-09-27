@@ -112,8 +112,8 @@ class DDPOption(DistributedBaseOption):
 
         if self.init_method == "tcp":
             assert (
-                (master_addr or self.master_addr) and self.master_port
-            ), "Master IP and Port empty, pytorch DDP should pass master addr and master port!"
+                master_addr or self.master_addr
+            ) and self.master_port, "Master IP and Port empty, pytorch DDP should pass master addr and master port!"
             master_addr = self.master_addr or master_addr
             init_method = f"{self.init_method}://{master_addr}:{self.master_port}"
         elif self.init_method == "file":
