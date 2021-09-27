@@ -8,6 +8,7 @@ use std::{path::PathBuf, sync::Arc};
 use persia_libs::{anyhow::Result, color_eyre, hyper, tracing, tracing_subscriber};
 use structopt::StructOpt;
 
+use persia_common::utils::start_deadlock_detection_thread;
 use persia_embedding_config::{
     EmbeddingConfig, PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig,
     PersiaGlobalConfig,
@@ -53,6 +54,8 @@ async fn main() -> Result<()> {
     eprintln!("rust_version: {}", build::RUST_VERSION);
     eprintln!("build_time: {}", build::BUILD_TIME);
     let args: Cli = Cli::from_args();
+
+    start_deadlock_detection_thread();
 
     PersiaGlobalConfig::set_configures(
         &args.global_config,
@@ -124,5 +127,6 @@ async fn main() -> Result<()> {
     } else {
         tracing::info!("embedding server exited successfully");
     }
+
     Ok(())
 }

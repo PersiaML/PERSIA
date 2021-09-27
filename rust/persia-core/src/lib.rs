@@ -40,6 +40,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::wrap_pyfunction;
 
+use persia_common::utils::start_deadlock_detection_thread;
 use persia_common::PersiaBatchData;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaReplicaInfo};
 use persia_embedding_server::middleware_service::MiddlewareServerError;
@@ -451,6 +452,8 @@ fn persia_core(py: Python, m: &PyModule) -> PyResult<()> {
     eprintln!("build_os: {}", build::BUILD_OS);
     eprintln!("rust_version: {}", build::RUST_VERSION);
     eprintln!("build_time: {}", build::BUILD_TIME);
+
+    start_deadlock_detection_thread();
 
     Ok(())
 }
