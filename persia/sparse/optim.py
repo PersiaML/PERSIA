@@ -67,6 +67,7 @@ class Adagrad(Optimizer):
         weight_decay: float = 0,
         g_square_momentum: float = 1,
         eps: float = 1e-10,
+        vectorwise_shared: bool = False,
     ):
         """
         Arguments:
@@ -75,6 +76,7 @@ class Adagrad(Optimizer):
             weight_decay (float, optional): parameters L2 penalty factor.
             g_square_momentum (float, optional): factor of accumulator incremental.
             eps(float, optional): epsilon term to avoid divide zero.
+            vectorwise_shared(bool, optional): whether to share optimizer status vectorwise of embedding.
 
         """
         super(Adagrad, self).__init__()
@@ -83,10 +85,12 @@ class Adagrad(Optimizer):
         self.initial_accumulator_value = initial_accumulator_value
         self.g_square_momentum = g_square_momentum
         self.eps = eps
+        self.vectorwise_shared = vectorwise_shared
         self.optimizer_base.init_adagrad(
             self.lr,
             self.weight_decay,
-            self.initial_accumulator_value,
             self.g_square_momentum,
+            self.initial_accumulator_value,
             self.eps,
+            self.vectorwise_shared,
         )
