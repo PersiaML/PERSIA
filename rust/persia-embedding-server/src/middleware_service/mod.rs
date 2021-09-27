@@ -206,7 +206,7 @@ impl AllEmbeddingServerClient {
                 PersiaPersistenceStatus::Failed(String::from(
                     "failed to get status"
                 ));
-                self.clients.replica_size()
+                self.replica_size()
             ]);
 
         return status;
