@@ -182,8 +182,8 @@ impl AllEmbeddingServerClient {
     }
 
     pub async fn ready_for_serving(&self) -> bool {
-        let clients = self.clients.read().await;
-        let futs = clients.iter().map(|client| async move {
+        let futs = (0..self.replica_size()).map(|client_idx| async move {
+            let client = self.get_client_by_index(client_idx).await;
             let resp = client.ready_for_serving(&()).await;
             if let Ok(x) = resp {
                 if x {
@@ -197,16 +197,16 @@ impl AllEmbeddingServerClient {
     }
 
     pub async fn model_manager_status(&self) -> Vec<PersiaPersistenceStatus> {
-        let clients = self.clients.read().await;
-        let futs = clients
-            .iter()
-            .map(|client| async move { client.model_manager_status(&()).await });
+        let futs = (0..self.replica_size()).map(|client_idx| async move {
+            let client = self.get_client_by_index(client_idx).await;
+            client.model_manager_status(&()).await
+        });
 
         let status: Vec<_> = futures::future::try_join_all(futs).await.unwrap_or(vec![
                 PersiaPersistenceStatus::Failed(String::from(
                     "failed to get status"
                 ));
-                self.clients.read().await.len()
+                self.clients.replica_size()
             ]);
 
         return status;
@@ -1212,34 +1212,38 @@ impl MiddlewareServerInner {
     }
 
     pub async fn get_embedding_size(&self) -> Result<Vec<usize>, MiddlewareServerError> {
-        let clients = self.all_embedding_server_client.clients.read().await;
-        let futs = clients.iter().map(|client| {
-            let client = client.clone();
-            async move {
+        let inner = self.clone();
+        let futs =
+            (0..inner.all_embedding_server_client.replica_size()).map(|client_idx| async move {
+                let client = inner
+                    .all_embedding_server_client
+                    .get_client_by_index(client_idx)
+                    .await;
                 let result = client
                     .get_embedding_size(&())
                     .await
                     .map_err(|e| MiddlewareServerError::RpcError(format!("{:?}", e)))??;
                 Ok(result)
-            }
-        });
+            });
 
         let result = futures::future::try_join_all(futs).await;
         result
     }
 
     pub async fn clear_embeddings(&self) -> Result<(), MiddlewareServerError> {
-        let clients = self.all_embedding_server_client.clients.read().await;
-        let futs = clients.iter().map(|client| {
-            let client = client.clone();
-            async move {
+        let inner = self.clone();
+        let futs =
+            (0..inner.all_embedding_server_client.replica_size()).map(|client_idx| async move {
+                let client = inner
+                    .all_embedding_server_client
+                    .get_client_by_index(client_idx)
+                    .await;
                 client
                     .clear_embeddings(&())
                     .await
                     .map_err(|e| MiddlewareServerError::RpcError(format!("{:?}", e)))??;
                 Ok(())
-            }
-        });
+            });
         futures::future::try_join_all(futs).await.map(|_| ())
     }
 }
