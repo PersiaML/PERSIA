@@ -412,8 +412,6 @@ mod sparse_optimizer_tests {
 
         let embedding_entry = execute_test(Box::new(optimizer));
 
-        println!("{:?}", embedding_entry);
-
         let adagrad_result: Vec<f32> = vec![
             0.6601662,
             -0.018124206,
