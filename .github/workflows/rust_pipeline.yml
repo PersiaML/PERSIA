@@ -27,4 +27,4 @@ jobs:
             toolchain: nightly
             override: true
       - name: Run tests
-        run: cargo test --verbose
+        run: cd rust/ && cargo test --verbose
