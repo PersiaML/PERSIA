@@ -28,7 +28,7 @@ class DistributedBaseOption(ABC):
             )
         else:
             _logger.info(
-                f"Distributed option master addr not found, retrive the master addr by nats service, master port: {master_port}"
+                f"Distributed option master addr not found, retrieve the master addr by nats service, master port: {master_port}"
             )
 
     @abstractmethod
@@ -112,7 +112,7 @@ class DDPOption(DistributedBaseOption):
 
         if self.init_method == "tcp":
             assert (
-                master_addr and self.master_port
+                (master_addr or self.master_addr) and self.master_port
             ), "Master IP and Port empty, pytorch DDP should pass master addr and master port!"
             master_addr = self.master_addr or master_addr
             init_method = f"{self.init_method}://{master_addr}:{self.master_port}"
@@ -252,7 +252,7 @@ class BaguaDistributedOption(DistributedBaseOption):
             # pytype: enable=import-error
         except ImportError as e:
             _logger.error(
-                "Import Bagua Error, instasll Bagua before use BaguaOption, you should build the persia docker image with Bagua before task start."
+                "Import Bagua Error, install Bagua before use BaguaOption, you should build the persia docker image with Bagua before task start."
             )
             raise e
 
