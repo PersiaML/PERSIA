@@ -114,9 +114,9 @@ pub enum MiddlewareServerError {
 }
 
 pub struct AllEmbeddingServerClient {
-    pub clients: RwLock<Vec<Arc<EmbeddingServiceClient>>>,
-    pub nats_publisher: Option<EmbeddingServerNatsServicePublisher>,
-    pub dst_replica_size: usize,
+    clients: RwLock<Vec<Arc<EmbeddingServiceClient>>>,
+    nats_publisher: Option<EmbeddingServerNatsServicePublisher>,
+    dst_replica_size: usize,
 }
 
 impl AllEmbeddingServerClient {
@@ -1281,11 +1281,16 @@ impl MiddlewareServer {
     }
 
     pub async fn shutdown_server(&self, _req: ()) -> Result<(), EmbeddingServerError> {
-        let clients = self.inner.all_embedding_server_client.clients.read().await;
-
-        let futs = clients
-            .iter()
-            .map(|client| async move { client.shutdown(&()).await });
+        let futs = (0..self.inner.all_embedding_server_client.replica_size()).map(
+            |client_idx| async move {
+                let client = self
+                    .inner
+                    .all_embedding_server_client
+                    .get_client_by_index(client_idx)
+                    .await;
+                client.shutdown(&()).await
+            },
+        );
 
         let result = futures::future::try_join_all(futs).await;
 
