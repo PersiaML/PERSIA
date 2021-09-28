@@ -12,19 +12,19 @@ use persia_model_manager::PersiaPersistenceStatus;
 
 pub struct PersiaRpcClient {
     pub clients: RwLock<HashMap<String, Arc<MiddlewareServerClient>>>,
-    pub middleware_addrs: RwLock<Vec<String>>,
+    pub middleware_addr_list: RwLock<Vec<String>>,
 }
 
 impl PersiaRpcClient {
     pub fn new() -> Self {
         Self {
             clients: RwLock::new(HashMap::new()),
-            middleware_addrs: RwLock::new(vec![]),
+            middleware_addr_list: RwLock::new(vec![]),
         }
     }
 
     pub fn get_random_client_with_addr(&self) -> (String, Arc<MiddlewareServerClient>) {
-        let middleware_addrs = self.middleware_addrs.read();
+        let middleware_addrs = self.middleware_addr_list.read();
         let addr = middleware_addrs[rand::random::<usize>() % middleware_addrs.len()].as_str();
         let client = self.get_client_by_addr(addr);
         (addr.to_string(), client)
@@ -35,7 +35,7 @@ impl PersiaRpcClient {
     }
 
     pub fn get_first_client(&self) -> Arc<MiddlewareServerClient> {
-        let addrs = self.middleware_addrs.read();
+        let addrs = self.middleware_addr_list.read();
         let addr = addrs.first().expect("clients not initialized");
         self.get_client_by_addr(addr)
     }
@@ -51,12 +51,17 @@ impl PersiaRpcClient {
                 .write()
                 .insert(middleware_addr.to_string(), client.clone());
 
-            self.middleware_addrs
+            self.middleware_addr_list
                 .write()
                 .push(middleware_addr.to_string());
             tracing::info!("created client for middleware {}", middleware_addr);
             client
         }
+    }
+
+    pub fn extend_middleware_addr_list(&self, middleware_addr: Vec<String>) {
+        let mut middleware_addrs = self.middleware_addr_list.write();
+        middleware_addrs.extend(middleware_addr);
     }
 
     // TODO(zhuxuefeng): move to nats

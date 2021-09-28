@@ -277,6 +277,7 @@ struct Forward {
     pub gpu_forwarded_channel_s: flume::Sender<PersiaTrainingBatchOnGpu>,
     pub gpu_forwarded_channel_r: flume::Receiver<PersiaTrainingBatchOnGpu>,
     pub is_training: bool,
+    pub from_sparse_remote_ref: bool,
     pub launch: bool,
     pub embedding_staleness_semaphore: Option<Arc<Semaphore>>,
     pub std_handles: Vec<std::thread::JoinHandle<()>>,
@@ -289,6 +290,7 @@ impl Forward {
         forward_buffer_size: usize,
         is_training: bool,
         reproducible: bool,
+        from_sparse_remote_ref: bool,
         embedding_staleness: Option<usize>,
     ) -> Self {
         let (reorder_buffer_channel_s, reorder_buffer_channel_r) = if reproducible {
@@ -317,6 +319,7 @@ impl Forward {
             is_training,
             launch: false,
             embedding_staleness_semaphore,
+            from_sparse_remote_ref,
             std_handles: Vec::new(),
             tokio_handles: Vec::new(),
             running: Arc::new(AtomicBool::new(false)),
@@ -427,6 +430,31 @@ impl Forward {
     fn spawn_forward_worker(&mut self, num_workers: usize) {
         let context = PersiaCommonContext::get();
         let _guard = context.async_runtime.enter();
+
+        // retrieve middlewares addr if the training without isolation data composer
+        if !self.from_sparse_remote_ref {
+            let nats_publisher = context.nats_publisher.read();
+            match nats_publisher.as_ref() {
+                Some(nats_publisher) => {
+                    let middleware_addr_list = context
+                        .async_runtime
+                        .block_on(nats_publisher.get_middleware_addr_list());
+
+                    match middleware_addr_list {
+                        Ok(middleware_addr_list) => {
+                            context.rpc_client.extend_middleware_addr_list(middleware_addr_list);
+                        },
+                        Err(e) => {
+                            panic!("Exception on adding middleware_addr_list {:?}", e.to_string());
+                        }
+                    }
+
+                }
+                None => {
+                    panic!("Nats publisher not found, enter the persia context before launch the forward engine");
+                }
+            }
+        }
 
         for _ in 0..num_workers {
             let channel_s = self.forwarded_channel_s.clone();
@@ -624,6 +652,7 @@ impl PyForward {
         forward_buffer_size: usize,
         is_training: bool,
         reproducible: bool,
+        from_sparse_remote_ref: bool,
         embedding_staleness: Option<usize>,
     ) -> PyResult<PyForward> {
         Ok(PyForward {
@@ -631,6 +660,7 @@ impl PyForward {
                 forward_buffer_size,
                 is_training,
                 reproducible,
+                from_sparse_remote_ref,
                 embedding_staleness,
             ),
         })
