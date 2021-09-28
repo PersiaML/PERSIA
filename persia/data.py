@@ -127,7 +127,7 @@ class Dataloder(object):
         reproducible (bool, optional): iterate the data in fixed order, make the dataflow deterministic
         from_sparse_remote_ref (bool, optional): whether forward sparse data from sparse remote reference which is use the independent data service that preforward the
             sparse batch data to middleware and transfer the sparse remote reference to training service. we recommend no to use the isolation dataset or distributed
-            dataset unless meet the data processing bottleneck. 
+            dataset unless meet the data processing bottleneck.
         embedding_staleness (int, optional): max number of batched staleness embedding each rank. A staleness embedding means it prefetched from embedding server before gradient updated.
     """
 
