@@ -169,10 +169,11 @@ impl PersiaBatchFlowNatsServicePublisherWrapper {
             .middleware_publish_service
             .publish_get_replica_size(&(), None)
             .await??;
-        
+
         let mut middleware_addr_list = Vec::new();
         for middleware_idx in 0..middleware_replica_size {
-            let middleware_addr = self.middleware_publish_service
+            let middleware_addr = self
+                .middleware_publish_service
                 .publish_get_address(&(), Some(middleware_idx))
                 .await??;
             middleware_addr_list.push(middleware_addr.to_string())
