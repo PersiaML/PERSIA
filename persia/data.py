@@ -125,7 +125,10 @@ class Dataloder(object):
         timeout_ms (int, optional): timeout for PyForward to fetch data, millisecond unit
         num_workers (int, optional): spawn thread worker number for  PyForward to lookup embedding and PythonBatchData prefetch
         reproducible (bool, optional): iterate the data in fixed order, make the dataflow deterministic
-        embedding_staleness (int, optional): Max number of batched staleness embedding each rank. A staleness embedding means it prefetched from embedding server before gradient updated.
+        from_sparse_remote_ref (bool, optional): whether forward sparse data from sparse remote reference which is use the independent data service that preforward the
+            sparse batch data to middleware and transfer the sparse remote reference to training service. we recommend no to use the isolation dataset or distributed
+            dataset unless meet the data processing bottleneck. 
+        embedding_staleness (int, optional): max number of batched staleness embedding each rank. A staleness embedding means it prefetched from embedding server before gradient updated.
     """
 
     def __init__(
@@ -136,6 +139,7 @@ class Dataloder(object):
         timeout_ms: int = 1000 * 60 * 10,
         num_workers: int = 10,
         reproducible: bool = False,
+        from_sparse_remote_ref: bool = False,
         embedding_staleness: Optional[int] = None,
     ):
         # dynamic import the PyForward due to conditional compilation
@@ -152,6 +156,7 @@ class Dataloder(object):
             forward_buffer_size,
             is_training,
             reproducible,
+            from_sparse_remote_ref,
             embedding_staleness,
         )
         self.forward_engine.set_input_channel(dataset.receiver)
