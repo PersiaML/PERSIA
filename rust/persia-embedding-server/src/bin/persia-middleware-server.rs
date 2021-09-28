@@ -10,6 +10,7 @@ use persia_libs::{
 
 use structopt::StructOpt;
 
+use persia_common::utils::start_deadlock_detection_thread;
 use persia_embedding_config::{
     EmbeddingConfig, PerisaJobType, PersiaCommonConfig, PersiaGlobalConfig, PersiaMiddlewareConfig,
 };
@@ -51,6 +52,8 @@ async fn main() -> Result<()> {
     eprintln!("rust_version: {}", build::RUST_VERSION);
     eprintln!("build_time: {}", build::BUILD_TIME);
     let args: Cli = Cli::from_args();
+
+    start_deadlock_detection_thread();
 
     PersiaGlobalConfig::set_configures(
         &args.global_config,

@@ -18,7 +18,7 @@ use persia_embedding_config::{
 };
 use persia_embedding_server::middleware_service::MiddlewareNatsServicePublisher;
 
-pub mod leader_discovery_service {
+pub mod master_discovery_service {
     use persia_embedding_config::PersiaReplicaInfo;
     use persia_libs::{async_lock::RwLock, thiserror, tokio, tracing};
     use persia_nats_client::{NatsClient, NatsError};
@@ -33,13 +33,13 @@ pub mod leader_discovery_service {
 
     #[derive(Clone)]
     pub struct Service {
-        pub leader_addr: Arc<RwLock<Option<String>>>,
+        pub master_addr: Arc<RwLock<Option<String>>>,
     }
 
     #[persia_nats_marcos::service]
     impl Service {
-        pub async fn get_leader_addr(&self, _placeholder: ()) -> Result<String, Error> {
-            self.leader_addr
+        pub async fn get_master_addr(&self, _placeholder: ()) -> Result<String, Error> {
+            self.master_addr
                 .read()
                 .await
                 .clone()
@@ -48,34 +48,35 @@ pub mod leader_discovery_service {
     }
 }
 
-pub struct LeaderDiscoveryNatsServiceWrapper {
-    publisher: leader_discovery_service::ServicePublisher,
-    _responder: leader_discovery_service::ServiceResponder,
-    leader_addr: Option<String>,
+pub struct MasterDiscoveryNatsServiceWrapper {
+    publisher: master_discovery_service::ServicePublisher,
+    _responder: master_discovery_service::ServiceResponder,
+    master_addr: Option<String>,
 }
 
-impl LeaderDiscoveryNatsServiceWrapper {
-    pub async fn new(leader_addr: Option<String>) -> Self {
-        let service = leader_discovery_service::Service {
-            leader_addr: Arc::new(RwLock::new(leader_addr.clone())),
+impl MasterDiscoveryNatsServiceWrapper {
+    pub async fn new(master_addr: Option<String>) -> Self {
+        let service = master_discovery_service::Service {
+            master_addr: Arc::new(RwLock::new(master_addr.clone())),
         };
+
         let instance = Self {
-            publisher: leader_discovery_service::ServicePublisher::new().await,
-            _responder: leader_discovery_service::ServiceResponder::new(service).await,
-            leader_addr,
+            publisher: master_discovery_service::ServicePublisher::new().await,
+            _responder: master_discovery_service::ServiceResponder::new(service).await,
+            master_addr,
         };
         instance
     }
 
-    pub async fn get_leader_addr(&self) -> Result<String, PersiaError> {
-        if let Some(addr) = &self.leader_addr {
-            Ok(addr.clone())
+    pub async fn get_master_addr(&self) -> Result<String, PersiaError> {
+        if let Some(master_addr) = &self.master_addr {
+            Ok(master_addr.clone())
         } else {
-            let addr = self
+            let master_addr = self
                 .publisher
-                .publish_get_leader_addr(&(), Some(0))
+                .publish_get_master_addr(&(), Some(0))
                 .await??;
-            Ok(addr)
+            Ok(master_addr)
         }
     }
 }
