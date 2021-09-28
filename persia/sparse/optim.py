@@ -1,4 +1,4 @@
-from abc import abstractmethod, ABC
+from abc import ABC
 from typing import Tuple
 
 from persia.prelude import PyOptimizerBase

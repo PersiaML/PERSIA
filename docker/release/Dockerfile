@@ -23,6 +23,7 @@ RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-
     net-tools \
     apt-utils \
     rlwrap \
+    ethtool \
     telnet
 
 RUN curl -o ~/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
@@ -48,6 +49,7 @@ RUN /opt/conda/bin/conda install -y -c pytorch -c conda-forge pytorch=${PYTORCH_
     pytest \
     tqdm \
     pandas \
+    tensorbard \ 
     scikit-learn \
     ipython && \
     rm -rf /var/lib/apt/lists/* && \

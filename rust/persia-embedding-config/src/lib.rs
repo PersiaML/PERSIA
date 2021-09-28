@@ -185,7 +185,7 @@ impl PersiaReplicaInfo {
             .map_err(|_| PersiaGlobalConfigError::SetError)
     }
 
-    pub fn is_leader(&self) -> bool {
+    pub fn is_master(&self) -> bool {
         self.replica_index == 0
     }
 }
