@@ -5,14 +5,16 @@ import socket
 from enum import Enum
 from queue import Queue
 from typing import List, Tuple, Optional, NewType, Union
-from retrying import retry
 
 import torch
+
+from retrying import retry
 
 import persia.env as env
 
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
+from persia.distributed import DistributedBaseOption, get_default_distributed_option
 from persia.prelude import PyPersiaCommonContext, PyPersiaBatchData
 
 _CURRENT_CXT = None
@@ -120,13 +122,18 @@ class DataCtx(BaseCtx):
         >>>         ctx.send_data(batch_data)
     """
 
-    @retry(wait_fixed=2000)
     def __init__(
         self,
         *args,
         **kwargs,
     ):
         super(DataCtx, self).__init__(*args, **kwargs)
+        self.prepare()
+        _logger.info("Data ctx prepare done.")
+
+    @retry(wait_fixed=2000)
+    def prepare(self):
+        """Do some preparation to init `DataCtx`."""
 
         self.common_context.init_nats_publisher(None)
         self.common_context.wait_servers_ready()
@@ -257,9 +264,7 @@ class EmbeddingCtx(BaseCtx):
         Returns:
             the tuple of output data and target data.
         """
-        assert (
-            self.model is not None
-        ), f"model not found, please init context with model"
+        assert self.model is not None, "model not found, please init context with model"
         dense, sparse, target = self.prepare_features(batch)
         output = self.model(dense, sparse)
         return (output, target)
@@ -399,9 +404,7 @@ class EmbeddingCtx(BaseCtx):
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
             with_jit_model (bool, optional): Dump jit script dense checkpoint or not.
         """
-        assert (
-            self.model is not None
-        ), f"model not found, please init context with model"
+        assert self.model is not None, "model not found, please init context with model"
 
         if with_jit_model:
             self.dump_dense(self.model, dst_dir, jit_dense_filename, True)
@@ -424,9 +427,7 @@ class EmbeddingCtx(BaseCtx):
             dense_filename (str, optional): Dense checkpoint filename.
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
         """
-        assert (
-            self.model is not None
-        ), f"model not found, please init context with model"
+        assert self.model is not None, "model not found, please init context with model"
 
         dense_model_filepath = os.path.join(src_dir, dense_filename)
         if os.path.exists(dense_model_filepath):
@@ -524,7 +525,7 @@ class EmbeddingCtx(BaseCtx):
     ) -> PythonTrainBatch:
         """Get embeddings of the input batch data.
 
-         Arguments:
+        Arguments:
             data (PyPersiaBatchData): Input data without embeddings.
             device_id (int, optional): The CUDA device to use for this process.
 
@@ -539,7 +540,7 @@ class EmbeddingCtx(BaseCtx):
     ) -> PythonTrainBatch:
         """Get embeddings of the serialized input batch data.
 
-         Arguments:
+        Arguments:
             data (PyPersiaBatchData): Serialized input data without embeddings.
             device_id (int, optional): The CUDA device to use for this process.
 
@@ -559,10 +560,8 @@ class TrainCtx(EmbeddingCtx):
         >>> dense_optimizer = torch.optim.SGD(lr=1e-3)
         >>> loss_fn = torch.nn.BCELoss(reduction="mean")
         >>> with TrainCtx(
-        >>>     model=model,
         >>>     sparse_optimizer,
         >>>     dense_optimizer,
-        >>>     mixed_precision=True
         >>> ) as ctx:
         >>>     for batch_data in dataloder:
         >>>         dense, sparse, target = ctx.prepare_features(data)
@@ -580,7 +579,7 @@ class TrainCtx(EmbeddingCtx):
         backward_buffer_size: int = 10,
         backward_workers_size: int = 8,
         grad_update_buffer_size: int = 60,
-        torch_distributed_port: int = 23456,
+        distributed_option: Optional[DistributedBaseOption] = None,
         *args,
         **kwargs,
     ):
@@ -594,7 +593,7 @@ class TrainCtx(EmbeddingCtx):
             backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
             grad_tensor_cache_size(int, optional): Number of reference cache , hold the gradient tensor reference to avoid
                 meet dangle data in gradient backward phase.
-            torch_distributed_port(int, optional): tcp Port when init torch distributed process group.
+            distributed_option (DistributedBaseOption, optional): DistributedOption to converted model to dataparallel model.
         """
         super(TrainCtx, self).__init__(PreprocessMode.TRAIN, *args, **kwargs)
 
@@ -603,40 +602,46 @@ class TrainCtx(EmbeddingCtx):
         ), "Sparse_optimizer should not be none in train context"
         assert (
             0 <= device_id < torch.cuda.device_count()
-        ), f"device_id: {device_id} invalid!"
+        ), f"Device_id: {device_id} invalid!"
         assert grad_scalar_update_factor > 0, "grad scalar should greater than zero"
         assert (
             self.model is not None
-        ), f"model not found, please init context with model"
+        ), "Model not found, please init context with pytorch model"
 
         torch.cuda.set_device(device_id)
 
-        self.world_size = env.get_world_size()
-        assert self.world_size != -1, "WORLD_SIZE not set"
-        self.rank_id = env.get_rank()
-        assert self.rank_id != -1, "RANK not set"
+        world_size = env.get_world_size()
+        assert world_size != -1, "WORLD_SIZE not set"
+        rank_id = env.get_rank()
+        assert rank_id != -1, "RANK not set"
 
-        self.torch_distributed_port = torch_distributed_port
+        self.world_size = world_size
+        self.rank_id = rank_id
 
-        if self.world_size > 1:
-            leader_addr = self.get_leader_addr()
-            _logger.info(f"leader addr is {leader_addr}")
+        if world_size > 1:
+            distributed_option = distributed_option or get_default_distributed_option()
+            not_env_file = not distributed_option.init_with_env_file()
+            not_exists_master_addr = not distributed_option.master_addr
+            if not_env_file and not_exists_master_addr:
+                master_addr = self.get_master_addr()
+            else:
+                master_addr = None
 
-            torch.distributed.init_process_group(
-                "nccl",
-                init_method=leader_addr,
-                rank=self.rank_id,
-                world_size=self.world_size,
-            )
-
-            _logger.info("torch ddp init process group done")
-
-            self.model = torch.nn.parallel.DistributedDataParallel(
+            model, dense_optimizer = distributed_option.convert2distributed_model(
                 self.model,
-                device_ids=[device_id],
-                output_device=device_id,
-                find_unused_parameters=True,
+                world_size,
+                rank_id,
+                device_id,
+                master_addr=master_addr,
+                optimizer=dense_optimizer,
             )
+            self.model = model
+            _logger.info("Distributed training context init done.")
+        else:
+            _logger.info("SingleMachine training context init done.")
+
+        self.dense_optimizer = dense_optimizer
+        self.sparse_optimizer = sparse_optimizer
 
         self.wait_servers_ready()
 
@@ -645,13 +650,10 @@ class TrainCtx(EmbeddingCtx):
         self.update_times = 0
         self.grad_scalar_update_factor = grad_scalar_update_factor
         self.grad_scaler = torch.cuda.amp.GradScaler()
-        self.sparse_optimizer = sparse_optimizer
-        self.dense_optimizer = dense_optimizer
         self.backward_workers_size = backward_workers_size
 
         from persia.prelude import PyBackward
 
-        # dynamic import the PyForward due to conditional compilation
         self.grad_queue = Queue(grad_update_buffer_size)
         self.backward_engine = PyBackward(backward_buffer_size)
 
@@ -667,16 +669,17 @@ class TrainCtx(EmbeddingCtx):
         self.backward_engine.shutdown()
 
     @retry(wait_fixed=2000)
-    def get_leader_addr(self):
+    def get_master_addr(self):
         """Get leader(rank 0) ip address."""
         if self.rank_id == 0:
-            ip = socket.gethostbyname(socket.gethostname())
-            leader_addr = f"tcp://{ip}:{self.torch_distributed_port}"
-            self.common_context.init_leader_discovery_service(leader_addr)
+            master_addr = socket.gethostbyname(socket.gethostname())
+            self.common_context.init_master_discovery_service(master_addr)
+            _logger.info(f"init addr is {master_addr}")
         else:
-            self.common_context.init_leader_discovery_service(None)
-            leader_addr = self.common_context.get_leader_addr()
-        return leader_addr
+            self.common_context.init_master_discovery_service(None)
+            master_addr = self.common_context.master_addr
+            _logger.info(f"master addr is {master_addr}")
+        return master_addr
 
     @retry(wait_fixed=2000)
     def wait_servers_ready(self):

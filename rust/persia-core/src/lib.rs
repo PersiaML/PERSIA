@@ -51,41 +51,41 @@ use persia_storage::{PersiaPath, PersiaPathImpl};
 pub enum PersiaError {
     #[error("Persia context NOT initialized")]
     NotInitializedError,
-    #[error("enter persia context multiple times")]
+    #[error("Enter persia context multiple times")]
     MultipleContextError,
-    #[error("shutdown server failed: {0}")]
+    #[error("Shutdown server failed: {0}")]
     ShutdownError(String),
-    #[error("server dump/load status error: {0}")]
+    #[error("Server dump/load status error: {0}")]
     ServerStatusError(String),
-    #[error("global config error: {0}")]
+    #[error("Global config error: {0}")]
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
-    #[error("server side error: {0}")]
+    #[error("Server side error: {0}")]
     ServerSideError(#[from] MiddlewareServerError),
-    #[error("rpc error: {0}")]
+    #[error("Rpc error: {0}")]
     RpcError(#[from] persia_rpc::PersiaRpcError),
-    #[error("nats error: {0}")]
+    #[error("Nats error: {0}")]
     NatsError(#[from] persia_nats_client::NatsError),
-    #[error("send sparse data to middleware server multi times")]
+    #[error("Send sparse data to middleware server multi times")]
     MultipleSendError,
-    #[error("sparse data is null, please call batch.add_sparse first")]
+    #[error("Sparse data is null, please call batch.add_sparse first")]
     NullSparseDataError,
-    #[error("batch id is null, please call send_sparse_to_middleware first")]
+    #[error("Batch id is null, please call send_sparse_to_middleware first")]
     NullBatchIdError,
-    #[error("sparse optimizer not set yet")]
+    #[error("Sparse optimizer not set yet")]
     NullOptimizerError,
-    #[error("data send failed")]
+    #[error("Data send failed")]
     SendDataError,
-    #[error("nats publisher not initialized")]
+    #[error("Nats publisher not initialized")]
     NatsNotInitializedError,
-    #[error("LeaderDiscoveryService not initialized")]
-    LeaderDiscoveryServiceNotInitializedError,
-    #[error("leader addr input wrong")]
-    LeaderAddrInputError,
-    #[error("storage visit error {0}")]
+    #[error("MasterDiscoveryService not initialized")]
+    MasterDiscoveryServiceNotInitializedError,
+    #[error("Master service empty")]
+    MasterServiceEmpty,
+    #[error("Storage visit error {0}")]
     StorageVisitError(String),
-    #[error("leader discovery error: {0}")]
-    LeaderDiscoveryError(#[from] nats::leader_discovery_service::Error),
-    #[error("batch flow error: {0}")]
+    #[error("Master discovery error: {0}")]
+    MasterDiscoveryError(#[from] nats::master_discovery_service::Error),
+    #[error("Dataflow error: {0}")]
     PersiaBatchFlowError(#[from] nats::persia_dataflow_service::Error),
 }
 
@@ -100,7 +100,7 @@ static PERSIA_COMMON_CONTEXT: OnceCell<Arc<PersiaCommonContext>> = OnceCell::new
 struct PersiaCommonContext {
     pub rpc_client: Arc<PersiaRpcClient>,
     pub nats_publisher: Arc<RwLock<Option<nats::PersiaBatchFlowNatsServicePublisherWrapper>>>,
-    pub leader_discovery_service: Arc<RwLock<Option<nats::LeaderDiscoveryNatsServiceWrapper>>>,
+    pub master_discovery_service: Arc<RwLock<Option<nats::MasterDiscoveryNatsServiceWrapper>>>,
     pub async_runtime: Arc<Runtime>,
 }
 
@@ -134,7 +134,7 @@ impl PersiaCommonContext {
         let common_context = Self {
             rpc_client,
             nats_publisher: Arc::new(RwLock::new(None)),
-            leader_discovery_service: Arc::new(RwLock::new(None)),
+            master_discovery_service: Arc::new(RwLock::new(None)),
             async_runtime: runtime,
         };
 
@@ -198,32 +198,34 @@ impl PyPersiaCommonContext {
         Ok(())
     }
 
-    pub fn init_leader_discovery_service(&self, leader_addr: Option<String>) -> PyResult<()> {
-        if self.inner.leader_discovery_service.read().is_some() {
+    pub fn init_master_discovery_service(&self, master_addr: Option<String>) -> PyResult<()> {
+        if self.inner.master_discovery_service.read().is_some() {
             return Ok(());
         }
         let replica_info = PersiaReplicaInfo::get().expect("not in persia context");
-        if replica_info.is_leader() == leader_addr.is_none() {
-            return Err(PersiaError::LeaderAddrInputError.to_py_runtime_err());
+        if replica_info.is_master() && master_addr.is_none() {
+            return Err(PersiaError::MasterServiceEmpty.to_py_runtime_err());
         }
+
         let _guard = self.inner.async_runtime.enter();
-        let instance = nats::LeaderDiscoveryNatsServiceWrapper::new(leader_addr);
-        let mut leader_discovery_service = self.inner.leader_discovery_service.write();
-        *leader_discovery_service = Some(instance);
+        let instance = nats::MasterDiscoveryNatsServiceWrapper::new(master_addr);
+        let mut master_discovery_service = self.inner.master_discovery_service.write();
+        *master_discovery_service = Some(instance);
         Ok(())
     }
 
-    pub fn get_leader_addr(&self) -> PyResult<String> {
+    #[getter]
+    pub fn master_addr(&self) -> PyResult<String> {
         self.inner
             .async_runtime
             .block_on(
                 self.inner
-                    .leader_discovery_service
+                    .master_discovery_service
                     .read()
                     .as_ref()
-                    .ok_or_else(|| PersiaError::LeaderDiscoveryServiceNotInitializedError)
+                    .ok_or_else(|| PersiaError::MasterDiscoveryServiceNotInitializedError)
                     .map_err(|e| e.to_py_runtime_err())?
-                    .get_leader_addr(),
+                    .get_master_addr(),
             )
             .map_err(|e| e.to_py_runtime_err())
     }
