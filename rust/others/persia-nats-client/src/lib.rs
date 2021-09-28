@@ -27,7 +27,7 @@ impl From<std::io::Error> for NatsError {
     }
 }
 
-static NATS_CLIRNT: OnceCell<NatsClient> = OnceCell::const_new();
+static NATS_CLIENT: OnceCell<NatsClient> = OnceCell::const_new();
 
 #[derive(Debug, Clone)]
 pub struct NatsClient {
@@ -37,7 +37,7 @@ pub struct NatsClient {
 
 impl NatsClient {
     pub async fn get() -> Self {
-        let instance = NATS_CLIRNT.get_or_init(|| NatsClient::new()).await;
+        let instance = NATS_CLIENT.get_or_init(|| NatsClient::new()).await;
         instance.clone()
     }
 

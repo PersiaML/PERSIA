@@ -154,7 +154,9 @@ impl NatsService {
             .map(|x| {
                 let subscribe_ident = x.subscribe_subject_ident();
                 quote::quote! {
-                    self.#subscribe_ident().await.expect("failed to subsrcibe");
+                    if let Err(e) = self.#subscribe_ident().await {
+                        panic!("failed to subsrcibe due to {:?}", e);
+                    }
                 }
             })
             .collect();
