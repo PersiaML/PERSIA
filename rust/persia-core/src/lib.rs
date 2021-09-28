@@ -230,6 +230,21 @@ impl PyPersiaCommonContext {
             .map_err(|e| e.to_py_runtime_err())
     }
 
+    pub fn get_middleware_addr_list(&self) -> PyResult<Vec<String>> {
+        self.inner
+            .async_runtime
+            .block_on(
+                self.inner
+                    .nats_publisher
+                    .read()
+                    .as_ref()
+                    .ok_or_else(|| PersiaError::NatsNotInitializedError)
+                    .map_err(|e| e.to_py_runtime_err())?
+                    .get_middleware_addr_list(),
+            )
+            .map_err(|e| e.to_py_runtime_err())
+    }
+
     pub fn init_rpc_client_with_addr(&self, middleware_addr: String) -> PyResult<()> {
         self.inner
             .init_rpc_client_with_addr(middleware_addr)
