@@ -442,13 +442,17 @@ impl Forward {
 
                     match middleware_addr_list {
                         Ok(middleware_addr_list) => {
-                            context.rpc_client.extend_middleware_addr_list(middleware_addr_list);
-                        },
+                            context
+                                .rpc_client
+                                .extend_middleware_addr_list(middleware_addr_list);
+                        }
                         Err(e) => {
-                            panic!("Exception on adding middleware_addr_list {:?}", e.to_string());
+                            panic!(
+                                "Exception on adding middleware_addr_list {:?}",
+                                e.to_string()
+                            );
                         }
                     }
-
                 }
                 None => {
                     panic!("Nats publisher not found, enter the persia context before launch the forward engine");
