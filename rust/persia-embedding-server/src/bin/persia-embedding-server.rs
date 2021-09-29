@@ -105,7 +105,7 @@ async fn main() -> Result<()> {
             let nats_service = EmbeddingServerNatsService {
                 inner: inner.clone(),
             };
-            let responder = EmbeddingServerNatsServiceResponder::new(nats_service);
+            let responder = EmbeddingServerNatsServiceResponder::new(nats_service).await;
             Some(responder)
         }
     };
