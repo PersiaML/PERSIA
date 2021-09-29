@@ -580,7 +580,7 @@ class TrainCtx(EmbeddingCtx):
         backward_buffer_size: int = 10,
         backward_workers_size: int = 8,
         grad_update_buffer_size: int = 60,
-        init_rpc_client: bool = True,
+        lookup_emb_directly: bool = True,
         distributed_option: Optional[DistributedBaseOption] = None,
         *args,
         **kwargs,
@@ -595,8 +595,7 @@ class TrainCtx(EmbeddingCtx):
             backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
             grad_update_buffer_size (int, optional): Number of reference cache , hold the gradient tensor reference to avoid
                 meet dangle data in gradient backward phase.
-            init_rpc_client (bool, optional): Init all middleware rpc client. It is necessary when there is not isolation datacompose to provide
-                middleware address to avoid not available rpc client error`.
+            lookup_emb_directly (bool, optional): Lookup embedding directly without isolation data compose.
             distributed_option (DistributedBaseOption, optional): DistributedOption to converted model to dataparallel model.
         """
         super(TrainCtx, self).__init__(PreprocessMode.TRAIN, *args, **kwargs)
@@ -649,7 +648,7 @@ class TrainCtx(EmbeddingCtx):
 
         self.wait_servers_ready()
 
-        if init_rpc_client:
+        if lookup_emb_directly:
             init_rpc_client_num = self._init_middlewrae_rpc_client()
             _logger.info(f"Successfully init {init_rpc_client_num} rpc client")
 
