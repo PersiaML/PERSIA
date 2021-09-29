@@ -207,8 +207,10 @@ impl PyPersiaCommonContext {
             return Err(PersiaError::MasterServiceEmpty.to_py_runtime_err());
         }
 
-        let _guard = self.inner.async_runtime.enter();
-        let instance = nats::MasterDiscoveryNatsServiceWrapper::new(master_addr);
+        let instance = self
+            .inner
+            .async_runtime
+            .block_on(nats::MasterDiscoveryNatsServiceWrapper::new(master_addr));
         let mut master_discovery_service = self.inner.master_discovery_service.write();
         *master_discovery_service = Some(instance);
         Ok(())
