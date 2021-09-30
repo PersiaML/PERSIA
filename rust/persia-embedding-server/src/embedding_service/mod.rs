@@ -400,7 +400,7 @@ impl EmbeddingServiceInner {
                             let mut entry = entry.write();
                             let emb_entry_slice = entry.as_mut_emb_entry_slice();
                             optimizer.update(emb_entry_slice, grad, entry_dim, &state);
-    
+
                             if conf.enable_weight_bound {
                                 unsafe {
                                     persia_simd::weight_bound(
@@ -410,7 +410,7 @@ impl EmbeddingServiceInner {
                                 }
                             }
                         }
-    
+
                         indices_to_commit.push((*sign, entry.clone()));
                     }
                 } else {

@@ -186,14 +186,8 @@ pub unsafe fn adam_avx2(
             ),
         );
 
-        let m_bias_corr = _mm256_div_ps(
-            updated_m,
-            _mm256_set1_ps(1.0_f32 - beta1_power),
-        );
-        let v_bias_corr = _mm256_div_ps(
-            updated_v,
-            _mm256_set1_ps(1.0_f32 - beta2_power)
-        );
+        let m_bias_corr = _mm256_div_ps(updated_m, _mm256_set1_ps(1.0_f32 - beta1_power));
+        let v_bias_corr = _mm256_div_ps(updated_v, _mm256_set1_ps(1.0_f32 - beta2_power));
 
         let descent = _mm256_div_ps(
             m_bias_corr,

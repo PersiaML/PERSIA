@@ -39,7 +39,6 @@ pub struct AdagradConfig {
     pub vectorwise_shared: bool,
 }
 
-
 pub enum Optimizer {
     Adam(Adam),
     SGD(NaiveSGD),
@@ -146,7 +145,11 @@ impl Optimizable for Adam {
     }
 
     #[inline]
-    fn get_item_level_state(&self, idx: usize, batch_level_state: &Option<Vec<f32>>) -> Option<Vec<f32>> {
+    fn get_item_level_state(
+        &self,
+        idx: usize,
+        batch_level_state: &Option<Vec<f32>>,
+    ) -> Option<Vec<f32>> {
         if let Some(batch_level_state) = batch_level_state.as_ref() {
             let mut state = vec![0f32; 2];
             state[0] = batch_level_state[idx];
@@ -200,13 +203,7 @@ impl Optimizable for Adam {
     }
 
     #[inline]
-    fn update(
-        &self,
-        emb_entry: &mut [f32],
-        grad: &[f32],
-        dim: usize,
-        state: &Option<Vec<f32>>,
-    ) {
+    fn update(&self, emb_entry: &mut [f32], grad: &[f32], dim: usize, state: &Option<Vec<f32>>) {
         let state = state.as_deref().unwrap();
         let (emb, opt) = emb_entry.split_at_mut(dim);
         let (adam_m, adam_v) = opt.split_at_mut(dim);
