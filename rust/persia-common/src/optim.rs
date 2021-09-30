@@ -39,6 +39,7 @@ pub struct AdagradConfig {
     pub vectorwise_shared: bool,
 }
 
+
 pub enum Optimizer {
     Adam(Adam),
     SGD(NaiveSGD),
@@ -72,6 +73,14 @@ pub trait Optimizable {
         batch_level_status: &Option<Vec<f32>>,
     );
 
+    fn get_item_level_state(
+        &self,
+        _idx: usize,
+        _batch_level_state: &Option<Vec<f32>>,
+    ) -> Option<Vec<f32>> {
+        None
+    }
+
     fn get_batch_level_state(&self, _signs: &[u64]) -> Option<Vec<f32>> {
         None
     }
@@ -87,11 +96,13 @@ pub trait Optimizable {
     fn state_initialization(&self, _state: &mut [f32], _dim: usize) {}
 }
 
+#[derive(Debug)]
 struct AdamPowerOfBetas {
     beta1: f32,
     beta2: f32,
 }
 
+#[derive(Debug)]
 pub struct Adam {
     config: AdamConfig,
     embedding_config: Arc<EmbeddingConfig>,
@@ -132,6 +143,18 @@ impl Optimizable for Adam {
     #[inline]
     fn require_space(&self, dim: usize) -> usize {
         dim * 2
+    }
+
+    #[inline]
+    fn get_item_level_state(&self, idx: usize, batch_level_state: &Option<Vec<f32>>) -> Option<Vec<f32>> {
+        if let Some(batch_level_state) = batch_level_state.as_ref() {
+            let mut state = vec![0f32; 2];
+            state[0] = batch_level_state[idx];
+            state[1] = batch_level_state[idx + batch_level_state.len() / 2];
+            Some(state)
+        } else {
+            panic!("empty batch_level state for optimizer: {:?}", self);
+        }
     }
 
     #[inline]
@@ -182,12 +205,13 @@ impl Optimizable for Adam {
         emb_entry: &mut [f32],
         grad: &[f32],
         dim: usize,
-        batch_level_status: &Option<Vec<f32>>,
+        state: &Option<Vec<f32>>,
     ) {
-        let batch_level_status = batch_level_status.as_deref().unwrap();
+        let state = state.as_deref().unwrap();
         let (emb, opt) = emb_entry.split_at_mut(dim);
         let (adam_m, adam_v) = opt.split_at_mut(dim);
-        let (beta1_power, beta2_power) = batch_level_status.split_at(dim);
+        let beta1_power = state[0];
+        let beta2_power = state[1];
 
         unsafe {
             adam_avx2(
@@ -206,6 +230,7 @@ impl Optimizable for Adam {
     }
 }
 
+#[derive(Debug)]
 pub struct NaiveSGD {
     config: NaiveSGDConfig,
 }
@@ -229,6 +254,7 @@ impl Optimizable for NaiveSGD {
     }
 }
 
+#[derive(Debug)]
 pub struct Adagrad {
     config: AdagradConfig,
 }

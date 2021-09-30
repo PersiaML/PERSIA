@@ -389,18 +389,18 @@ impl EmbeddingServiceInner {
         let batch_level_state = optimizer.get_batch_level_state(signs.as_slice());
 
         tokio::task::block_in_place(|| {
-            for sign in signs {
+            signs.iter().enumerate().for_each(|(idx, sign)| {
                 if let Some(entry) = self.embedding.get_value(&sign) {
                     if let Some(entry) = entry.upgrade() {
                         let entry_dim = { entry.read().dim() };
                         let (grad, r) = remaining_gradients.split_at(entry_dim);
                         remaining_gradients = r;
-
+                        let state = optimizer.get_item_level_state(idx, &batch_level_state);
                         {
                             let mut entry = entry.write();
                             let emb_entry_slice = entry.as_mut_emb_entry_slice();
-                            optimizer.update(emb_entry_slice, grad, entry_dim, &batch_level_state);
-
+                            optimizer.update(emb_entry_slice, grad, entry_dim, &state);
+    
                             if conf.enable_weight_bound {
                                 unsafe {
                                     persia_simd::weight_bound(
@@ -410,13 +410,42 @@ impl EmbeddingServiceInner {
                                 }
                             }
                         }
-
-                        indices_to_commit.push((sign, entry.clone()));
+    
+                        indices_to_commit.push((*sign, entry.clone()));
                     }
                 } else {
                     gradient_id_miss_count += 1;
                 }
-            }
+            });
+
+            // for sign in signs {
+            //     if let Some(entry) = self.embedding.get_value(&sign) {
+            //         if let Some(entry) = entry.upgrade() {
+            //             let entry_dim = { entry.read().dim() };
+            //             let (grad, r) = remaining_gradients.split_at(entry_dim);
+            //             remaining_gradients = r;
+
+            //             {
+            //                 let mut entry = entry.write();
+            //                 let emb_entry_slice = entry.as_mut_emb_entry_slice();
+            //                 optimizer.update(emb_entry_slice, grad, entry_dim, &batch_level_state);
+
+            //                 if conf.enable_weight_bound {
+            //                     unsafe {
+            //                         persia_simd::weight_bound(
+            //                             &mut emb_entry_slice[..entry_dim],
+            //                             conf.weight_bound,
+            //                         );
+            //                     }
+            //                 }
+            //             }
+
+            //             indices_to_commit.push((sign, entry.clone()));
+            //         }
+            //     } else {
+            //         gradient_id_miss_count += 1;
+            //     }
+            // }
         });
 
         tracing::debug!(
