@@ -563,9 +563,10 @@ class TrainCtx(EmbeddingCtx):
         >>>     sparse_optimizer,
         >>>     dense_optimizer,
         >>> ) as ctx:
+        >>>     parallel_model = ctx.model
         >>>     for batch_data in dataloder:
         >>>         dense, sparse, target = ctx.prepare_features(data)
-        >>>         output = model(dense, sparse)
+        >>>         output = parallel_model(dense, sparse)
         >>>         loss = loss_fn(output, target)
         >>>         scaled_loss = ctx.backward(loss)
     """
@@ -579,6 +580,7 @@ class TrainCtx(EmbeddingCtx):
         backward_buffer_size: int = 10,
         backward_workers_size: int = 8,
         grad_update_buffer_size: int = 60,
+        lookup_emb_directly: bool = True,
         distributed_option: Optional[DistributedBaseOption] = None,
         *args,
         **kwargs,
@@ -591,8 +593,9 @@ class TrainCtx(EmbeddingCtx):
             grad_scalar_update_factor (float, optional): Update factor of ``Gradscalar`` to ensure loss scale finitely if set ``mixed_precision=True``.
             backward_buffer_size (int, optional): Max number of not updated gradients queued.
             backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
-            grad_tensor_cache_size(int, optional): Number of reference cache , hold the gradient tensor reference to avoid
+            grad_update_buffer_size (int, optional): Number of reference cache , hold the gradient tensor reference to avoid
                 meet dangle data in gradient backward phase.
+            lookup_emb_directly (bool, optional): Lookup embedding directly without isolation data compose.
             distributed_option (DistributedBaseOption, optional): DistributedOption to converted model to dataparallel model.
         """
         super(TrainCtx, self).__init__(PreprocessMode.TRAIN, *args, **kwargs)
@@ -623,7 +626,7 @@ class TrainCtx(EmbeddingCtx):
             not_env_file = not distributed_option.init_with_env_file()
             not_exists_master_addr = not distributed_option.master_addr
             if not_env_file and not_exists_master_addr:
-                master_addr = self.get_master_addr()
+                master_addr = self._get_master_addr()
             else:
                 master_addr = None
 
@@ -644,6 +647,10 @@ class TrainCtx(EmbeddingCtx):
         self.sparse_optimizer = sparse_optimizer
 
         self.wait_servers_ready()
+
+        if lookup_emb_directly:
+            init_rpc_client_num = self._init_middlewrae_rpc_client()
+            _logger.info(f"Successfully init {init_rpc_client_num} rpc client")
 
         self.device_id = device_id
 
@@ -669,7 +676,7 @@ class TrainCtx(EmbeddingCtx):
         self.backward_engine.shutdown()
 
     @retry(wait_fixed=2000)
-    def get_master_addr(self):
+    def _get_master_addr(self) -> str:
         """Get leader(rank 0) ip address."""
         if self.rank_id == 0:
             master_addr = socket.gethostbyname(socket.gethostname())
@@ -680,6 +687,14 @@ class TrainCtx(EmbeddingCtx):
             master_addr = self.common_context.master_addr
             _logger.info(f"master addr is {master_addr}")
         return master_addr
+
+    @retry(wait_fixed=2000)
+    def _init_middlewrae_rpc_client(self) -> int:
+        middleware_addr_list = self.common_context.get_middleware_addr_list()
+        assert len(middleware_addr_list) > 0, "Not available middleware."
+        for middleware_addr in middleware_addr_list:
+            self.common_context.init_rpc_client_with_addr(middleware_addr)
+        return len(middleware_addr_list)
 
     @retry(wait_fixed=2000)
     def wait_servers_ready(self):
