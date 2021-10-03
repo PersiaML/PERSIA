@@ -49,7 +49,7 @@ RUN /opt/conda/bin/conda install -y -c pytorch -c conda-forge pytorch=${PYTORCH_
     pytest \
     tqdm \
     pandas \
-    tensorbard \ 
+    tensorboard \ 
     scikit-learn \
     ipython && \
     rm -rf /var/lib/apt/lists/* && \
