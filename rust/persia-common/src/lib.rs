@@ -31,12 +31,12 @@ use persia_speedy::{Readable, Writable};
 #[derive(Serialize, Deserialize, Readable, Writable, Clone, Debug)]
 #[serde(crate = "self::serde")]
 pub struct HashMapEmbeddingEntry {
-    inner: Vec<f16>, // TODO option1: consider using smallvec and slab allocator, and reference that smallvec with &[f32] here to avoid const generics
+    pub inner: Vec<f16>, // TODO option1: consider using smallvec and slab allocator, and reference that smallvec with &[f32] here to avoid const generics
     // TODO option2: consider wrap BufferPool (see crates.io) or modify sharded slab to allocate &[f32] here
     // TODO option3: consider using a object pool of &[f32] with predefined length and all these &[f32] comes from a large continuous Vec. When the object pool is exhausted, create a new large continuous Vec and split it to &[f32]s and add them to the object pool
     // TODO option4: allocate slices and put them in the slice_arena (see crates.io), then put the slice in the arena into a reusable object pool for consumption
     // TODO option5: allocate slices in bumpalo_herd allocator with alloc_slice_fill_default, and unsafely converts it to Vec, then put the Vec in a reusable object pool for consumption. In this case we can actually put the whole entry in the pool
-    embedding_dim: usize,
+    pub embedding_dim: usize,
 }
 
 impl HashMapEmbeddingEntry {
