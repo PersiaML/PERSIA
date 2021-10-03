@@ -77,6 +77,50 @@ pub unsafe fn decayed_adagrad_avx2(
 }
 
 #[allow(clippy::missing_safety_doc)]
+/// remember to update adagrad with gradient squared after this, the function will not do this
+pub unsafe fn decayed_adagrad_vectorwise_shared_avx2(
+    adagrad: f32,
+    embedding: &mut [f32],
+    gradient: &[f32],
+    learning_rate: f32,
+    eps: f32,
+) {
+    let length = embedding.len();
+    let end = (length / 8) * 8;
+    let embedding_ptr = embedding.as_ptr();
+    let gradient_ptr = gradient.as_ptr();
+    let adagrad_v = _mm256_set1_ps(adagrad);
+    for i in (0..end as isize).step_by(8) {
+        let embedding_v = _mm256_loadu_ps(embedding_ptr.offset(i));
+        let gradient_v = _mm256_loadu_ps(gradient_ptr.offset(i));
+
+        let scaled_gradient_v = _mm256_mul_ps(
+            gradient_v,
+            _mm256_rsqrt_ps(_mm256_add_ps(adagrad_v, _mm256_set1_ps(eps))),
+        );
+
+        let embedding_result_v = _mm256_fnmadd_ps(
+            _mm256_set1_ps(learning_rate),
+            scaled_gradient_v,
+            embedding_v,
+        );
+
+        _mm256_storeu_ps(embedding_ptr.offset(i) as *mut f32, embedding_result_v);
+    }
+
+    for i in end..length {
+        let embedding_v = &embedding[i];
+        let gradient_v = &gradient[i];
+
+        let scaled_gradient_v = gradient_v * (adagrad + eps).sqrt().recip();
+
+        let embedding_result_v = -learning_rate * scaled_gradient_v + embedding_v;
+
+        embedding[i] = embedding_result_v;
+    }
+}
+
+#[allow(clippy::missing_safety_doc)]
 pub unsafe fn decayed_sgd_avx2(emb: &mut [f32], grad: &[f32], wd: f32, lr: f32) {
     let length = emb.len();
     let end = (length / 8) * 8; // divide by simd step

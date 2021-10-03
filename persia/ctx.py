@@ -8,10 +8,13 @@ from typing import List, Tuple, Optional, NewType, Union
 
 import torch
 
+from retrying import retry
+
 import persia.env as env
 
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
+from persia.distributed import DistributedBaseOption, get_default_distributed_option
 from persia.prelude import PyPersiaCommonContext, PyPersiaBatchData
 
 _CURRENT_CXT = None
@@ -125,19 +128,42 @@ class DataCtx(BaseCtx):
         **kwargs,
     ):
         super(DataCtx, self).__init__(*args, **kwargs)
+        self.prepare()
+        _logger.info("Data ctx prepare done.")
+
+    @retry(wait_fixed=2000)
+    def prepare(self):
+        """Do some preparation to init `DataCtx`."""
 
         self.common_context.init_nats_publisher(None)
         self.common_context.wait_servers_ready()
 
-    def send_data(self, data: PyPersiaBatchData, blocking: bool = True):
+    @retry(wait_fixed=2000)
+    def send_sparse_to_middleware(self, data: PyPersiaBatchData):
+        """Send PersiaBatchData from data compose to middleware side.
+
+        Arguments:
+            data (PyPersiaBatchData): PersiaBatchData that haven't been process.
+        """
+        self.common_context.send_sparse_to_middleware(data)
+
+    @retry(wait_fixed=2000)
+    def send_dense_to_trainer(self, data: PyPersiaBatchData):
+        """Send PersiaBatchData from data compose to trainer side.
+
+        Arguments:
+            data (PyPersiaBatchData): PersiaBatchData that have been sent to middleware.
+        """
+        self.common_context.send_dense_to_trainer(data)
+
+    def send_data(self, data: PyPersiaBatchData):
         """Send PersiaBatchData from data compose to trainer and middleware side.
 
         Arguments:
             data (PyPersiaBatchData): PersiaBatchData that haven't been process.
-            blocking (bool, optional): Wait util the data send successfully.
         """
-        self.common_context.send_sparse_to_middleware(data, blocking)
-        self.common_context.send_dense_to_trainer(data, blocking)
+        self.send_sparse_to_middleware(data)
+        self.send_dense_to_trainer(data)
 
 
 class EmbeddingConfig:
@@ -207,13 +233,24 @@ class EmbeddingCtx(BaseCtx):
 
     def _enter(self):
         if self.embedding_config is not None:
-            self.common_context.configure_embedding_servers(
-                self.embedding_config.emb_initialization[0],
-                self.embedding_config.emb_initialization[1],
-                self.embedding_config.admit_probability,
-                self.embedding_config.weight_bound > 0,
-                self.embedding_config.weight_bound,
-            )
+            self.configure_embedding_servers(self.embedding_config)
+
+    @retry(wait_fixed=2000)
+    def configure_embedding_servers(
+        self,
+        embedding_config: EmbeddingConfig,
+    ):
+        """Apply Embedding config to embedding servers.
+        Arguments:
+            embedding_config (EmbeddingConfig): The configuration about embedding that will be sent to the embedding server.
+        """
+        self.common_context.configure_embedding_servers(
+            embedding_config.emb_initialization[0],
+            embedding_config.emb_initialization[1],
+            embedding_config.admit_probability,
+            embedding_config.weight_bound > 0,
+            embedding_config.weight_bound,
+        )
 
     def forward(
         self, batch: PythonTrainBatch
@@ -227,9 +264,7 @@ class EmbeddingCtx(BaseCtx):
         Returns:
             the tuple of output data and target data.
         """
-        assert (
-            self.model is not None
-        ), f"model not found, please init context with model"
+        assert self.model is not None, "model not found, please init context with model"
         dense, sparse, target = self.prepare_features(batch)
         output = self.model(dense, sparse)
         return (output, target)
@@ -369,9 +404,7 @@ class EmbeddingCtx(BaseCtx):
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
             with_jit_model (bool, optional): Dump jit script dense checkpoint or not.
         """
-        assert (
-            self.model is not None
-        ), f"model not found, please init context with model"
+        assert self.model is not None, "model not found, please init context with model"
 
         if with_jit_model:
             self.dump_dense(self.model, dst_dir, jit_dense_filename, True)
@@ -394,9 +427,7 @@ class EmbeddingCtx(BaseCtx):
             dense_filename (str, optional): Dense checkpoint filename.
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
         """
-        assert (
-            self.model is not None
-        ), f"model not found, please init context with model"
+        assert self.model is not None, "model not found, please init context with model"
 
         dense_model_filepath = os.path.join(src_dir, dense_filename)
         if os.path.exists(dense_model_filepath):
@@ -488,12 +519,13 @@ class EmbeddingCtx(BaseCtx):
         """Clear all embeddings on all embedding servers."""
         self.common_context.clear_embeddings()
 
+    @retry(wait_fixed=2000)
     def get_embedding_from_data(
         self, data: PyPersiaBatchData, device_id: int = 0
     ) -> PythonTrainBatch:
         """Get embeddings of the input batch data.
 
-         Arguments:
+        Arguments:
             data (PyPersiaBatchData): Input data without embeddings.
             device_id (int, optional): The CUDA device to use for this process.
 
@@ -502,12 +534,13 @@ class EmbeddingCtx(BaseCtx):
         """
         return self.common_context.get_embedding_from_data(data, device_id)
 
+    @retry(wait_fixed=2000)
     def get_embedding_from_bytes(
         self, data: bytes, device_id: int = 0
     ) -> PythonTrainBatch:
         """Get embeddings of the serialized input batch data.
 
-         Arguments:
+        Arguments:
             data (PyPersiaBatchData): Serialized input data without embeddings.
             device_id (int, optional): The CUDA device to use for this process.
 
@@ -527,14 +560,13 @@ class TrainCtx(EmbeddingCtx):
         >>> dense_optimizer = torch.optim.SGD(lr=1e-3)
         >>> loss_fn = torch.nn.BCELoss(reduction="mean")
         >>> with TrainCtx(
-        >>>     model=model,
         >>>     sparse_optimizer,
         >>>     dense_optimizer,
-        >>>     mixed_precision=True
         >>> ) as ctx:
+        >>>     parallel_model = ctx.model
         >>>     for batch_data in dataloder:
         >>>         dense, sparse, target = ctx.prepare_features(data)
-        >>>         output = model(dense, sparse)
+        >>>         output = parallel_model(dense, sparse)
         >>>         loss = loss_fn(output, target)
         >>>         scaled_loss = ctx.backward(loss)
     """
@@ -548,9 +580,8 @@ class TrainCtx(EmbeddingCtx):
         backward_buffer_size: int = 10,
         backward_workers_size: int = 8,
         grad_update_buffer_size: int = 60,
-        torch_distributed_port: int = 23456,
-        sync_params_in_asynchronous_mode: bool = False,
-        async_sync_interval: int = 500,
+        lookup_emb_directly: bool = True,
+        distributed_option: Optional[DistributedBaseOption] = None,
         *args,
         **kwargs,
     ):
@@ -562,11 +593,11 @@ class TrainCtx(EmbeddingCtx):
             grad_scalar_update_factor (float, optional): Update factor of ``Gradscalar`` to ensure loss scale finitely if set ``mixed_precision=True``.
             backward_buffer_size (int, optional): Max number of not updated gradients queued.
             backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
-            grad_tensor_cache_size(int, optional): Number of reference cache , hold the gradient tensor reference to avoid
+            grad_update_buffer_size (int, optional): Number of reference cache , hold the gradient tensor reference to avoid
                 meet dangle data in gradient backward phase.
-            torch_distributed_port(int, optional): tcp Port when init torch distributed process group.
-            sync_params_in_asynchronous_mode(bool, optional): Apply Bagua to average the model parameters in asynchronous mode.
-            async_sync_interval(int, optional): Interval of time that Bagua do model synchronize
+            lookup_emb_directly (bool, optional): Lookup embedding directly without isolation data compose.
+            distributed_option (DistributedBaseOption, optional): DistributedOption to converted model to dataparallel model.
+
         """
         super(TrainCtx, self).__init__(PreprocessMode.TRAIN, *args, **kwargs)
 
@@ -575,11 +606,11 @@ class TrainCtx(EmbeddingCtx):
         ), "Sparse_optimizer should not be none in train context"
         assert (
             0 <= device_id < torch.cuda.device_count()
-        ), f"device_id: {device_id} invalid!"
+        ), f"Device_id: {device_id} invalid!"
         assert grad_scalar_update_factor > 0, "grad scalar should greater than zero"
         assert (
             self.model is not None
-        ), f"model not found, please init context with model"
+        ), "Model not found, please init context with pytorch model"
 
         torch.cuda.set_device(device_id)
 
@@ -588,66 +619,49 @@ class TrainCtx(EmbeddingCtx):
         rank_id = env.get_rank()
         assert rank_id != -1, "RANK not set"
 
+        self.world_size = world_size
+        self.rank_id = rank_id
+
         if world_size > 1:
-            if rank_id == 0:
-                ip = socket.gethostbyname(socket.gethostname())
-                leader_addr = f"tcp://{ip}:{torch_distributed_port}"
-                self.common_context.init_leader_discovery_service(leader_addr)
+            distributed_option = distributed_option or get_default_distributed_option()
+            not_env_file = not distributed_option.init_with_env_file()
+            not_exists_master_addr = not distributed_option.master_addr
+            if not_env_file and not_exists_master_addr:
+                master_addr = self._get_master_addr()
             else:
-                self.common_context.init_leader_discovery_service(None)
-                leader_addr = self.common_context.get_leader_addr()
+                master_addr = None
 
-            _logger.info(f"leader addr is {leader_addr}")
+            model, dense_optimizer = distributed_option.convert2distributed_model(
+                self.model,
+                world_size,
+                rank_id,
+                device_id,
+                master_addr=master_addr,
+                optimizer=dense_optimizer,
+            )
+            self.model = model
+            _logger.info("Distributed training context init done.")
+        else:
+            _logger.info("SingleMachine training context init done.")
 
+        self.dense_optimizer = dense_optimizer
+        self.sparse_optimizer = sparse_optimizer
 
-            ip, port = leader_addr.replace("tcp://", "").split(":")
-            
-            if not sync_params_in_asynchronous_mode:
-                torch.distributed.init_process_group(
-                    "nccl",
-                    init_method=leader_addr,
-                    rank=rank_id,
-                    world_size=world_size,
-                )
-                _logger.info("torch ddp init process group done")
+        self.wait_servers_ready()
 
-                self.model = torch.nn.parallel.DistributedDataParallel(
-                    self.model,
-                    device_ids=[device_id],
-                    output_device=device_id,
-                    find_unused_parameters=True,
-                )
-            else:
-                from bagua.torch_api import init_process_group
-                from bagua.torch_api.algorithms import async_model_average
-
-                os.environ["MASTER_ADDR"] = ip
-                os.environ["MASTER_PORT"] = port
-                os.environ["BAGUA_SERVICE_PORT"] = str(6666)
-                os.environ["BAGUA_AUTOTUNE"] = str(0)
-
-                init_process_group()
-                algorithm = async_model_average.AsyncModelAverageAlgorithm(
-                    sync_interval_ms=async_sync_interval
-                )
-
-                self.model = self.model.with_bagua([dense_optimizer], algorithm)
-
-        self.common_context.init_nats_publisher(world_size)
-        self.common_context.wait_servers_ready()
+        if lookup_emb_directly:
+            init_rpc_client_num = self._init_middlewrae_rpc_client()
+            _logger.info(f"Successfully init {init_rpc_client_num} rpc client")
 
         self.device_id = device_id
 
         self.update_times = 0
         self.grad_scalar_update_factor = grad_scalar_update_factor
         self.grad_scaler = torch.cuda.amp.GradScaler()
-        self.sparse_optimizer = sparse_optimizer
-        self.dense_optimizer = dense_optimizer
         self.backward_workers_size = backward_workers_size
 
         from persia.prelude import PyBackward
 
-        # dynamic import the PyForward due to conditional compilation
         self.grad_queue = Queue(grad_update_buffer_size)
         self.backward_engine = PyBackward(backward_buffer_size)
 
@@ -661,6 +675,34 @@ class TrainCtx(EmbeddingCtx):
         super()._exit()
 
         self.backward_engine.shutdown()
+
+    @retry(wait_fixed=2000)
+    def _get_master_addr(self) -> str:
+        """Get leader(rank 0) ip address."""
+        if self.rank_id == 0:
+            master_addr = socket.gethostbyname(socket.gethostname())
+            self.common_context.init_master_discovery_service(master_addr)
+            _logger.info(f"init addr is {master_addr}")
+        else:
+            self.common_context.init_master_discovery_service(None)
+            master_addr = self.common_context.master_addr
+            _logger.info(f"master addr is {master_addr}")
+        return master_addr
+
+    @retry(wait_fixed=2000)
+    def _init_middlewrae_rpc_client(self) -> int:
+        middleware_addr_list = self.common_context.get_middleware_addr_list()
+        assert len(middleware_addr_list) > 0, "Not available middleware."
+        for middleware_addr in middleware_addr_list:
+            self.common_context.init_rpc_client_with_addr(middleware_addr)
+        return len(middleware_addr_list)
+
+    @retry(wait_fixed=2000)
+    def wait_servers_ready(self):
+        """query embedding server to check if servers are ready"""
+
+        self.common_context.init_nats_publisher(self.world_size)
+        self.common_context.wait_servers_ready()
 
     def backward(
         self, loss: torch.Tensor, embedding_gradient_check_frequency: int = 20

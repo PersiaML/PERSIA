@@ -5,11 +5,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use persia_libs::{
-    anyhow::Result, color_eyre, hashbrown::HashMap, rand, tracing, tracing_subscriber,
+    anyhow::Result, color_eyre, hashbrown::HashMap, hyper, rand, tracing, tracing_subscriber,
 };
 
 use structopt::StructOpt;
 
+use persia_common::utils::start_deadlock_detection_thread;
 use persia_embedding_config::{
     EmbeddingConfig, PerisaJobType, PersiaCommonConfig, PersiaGlobalConfig, PersiaMiddlewareConfig,
 };
@@ -52,6 +53,8 @@ async fn main() -> Result<()> {
     eprintln!("build_time: {}", build::BUILD_TIME);
     let args: Cli = Cli::from_args();
 
+    start_deadlock_detection_thread();
+
     PersiaGlobalConfig::set_configures(
         &args.global_config,
         args.port,
@@ -65,11 +68,11 @@ async fn main() -> Result<()> {
     let all_embedding_server_client = match &common_config.job_type {
         PerisaJobType::Infer => {
             let servers = common_config.infer_config.servers.clone();
-            AllEmbeddingServerClient::with_addrs(servers)
+            AllEmbeddingServerClient::with_addrs(servers).await
         }
         _ => {
-            let nats_publisher = EmbeddingServerNatsServicePublisher::new();
-            AllEmbeddingServerClient::with_nats(nats_publisher)
+            let nats_publisher = EmbeddingServerNatsServicePublisher::new().await;
+            AllEmbeddingServerClient::with_nats(nats_publisher).await
         }
     };
 
@@ -97,7 +100,7 @@ async fn main() -> Result<()> {
             let nats_service = MiddlewareNatsService {
                 inner: inner.clone(),
             };
-            let responder = MiddlewareNatsServiceResponder::new(nats_service);
+            let responder = MiddlewareNatsServiceResponder::new(nats_service).await;
             Some(responder)
         }
     };

@@ -2,7 +2,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use persia_libs::{
-    bytes, bytes::Bytes, once_cell, parking_lot, rand, rand::Rng, thiserror, tokio, tracing,
+    bytes, bytes::Bytes, hyper, lz4, once_cell, parking_lot, rand, rand::Rng, thiserror, tokio,
+    tracing,
 };
 use snafu::ResultExt;
 
@@ -544,7 +545,7 @@ pub struct EmbeddingService {
         Arc<persia_libs::async_lock::RwLock<Option<tokio::sync::oneshot::Sender<()>>>>,
 }
 
-#[persia_rpc::service]
+#[persia_rpc_macro::service]
 impl EmbeddingService {
     pub async fn ready_for_serving(&self, _req: ()) -> bool {
         self.inner.ready_for_serving().await

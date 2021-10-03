@@ -30,6 +30,7 @@ impl PyOptimizerBase {
         g_square_momentum: f32,
         initialization: f32,
         eps: f32,
+        vectorwise_shared: Option<bool>,
     ) -> () {
         let config = AdagradConfig {
             lr,
@@ -37,6 +38,7 @@ impl PyOptimizerBase {
             g_square_momentum,
             initialization,
             eps,
+            vectorwise_shared: vectorwise_shared.unwrap_or(false),
         };
         self.inner = Some(OptimizerConfig::Adagrad(config));
     }

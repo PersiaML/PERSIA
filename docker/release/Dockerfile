@@ -24,13 +24,8 @@ RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-
     net-tools \
     apt-utils \
     rlwrap \
-    telnet \
-    libhwloc-dev \
-    software-properties-common \
-    libssl-dev && \
-    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
-    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main' && \ 
-    apt remove --purge cmake -y && apt-get update && apt-get install -y --no-install-recommends cmake
+    ethtool \
+    telnet
 
 RUN curl -o ~/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
     chmod +x ~/miniconda.sh && \
@@ -58,10 +53,12 @@ RUN /opt/conda/bin/conda install -y -c pytorch -c conda-forge pytorch=${PYTORCH_
     /opt/conda/bin/pip install --no-cache-dir \ 
     pyyaml \
     remote-pdb \
+    retrying \
     colorlog \
     pytest \
     tqdm \
     pandas \
+    tensorboard \ 
     scikit-learn \
     ipython && \
     rm -rf /var/lib/apt/lists/* && \
