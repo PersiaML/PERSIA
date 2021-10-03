@@ -114,40 +114,6 @@ async fn main() -> Result<()> {
         }
     };
 
-    let initial_emb_size = std::env::var("INITIAL_EMB_SIZE")
-        .unwrap_or(String::from("0"))
-        .parse::<u64>()
-        .expect("INITIAL_EMB_SIZE not a number");
-
-    let initial_emb_dim = std::env::var("INITIAL_EMB_DIM")
-        .unwrap_or(String::from("0"))
-        .parse::<usize>()
-        .expect("INITIAL_EMB_DIM not a number");
-
-    if initial_emb_size > 0 {
-        let thread_num = std::env::var("INITIAL_THREAD_NUM")
-            .unwrap_or(String::from("0"))
-            .parse::<u64>()
-            .expect("INITIAL_THREAD_NUM not a number");
-
-        let num_ids_per_thread = initial_emb_size / thread_num;
-
-        (0..thread_num).for_each(|thread_idx| {
-            let start = num_ids_per_thread * thread_idx;
-            let end = start + num_ids_per_thread;
-            let inner = inner.clone();
-            std::thread::spawn(move || {
-                (start..end).into_iter().for_each(|id| {
-                    let entry = HashMapEmbeddingEntry {
-                        inner: vec![half::f16::from_f32(0.01_f32); initial_emb_dim],
-                        embedding_dim: initial_emb_dim,
-                    };
-                    inner.embedding.insert(id, Arc::new(RwLock::new(entry)));
-                })
-            });
-        })
-    }
-
     match job_type {
         PerisaJobType::Infer => {
             let common_config = PersiaCommonConfig::get()?;

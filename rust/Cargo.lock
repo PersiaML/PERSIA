@@ -1869,6 +1869,7 @@ dependencies = [
 name = "persia-embedding-holder"
 version = "0.1.0"
 dependencies = [
+ "hashlink",
  "persia-common",
  "persia-embedding-config",
  "persia-eviction-map",
