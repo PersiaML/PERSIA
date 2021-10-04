@@ -57,6 +57,14 @@ impl PersiaEmbeddingHolder {
                         .map(|_| {
                             let num_ids_per_bucket = num_ids_per_bucket.clone();
                             std::thread::spawn(move || {
+                                let float_embs = vec![0.01_f32; initial_emb_dim];
+                                let inner = half::vec::HalfFloatVecExt::from_f32_slice(
+                                    float_embs.as_slice(),
+                                );
+                                let entry = HashMapEmbeddingEntry {
+                                    inner,
+                                    embedding_dim: initial_emb_dim,
+                                };
                                 let mut map =
                                     LinkedHashMap::with_capacity(num_ids_per_bucket as usize);
                                 (0..num_ids_per_bucket).for_each(|id| {
@@ -68,11 +76,7 @@ impl PersiaEmbeddingHolder {
                                             progress
                                         );
                                     }
-                                    let entry = HashMapEmbeddingEntry {
-                                        inner: vec![half::f16::from_f32(0.01_f32); initial_emb_dim],
-                                        embedding_dim: initial_emb_dim,
-                                    };
-                                    map.insert(id, Arc::new(RwLock::new(entry)));
+                                    map.insert(id, Arc::new(RwLock::new(entry.clone())));
                                 });
                                 map
                             })
