@@ -122,23 +122,24 @@ pub struct AllEmbeddingServerClient {
 impl AllEmbeddingServerClient {
     pub async fn with_nats(nats_publisher: EmbeddingServerNatsServicePublisher) -> Self {
         tracing::info!("trying to get replica info of embedding servers");
-        let dst_replica_info: Result<PersiaReplicaInfo, _> =
-            retry(ExponentialBackoff::default(), || async {
-                let resp = AllEmbeddingServerClient::get_dst_replica_info(&nats_publisher).await;
-                if resp.is_err() {
-                    tracing::warn!(
-                        "failed to get replica info of embedding servers, due to {:?}, retrying",
-                        resp
-                    );
-                } else {
-                    tracing::info!(
-                        "succeed to get replica info of embedding servers, {:?}",
-                        resp
-                    );
-                }
-                Ok(resp?)
-            })
-            .await;
+        let mut backoff = ExponentialBackoff::default();
+        backoff.max_elapsed_time = Some(std::time::Duration::from_secs(36000));
+        let dst_replica_info: Result<PersiaReplicaInfo, _> = retry(backoff, || async {
+            let resp = AllEmbeddingServerClient::get_dst_replica_info(&nats_publisher).await;
+            if resp.is_err() {
+                tracing::warn!(
+                    "failed to get replica info of embedding servers, due to {:?}, retrying",
+                    resp
+                );
+            } else {
+                tracing::info!(
+                    "succeed to get replica info of embedding servers, {:?}",
+                    resp
+                );
+            }
+            Ok(resp?)
+        })
+        .await;
 
         let dst_replica_info =
             dst_replica_info.expect("failed to get replica info of embedding server");
@@ -241,7 +242,9 @@ impl AllEmbeddingServerClient {
     pub async fn get_all_addresses(&self) -> Result<Vec<String>, MiddlewareServerError> {
         let futs = (0..self.dst_replica_size).map(|replica_index| async move {
             tracing::info!("trying to get ip address of server {}", replica_index);
-            retry(ExponentialBackoff::default(), || async {
+            let mut backoff = ExponentialBackoff::default();
+            backoff.max_elapsed_time = Some(std::time::Duration::from_secs(36000));
+            retry(backoff, || async {
                 let addr = self.get_address(replica_index).await;
                 if addr.is_err() {
                     tracing::warn!(
