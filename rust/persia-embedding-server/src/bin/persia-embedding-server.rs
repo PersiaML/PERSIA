@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
     eprintln!("build_time: {}", build::BUILD_TIME);
     let args: Cli = Cli::from_args();
 
-    start_deadlock_detection_thread();
+    // start_deadlock_detection_thread();
 
     PersiaGlobalConfig::set_configures(
         &args.global_config,
