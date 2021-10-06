@@ -3,6 +3,11 @@
 #[macro_use]
 extern crate shadow_rs;
 
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 use std::{path::PathBuf, sync::Arc};
 
 use persia_libs::{
