@@ -96,9 +96,9 @@ pub struct EmbeddingServiceInner {
     pub server_config: Arc<PersiaEmbeddingServerConfig>,
     pub common_config: Arc<PersiaCommonConfig>,
     pub embedding_config: Arc<EmbeddingConfig>,
-    pub inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
-    pub model_persistence_manager: Arc<PersiaPersistenceManager>,
-    pub full_amount_manager: Arc<FullAmountManager>,
+    // pub inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
+    // pub model_persistence_manager: Arc<PersiaPersistenceManager>,
+    // pub full_amount_manager: Arc<FullAmountManager>,
     pub replica_index: usize,
 }
 
@@ -108,9 +108,9 @@ impl EmbeddingServiceInner {
         server_config: Arc<PersiaEmbeddingServerConfig>,
         common_config: Arc<PersiaCommonConfig>,
         embedding_config: Arc<EmbeddingConfig>,
-        inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
-        model_persistence_manager: Arc<PersiaPersistenceManager>,
-        full_amount_manager: Arc<FullAmountManager>,
+        // inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
+        // model_persistence_manager: Arc<PersiaPersistenceManager>,
+        // full_amount_manager: Arc<FullAmountManager>,
         replica_index: usize,
     ) -> Self {
         Self {
@@ -121,9 +121,9 @@ impl EmbeddingServiceInner {
             server_config,
             common_config,
             embedding_config,
-            inc_update_manager,
-            model_persistence_manager,
-            full_amount_manager,
+            // inc_update_manager,
+            // model_persistence_manager,
+            // full_amount_manager,
             replica_index,
         }
     }
@@ -198,7 +198,7 @@ impl EmbeddingServiceInner {
                                     emb_entry.update_by_f32_vec(f32_vec);
 
                                     let evcited = self.embedding
-                                        .insert(*sign, Arc::new(parking_lot::RwLock::new(emb_entry)));
+                                        .insert(*sign, parking_lot::RwLock::new(emb_entry));
 
                                     if evcited.is_some() {
                                         evcited_ids.push(sign.clone());
@@ -211,7 +211,7 @@ impl EmbeddingServiceInner {
                                 }
                             }
                             Some(entry) => {
-                                if let Some(entry) = entry.upgrade() {
+
                                     let entry_dim = { entry.read().dim() };
                                     if entry_dim != *dim {
                                         tracing::error!("dimensional mismatch on sign {}, in hashmap dim {}, requested dim {}", sign, entry_dim, dim);
@@ -228,7 +228,7 @@ impl EmbeddingServiceInner {
 
                                         let evcited = self
                                             .embedding
-                                            .insert(*sign, Arc::new(parking_lot::RwLock::new(entry)));
+                                            .insert(*sign, parking_lot::RwLock::new(entry));
                                         if evcited.is_some() {
                                             evcited_ids.push(sign.clone());
                                         }
@@ -238,17 +238,17 @@ impl EmbeddingServiceInner {
                                         assert_eq!(slice.len(), *dim, "dimension not match! 3");
                                         embeddings.extend_from_slice(&slice);
                                     }
-                                }
+
                             }
                         }
                     });
 
-                if let Err(_) = self.full_amount_manager.try_commit_evicted_ids(evcited_ids) {
-                    tracing::warn!(
-                            "commit to full_amount_manager failed, it is ok when dumping emb, otherwise, 
-                            please try a bigger full_amount_manager_buffer_size or num_hashmap_internal_shards"
-                        );
-                }
+                // if let Err(_) = self.full_amount_manager.try_commit_evicted_ids(evcited_ids) {
+                //     tracing::warn!(
+                //             "commit to full_amount_manager failed, it is ok when dumping emb, otherwise,
+                //             please try a bigger full_amount_manager_buffer_size or num_hashmap_internal_shards"
+                //         );
+                // }
                 Ok(())
             }
             false => {
@@ -260,7 +260,7 @@ impl EmbeddingServiceInner {
                                 index_miss_count += 1;
                             }
                             Some(entry) => {
-                                if let Some(entry) = entry.upgrade() {
+
                                     let entry_dim = { entry.read().dim() };
                                     if entry_dim != *dim {
                                         tracing::error!("dimensional mismatch on sign {}, in hashmap dim {}, requested dim {}",
@@ -270,7 +270,7 @@ impl EmbeddingServiceInner {
                                         let vec_f32= entry.read().to_owned_f32_vec();
                                         embeddings.extend_from_slice(&vec_f32.as_slice()[..*dim]);
                                     }
-                                }
+
                             }
                         }
                     });
@@ -288,16 +288,16 @@ impl EmbeddingServiceInner {
     }
 
     pub async fn ready_for_serving(&self) -> bool {
-        let model_status = self.model_persistence_manager.get_status();
-        let model_ready = match model_status {
-            PersiaPersistenceStatus::Dumping(_) => true,
-            PersiaPersistenceStatus::Idle => true,
-            PersiaPersistenceStatus::Loading(_) => false,
-            PersiaPersistenceStatus::Failed(_) => false,
-        };
-        if !model_ready {
-            return false;
-        }
+        // let model_status = self.model_persistence_manager.get_status();
+        // let model_ready = match model_status {
+        //     PersiaPersistenceStatus::Dumping(_) => true,
+        //     PersiaPersistenceStatus::Idle => true,
+        //     PersiaPersistenceStatus::Loading(_) => false,
+        //     PersiaPersistenceStatus::Failed(_) => false,
+        // };
+        // if !model_ready {
+        //     return false;
+        // }
         let job_type = self.common_config.job_type.clone();
         match job_type {
             PerisaJobType::Infer => true,
@@ -306,8 +306,9 @@ impl EmbeddingServiceInner {
     }
 
     pub async fn model_manager_status(&self) -> PersiaPersistenceStatus {
-        let status = self.model_persistence_manager.get_status();
-        status
+        // let status = self.model_persistence_manager.get_status();
+        // status
+        PersiaPersistenceStatus::Idle
     }
 
     pub async fn set_embedding(
@@ -315,23 +316,21 @@ impl EmbeddingServiceInner {
         embeddings: Vec<(u64, HashMapEmbeddingEntry)>,
     ) -> Result<(), EmbeddingServerError> {
         let start_time = std::time::Instant::now();
-        let mut evcited_ids = Vec::with_capacity(embeddings.len());
+        // let mut evcited_ids = Vec::with_capacity(embeddings.len());
         tokio::task::block_in_place(|| {
             embeddings.into_iter().for_each(|(id, entry)| {
-                let evcited = self
-                    .embedding
-                    .insert(id, Arc::new(parking_lot::RwLock::new(entry)));
-                if evcited.is_some() {
-                    evcited_ids.push(id);
-                }
+                let evcited = self.embedding.insert(id, parking_lot::RwLock::new(entry));
+                // if evcited.is_some() {
+                //     evcited_ids.push(id);
+                // }
             });
         });
-        if let Err(_) = self.full_amount_manager.try_commit_evicted_ids(evcited_ids) {
-            tracing::warn!(
-                    "commit to full_amount_manager failed, it is ok when dumping emb, otherwise, 
-                    please try a bigger full_amount_manager_buffer_size or num_hashmap_internal_shards"
-                );
-        }
+        // if let Err(_) = self.full_amount_manager.try_commit_evicted_ids(evcited_ids) {
+        //     tracing::warn!(
+        //             "commit to full_amount_manager failed, it is ok when dumping emb, otherwise,
+        //             please try a bigger full_amount_manager_buffer_size or num_hashmap_internal_shards"
+        //         );
+        // }
         if let Ok(m) = MetricsHolder::get() {
             m.set_embedding_time_cost
                 .observe(start_time.elapsed().as_secs_f64());
@@ -408,37 +407,35 @@ impl EmbeddingServiceInner {
         tokio::task::block_in_place(|| {
             for sign in signs {
                 if let Some(entry) = self.embedding.get_value(&sign) {
-                    if let Some(entry) = entry.upgrade() {
-                        let entry_dim = { entry.read().dim() };
-                        let (grad, r) = remaining_gradients.split_at(entry_dim);
-                        remaining_gradients = r;
+                    let entry_dim = { entry.read().dim() };
+                    let (grad, r) = remaining_gradients.split_at(entry_dim);
+                    remaining_gradients = r;
 
-                        {
-                            let mut entry = entry.write();
-                            // let emb_entry_slice = entry.as_mut_emb_entry_slice();
-                            let mut emb_vec = entry.to_owned_f32_vec();
+                    {
+                        let mut entry = entry.write();
+                        // let emb_entry_slice = entry.as_mut_emb_entry_slice();
+                        let mut emb_vec = entry.to_owned_f32_vec();
 
-                            optimizer.update(
-                                emb_vec.as_mut_slice(),
-                                grad,
-                                entry_dim,
-                                &batch_level_state,
-                            );
+                        optimizer.update(
+                            emb_vec.as_mut_slice(),
+                            grad,
+                            entry_dim,
+                            &batch_level_state,
+                        );
 
-                            if conf.enable_weight_bound {
-                                unsafe {
-                                    persia_simd::weight_bound(
-                                        &mut emb_vec.as_mut_slice()[..entry_dim],
-                                        conf.weight_bound,
-                                    );
-                                }
+                        if conf.enable_weight_bound {
+                            unsafe {
+                                persia_simd::weight_bound(
+                                    &mut emb_vec.as_mut_slice()[..entry_dim],
+                                    conf.weight_bound,
+                                );
                             }
-
-                            entry.update_by_f32_vec(emb_vec)
                         }
 
-                        indices_to_commit.push((sign, entry.clone()));
+                        entry.update_by_f32_vec(emb_vec)
                     }
+
+                    indices_to_commit.push((sign, entry.clone()));
                 } else {
                     gradient_id_miss_count += 1;
                 }
@@ -453,28 +450,28 @@ impl EmbeddingServiceInner {
             m.gradient_id_miss_count.inc_by(gradient_id_miss_count);
         }
 
-        let weak_ptrs = indices_to_commit
-            .iter()
-            .map(|(k, v)| (k.clone(), Arc::downgrade(v)))
-            .collect();
-        let commit_result = self.full_amount_manager.try_commit_weak_ptrs(weak_ptrs);
-        if commit_result.is_err() {
-            tracing::warn!(
-                "commit to full_amount_manager failed, it is ok when dumping emb, otherwise, 
-                please try a bigger full_amount_manager_buffer_size or num_hashmap_internal_shards"
-            );
-        }
+        // let weak_ptrs = indices_to_commit
+        //     .iter()
+        //     .map(|(k, v)| (k.clone(), Arc::downgrade(v)))
+        //     .collect();
+        // let commit_result = self.full_amount_manager.try_commit_weak_ptrs(weak_ptrs);
+        // if commit_result.is_err() {
+        //     tracing::warn!(
+        //         "commit to full_amount_manager failed, it is ok when dumping emb, otherwise,
+        //         please try a bigger full_amount_manager_buffer_size or num_hashmap_internal_shards"
+        //     );
+        // }
 
-        if self.server_config.enable_incremental_update {
-            let result = self
-                .inc_update_manager
-                .try_commit_incremental(indices_to_commit);
-            if result.is_err() {
-                tracing::error!(
-                    "inc update failed, please try a bigger inc_update_sending_buffer_size"
-                );
-            }
-        }
+        // if self.server_config.enable_incremental_update {
+        //     let result = self
+        //         .inc_update_manager
+        //         .try_commit_incremental(indices_to_commit);
+        //     if result.is_err() {
+        //         tracing::error!(
+        //             "inc update failed, please try a bigger inc_update_sending_buffer_size"
+        //         );
+        //     }
+        // }
 
         Ok(())
     }
@@ -504,16 +501,16 @@ impl EmbeddingServiceInner {
     }
 
     pub async fn dump(&self, dir: String) -> Result<(), EmbeddingServerError> {
-        let dst_dir = PathBuf::from(dir);
-        self.model_persistence_manager
-            .dump_full_amount_embedding(dst_dir)?;
+        // let dst_dir = PathBuf::from(dir);
+        // self.model_persistence_manager
+        //     .dump_full_amount_embedding(dst_dir)?;
         Ok(())
     }
 
     pub async fn load(&self, dir: String) -> Result<(), EmbeddingServerError> {
-        let dst_dir = PathBuf::from(dir);
-        self.model_persistence_manager
-            .load_embedding_from_dir(dst_dir)?;
+        // let dst_dir = PathBuf::from(dir);
+        // self.model_persistence_manager
+        //     .load_embedding_from_dir(dst_dir)?;
         Ok(())
     }
 

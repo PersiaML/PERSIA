@@ -79,9 +79,9 @@ async fn main() -> Result<()> {
     let common_config = PersiaCommonConfig::get()?;
     let server_config = PersiaEmbeddingServerConfig::get()?;
     let embedding_holder = PersiaEmbeddingHolder::get()?;
-    let full_amount_manager = FullAmountManager::get()?;
-    let inc_update_manager = PerisaIncrementalUpdateManager::get()?;
-    let model_persistence_manager = PersiaPersistenceManager::get()?;
+    // let full_amount_manager = FullAmountManager::get()?;
+    // let inc_update_manager = PerisaIncrementalUpdateManager::get()?;
+    // let model_persistence_manager = PersiaPersistenceManager::get()?;
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
 
     let inner = Arc::new(EmbeddingServiceInner::new(
@@ -89,9 +89,9 @@ async fn main() -> Result<()> {
         server_config,
         common_config,
         embedding_config,
-        inc_update_manager,
-        model_persistence_manager,
-        full_amount_manager,
+        // inc_update_manager,
+        // model_persistence_manager,
+        // full_amount_manager,
         args.replica_index,
     ));
 

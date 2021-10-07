@@ -13,3 +13,5 @@ persia-eviction-map = {path = "../persia-eviction-map"}
 persia-libs = {path = "../persia-libs"}
 persia-speedy = "0.9"
 hashlink = "0.7"
+slotmap = "1.0.3"
+indexlist = "0.1.0"
