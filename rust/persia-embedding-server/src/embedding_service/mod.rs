@@ -178,7 +178,9 @@ impl EmbeddingServiceInner {
 
                 req.iter().for_each(|(sign, dim)| {
                         let conf = conf.as_ref().unwrap();
-                        let e = self.embedding.get_value_refresh(sign);
+                        let mut shard = self.embedding.inner.shard(sign).write();
+                        let e =shard.get_value(sign);
+                        // let e = self.embedding.get_value_refresh(sign);
                         match e {
                             None => {
                                 if rand::thread_rng().gen_range(0f32..1f32) < conf.admit_probability {
@@ -197,7 +199,7 @@ impl EmbeddingServiceInner {
                                     embeddings.extend_from_slice(slice);
                                     emb_entry.update_by_f32_vec(f32_vec);
 
-                                    let evcited = self.embedding
+                                    let evcited = shard
                                         .insert(*sign, parking_lot::RwLock::new(emb_entry));
 
                                     if evcited.is_some() {
@@ -226,8 +228,7 @@ impl EmbeddingServiceInner {
                                         assert_eq!(slice.len(), *dim, "dimension not match! 2");
                                         embeddings.extend_from_slice(slice);
 
-                                        let evcited = self
-                                            .embedding
+                                        let evcited = shard
                                             .insert(*sign, parking_lot::RwLock::new(entry));
                                         if evcited.is_some() {
                                             evcited_ids.push(sign.clone());
@@ -253,7 +254,9 @@ impl EmbeddingServiceInner {
             }
             false => {
                 req.iter().for_each(|(sign, dim)| {
-                        let e = self.embedding.get_value(sign);
+                        let shard = self.embedding.inner.shard(sign).read();
+                        let e =shard.get_value(sign);
+                        // let e = self.embedding.get_value(sign);
                         match e {
                             None => {
                                 embeddings.extend_from_slice(vec![0f32; *dim].as_slice());
@@ -319,7 +322,12 @@ impl EmbeddingServiceInner {
         // let mut evcited_ids = Vec::with_capacity(embeddings.len());
         tokio::task::block_in_place(|| {
             embeddings.into_iter().for_each(|(id, entry)| {
-                let evcited = self.embedding.insert(id, parking_lot::RwLock::new(entry));
+                let evcited = self
+                    .embedding
+                    .inner
+                    .shard(&id)
+                    .write()
+                    .insert(id, parking_lot::RwLock::new(entry));
                 // if evcited.is_some() {
                 //     evcited_ids.push(id);
                 // }
@@ -393,7 +401,7 @@ impl EmbeddingServiceInner {
         let conf = self.get_configuration().await?;
         let (signs, remaining_gradients) = req;
         let mut remaining_gradients = remaining_gradients.as_slice();
-        let mut indices_to_commit = Vec::with_capacity(signs.len());
+        // let mut indices_to_commit = Vec::with_capacity(signs.len());
         let mut gradient_id_miss_count = 0;
 
         let optimizer = self.optimizer.read().await;
@@ -406,7 +414,8 @@ impl EmbeddingServiceInner {
 
         tokio::task::block_in_place(|| {
             for sign in signs {
-                if let Some(entry) = self.embedding.get_value(&sign) {
+                let shard = self.embedding.inner.shard(&sign).read();
+                if let Some(entry) = shard.get_value(&sign) {
                     let entry_dim = { entry.read().dim() };
                     let (grad, r) = remaining_gradients.split_at(entry_dim);
                     remaining_gradients = r;
@@ -435,7 +444,7 @@ impl EmbeddingServiceInner {
                         entry.update_by_f32_vec(emb_vec)
                     }
 
-                    indices_to_commit.push((sign, entry.clone()));
+                    // indices_to_commit.push((sign, entry.clone()));
                 } else {
                     gradient_id_miss_count += 1;
                 }

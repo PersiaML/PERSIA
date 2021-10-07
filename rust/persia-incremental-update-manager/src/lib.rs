@@ -228,12 +228,12 @@ impl PerisaIncrementalUpdateManager {
             m.inc_update_delay.set(delay as f64);
         }
         tracing::debug!("loading inc packet, delay is {}s", delay);
-        packet.content.into_iter().for_each(|(id, emb)| {
-            self.embedding_holder.insert(
-                id,
-                Arc::new(RwLock::new(HashMapEmbeddingEntry::from_emb(emb))),
-            );
-        });
+        // packet.content.into_iter().for_each(|(id, emb)| {
+        //     self.embedding_holder.insert(
+        //         id,
+        //         Arc::new(RwLock::new(HashMapEmbeddingEntry::from_emb(emb))),
+        //     );
+        // });
     }
 
     pub fn try_commit_incremental(

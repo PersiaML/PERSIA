@@ -112,7 +112,7 @@ impl PersiaHashLink {
 
 #[derive(Clone)]
 pub struct PersiaEmbeddingHolder {
-    inner: Arc<Sharded<PersiaHashLink, u64>>,
+    pub inner: Arc<Sharded<PersiaHashLink, u64>>,
     _recycle_pool: Arc<RecyclePool>,
 }
 
@@ -195,21 +195,21 @@ impl PersiaEmbeddingHolder {
             .sum::<usize>()
     }
 
-    pub fn insert(
-        &self,
-        key: u64,
-        value: RwLock<HashMapEmbeddingEntry>,
-    ) -> Option<RwLock<HashMapEmbeddingEntry>> {
-        self.inner.shard(&key).write().insert(key, value)
-    }
+    // pub fn insert(
+    //     &self,
+    //     key: u64,
+    //     value: RwLock<HashMapEmbeddingEntry>,
+    // ) -> Option<RwLock<HashMapEmbeddingEntry>> {
+    //     self.inner.shard(&key).write().insert(key, value)
+    // }
 
-    pub fn get_value(&self, key: &u64) -> Option<&RwLock<HashMapEmbeddingEntry>> {
-        self.inner.shard(key).read().get_value(key)
-    }
+    // pub fn get_value(&self, key: &u64) -> Option<&RwLock<HashMapEmbeddingEntry>> {
+    //     self.inner.shard(key).read().get_value(key)
+    // }
 
-    pub fn get_value_refresh(&self, key: &u64) -> Option<&RwLock<HashMapEmbeddingEntry>> {
-        self.inner.shard(key).write().get_value_refresh(key)
-    }
+    // pub fn get_value_refresh(&self, key: &u64) -> Option<&RwLock<HashMapEmbeddingEntry>> {
+    //     self.inner.shard(key).write().get_value_refresh(key)
+    // }
 
     pub fn clear(&self) {
         tracing::warn!("clear do nothing for now");

@@ -418,31 +418,31 @@ impl PersiaPersistenceManager {
                     };
                     let embeddings = manager.wrap_embeddings(content, load_opt);
 
-                    let weak_ptrs = embeddings
-                        .iter()
-                        .map(|(k, v)| (k.clone(), Arc::downgrade(v)))
-                        .collect();
-                    if let Ok(_) = manager.full_amount_manager.commit_weak_ptrs(weak_ptrs) {
-                        for (id, entry) in embeddings.into_iter() {
-                            manager.embedding_holder.insert(id, entry);
-                        }
+                    // let weak_ptrs = embeddings
+                    //     .iter()
+                    //     .map(|(k, v)| (k.clone(), Arc::downgrade(v)))
+                    //     .collect();
+                    // if let Ok(_) = manager.full_amount_manager.commit_weak_ptrs(weak_ptrs) {
+                    //     for (id, entry) in embeddings.into_iter() {
+                    //         manager.embedding_holder.insert(id, entry);
+                    //     }
 
-                        let cur_loaded_files = num_loaded_files.fetch_add(1, Ordering::AcqRel);
-                        let cur_loaded_files = cur_loaded_files + 1;
+                    //     let cur_loaded_files = num_loaded_files.fetch_add(1, Ordering::AcqRel);
+                    //     let cur_loaded_files = cur_loaded_files + 1;
 
-                        let loading_progress = (cur_loaded_files as f32) / (num_total_files as f32);
-                        *manager.status.write() =
-                            PersiaPersistenceStatus::Loading(loading_progress);
-                        tracing::debug!("load embedding progress is {}", loading_progress);
+                    //     let loading_progress = (cur_loaded_files as f32) / (num_total_files as f32);
+                    //     *manager.status.write() =
+                    //         PersiaPersistenceStatus::Loading(loading_progress);
+                    //     tracing::debug!("load embedding progress is {}", loading_progress);
 
-                        if num_total_files == cur_loaded_files {
-                            *manager.status.write() = PersiaPersistenceStatus::Idle;
-                        }
-                    } else {
-                        let msg = String::from("failed to commit embedding to full amount manager");
-                        tracing::error!("{}", msg);
-                        *manager.status.write() = PersiaPersistenceStatus::Failed(msg);
-                    }
+                    //     if num_total_files == cur_loaded_files {
+                    //         *manager.status.write() = PersiaPersistenceStatus::Idle;
+                    //     }
+                    // } else {
+                    //     let msg = String::from("failed to commit embedding to full amount manager");
+                    //     tracing::error!("{}", msg);
+                    //     *manager.status.write() = PersiaPersistenceStatus::Failed(msg);
+                    // }
                 }
             }
         });
