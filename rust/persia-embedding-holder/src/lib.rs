@@ -146,21 +146,22 @@ impl PersiaEmbeddingHolder {
                         let num_ids_per_bucket = num_ids_per_bucket.clone();
                         std::thread::spawn(move || {
                             let float_embs = vec![0.01_f32; initial_emb_dim];
-                            let inner =
-                                half::vec::HalfFloatVecExt::from_f32_slice(float_embs.as_slice());
+                            // let inner =
+                            //     half::vec::HalfFloatVecExt::from_f32_slice(float_embs.as_slice());
+                            let inner = [half::f16::from_f32(0.01_f32); 32];
                             let entry = HashMapEmbeddingEntry {
                                 inner,
                                 embedding_dim: initial_emb_dim,
                             };
                             let mut map = PersiaHashLink::new(num_ids_per_bucket as usize);
-                            (0..num_ids_per_bucket).for_each(|id| {
-                                if id % 100000 == 0 {
-                                    let progress =
-                                        id as f32 / num_ids_per_bucket as f32 * 100.0_f32;
-                                    tracing::info!("generating embedding, progress {}%", progress);
-                                }
-                                map.insert(id, RwLock::new(entry.clone()));
-                            });
+                            // (0..num_ids_per_bucket).for_each(|id| {
+                            //     if id % 100000 == 0 {
+                            //         let progress =
+                            //             id as f32 / num_ids_per_bucket as f32 * 100.0_f32;
+                            //         tracing::info!("generating embedding, progress {}%", progress);
+                            //     }
+                            //     map.insert(id, RwLock::new(entry.clone()));
+                            // });
                             map
                         })
                     })
@@ -170,6 +171,8 @@ impl PersiaEmbeddingHolder {
                     .into_iter()
                     .map(|h| RwLock::new(h.join().expect("failed to gen map")))
                     .collect();
+
+                panic!("exit");
 
                 Sharded {
                     inner: maps,

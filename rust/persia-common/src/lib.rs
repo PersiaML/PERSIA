@@ -31,7 +31,7 @@ use persia_speedy::{Readable, Writable};
 #[derive(Serialize, Deserialize, Readable, Writable, Clone, Debug)]
 #[serde(crate = "self::serde")]
 pub struct HashMapEmbeddingEntry {
-    pub inner: Vec<f16>, // TODO option1: consider using smallvec and slab allocator, and reference that smallvec with &[f32] here to avoid const generics
+    pub inner: [half::f16; 32], // TODO option1: consider using smallvec and slab allocator, and reference that smallvec with &[f32] here to avoid const generics
     // TODO option2: consider wrap BufferPool (see crates.io) or modify sharded slab to allocate &[f32] here
     // TODO option3: consider using a object pool of &[f32] with predefined length and all these &[f32] comes from a large continuous Vec. When the object pool is exhausted, create a new large continuous Vec and split it to &[f32]s and add them to the object pool
     // TODO option4: allocate slices and put them in the slice_arena (see crates.io), then put the slice in the arena into a reusable object pool for consumption
@@ -46,38 +46,47 @@ impl HashMapEmbeddingEntry {
         require_space: usize,
         seed: u64,
     ) -> Self {
-        let emb = {
-            let mut rng = SmallRng::seed_from_u64(seed);
-            match initialization_method {
-                InitializationMethod::BoundedUniform(x) => {
-                    Array1::random_using((dim,), Uniform::new(x.lower, x.upper), &mut rng)
-                }
-                InitializationMethod::BoundedGamma(x) => {
-                    Array1::random_using((dim,), Gamma::new(x.shape, x.scale).unwrap(), &mut rng)
-                }
-                InitializationMethod::BoundedPoisson(x) => {
-                    Array1::random_using((dim,), Poisson::new(x.lambda).unwrap(), &mut rng)
-                }
-                InitializationMethod::BoundedNormal(x) => Array1::random_using(
-                    (dim,),
-                    Normal::new(x.mean, x.standard_deviation).unwrap(),
-                    &mut rng,
-                ),
-                _ => panic!(
-                    "unsupported initialization method for hashmap impl: {:?}",
-                    initialization_method
-                ),
-            }
-        };
+        // let emb = {
+        //     let mut rng = SmallRng::seed_from_u64(seed);
+        //     match initialization_method {
+        //         InitializationMethod::BoundedUniform(x) => {
+        //             Array1::random_using((dim,), Uniform::new(x.lower, x.upper), &mut rng)
+        //         }
+        //         InitializationMethod::BoundedGamma(x) => {
+        //             Array1::random_using((dim,), Gamma::new(x.shape, x.scale).unwrap(), &mut rng)
+        //         }
+        //         InitializationMethod::BoundedPoisson(x) => {
+        //             Array1::random_using((dim,), Poisson::new(x.lambda).unwrap(), &mut rng)
+        //         }
+        //         InitializationMethod::BoundedNormal(x) => Array1::random_using(
+        //             (dim,),
+        //             Normal::new(x.mean, x.standard_deviation).unwrap(),
+        //             &mut rng,
+        //         ),
+        //         _ => panic!(
+        //             "unsupported initialization method for hashmap impl: {:?}",
+        //             initialization_method
+        //         ),
+        //     }
+        // };
 
-        let mut inner = emb.into_raw_vec();
-        if require_space > 0 {
-            inner.resize(inner.len() + require_space, 0.0_f32);
-        }
-        let inner = Vec::from_f32_slice(inner.as_slice());
+        // let mut inner = emb.into_raw_vec();
+        // if require_space > 0 {
+        //     inner.resize(inner.len() + require_space, 0.0_f32);
+        // }
+        // let inner = Vec::from_f32_slice(inner.as_slice());
+        let inner = [half::f16::from_f32(0.01_f32); 32];
         Self {
             inner,
-            embedding_dim: dim,
+            embedding_dim: 32,
+        }
+    }
+
+    pub fn new_const() -> Self {
+        let inner = [half::f16::from_f32(0.01_f32); 32];
+        Self {
+            inner,
+            embedding_dim: 32,
         }
     }
 
@@ -89,12 +98,13 @@ impl HashMapEmbeddingEntry {
     // }
 
     pub fn from_emb(emb: Vec<f32>) -> Self {
-        let embedding_dim = emb.len();
-        let emb = Vec::from_f32_slice(emb.as_slice());
-        Self {
-            inner: emb,
-            embedding_dim,
-        }
+        // let embedding_dim = emb.len();
+        // let emb = Vec::from_f32_slice(emb.as_slice());
+        // Self {
+        //     inner: emb,
+        //     embedding_dim,
+        // }
+        Self::new_const()
     }
 
     // pub fn from_emb_and_opt(emb: Vec<f32>, opt: &[f32]) -> Self {
@@ -123,7 +133,9 @@ impl HashMapEmbeddingEntry {
     }
 
     pub fn update_by_f32_vec(&mut self, source: Vec<f32>) {
-        self.inner = Vec::from_f32_slice(source.as_slice());
+        source.iter().zip(self.inner.iter_mut()).for_each(|(x, y)| {
+            *y = half::f16::from_f32(*x);
+        });
     }
 
     // pub fn as_mut_emb_entry_slice(&mut self) -> &mut [f32] {
