@@ -1,3 +1,5 @@
+mod array_linked_list;
+
 use hashlink::LinkedHashMap;
 use indexlist::IndexList;
 use slotmap::{DefaultKey, HopSlotMap};
@@ -17,6 +19,8 @@ use persia_embedding_config::{PersiaEmbeddingServerConfig, PersiaGlobalConfigErr
 use persia_eviction_map::{PersiaEvictionMap, Sharded};
 use persia_speedy::{Readable, Writable};
 
+use array_linked_list::ArrayLinkedList;
+
 #[derive(Readable, Writable, thiserror::Error, Debug)]
 pub enum PersiaEmbeddingHolderError {
     #[error("global config error: {0}")]
@@ -29,9 +33,8 @@ static PERSIA_EMBEDDING_HOLDER: once_cell::sync::OnceCell<PersiaEmbeddingHolder>
     once_cell::sync::OnceCell::new();
 
 pub struct PersiaHashLink {
-    hashmap: HashMap<u64, DefaultKey>,
-    slotmap: HopSlotMap<DefaultKey, RwLock<HashMapEmbeddingEntry>>,
-    indexlist: IndexList<u64>,
+    hashmap: HashMap<u64, u32>,
+    indexlist: ArrayLinkedList<RwLock<HashMapEmbeddingEntry>>,
     capacity: usize,
 }
 
@@ -39,8 +42,7 @@ impl PersiaHashLink {
     pub fn new(capacity: usize) -> Self {
         Self {
             hashmap: HashMap::with_capacity(capacity),
-            slotmap: HopSlotMap::with_capacity(capacity),
-            indexlist: IndexList::with_capacity(capacity),
+            indexlist: ArrayLinkedList::with_capacity(capacity as u32),
             capacity,
         }
     }
@@ -50,38 +52,18 @@ impl PersiaHashLink {
         key: u64,
         value: RwLock<HashMapEmbeddingEntry>,
     ) -> Option<RwLock<HashMapEmbeddingEntry>> {
-        match self.hashmap.get(&key) {
-            Some(old_k) => {
-                if let Some(old_v) = self.slotmap.get_mut(*old_k) {
-                    *old_v = value;
-                }
-                if let Some(old_index) = self.indexlist.index_of(&key) {
-                    self.indexlist.remove(old_index);
-                    self.indexlist.push_back(key);
-                }
-            }
-            None => {
-                let slot_key = self.slotmap.insert(value);
-                self.hashmap.insert(key.clone(), slot_key);
-                self.indexlist.push_back(key);
-            }
-        }
-        if self.hashmap.len() > self.capacity {
-            if let Some(evicted) = self.indexlist.pop_front() {
-                if let Some(slot_key) = self.hashmap.remove(&evicted) {
-                    let evicted_v = self.slotmap.remove(slot_key);
-                    return evicted_v;
-                }
-            }
-        }
+        let index = self.indexlist.push_back(value);
+        self.hashmap.insert(key, index);
         return None;
     }
 
     pub fn get_value(&self, key: &u64) -> Option<&RwLock<HashMapEmbeddingEntry>> {
         match self.hashmap.get(key) {
-            Some(slot_k) => {
-                let val = self.slotmap.get(*slot_k);
-                return val;
+            Some(index) => {
+                if let Some(val) = &self.indexlist[*index as usize] {
+                    return Some(val);
+                }
+                return None;
             }
             None => {
                 return None;
@@ -91,13 +73,11 @@ impl PersiaHashLink {
 
     pub fn get_value_refresh(&mut self, key: &u64) -> Option<&RwLock<HashMapEmbeddingEntry>> {
         match self.hashmap.get(key) {
-            Some(slot_k) => {
-                let val = self.slotmap.get(*slot_k);
-                if let Some(index) = self.indexlist.index_of(key) {
-                    self.indexlist.remove(index);
-                    self.indexlist.push_back(key.clone());
+            Some(index) => {
+                if let Some(val) = &self.indexlist[*index as usize] {
+                    return Some(val);
                 }
-                return val;
+                return None;
             }
             None => {
                 return None;
@@ -106,7 +86,7 @@ impl PersiaHashLink {
     }
 
     pub fn len(&self) -> usize {
-        self.slotmap.len()
+        self.indexlist.len() as usize
     }
 }
 
@@ -146,22 +126,21 @@ impl PersiaEmbeddingHolder {
                         let num_ids_per_bucket = num_ids_per_bucket.clone();
                         std::thread::spawn(move || {
                             let float_embs = vec![0.01_f32; initial_emb_dim];
-                            // let inner =
-                            //     half::vec::HalfFloatVecExt::from_f32_slice(float_embs.as_slice());
-                            let inner = [half::f16::from_f32(0.01_f32); 32];
+                            let inner =
+                                half::vec::HalfFloatVecExt::from_f32_slice(float_embs.as_slice());
                             let entry = HashMapEmbeddingEntry {
                                 inner,
                                 embedding_dim: initial_emb_dim,
                             };
                             let mut map = PersiaHashLink::new(num_ids_per_bucket as usize);
-                            // (0..num_ids_per_bucket).for_each(|id| {
-                            //     if id % 100000 == 0 {
-                            //         let progress =
-                            //             id as f32 / num_ids_per_bucket as f32 * 100.0_f32;
-                            //         tracing::info!("generating embedding, progress {}%", progress);
-                            //     }
-                            //     map.insert(id, RwLock::new(entry.clone()));
-                            // });
+                            (0..num_ids_per_bucket).for_each(|id| {
+                                if id % 100000 == 0 {
+                                    let progress =
+                                        id as f32 / num_ids_per_bucket as f32 * 100.0_f32;
+                                    tracing::info!("generating embedding, progress {}%", progress);
+                                }
+                                map.insert(id, RwLock::new(entry.clone()));
+                            });
                             map
                         })
                     })
@@ -171,8 +150,6 @@ impl PersiaEmbeddingHolder {
                     .into_iter()
                     .map(|h| RwLock::new(h.join().expect("failed to gen map")))
                     .collect();
-
-                panic!("exit");
 
                 Sharded {
                     inner: maps,

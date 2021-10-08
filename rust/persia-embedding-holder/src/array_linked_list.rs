@@ -122,7 +122,7 @@ use std::{
 };
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-struct LinkedListNode<T> {
+pub struct LinkedListNode<T> {
     next_index: u32,
     prev_index: u32,
     data: Option<T>,
@@ -797,7 +797,9 @@ impl<T> ArrayLinkedList<T> {
     }
 
     /// Returns a borrowing iterator over its indexed elements.
-    pub fn indexed<'a>(&'a self) -> impl Iterator<Item = (u32, &'a T)> + DoubleEndedIterator<Item = (u32, &'a T)> {
+    pub fn indexed<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = (u32, &'a T)> + DoubleEndedIterator<Item = (u32, &'a T)> {
         Indexed::new(self)
     }
 

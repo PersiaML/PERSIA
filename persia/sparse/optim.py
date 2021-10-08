@@ -2,6 +2,7 @@ from abc import ABC
 from typing import Tuple
 
 from persia.prelude import PyOptimizerBase
+from retrying import retry
 
 
 class Optimizer(ABC):
@@ -10,6 +11,7 @@ class Optimizer(ABC):
     def __init__(self):
         self.optimizer_base = PyOptimizerBase()
 
+    @retry(wait_fixed=2000)
     def apply(self):
         """Register sparse optimizer to embedding server."""
         self.optimizer_base.apply()
