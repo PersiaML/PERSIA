@@ -22,7 +22,7 @@ pub fn start_deadlock_detection_thread() {
     if std::env::var("PERSIA_DEADLOCK_DETECTION")
         .unwrap_or(String::from("0"))
         .parse::<usize>()
-        .expect("PERSIA_DEADLOCK_DETECTION expect 0 or 1")
+        .expect("PERSIA_DEADLOCK_DETECTION should be 0 or 1")
         > 0
     {
         std::thread::spawn(move || {
