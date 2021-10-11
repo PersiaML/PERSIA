@@ -190,14 +190,8 @@ pub unsafe fn adam_avx2(
             ),
         );
 
-        let m_bias_corr = _mm256_mul_ps(
-            updated_m,
-            _mm256_set1_ps(one_minus_beta1_power_recip),
-        );
-        let v_bias_corr = _mm256_mul_ps(
-            updated_v,
-            _mm256_set1_ps(one_minus_beta2_power_recip)
-        );
+        let m_bias_corr = _mm256_mul_ps(updated_m, _mm256_set1_ps(one_minus_beta1_power_recip));
+        let v_bias_corr = _mm256_mul_ps(updated_v, _mm256_set1_ps(one_minus_beta2_power_recip));
 
         let descent = _mm256_div_ps(
             m_bias_corr,
@@ -232,8 +226,6 @@ pub unsafe fn adam_avx2(
         emb[i] = updated_emb;
     }
 }
-
-
 
 #[allow(clippy::missing_safety_doc)]
 pub unsafe fn weight_bound(embedding: &mut [f32], weight_bound: f32) {
