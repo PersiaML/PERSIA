@@ -99,8 +99,8 @@ static PERSIA_COMMON_CONTEXT: OnceCell<Arc<PersiaCommonContext>> = OnceCell::new
 
 struct PersiaCommonContext {
     pub rpc_client: Arc<PersiaRpcClient>,
-    pub nats_publisher: Arc<RwLock<Option<nats::PersiaBatchFlowNatsServicePublisherWrapper>>>,
-    pub master_discovery_service: Arc<RwLock<Option<nats::MasterDiscoveryNatsServiceWrapper>>>,
+    pub nats_publisher: Arc<RwLock<Option<nats::PersiaDataFlowComponent>>>,
+    pub master_discovery_service: Arc<RwLock<Option<nats::MasterDiscoveryComponent>>>,
     pub async_runtime: Arc<Runtime>,
 }
 
@@ -188,9 +188,7 @@ impl PyPersiaCommonContext {
         let instance = self
             .inner
             .async_runtime
-            .block_on(nats::PersiaBatchFlowNatsServicePublisherWrapper::new(
-                world_size,
-            ))
+            .block_on(nats::PersiaDataFlowComponent::new_initialized(world_size))
             .map_err(|e| e.to_py_runtime_err())?;
 
         let mut nats_publisher = self.inner.nats_publisher.write();
@@ -210,7 +208,7 @@ impl PyPersiaCommonContext {
         let instance = self
             .inner
             .async_runtime
-            .block_on(nats::MasterDiscoveryNatsServiceWrapper::new(master_addr));
+            .block_on(nats::MasterDiscoveryComponent::new(master_addr));
         let mut master_discovery_service = self.inner.master_discovery_service.write();
         *master_discovery_service = Some(instance);
         Ok(())
