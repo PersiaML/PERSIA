@@ -277,7 +277,7 @@ impl PersiaDataFlowComponent {
                 let batch_id = local_batch_id * self.replica_info.replica_size
                     + self.replica_info.replica_index;
                 batch.inner.batch_id = Some(batch_id);
-                tracing::debug!(
+                tracing::info!(
                     "send_sparse_to_middleware time cost {} ms",
                     start.elapsed().as_millis()
                 );
@@ -318,7 +318,7 @@ impl PersiaDataFlowComponent {
             Ok(resp?)
         });
 
-        tracing::debug!(
+        tracing::info!(
             "send_dense_to_trainer {} time cost {} ms",
             rank_id,
             start.elapsed().as_millis()
