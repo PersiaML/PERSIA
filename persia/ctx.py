@@ -8,8 +8,6 @@ from typing import List, Tuple, Optional, NewType, Union
 
 import torch
 
-from retrying import retry
-
 import persia.env as env
 
 from persia.logger import get_default_logger
