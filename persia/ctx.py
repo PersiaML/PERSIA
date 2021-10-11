@@ -35,40 +35,17 @@ def _check_finite(tensors: List[torch.Tensor]) -> bool:
     return all([torch.isfinite(t).all() if t is not None else True for t in tensors])
 
 
-class DType(IntEnum):
-    F16 = 1
-    F32 = 2
-    F64 = 3
-    I32 = 4
-    I64 = 5
-    U32 = 6
-    U64 = 7
-    USIZE = 8
+def _cast_dlpack2torch_tensor(pytensor: PyTensor, requires_grad: bool):
+    """Convert the dlpack tensor to torch tensor
 
+    Arguments:
+        pytensor (PyTensor): ...
+        requires_grad (bool, optional): ...
+    Returns: pytorch tensor
+    """
 
-def _cast_persia_tensor2torch_tensor(
-    raw_tensor: PyTensor, requires_grad: bool = False
-) -> torch.Tensor:
-    import persia_torch_ext as pte  # pytype: disable=import-error
-
-    type_id = raw_tensor.dtype
-    on_cuda = raw_tensor.device.startswith("cuda")
-
-    if type_id == DType.F32:
-        tensor = pte.ptr_to_tensor_f32(
-            raw_tensor.data_ptr, raw_tensor.shape, requires_grad, on_cuda
-        )
-    elif type_id == DType.F16:
-        tensor = pte.ptr_to_tensor_f16(
-            raw_tensor.data_ptr, raw_tensor.shape, requires_grad, on_cuda
-        )
-    elif type_id in [DType.USIZE, DType.U64]:
-        tensor = pte.ptr_to_tensor_long(
-            raw_tensor.data_ptr, raw_tensor.shape, requires_grad, on_cuda
-        )
-    else:
-        raise Exception(f"type_id: {type_id} not found, persia tensor convert to torch tensor failed")
-
+    tensor = torch.utils.dlpack.from_dlpack(pytensor.dlpack)
+    tensor.requires_grad = requires_grad
     return tensor
 
 
@@ -337,10 +314,7 @@ class EmbeddingCtx(BaseCtx):
             # pytype: enable=attribute-error
             assert len(batch.target) == 1
             batch.target = batch.target[0]
-
-            batch.target_tensor = _cast_persia_tensor2torch_tensor(
-                batch.target, requires_grad=False
-            )
+            batch.target_tensor = _cast_dlpack2torch_tensor(batch.target)
 
         is_training = self.preprocess_mode == PreprocessMode.TRAIN  # cache property
 
@@ -348,9 +322,7 @@ class EmbeddingCtx(BaseCtx):
         batch.dense = batch.consume_all_dense_features()
         # pytype: enable=attribute-error
         batch.dense = batch.dense[0]
-        batch.dense_tensor = _cast_persia_tensor2torch_tensor(
-            batch.dense, requires_grad=False
-        )
+        batch.dense_tensor = _cast_dlpack2torch_tensor(batch.dense)
 
         # pytype: disable=attribute-error
         batch.emb = batch.consume_all_sparse_features()
@@ -371,8 +343,8 @@ class EmbeddingCtx(BaseCtx):
                 ) = emb.get_raw_embedding()
 
                 batch.emb_slot.append([raw_embedding, index, non_empty_index])
-                distinct_id_tensor = _cast_persia_tensor2torch_tensor(raw_embedding)
-                index_tensor = _cast_persia_tensor2torch_tensor(
+                distinct_id_tensor = _cast_dlpack2torch_tensor(raw_embedding)
+                index_tensor = _cast_dlpack2torch_tensor(
                     index
                 )  # tensor shape (1, batch_size * sample_fixed_size)
                 max_index = index_tensor.max()
@@ -383,7 +355,7 @@ class EmbeddingCtx(BaseCtx):
                     max_index < size_of_distinct_id_tensor
                 ), "raw embedding select index larger than tensor"
 
-                non_empty_index_tensor = _cast_persia_tensor2torch_tensor(
+                non_empty_index_tensor = _cast_dlpack2torch_tensor(
                     non_empty_index
                 )  # tensor shape (-1), variable length
 
@@ -417,7 +389,7 @@ class EmbeddingCtx(BaseCtx):
             else:
                 emb = emb.get_sum_embedding()
                 batch.emb_slot.append([emb])
-                sum_tensor = _cast_persia_tensor2torch_tensor(emb, is_training)
+                sum_tensor = _cast_dlpack2torch_tensor(emb, requires_grad=is_training)
                 forward_tensors.append(sum_tensor)
                 emb_tensors.append((emb.name(), None, None, None, sum_tensor))
 
