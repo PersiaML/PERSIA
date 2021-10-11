@@ -1,0 +1,14 @@
+[package]
+authors = ["Kuaishou AI Platform PersiaML Team <admin@mail.xrlian.com>"]
+edition = "2018"
+license = "MIT"
+name = "persia-rpc"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+persia-speedy = "0.9"
+tracing = "0.1"
+reqwest = { version = "0.11", default-features = false, features = ["native-tls-vendored"] }
+persia-libs = {path = "../../persia-libs"}
+snafu = "0.6"

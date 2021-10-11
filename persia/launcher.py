@@ -37,7 +37,7 @@ def resolve_binary_execute_path(binary_name: str) -> str:
                 "Launch program with debug mode but without PERSIA_DEV_PATH env"
             )
 
-        if os.access(os.path.join(persia_dev_path, binary_name), os.X_OK):
+        if not os.access(os.path.join(persia_dev_path, binary_name), os.X_OK):
             raise Exception(
                 f"Can't not found executable {binary_name} in {persia_dev_path}"
             )

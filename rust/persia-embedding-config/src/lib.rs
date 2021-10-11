@@ -161,13 +161,6 @@ pub enum PerisaJobType {
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
 #[serde(crate = "self::serde")]
-pub enum PersiaPersistenceStorage {
-    Ceph,
-    Hdfs,
-}
-
-#[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
-#[serde(crate = "self::serde")]
 pub struct PersiaReplicaInfo {
     pub replica_size: usize,
     pub replica_index: usize,
@@ -192,7 +185,7 @@ impl PersiaReplicaInfo {
             .map_err(|_| PersiaGlobalConfigError::SetError)
     }
 
-    pub fn is_leader(&self) -> bool {
+    pub fn is_master(&self) -> bool {
         self.replica_index == 0
     }
 }
@@ -271,10 +264,6 @@ fn get_default_incremental_dir() -> String {
 
 fn get_default_job_name() -> String {
     String::from("persia_default_jobname")
-}
-
-fn get_default_storage() -> PersiaPersistenceStorage {
-    PersiaPersistenceStorage::Ceph
 }
 
 fn get_default_common_config() -> PersiaCommonConfig {
@@ -411,8 +400,6 @@ pub struct PersiaEmbeddingServerConfig {
     #[serde(default = "get_million")]
     pub num_signs_per_file: usize,
 
-    #[serde(default = "get_default_storage")]
-    pub storage: PersiaPersistenceStorage,
     #[serde(default = "get_default_local_buffer_dir")]
     pub local_buffer_dir: String,
 
@@ -436,7 +423,6 @@ impl Default for PersiaEmbeddingServerConfig {
             embedding_recycle_pool_capacity: 1_000_000,
             num_persistence_workers: 4,
             num_signs_per_file: 1_000_000,
-            storage: get_default_storage(),
             local_buffer_dir: get_default_local_buffer_dir(),
             enable_incremental_update: false,
             incremental_buffer_size: 1_000_000,

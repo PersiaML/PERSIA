@@ -120,7 +120,7 @@ class Dataloder(object):
         timeout_ms (int, optional): timeout for PyForward to fetch data, millisecond unit
         num_workers (int, optional): spawn thread worker number for  PyForward to lookup embedding and PythonBatchData prefetch
         reproducible (bool, optional): iterate the data in fixed order, make the dataflow deterministic
-        embedding_staleness (int, optional): Max number of batched staleness embedding each rank. A staleness embedding means it prefetched from embedding server before gradient updated.
+        embedding_staleness (int, optional): max number of batched staleness embedding each rank. A staleness embedding means it prefetched from embedding server before gradient updated.
     """
 
     def __init__(

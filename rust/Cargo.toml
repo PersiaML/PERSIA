@@ -10,10 +10,12 @@ members = [
   "persia-eviction-map",
   "persia-model-manager",
   "persia-full-amount-manager",
-  "persia-storage-visitor",
+  "persia-storage",
   "persia-embedding-holder",
   "persia-metrics",
   "others/persia-common-benchmark",
   "others/persia-nats-client",
   "others/persia-nats-marcos",
+  "others/persia-rpc",
+  "others/persia-rpc-macro"
 ]

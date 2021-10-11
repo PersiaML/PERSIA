@@ -1,0 +1,126 @@
+ARG DEVICE=cuda
+ARG BASE_IMAGE=nvidia/cuda:11.2.0-devel-ubuntu20.04
+
+FROM ${BASE_IMAGE} AS base
+ARG PYTHON_VERSION=3.8
+ARG PYTORCH_VERSION=1.7
+ARG MAGMA_CUDA_VERSION=magma-cuda110
+ARG DEVICE
+
+RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl \
+    build-essential \
+    ca-certificates \
+    git \
+    libgfortran-8-dev \
+    vim \
+    zsh \
+    wget \
+    ssh \
+    iputils-ping \
+    procps \
+    net-tools \
+    apt-utils \
+    rlwrap \
+    ethtool \
+    telnet && \
+    apt-get purge --auto-remove && apt-get clean
+
+RUN curl -o ~/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
+    chmod +x ~/miniconda.sh && \
+    ~/miniconda.sh -b -p /opt/conda && \
+    rm ~/miniconda.sh && \
+    /opt/conda/bin/conda install -y python=${PYTHON_VERSION} numpy pyyaml scipy ipython mkl mkl-include ninja cython typing && \
+    /opt/conda/bin/conda install -y -c conda-forge mpi4py && \
+    ln -s /usr/share/pyshared /opt/conda/lib/python${PYTHON_VERSION}/site-packages && \
+    if [ "${DEVICE}" = "cuda" ]; then \
+    /opt/conda/bin/conda install -y -c pytorch -c conda-forge ${MAGMA_CUDA_VERSION} pytorch=${PYTORCH_VERSION} torchvision; \
+    else \ 
+    /opt/conda/bin/conda install -y -c pytorch -c conda-forge pytorch=${PYTORCH_VERSION} torchvision cpuonly; \
+    fi && \
+    /opt/conda/bin/conda clean -yapf;
+
+RUN /opt/conda/bin/pip install --no-cache-dir \ 
+    pyyaml \
+    remote-pdb \
+    colorlog \
+    pytest \
+    tqdm \
+    retrying \
+    pandas \
+    tensorboard \
+    scikit-learn==0.24.2 \
+    ipython && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get purge --auto-remove && \
+    apt-get clean
+
+ENV PATH=/opt/conda/bin:$PATH
+ENV LIBRARY_PATH="/usr/local/lib64:/usr/local/lib:/usr/lib"
+ENV LD_LIBRARY_PATH="/opt/conda/lib/python${PYTHON_VERSION}/site-packages/torch/lib/:/opt/conda/lib/"
+
+# alias for cpu builder image
+FROM base AS cpu-builder-base 
+# alias for gpu builder image
+FROM base AS cuda-builder-base
+ARG DEVICE
+
+ENV USE_CUDA=1
+ENV LIBRARY_PATH="${LIBRARY_PATH}:/usr/local/cuda/lib64/stubs/"
+
+FROM ${DEVICE}-builder-base AS builder
+
+ENV RUSTUP_HOME=/rust
+ENV CARGO_HOME=/cargo
+ENV PATH=/cargo/bin:/rust/bin:/opt/conda/bin:$PATH
+
+RUN curl -sSf https://sh.rustup.rs | sh -s -- --default-toolchain stable -y --profile default --no-modify-path 
+
+WORKDIR /workspace
+COPY . /workspace
+RUN cd /workspace && pip3 install click colorlog colorama setuptools setuptools-rust setuptools_scm \
+    && python setup.py bdist_wheel --dist-dir=/root/dist && rm -rf /workspace
+
+FROM base AS runtime
+
+COPY --from=builder /root/dist .
+RUN pip3 install *.whl && rm -rf *.whl
+
+FROM runtime AS inference-runtime
+RUN echo "install deploy image requirement, openjdk and torch serve"; \
+    /opt/conda/bin/conda install torchserve torch-model-archiver torch-workflow-archiver -c pytorch -y; \
+    /opt/conda/bin/conda clean -yapf; \
+    /opt/conda/bin/pip install --no-cache-dir \ 
+        captum \
+        grpcio \
+        protobuf \
+        grpcio-tools; \
+    apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-11-jdk; \
+    apt-get purge --auto-remove; \
+    apt-get clean
+
+FROM builder AS bagua-builder
+RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libhwloc-dev \
+    software-properties-common \
+    libssl-dev && \
+    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
+    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main' && \ 
+    apt remove --purge cmake -y && apt-get update && apt-get install -y --no-install-recommends cmake
+
+RUN git clone https://github.com/BaguaSys/bagua.git; \
+    /opt/conda/bin/pip install setuptools-rust colorama tqdm wheel; \
+    cd bagua; \
+    git submodule update --init --recursive; \
+    python setup.py bdist_wheel --dist-dir=/root/bagua-dist; \
+    cd ..; \
+    rm -rf bagua
+
+FROM runtime AS bagua-runtime
+RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libhwloc-dev \
+    software-properties-common \
+    libssl-dev && \
+    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
+    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main' && \ 
+    apt remove --purge cmake -y && apt-get update && apt-get install -y --no-install-recommends cmake && mkdir /root/bagua-dist /root/bagua-core-dist
+
+COPY --from=bagua-builder /root/bagua-dist /root/bagua-dist
+RUN pip3 install /root/bagua-dist/*.whl && rm -rf /root/bagua-*

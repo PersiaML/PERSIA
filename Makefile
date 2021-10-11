@@ -13,7 +13,7 @@ pytest:
 all: lint flake8 format pytest
 
 build_ci_image:
-	docker build --build-arg DEPLOY=true --build-arg CI=true \
+	docker build --build-arg DEPLOY=true --build-arg CI=true --build-arg HDFS=true \
 		--no-cache -f docker/release/Dockerfile -t persiaml/persia-ci:latest .
 
 build_cpu_image:
@@ -33,3 +33,23 @@ build_test_image:
 
 build_dev_image:
 	docker build --build-arg USE_CUDA=1 --no-cache -f docker/dev/Dockerfile -t persiaml/persia-cuda-runtime:dev .
+
+build_cuda_runtime_image:
+	DOCKER_BUILDKIT=1 docker build --build-arg DEVICE=cuda --no-cache -f docker/release/Dockerfile.multistage \
+	-t persia-cuda-runtime --target runtime .
+
+build_cuda_runtime_image_with_bagua:
+	DOCKER_BUILDKIT=1 docker build --build-arg DEVICE=cuda --no-cache -f docker/release/Dockerfile.multistage \
+	-t persia-cuda-runtime:bagua --target bagua-runtime .
+
+build_inference_runtime_image:
+	DOCKER_BUILDKIT=1 docker build --build-arg DEVICE=cuda --no-cache -f docker/release/Dockerfile.multistage \
+	-t persia-inference-runtime --target inference-runtime.
+
+build_cpu_runtime_image:
+	DOCKER_BUILDKIT=1 docker build --build-arg DEVICE=cpu --build-arg BASE_IMAGE="ubuntu:20.04" --no-cache -f docker/release/Dockerfile.multistage \
+	-t persia-cpu-runtime --target runtime .
+
+build_bagua_builder:
+	DOCKER_BUILDKIT=1 docker build --build-arg DEVICE=cuda --no-cache -f docker/release/Dockerfile.multistage \
+	-t persia-cuda-runtime:test --target bagua-builder .
