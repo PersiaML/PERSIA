@@ -73,10 +73,25 @@ impl MasterDiscoveryComponent {
         if let Some(master_addr) = &self.master_addr {
             Ok(master_addr.clone())
         } else {
-            let master_addr = self
-                .publisher
-                .publish_get_master_addr(&(), Some(0))
-                .await??;
+            let backoff = backoff::ExponentialBackoff::default();
+
+            let master_addr = backoff::future::retry(backoff, || async {
+                let master_addr = self
+                    .publisher
+                    .publish_get_master_addr(&(), Some(0))
+                    .await
+                    .map_err(|e| PersiaError::from(e))?
+                    .map_err(|e| PersiaError::from(e));
+                if master_addr.is_err() {
+                    tracing::warn!(
+                        "failed to get master addr due to {:?}, retrying...",
+                        master_addr
+                    );
+                }
+                Ok(master_addr?)
+            })
+            .await?;
+
             Ok(master_addr)
         }
     }
