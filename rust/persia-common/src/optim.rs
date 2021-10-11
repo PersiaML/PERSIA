@@ -69,8 +69,12 @@ pub trait Optimizable {
         emb_entry: &mut [f32],
         grad: &[f32],
         dim: usize,
-        batch_level_status: &Option<Vec<f32>>,
+        emb_opt_state: &Option<Vec<f32>>,
     );
+
+    fn get_emb_state(&self, state: &Option<Vec<f32>>, idx: usize) -> Option<Vec<f32>> {
+        None
+    }
 
     fn get_batch_level_state(&self, _signs: &[u64]) -> Option<Vec<f32>> {
         None
@@ -135,6 +139,15 @@ impl Optimizable for Adam {
     }
 
     #[inline]
+    fn get_emb_state(&self, opt_state: &Option<Vec<f32>>, idx: usize) -> Option<Vec<f32>> {
+        if let Some(opt_state) = opt_state {
+            Some(vec![opt_state[idx], opt_state[opt_state.len() / 2 + idx]])
+        } else {
+            None
+        }
+    }
+
+    #[inline]
     fn get_batch_level_state(&self, signs: &[u64]) -> Option<Vec<f32>> {
         let mut betas_power = vec![0.0_f32; signs.len() * 2];
         let (beta1_power, beta2_power) = betas_power.as_mut_slice().split_at_mut(signs.len());
@@ -182,12 +195,13 @@ impl Optimizable for Adam {
         emb_entry: &mut [f32],
         grad: &[f32],
         dim: usize,
-        batch_level_status: &Option<Vec<f32>>,
+        emb_opt_state: &Option<Vec<f32>>,
     ) {
-        let batch_level_status = batch_level_status.as_deref().unwrap();
+        let emb_opt_state = emb_opt_state.as_deref().unwrap();
+        let beta1_power = emb_opt_state[0];
+        let beta2_power = emb_opt_state[1];
         let (emb, opt) = emb_entry.split_at_mut(dim);
         let (adam_m, adam_v) = opt.split_at_mut(dim);
-        let (beta1_power, beta2_power) = batch_level_status.split_at(dim);
 
         unsafe {
             adam_avx2(
