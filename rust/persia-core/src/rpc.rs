@@ -4,30 +4,28 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use persia_libs::{
-    anyhow::Result, futures, hashbrown::HashMap, parking_lot::RwLock, rand, tracing,
+    anyhow::Result, futures, indexmap::IndexMap, parking_lot::RwLock, rand, tracing,
 };
 
 use persia_embedding_server::middleware_service::MiddlewareServerClient;
 use persia_model_manager::PersiaPersistenceStatus;
 
 pub struct PersiaRpcClient {
-    pub clients: RwLock<HashMap<String, Arc<MiddlewareServerClient>>>,
-    pub middleware_addrs: RwLock<Vec<String>>,
+    pub clients: RwLock<IndexMap<String, Arc<MiddlewareServerClient>>>,
 }
 
 impl PersiaRpcClient {
     pub fn new() -> Self {
         Self {
-            clients: RwLock::new(HashMap::new()),
-            middleware_addrs: RwLock::new(vec![]),
+            clients: RwLock::new(IndexMap::new()),
         }
     }
 
     pub fn get_random_client_with_addr(&self) -> (String, Arc<MiddlewareServerClient>) {
-        let middleware_addrs = self.middleware_addrs.read();
-        let addr = middleware_addrs[rand::random::<usize>() % middleware_addrs.len()].as_str();
-        let client = self.get_client_by_addr(addr);
-        (addr.to_string(), client)
+        let clients = self.clients.read();
+        let client_idx = rand::random::<usize>() % clients.len();
+        let (middleware_addr, client) = clients.get_index(client_idx).unwrap();
+        (middleware_addr.to_string(), client.clone())
     }
 
     pub fn get_random_client(&self) -> Arc<MiddlewareServerClient> {
@@ -35,9 +33,12 @@ impl PersiaRpcClient {
     }
 
     pub fn get_first_client(&self) -> Arc<MiddlewareServerClient> {
-        let addrs = self.middleware_addrs.read();
-        let addr = addrs.first().expect("clients not initialized");
-        self.get_client_by_addr(addr)
+        let clients = self.clients.read();
+        clients
+            .get_index(0)
+            .expect("clients not initialized")
+            .1
+            .clone()
     }
 
     pub fn get_client_by_addr(&self, middleware_addr: &str) -> Arc<MiddlewareServerClient> {
@@ -47,14 +48,10 @@ impl PersiaRpcClient {
             let rpc_client = persia_rpc::RpcClient::new(middleware_addr).unwrap();
             let client = Arc::new(MiddlewareServerClient::new(rpc_client));
 
+            tracing::debug!("created client for middleware {}", middleware_addr);
             self.clients
                 .write()
                 .insert(middleware_addr.to_string(), client.clone());
-
-            self.middleware_addrs
-                .write()
-                .push(middleware_addr.to_string());
-            tracing::info!("created client for middleware {}", middleware_addr);
             client
         }
     }

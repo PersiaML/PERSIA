@@ -50,7 +50,7 @@ impl NatsSubject {
         let req_type = self.req_type();
         let spawn_task = quote::quote! {
             let instance = self.inner.clone();
-            let subscription = persia_libs::smol::block_on(nats_client.subscribe(&subject))?;
+            let subscription = nats_client.subscribe(&subject).await?;
             persia_libs::tokio::spawn(async move {
                 while let Some(msg) = subscription.next().await {
                     let arg: Result<#req_type, _> = tokio::task::block_in_place(|| {
@@ -73,7 +73,7 @@ impl NatsSubject {
             });
         };
         quote::quote! {
-            pub fn #subscribe_ident(&self) -> Result<(), NatsError> {
+            pub async fn #subscribe_ident(&self) -> Result<(), NatsError> {
                 let nats_client = self.nats_client.clone();
                 let replica_info = PersiaReplicaInfo::get().expect("failed to get replica_info");
                 let subject = nats_client.get_subject(
@@ -154,7 +154,9 @@ impl NatsService {
             .map(|x| {
                 let subscribe_ident = x.subscribe_subject_ident();
                 quote::quote! {
-                    self.#subscribe_ident().expect("failed to subsrcibe");
+                    if let Err(e) = self.#subscribe_ident().await {
+                        panic!("failed to subsrcibe due to {:?}", e);
+                    }
                 }
             })
             .collect();
@@ -166,18 +168,18 @@ impl NatsService {
             }
 
             impl #responder_ident {
-                pub fn new(service: #service_ident) -> Self {
+                pub async fn new(service: #service_ident) -> Self {
                     let instance = Self {
                         inner: service,
-                        nats_client: NatsClient::get(),
+                        nats_client: NatsClient::get().await,
                     };
-                    instance.spawn_subscriptions().expect("failed to spawn nats subscriptions");
+                    instance.spawn_subscriptions().await.expect("failed to spawn nats subscriptions");
                     instance
                 }
 
                 #( #subscriptions )*
 
-                pub fn spawn_subscriptions(&self) -> Result<(), NatsError> {
+                pub async fn spawn_subscriptions(&self) -> Result<(), NatsError> {
                     #( #subscribe_subjects )*
                     Ok(())
                 }
@@ -199,9 +201,9 @@ impl NatsService {
             }
 
             impl #publisher_ident {
-                pub fn new() -> Self {
+                pub async fn new() -> Self {
                     Self {
-                        nats_client: NatsClient::get(),
+                        nats_client: NatsClient::get().await,
                     }
                 }
                 #( #publish )*
