@@ -187,17 +187,17 @@ pub enum DeviceType {
 }
 
 #[derive(Readable, Writable, Debug)]
-struct Device {
+pub struct Device {
     device_type: DeviceType,
     device_id: Option<i32>,
 }
 
 impl Device {
-    fn with_device_id_opt(device_id: &Option<i32>) -> Self {
+    fn with_device_id_opt(device_id: Option<i32>) -> Self {
         match device_id {
             Some(device_id) => Device {
                 device_type: DeviceType::GPU,
-                device_id: Some(*device_id),
+                device_id: Some(device_id),
             },
             None => Device {
                 device_type: DeviceType::CPU,
@@ -261,7 +261,7 @@ impl Tensor {
         storage: Storage,
         shape: Vec<usize>,
         name: Option<String>,
-        device_id: &Option<i32>,
+        device_id: Option<i32>,
     ) -> Self {
         let stride = get_stride_by_shape(shape.as_slice());
         let device = Device::with_device_id_opt(device_id);
@@ -317,7 +317,7 @@ impl Tensor {
         }
     }
 
-    pub fn dlpack(&self) -> DLManagedTensor {
+    pub fn dlpack(&mut self) -> DLManagedTensor {
         let dl_tensor = DLTensor {
             data: self.raw_data_ptr(),
             dtype: self.dtype().to_dldtype(),

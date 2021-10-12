@@ -7,6 +7,7 @@ use persia_libs::tracing;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
+#[warn(non_camel_case_types)]
 pub enum DLDeviceType {
     kDLCPU = 1,
     kDLCUDA = 2,
@@ -22,6 +23,7 @@ pub enum DLDeviceType {
 }
 
 #[derive(Clone, Copy)]
+#[warn(non_camel_case_types)]
 pub enum DLDataTypeCode {
     kDLInt = 0,
     kDLUInt = 1,

@@ -127,13 +127,14 @@ impl PyTensor {
         let shape = data.shape().to_vec();
 
         PyTensor {
-            inner: Tensor {
-                storage: Storage::CPU(CPUStorage::F32(
+            inner: Tensor::new(
+                Storage::CPU(CPUStorage::F32(
                     data.to_vec().expect("convert ndarray to vec failed"),
                 )),
                 shape,
-                name: None,
-            },
+                None,
+                None,
+            ),
         }
     }
 
@@ -155,7 +156,7 @@ impl PyTensor {
     }
 
     #[getter]
-    pub fn dlpack(&self, py: Python) -> PyResult<PyObject> {
+    pub fn dlpack(&mut self, py: Python) -> PyResult<PyObject> {
         let dlpack_managed_tensor = Box::new(self.inner.dlpack());
         let capsule = unsafe {
             let ptr = pyo3::ffi::PyCapsule_New(
@@ -293,35 +294,43 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch) -> Embedding {
                     }
                 });
 
+            let embedding_shape = raw_embedding.embeddings.shape().to_vec();
+            let index_len = raw_embedding.index.len();
+            let no_empty_index_list_len = std::cmp::max(non_empty_index_list.len(), 1);
             Embedding::Raw(RawEmbedding {
-                tensor: Tensor {
-                    shape: raw_embedding.embeddings.shape().to_vec(),
-                    storage: Storage::CPU(CPUStorage::from_f16(
+                tensor: Tensor::new(
+                    Storage::CPU(CPUStorage::from_f16(
                         raw_embedding.embeddings.into_raw_vec(),
                     )),
-                    name: None,
-                },
-                index: Tensor {
-                    shape: vec![raw_embedding.index.len()],
-                    storage: Storage::CPU(CPUStorage::from_usize(raw_embedding.index)),
-                    name: None,
-                },
-                non_empty_index: Tensor {
-                    shape: vec![std::cmp::max(non_empty_index_list.len(), 1)],
-                    storage: Storage::CPU(CPUStorage::from_u64(non_empty_index_list)),
-                    name: None,
-                },
+                    embedding_shape,
+                    None,
+                    None,
+                ),
+                index: Tensor::new(
+                    Storage::CPU(CPUStorage::from_usize(raw_embedding.index)),
+                    vec![index_len],
+                    None,
+                    None,
+                ),
+                non_empty_index: Tensor::new(
+                    Storage::CPU(CPUStorage::from_u64(non_empty_index_list)),
+                    vec![no_empty_index_list_len],
+                    None,
+                    None,
+                ),
                 samples_id_num: raw_embedding.sample_id_num,
             })
         }
         FeatureEmbeddingBatch::SumEmbedding(sum_embedding) => {
-            let tensor = Tensor {
-                shape: sum_embedding.embeddings.shape().to_vec(),
-                storage: Storage::CPU(CPUStorage::from_f16(
+            let embedding_shape = sum_embedding.embeddings.shape().to_vec();
+            let tensor = Tensor::new(
+                Storage::CPU(CPUStorage::from_f16(
                     sum_embedding.embeddings.into_raw_vec(),
                 )),
-                name: None,
-            };
+                embedding_shape,
+                None,
+                None,
+            );
             Embedding::Sum(SumEmbedding { tensor })
         }
     }
@@ -543,7 +552,7 @@ impl Forward {
                             #[cfg(feature = "cuda")]
                             {
                                 if use_gpu {
-                                    d.cuda()
+                                    d.cuda(common_ctx.device_id.as_ref().unwrap())
                                 } else {
                                     d
                                 }
@@ -563,7 +572,7 @@ impl Forward {
                             #[cfg(feature = "cuda")]
                             {
                                 if use_gpu {
-                                    t.cuda()
+                                    t.cuda(common_ctx.device_id.as_ref().unwrap())
                                 } else {
                                     t
                                 }

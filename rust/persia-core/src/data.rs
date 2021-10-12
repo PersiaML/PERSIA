@@ -89,13 +89,14 @@ impl PyPersiaBatchData {
 
     pub fn add_dense(&mut self, data: Vec<&PyArray2<f32>>) {
         data.iter().for_each(|x| {
-            self.inner.dense_data.push(Tensor {
-                storage: Storage::CPU(CPUStorage::from_f32(
+            self.inner.dense_data.push(Tensor::new(
+                Storage::CPU(CPUStorage::from_f32(
                     x.to_vec().expect("convert ndarray to vec failed"),
                 )),
-                shape: x.shape().to_vec(),
-                name: None,
-            });
+                x.shape().to_vec(),
+                None,
+                None,
+            ));
         });
     }
 
@@ -109,13 +110,14 @@ impl PyPersiaBatchData {
     }
 
     pub fn add_target(&mut self, target_data: &PyArray2<f32>) {
-        self.inner.target_data.push(Tensor {
-            storage: Storage::CPU(CPUStorage::from_f32(
+        self.inner.target_data.push(Tensor::new(
+            Storage::CPU(CPUStorage::from_f32(
                 target_data.to_vec().expect("convert ndarray to vec failed"),
             )),
-            shape: target_data.shape().to_vec(),
-            name: None,
-        });
+            target_data.shape().to_vec(),
+            None,
+            None
+        ));
     }
 
     pub fn add_meta(&mut self, data: &PyBytes) {
@@ -140,11 +142,12 @@ macro_rules! add_dense_func2batch_data {
             impl PyPersiaBatchData {
                     $(
                         pub fn [<add_dense_ $typ:lower>](&mut self, data: &PyArray2<$typ>) {
-                            self.inner.dense_data.push(Tensor {
-                                storage: Storage::CPU(CPUStorage::[<from_ $typ:lower>] (data.to_vec().expect("convert ndarray to vec failed"))),
-                                shape: data.shape().to_vec(),
-                                name: None,
-                            });
+                            self.inner.dense_data.push(Tensor::new(
+                                Storage::CPU(CPUStorage::[<from_ $typ:lower>] (data.to_vec().expect("convert ndarray to vec failed"))),
+                                data.shape().to_vec(),
+                                None,
+                                None
+                            ));
                         }
                     )*
             }

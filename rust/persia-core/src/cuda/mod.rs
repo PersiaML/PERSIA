@@ -45,7 +45,7 @@ impl GPUStorage {
 
             tracing::debug!("tensor shape is: {:?}, bytes: {:?}", &shape, &byte_count);
 
-            let host_ptr = storage.as_raw_ptr();
+            let host_ptr = storage.get_raw_ptr();
             let pinned_host_ptr = PINNED_MEMORY_POOL.allocate(byte_count);
             std::ptr::copy_nonoverlapping(host_ptr, pinned_host_ptr.inner, byte_count);
 

@@ -41,7 +41,6 @@ use pyo3::types::PyBytes;
 use pyo3::wrap_pyfunction;
 
 use persia_common::utils::start_deadlock_detection_thread;
-use persia_common::PersiaBatchData;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaReplicaInfo};
 use persia_embedding_server::middleware_service::MiddlewareServerError;
 use persia_speedy::Readable;

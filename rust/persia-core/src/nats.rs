@@ -1,4 +1,4 @@
-use crate::data::{EmbeddingTensor, PersiaBatchData, PyPersiaBatchData};
+use crate::data::{EmbeddingTensor, PyPersiaBatchData};
 use crate::optim::PyOptimizerBase;
 use crate::utils::PyPersiaBatchDataSender;
 use crate::{PersiaCommonContext, PersiaError};
@@ -11,7 +11,7 @@ use persia_libs::{async_lock::RwLock, once_cell::sync::OnceCell, tracing};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
-use persia_common::{EmbeddingTensor, SparseBatchRemoteReference};
+use persia_common::{SparseBatchRemoteReference};
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
@@ -82,7 +82,7 @@ impl MasterDiscoveryNatsServiceWrapper {
 }
 
 pub mod persia_dataflow_service {
-    use persia_common::PersiaBatchData;
+    use crate::data::PersiaBatchData;
     use persia_embedding_config::PersiaReplicaInfo;
     use persia_libs::{flume, thiserror, tokio, tracing};
 
