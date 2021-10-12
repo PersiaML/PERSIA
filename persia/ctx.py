@@ -2,7 +2,7 @@ import os
 import io
 import socket
 
-from enum import Enum, IntEnum
+from enum import Enum
 from queue import Queue
 from typing import List, Tuple, Optional, NewType, Union
 
@@ -36,7 +36,7 @@ def _check_finite(tensors: List[torch.Tensor]) -> bool:
     return all([torch.isfinite(t).all() if t is not None else True for t in tensors])
 
 
-def _cast_dlpack2torch_tensor(pytensor: PyTensor, requires_grad: bool):
+def _cast_dlpack2torch_tensor(pytensor: PyTensor, requires_grad: bool) -> torch.Tensor:
     """Convert the dlpack tensor to torch tensor
 
     Arguments:
