@@ -122,8 +122,15 @@ struct Backward {
     pub running: Arc<AtomicBool>,
 }
 
-fn ptr2vec<T: Clone>(ptr: *mut std::os::raw::c_void, element_num: usize) -> Vec<T> {
-    unsafe { std::slice::from_raw_parts(ptr as *const T, element_num).to_vec() }
+fn ptr2vec<T: Clone>(ptr: *mut std::os::raw::c_void, element_num: usize, clone: bool) -> Vec<T> {
+    unsafe { 
+        let vec = Vec::from_raw_parts(ptr as *mut T, element_num, element_num);
+        if clone {
+            vec.clone()
+        } else {
+            vec
+        }
+    }
 }
 
 fn host_ptr2gradient(
@@ -131,17 +138,67 @@ fn host_ptr2gradient(
     shape: [usize; 2],
     num_elements: usize,
     is_f16: bool,
+    copy: bool
 ) -> Gradients {
     if is_f16 {
         Gradients::F16(
-            ndarray::Array2::from_shape_vec(shape, ptr2vec::<half::f16>(ptr, num_elements))
+            ndarray::Array2::from_shape_vec(shape, ptr2vec::<half::f16>(ptr, num_elements, copy))
                 .unwrap(),
         )
     } else {
         Gradients::F32(
-            ndarray::Array2::from_shape_vec(shape, ptr2vec::<f32>(ptr, num_elements)).unwrap(),
+            ndarray::Array2::from_shape_vec(shape, ptr2vec::<f32>(ptr, num_elements, copy)).unwrap(),
         )
     }
+}
+
+#[cfg(feature = "cuda")]
+#[inline]
+fn copy_gradients(x: &SingleSlotGradient, num_bytes: usize, num_elements: usize, device_id: Arc<Option<i32>>) -> Gradients {
+    use crate::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
+    use crate::cuda::utils::cuda_d2h;
+
+    // judge the tensor with device
+    if device_id.as_ref().is_some() {
+        let host_ptr = PINNED_MEMORY_POOL.allocate(num_bytes);
+        let event = cuda_d2h(
+            num_bytes,
+            x.data_ptr as *mut std::os::raw::c_void,
+            host_ptr.inner,
+        )
+        .expect("cannot move tensor to host");
+
+        event.synchronize();
+        host_ptr2gradient(
+            host_ptr.inner,
+            x.shape,
+            num_elements,
+            x.is_f16_gradient,
+            true
+        )
+    } else {
+        host_ptr2gradient(
+            x.data_ptr as *mut std::os::raw::c_void,
+            x.shape,
+            num_elements,
+            x.is_f16_gradient,
+            false,
+        )
+    }
+}
+
+#[cfg(not(feature = "cuda"))]
+#[inline]
+fn copy_gradients(x: &SingleSlotGradient, num_ytes: usize, num_elements: usize, device_id: Arc<Option<i32>>) -> Gradients {
+    // zero copy tensor which place in cpu.
+    host_ptr2gradient(
+        x.data_ptr as *mut std::os::raw::c_void,
+        x.shape,
+        num_elements,
+        x.is_f16_gradient,
+        false
+    )
+
 }
 
 impl Backward {
@@ -184,7 +241,6 @@ impl Backward {
             #[cfg(feature = "cuda")]
             if let Some(device_id) = device_id.as_ref() {
                 use crate::cuda::set_device;
-
                 set_device(*device_id as i32);
             }
             loop {
@@ -210,45 +266,8 @@ impl Backward {
                                 } else {
                                     num_elements * std::mem::size_of::<f32>()
                                 };
-
-                                let gradients = if cfg!(feature = "cuda") {
-                                    use crate::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
-                                    use crate::cuda::utils::cuda_d2h;
-
-                                    // judge the tensor with device
-                                    if device_id.as_ref().is_some() {
-                                        let host_ptr = PINNED_MEMORY_POOL.allocate(num_bytes);
-                                        let event = cuda_d2h(
-                                            num_bytes,
-                                            x.data_ptr as *mut std::os::raw::c_void,
-                                            host_ptr.inner,
-                                        )
-                                        .expect("cannot move tensor to host");
-
-                                        event.synchronize();
-
-                                        host_ptr2gradient(
-                                            host_ptr.inner,
-                                            x.shape,
-                                            num_elements,
-                                            x.is_f16_gradient,
-                                        )
-                                    } else {
-                                        host_ptr2gradient(
-                                            x.data_ptr as *mut std::os::raw::c_void,
-                                            x.shape,
-                                            num_elements,
-                                            x.is_f16_gradient,
-                                        )
-                                    }
-                                } else {
-                                    host_ptr2gradient(
-                                        x.data_ptr as *mut std::os::raw::c_void,
-                                        x.shape,
-                                        num_elements,
-                                        x.is_f16_gradient,
-                                    )
-                                };
+                                
+                                let gradients = copy_gradients(&x, num_bytes, num_elements, device_id.clone());
 
                                 SkippableFeatureEmbeddingGradientBatch::GradientBatch(
                                     FeatureEmbeddingGradientBatch {

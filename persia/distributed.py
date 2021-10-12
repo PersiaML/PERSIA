@@ -16,7 +16,9 @@ class DistributedBaseOption(ABC):
 
     This class should not be instantiated directly."""
 
-    def __init__(self, master_port: int, protocal: str, master_addr: Optional[str] = None):
+    def __init__(
+        self, master_port: int, protocal: str, master_addr: Optional[str] = None
+    ):
         """
         Arguments:
             master_port (int): Master of collective communication ip address.
@@ -225,7 +227,9 @@ class BaguaDistributedOption(DistributedBaseOption):
             options.pop("master_port", 23456), options.pop("master_addr", None)
         )
 
-        assert torch.cuda.is_available(), "BaguaDistributedOption only support on cuda device."
+        assert (
+            torch.cuda.is_available()
+        ), "BaguaDistributedOption only support on cuda device."
         self.algorithm = algorithm
         self.options = options
 

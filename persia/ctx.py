@@ -40,8 +40,8 @@ def _cast_dlpack2torch_tensor(pytensor: PyTensor, requires_grad: bool) -> torch.
     """Convert the dlpack tensor to torch tensor
 
     Arguments:
-        pytensor (PyTensor): ...
-        requires_grad (bool, optional): ...
+        pytensor (PyTensor): PersiaTensor wrapper that contains dlpack information.
+        requires_grad (bool, optional): Whether current tensor requires grad or not.
     Returns: pytorch tensor
     """
 
@@ -735,7 +735,7 @@ class TrainCtx(EmbeddingCtx):
             loss = self.grad_scaler.scale(loss)
             scale = self.grad_scaler.get_scale()
         else:
-            scale = 1 # Always equal to 1 when disable mixed_precision training
+            scale = 1  # Always equal to 1 when disable mixed_precision training
 
         loss.backward()
 
@@ -765,7 +765,10 @@ class TrainCtx(EmbeddingCtx):
 
         finite = True
 
-        if self.mixed_precision and self.update_times % embedding_gradient_check_frequency == 0:
+        if (
+            self.mixed_precision
+            and self.update_times % embedding_gradient_check_frequency == 0
+        ):
             finite = _check_finite(
                 [emb[-1].grad for emb in self.current_batch.emb_tensors]
             )
