@@ -10,24 +10,6 @@ if __name__ == "__main__":
 
     colorama.init(autoreset=True)
 
-    extensions = []
-    cmdclass = {}
-
-    if use_cuda:
-        from torch.utils.cpp_extension import BuildExtension
-        from torch.utils.cpp_extension import CUDAExtension
-
-        extensions.append(
-            CUDAExtension(
-                "persia_torch_ext",
-                sources=[
-                    "torch_ext/persia_torch_ext.cpp",
-                ],
-                extra_compile_args=["-fopenmp"],
-            ),
-        )
-        cmdclass["build_ext"] = BuildExtension
-
     features = None if not use_cuda else ["cuda"]
     rust_extensions = []
 
@@ -70,8 +52,6 @@ if __name__ == "__main__":
         author_email="admin@mail.xrlian.com",
         description="PersiaML Python Library",
         packages=find_packages(exclude=("tests",)),
-        ext_modules=extensions,
-        cmdclass=cmdclass,
         rust_extensions=rust_extensions,
         entry_points={
             "console_scripts": [
