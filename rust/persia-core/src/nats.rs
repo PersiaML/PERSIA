@@ -11,7 +11,7 @@ use persia_libs::{async_lock::RwLock, once_cell::sync::OnceCell, tracing};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
-use persia_common::{SparseBatchRemoteReference};
+use persia_common::SparseBatchRemoteReference;
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,

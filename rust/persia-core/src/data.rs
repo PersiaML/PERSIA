@@ -116,7 +116,7 @@ impl PyPersiaBatchData {
             )),
             target_data.shape().to_vec(),
             None,
-            None
+            None,
         ));
     }
 
