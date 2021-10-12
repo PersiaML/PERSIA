@@ -13,7 +13,7 @@ _logger = get_default_logger()
 class DistributedBaseOption(ABC):
     """Distributed option to converted torch model to dataparallel model."""
 
-    def __init__(self, master_port: int, master_addr: Optional[str] = None):
+    def __init__(self, master_port: int, protocal: str, master_addr: Optional[str] = None):
         """
         Arguments:
             master_port (int): Master of collective communication ip address.
@@ -62,7 +62,7 @@ class DistributedBaseOption(ABC):
         ...
 
 
-_ddp_backend_support_list = ["nccl"]
+_ddp_backend_support_list = ["nccl", "gloo"]
 _ddp_init_method_list = ["tcp", "file"]
 
 
@@ -221,6 +221,7 @@ class BaguaDistributedOption(DistributedBaseOption):
             options.pop("master_port", 23456), options.pop("master_addr", None)
         )
 
+        assert torch.cuda.is_available(), "BaguaDistributedOption only support on cuda device."
         self.algorithm = algorithm
         self.options = options
 

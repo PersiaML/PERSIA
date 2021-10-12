@@ -592,6 +592,7 @@ class TrainCtx(EmbeddingCtx):
         backward_workers_size: int = 8,
         grad_update_buffer_size: int = 60,
         lookup_emb_directly: bool = True,
+        mixed_precision: bool = True,
         distributed_option: Optional[DistributedBaseOption] = None,
         *args,
         **kwargs,
@@ -606,6 +607,7 @@ class TrainCtx(EmbeddingCtx):
             grad_update_buffer_size (int, optional): Number of reference cache , hold the gradient tensor reference to avoid
                 meet dangle data in gradient backward phase.
             lookup_emb_directly (bool, optional): Lookup embedding directly without isolation data compose.
+            mixed_precision (bool): Enable mixed_precision or not.
             distributed_option (DistributedBaseOption, optional): DistributedOption to converted model to dataparallel model.
         """
         super(TrainCtx, self).__init__(PreprocessMode.TRAIN, *args, **kwargs)
@@ -628,9 +630,12 @@ class TrainCtx(EmbeddingCtx):
         self.world_size = world_size
         self.rank_id = rank_id
 
-        if world_size > 1:
-            protocol = "nccl" if self.device_id is not None else "gloo"
+        assert not mixed_precision or (
+            mixed_precision and torch.cuda.is_available()
+        ), "Mixed precision training only support on cuda device."
+        self.mixed_precision = mixed_precision
 
+        if world_size > 1:
             distributed_option = distributed_option or get_default_distributed_option()
             not_env_file = not distributed_option.init_with_env_file()
             not_exists_master_addr = not distributed_option.master_addr
@@ -722,20 +727,23 @@ class TrainCtx(EmbeddingCtx):
             loss (torch.Tensor): Loss of current batch.
             embedding_gradient_check_frequency (int, optional): The frequency to check gradient finite or not for current embedding.
         """
-
-        loss = self.grad_scaler.scale(loss)
-        scale = self.grad_scaler.get_scale()
+        if self.mixed_precision:
+            loss = self.grad_scaler.scale(loss)
+            scale = self.grad_scaler.get_scale()
+        else:
+            scale = 1 # Always equal to 1 when disable mixed_precision training
 
         loss.backward()
 
         finite = self._on_backward(scale, embedding_gradient_check_frequency)
 
-        self.grad_scaler.step(self.dense_optimizer)
+        if self.mixed_precision:
+            self.grad_scaler.step(self.dense_optimizer)
 
-        if finite:
-            self.grad_scaler.update()
-        else:
-            self.grad_scaler.update(scale / self.grad_scalar_update_factor)
+            if finite:
+                self.grad_scaler.update()
+            else:
+                self.grad_scaler.update(scale / self.grad_scalar_update_factor)
 
         self.dense_optimizer.zero_grad()
 
@@ -745,14 +753,15 @@ class TrainCtx(EmbeddingCtx):
         """Update the embeddings gradients
 
         Arguments:
-            loss_scale (float): The loss that scaled by GradScalar.
+            loss_scale (float): The loss that scaled by GradScalar, loss_scale always equal to 1 for cpu training scenes.
             embedding_gradient_check_frequency (int): The frequency to check gradient finite or not for current embedding.
         """
         if self.grad_queue.full():
             self.grad_queue.get()
 
         finite = True
-        if self.update_times % embedding_gradient_check_frequency == 0:
+
+        if self.mixed_precision and self.update_times % embedding_gradient_check_frequency == 0:
             finite = _check_finite(
                 [emb[-1].grad for emb in self.current_batch.emb_tensors]
             )
@@ -786,7 +795,7 @@ class TrainCtx(EmbeddingCtx):
                         grad = None
                 else:
                     grad = emb_tensor.grad  # type: torch.Tensor
-                    is_f16_gradient = True
+                    is_f16_gradient = self.mixed_precision
 
                 if grad is not None:
                     grad_slots.append(grad)
