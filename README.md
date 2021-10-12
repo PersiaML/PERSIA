@@ -1,4 +1,4 @@
-PersiaML
+Persia
 ======
 
 [![tutorials](https://img.shields.io/badge/tutorials-passing-green)](https://persiaml-tutorials.pages.dev) 
