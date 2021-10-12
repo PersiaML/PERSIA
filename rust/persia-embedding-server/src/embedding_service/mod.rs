@@ -389,17 +389,18 @@ impl EmbeddingServiceInner {
         let batch_level_state = optimizer.get_batch_level_state(signs.as_slice());
 
         tokio::task::block_in_place(|| {
-            for sign in signs {
+            for (idx, sign) in signs.iter().enumerate() {
                 if let Some(entry) = self.embedding.get_value(&sign) {
                     if let Some(entry) = entry.upgrade() {
                         let entry_dim = { entry.read().dim() };
                         let (grad, r) = remaining_gradients.split_at(entry_dim);
                         remaining_gradients = r;
+                        let emb_opt_state = optimizer.get_emb_state(&batch_level_state, idx);
 
                         {
                             let mut entry = entry.write();
                             let emb_entry_slice = entry.as_mut_emb_entry_slice();
-                            optimizer.update(emb_entry_slice, grad, entry_dim, &batch_level_state);
+                            optimizer.update(emb_entry_slice, grad, entry_dim, &emb_opt_state);
 
                             if conf.enable_weight_bound {
                                 unsafe {
@@ -411,7 +412,7 @@ impl EmbeddingServiceInner {
                             }
                         }
 
-                        indices_to_commit.push((sign, entry.clone()));
+                        indices_to_commit.push((*sign, entry.clone()));
                     }
                 } else {
                     gradient_id_miss_count += 1;

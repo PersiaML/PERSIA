@@ -7,7 +7,6 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-persia-common = {path = "../persia-common"}
 persia-libs = {path = "../persia-libs"}
 persia-speedy = "0.9"
 enum_dispatch = "0.3.7"

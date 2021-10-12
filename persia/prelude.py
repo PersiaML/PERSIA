@@ -9,7 +9,7 @@ import persia_core
 
 
 def register_submodule(module: ModuleType, root_module_path: str):
-    """register the persia core module to sys module path.
+    """Register the persia core module to sys module path.
 
     Arguments:
         module (ModuleType): Root module.

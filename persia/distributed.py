@@ -11,7 +11,10 @@ _logger = get_default_logger()
 
 
 class DistributedBaseOption(ABC):
-    """Distributed option to converted torch model to dataparallel model."""
+    """Implements a common option to convert torch model to a distributed data parallel model,
+    e.g. Bagua Distributed or pyTorch DDP.
+
+    This class should not be instantiated directly."""
 
     def __init__(self, master_port: int, protocal: str, master_addr: Optional[str] = None):
         """
@@ -42,6 +45,7 @@ class DistributedBaseOption(ABC):
         optimizer: Optional[torch.optim.Optimizer] = None,
     ):
         """
+
         Arguments:
             model (torch.nn.Module): The pytorch model that need to converted to dataparallel model.
             world_size (int): Total number of processes.
@@ -54,10 +58,10 @@ class DistributedBaseOption(ABC):
 
     @abstractmethod
     def init_with_env_file(self) -> bool:
-        """Check current option init with ddp env file or not
+        """Check if the current option was initialized with a ddp env file or not
 
         Returns:
-            Whether distributed option init with env file
+            ``True`` if the current option was initialized with a ddp env file
         """
         ...
 
@@ -67,7 +71,7 @@ _ddp_init_method_list = ["tcp", "file"]
 
 
 class DDPOption(DistributedBaseOption):
-    """Implementation of pytorch distributed dataparallel option."""
+    """Implements an option to convert torch model to a DDP model."""
 
     def __init__(self, init_method: str = "tcp", backend: str = "nccl", **options):
         """
@@ -148,10 +152,10 @@ class DDPOption(DistributedBaseOption):
         return parallel_model, optimizer
 
     def init_with_env_file(self) -> bool:
-        """Check current option init with ddp env file or not
+        """Check if the current option was initialized with a ddp env file or not
 
         Returns:
-            Whether distributed option init with env file
+            ``True`` if the current option was initialized with a ddp env file
         """
         return self.init_method == "file"
 
@@ -209,7 +213,7 @@ def _select_bagua_algorithm(
 
 
 class BaguaDistributedOption(DistributedBaseOption):
-    """Implementation of bagua distributed dataparallel option"""
+    """Implements an option to convert torch model to a bagua distributed model."""
 
     def __init__(self, algorithm: str, **options):
         """
