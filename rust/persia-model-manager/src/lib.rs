@@ -14,13 +14,13 @@ use persia_libs::{
     thiserror, tracing,
 };
 
-use persia_common::HashMapEmbeddingEntry;
 use persia_embedding_config::{
     PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig, PersiaGlobalConfigError,
     PersiaReplicaInfo,
 };
-use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
-use persia_full_amount_manager::{FullAmountManager, PersiaFullAmountManagerError};
+use persia_embedding_holder::{
+    emb_entry::HashMapEmbeddingEntry, PersiaEmbeddingHolder, PersiaEmbeddingHolderError,
+};
 use persia_speedy::{Readable, Writable};
 use persia_storage::{PersiaPath, PersiaPathImpl};
 
@@ -28,8 +28,6 @@ use persia_storage::{PersiaPath, PersiaPathImpl};
 pub enum PersistenceManagerError {
     #[error("storage error")]
     StorageError(String),
-    #[error("full amount manager error: {0}")]
-    PersiaFullAmountManagerError(#[from] PersiaFullAmountManagerError),
     #[error("embedding holder error: {0}")]
     PersiaEmbeddingHolderError(#[from] PersiaEmbeddingHolderError),
     #[error("global config error: {0}")]
@@ -64,7 +62,6 @@ static MODEL_PERSISTENCE_MANAGER: OnceCell<Arc<PersiaPersistenceManager>> = Once
 #[derive(Clone)]
 pub struct PersiaPersistenceManager {
     embedding_holder: PersiaEmbeddingHolder,
-    full_amount_manager: Arc<FullAmountManager>,
     status: Arc<RwLock<PersiaPersistenceStatus>>,
     thread_pool: Arc<ThreadPool>,
     sign_per_file: usize,
@@ -79,12 +76,10 @@ impl PersiaPersistenceManager {
             let server_config = PersiaEmbeddingServerConfig::get()?;
             let common_config = PersiaCommonConfig::get()?;
             let embedding_holder = PersiaEmbeddingHolder::get()?;
-            let full_amount_manager = FullAmountManager::get()?;
             let replica_info = PersiaReplicaInfo::get()?;
 
             let singleton = Arc::new(Self::new(
                 embedding_holder,
-                full_amount_manager,
                 server_config.num_persistence_workers,
                 server_config.num_signs_per_file,
                 replica_info.replica_index,
@@ -102,7 +97,6 @@ impl PersiaPersistenceManager {
 
     fn new(
         embedding_holder: PersiaEmbeddingHolder,
-        full_amount_manager: Arc<FullAmountManager>,
         concurrent_size: usize,
         sign_per_file: usize,
         replica_index: usize,
@@ -111,7 +105,6 @@ impl PersiaPersistenceManager {
     ) -> Self {
         Self {
             embedding_holder,
-            full_amount_manager,
             status: Arc::new(RwLock::new(PersiaPersistenceStatus::Idle)),
             thread_pool: Arc::new(
                 ThreadPoolBuilder::new()
@@ -306,6 +299,17 @@ impl PersiaPersistenceManager {
         });
 
         Ok(())
+    }
+
+    pub fn dump_internal_shard_embeddings(
+        &self,
+        internal_shard_idx: usize,
+        dst_dir: PathBuf,
+    ) -> Result<(), PersistenceManagerError> {
+        let shard = self
+            .embedding_holder
+            .get_shard_by_index(internal_shard_idx)
+            .read();
     }
 
     pub fn dump_full_amount_embedding(

@@ -1,17 +1,17 @@
-use std::collections::LinkedList;
-use std::{sync::Arc, sync::Weak};
+pub mod array_linked_list;
+pub mod emb_entry;
+pub mod eviction_map;
+pub mod sharded;
 
-use persia_libs::{
-    hashbrown::HashMap,
-    once_cell,
-    parking_lot::{Mutex, RwLock},
-    thiserror,
-};
+use std::sync::Arc;
 
-use persia_common::HashMapEmbeddingEntry;
+use persia_libs::{once_cell, parking_lot::RwLock, thiserror};
+
+use emb_entry::HashMapEmbeddingEntry;
+use eviction_map::EvictionMap;
 use persia_embedding_config::{PersiaEmbeddingServerConfig, PersiaGlobalConfigError};
-use persia_eviction_map::PersiaEvictionMap;
 use persia_speedy::{Readable, Writable};
+use sharded::Sharded;
 
 #[derive(Readable, Writable, thiserror::Error, Debug)]
 pub enum PersiaEmbeddingHolderError {
@@ -26,19 +26,25 @@ static PERSIA_EMBEDDING_HOLDER: once_cell::sync::OnceCell<PersiaEmbeddingHolder>
 
 #[derive(Clone)]
 pub struct PersiaEmbeddingHolder {
-    inner: Arc<PersiaEvictionMap<u64, Arc<RwLock<HashMapEmbeddingEntry>>>>,
-    _recycle_pool: Arc<RecyclePool>,
+    inner: Arc<Sharded<EvictionMap<u64, HashMapEmbeddingEntry>, u64>>,
 }
 
 impl PersiaEmbeddingHolder {
     pub fn get() -> Result<PersiaEmbeddingHolder, PersiaEmbeddingHolderError> {
         let singleton = PERSIA_EMBEDDING_HOLDER.get_or_try_init(|| {
             let config = PersiaEmbeddingServerConfig::get()?;
-            let eviction_map: PersiaEvictionMap<u64, Arc<RwLock<HashMapEmbeddingEntry>>> =
-                PersiaEvictionMap::new(config.capacity, config.num_hashmap_internal_shards);
+            let mut inner = Vec::with_capacity(config.num_hashmap_internal_shards);
+            (0..config.num_hashmap_internal_shards).for_each(|_| {
+                inner.push(RwLock::new(EvictionMap::with_capacity(
+                    config.capacity / config.num_hashmap_internal_shards,
+                )))
+            });
+            let sharded = Sharded {
+                inner,
+                phantom: std::marker::PhantomData::default(),
+            };
             Ok(PersiaEmbeddingHolder {
-                inner: Arc::new(eviction_map),
-                _recycle_pool: Arc::new(RecyclePool::new(config.embedding_recycle_pool_capacity)),
+                inner: Arc::new(sharded),
             })
         });
         match singleton {
@@ -48,83 +54,33 @@ impl PersiaEmbeddingHolder {
     }
 
     pub fn num_total_signs(&self) -> usize {
-        self.inner.len()
+        self.inner
+            .inner
+            .iter()
+            .map(|x| x.read().len())
+            .sum::<usize>()
     }
 
-    pub fn insert(
-        &self,
-        key: u64,
-        value: Arc<RwLock<HashMapEmbeddingEntry>>,
-    ) -> Option<Weak<RwLock<HashMapEmbeddingEntry>>> {
-        let (_old_val, evcited) = self.inner.insert(key, value);
-        if let Some(entry) = evcited {
-            let evcited = Arc::downgrade(&entry);
-            Some(evcited)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_value(&self, key: &u64) -> Option<Weak<RwLock<HashMapEmbeddingEntry>>> {
-        match self.inner.get(key) {
-            Some(value) => Some(Arc::downgrade(&value)),
-            None => None,
-        }
-    }
-
-    pub fn get_value_refresh(&self, key: &u64) -> Option<Weak<RwLock<HashMapEmbeddingEntry>>> {
-        match self.inner.get_refresh(key) {
-            Some(value) => Some(Arc::downgrade(&value)),
-            None => None,
-        }
+    pub fn capacity(&self) -> usize {
+        self.inner
+            .inner
+            .iter()
+            .map(|x| x.read().capacity())
+            .sum::<usize>()
     }
 
     pub fn clear(&self) {
-        self.inner.clear();
-    }
-}
-
-pub struct RecyclePool {
-    pub inner: Arc<RwLock<HashMap<usize, Mutex<LinkedList<Arc<RwLock<HashMapEmbeddingEntry>>>>>>>,
-    pub capacity: usize,
-}
-
-impl RecyclePool {
-    pub fn new(capacity: usize) -> Self {
-        Self {
-            inner: Arc::new(RwLock::new(HashMap::new())),
-            capacity,
-        }
+        self.inner.inner.iter().for_each(|x| x.write().clear());
     }
 
-    pub fn restore(&self, entry: Arc<RwLock<HashMapEmbeddingEntry>>) {
-        let dim = { entry.read().inner_size() };
-        let entry_list_exist = {
-            let map = self.inner.read();
-            map.get(&dim).is_some()
-        };
-        if !entry_list_exist {
-            let mut map = self.inner.write();
-            let list = map.get(&dim);
-            if list.is_none() {
-                let empty_list = Mutex::new(LinkedList::new());
-                map.insert(dim, empty_list);
-            }
-        }
-        let map = self.inner.read();
-        let mut list = map.get(&dim).unwrap().lock();
-        if list.len() < self.capacity {
-            list.push_back(entry);
-        }
+    pub fn shard(&self, key: &u64) -> &RwLock<EvictionMap<u64, HashMapEmbeddingEntry>> {
+        self.inner.shard(key)
     }
 
-    pub fn take(&self, inner_size: usize) -> Option<Arc<RwLock<HashMapEmbeddingEntry>>> {
-        let map = self.inner.read();
-        let list = map.get(&inner_size);
-        if list.is_none() {
-            return None;
-        }
-        let mut list = list.unwrap().lock();
-        list.pop_back()
+    pub fn get_shard_by_index(
+        &self,
+        index: usize,
+    ) -> &RwLock<EvictionMap<u64, HashMapEmbeddingEntry>> {
+        self.inner.get_shard_by_index(index)
     }
 }
