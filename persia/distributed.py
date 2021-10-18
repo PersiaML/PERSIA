@@ -136,6 +136,7 @@ class DDPOption(DistributedBaseOption):
         else:
             raise NotImplementedError
 
+
         torch.distributed.init_process_group(
             self.backend,
             init_method=init_method,
@@ -143,10 +144,11 @@ class DDPOption(DistributedBaseOption):
             world_size=world_size,
         )
         _logger.info(f"Pytorch ddp init process group done, corresponding backend is {self.backend}, init method is {self.init_method}")
-
+        
+        device_ids = [device_id] if self.backend != "gloo" else None
         parallel_model = torch.nn.parallel.DistributedDataParallel(
             model,
-            device_ids=[device_id],
+            device_ids=device_ids,
             output_device=device_id,
             find_unused_parameters=True,
         )

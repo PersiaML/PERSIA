@@ -356,7 +356,7 @@ class EmbeddingCtx(BaseCtx):
                 )  # tensor shape (1, batch_size * sample_fixed_size)
                 max_index = index_tensor.max()
                 size_of_distinct_id_tensor = distinct_id_tensor.shape[0]
-                torch.cuda.synchronize()
+                # torch.cuda.synchronize()
 
                 assert (
                     max_index < size_of_distinct_id_tensor
@@ -642,6 +642,11 @@ class TrainCtx(EmbeddingCtx):
         ), "Mixed precision training only support on cuda device."
         self.mixed_precision = mixed_precision
 
+        if self.mixed_precision:
+            self.grad_scalar_update_factor = grad_scalar_update_factor
+            self.grad_scaler = torch.cuda.amp.GradScaler()
+            self.update_times = 0
+
         if world_size > 1:
             distributed_option = distributed_option or get_default_distributed_option()
             not_env_file = not distributed_option.init_with_env_file()
@@ -673,9 +678,6 @@ class TrainCtx(EmbeddingCtx):
             init_rpc_client_num = self._init_middlewrae_rpc_client()
             _logger.info(f"Successfully init {init_rpc_client_num} rpc client")
 
-        self.update_times = 0
-        self.grad_scalar_update_factor = grad_scalar_update_factor
-        self.grad_scaler = torch.cuda.amp.GradScaler()
         self.backward_workers_size = backward_workers_size
 
         from persia.prelude import PyBackward
