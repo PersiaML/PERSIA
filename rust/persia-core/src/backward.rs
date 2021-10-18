@@ -123,7 +123,7 @@ struct Backward {
 }
 
 fn ptr2vec<T: Clone>(ptr: *mut std::os::raw::c_void, element_num: usize, clone: bool) -> Vec<T> {
-    unsafe { 
+    unsafe {
         let vec = Vec::from_raw_parts(ptr as *mut T, element_num, element_num);
         if clone {
             vec.clone()
@@ -138,7 +138,7 @@ fn host_ptr2gradient(
     shape: [usize; 2],
     num_elements: usize,
     is_f16: bool,
-    copy: bool
+    copy: bool,
 ) -> Gradients {
     if is_f16 {
         Gradients::F16(
@@ -147,14 +147,20 @@ fn host_ptr2gradient(
         )
     } else {
         Gradients::F32(
-            ndarray::Array2::from_shape_vec(shape, ptr2vec::<f32>(ptr, num_elements, copy)).unwrap(),
+            ndarray::Array2::from_shape_vec(shape, ptr2vec::<f32>(ptr, num_elements, copy))
+                .unwrap(),
         )
     }
 }
 
 #[cfg(feature = "cuda")]
 #[inline]
-fn copy_gradients(x: &SingleSlotGradient, num_bytes: usize, num_elements: usize, device_id: Arc<Option<i32>>) -> Gradients {
+fn copy_gradients(
+    x: &SingleSlotGradient,
+    num_bytes: usize,
+    num_elements: usize,
+    device_id: Arc<Option<i32>>,
+) -> Gradients {
     use crate::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
     use crate::cuda::utils::cuda_d2h;
 
@@ -174,7 +180,7 @@ fn copy_gradients(x: &SingleSlotGradient, num_bytes: usize, num_elements: usize,
             x.shape,
             num_elements,
             x.is_f16_gradient,
-            true
+            true,
         )
     } else {
         host_ptr2gradient(
@@ -189,16 +195,20 @@ fn copy_gradients(x: &SingleSlotGradient, num_bytes: usize, num_elements: usize,
 
 #[cfg(not(feature = "cuda"))]
 #[inline]
-fn copy_gradients(x: &SingleSlotGradient, num_ytes: usize, num_elements: usize, device_id: Arc<Option<i32>>) -> Gradients {
+fn copy_gradients(
+    x: &SingleSlotGradient,
+    num_ytes: usize,
+    num_elements: usize,
+    device_id: Arc<Option<i32>>,
+) -> Gradients {
     // zero copy tensor which place in cpu.
     host_ptr2gradient(
         x.data_ptr as *mut std::os::raw::c_void,
         x.shape,
         num_elements,
         x.is_f16_gradient,
-        false
+        false,
     )
-
 }
 
 impl Backward {
@@ -266,8 +276,9 @@ impl Backward {
                                 } else {
                                     num_elements * std::mem::size_of::<f32>()
                                 };
-                                
-                                let gradients = copy_gradients(&x, num_bytes, num_elements, device_id.clone());
+
+                                let gradients =
+                                    copy_gradients(&x, num_bytes, num_elements, device_id.clone());
 
                                 SkippableFeatureEmbeddingGradientBatch::GradientBatch(
                                     FeatureEmbeddingGradientBatch {
