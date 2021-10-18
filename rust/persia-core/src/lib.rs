@@ -89,9 +89,9 @@ pub enum PersiaError {
     PersiaBatchFlowError(#[from] nats::persia_dataflow_service::Error),
 }
 
-impl PersiaError {
-    pub fn to_py_runtime_err(&self) -> PyErr {
-        PyRuntimeError::new_err(format!("{:?}", self))
+impl From<PersiaError> for PyErr {
+    fn from(e: PersiaError) -> Self {
+        PyRuntimeError::new_err(format!("{:?}", e))
     }
 }
 
@@ -157,6 +157,15 @@ impl PersiaCommonContext {
         )
     }
 
+    fn get_nats_publish_service(
+        &self,
+    ) -> Result<&nats::PersiaBatchFlowNatsServicePublisherWrapper, PersiaError> {
+        self.nats_publisher
+            .read()
+            .as_ref()
+            .ok_or_else(|| PersiaError::NatsNotInitializedError)
+    }
+
     pub fn init_rpc_client_with_addr(&self, addr: String) -> Result<(), PersiaError> {
         let _ = self.rpc_client.get_client_by_addr(&addr);
         Ok(())
@@ -177,7 +186,7 @@ impl PyPersiaCommonContext {
         replica_size: usize,
     ) -> PyResult<Self> {
         let inner = PersiaCommonContext::new(num_coroutines_worker, replica_index, replica_size)
-            .map_err(|e| e.to_py_runtime_err())?;
+            .map_err(|e| PyErr::from(e))?;
         Ok(Self { inner })
     }
 
@@ -191,7 +200,7 @@ impl PyPersiaCommonContext {
             .block_on(nats::PersiaBatchFlowNatsServicePublisherWrapper::new(
                 world_size,
             ))
-            .map_err(|e| e.to_py_runtime_err())?;
+            .map_err(|e| PyErr::from(e))?;
 
         let mut nats_publisher = self.inner.nats_publisher.write();
         *nats_publisher = Some(instance);
@@ -204,7 +213,7 @@ impl PyPersiaCommonContext {
         }
         let replica_info = PersiaReplicaInfo::get().expect("not in persia context");
         if replica_info.is_master() && master_addr.is_none() {
-            return Err(PersiaError::MasterServiceEmpty.to_py_runtime_err());
+            return Err(PyErr::from(PersiaError::MasterServiceEmpty));
         }
 
         let instance = self
@@ -226,10 +235,10 @@ impl PyPersiaCommonContext {
                     .read()
                     .as_ref()
                     .ok_or_else(|| PersiaError::MasterDiscoveryServiceNotInitializedError)
-                    .map_err(|e| e.to_py_runtime_err())?
+                    .map_err(|e| PyErr::from(e))?
                     .get_master_addr(),
             )
-            .map_err(|e| e.to_py_runtime_err())
+            .map_err(|e| e.into())
     }
 
     pub fn get_middleware_addr_list(&self) -> PyResult<Vec<String>> {
@@ -237,91 +246,79 @@ impl PyPersiaCommonContext {
             .async_runtime
             .block_on(
                 self.inner
-                    .nats_publisher
-                    .read()
-                    .as_ref()
-                    .ok_or_else(|| PersiaError::NatsNotInitializedError)
-                    .map_err(|e| e.to_py_runtime_err())?
+                    .get_nats_publish_service()?
                     .get_middleware_addr_list(),
             )
-            .map_err(|e| e.to_py_runtime_err())
+            .map_err(|e| e.into())
     }
 
     pub fn init_rpc_client_with_addr(&self, middleware_addr: String) -> PyResult<()> {
         self.inner
             .init_rpc_client_with_addr(middleware_addr)
-            .map_err(|e| e.to_py_runtime_err())
+            .map_err(|e| e.into())
     }
 
     pub fn wait_servers_ready(&self) -> PyResult<String> {
         self.inner
             .async_runtime
-            .block_on(
-                self.inner
-                    .nats_publisher
-                    .read()
-                    .as_ref()
-                    .ok_or_else(|| PersiaError::NatsNotInitializedError)
-                    .map_err(|e| e.to_py_runtime_err())?
-                    .wait_servers_ready(),
-            )
-            .map_err(|e| e.to_py_runtime_err())
+            .block_on(self.inner.get_nats_publish_service()?.wait_servers_ready())
+            .map_err(|e| e.into())
     }
 
     pub fn get_embedding_size(&self) -> PyResult<Vec<usize>> {
         self.inner
             .async_runtime
             .block_on(self.inner.rpc_client.get_embedding_size())
-            .map_err(|e| e.to_py_runtime_err())
+            .map_err(|e| e.into())
     }
 
     pub fn clear_embeddings(&self) -> PyResult<()> {
         self.inner
             .async_runtime
             .block_on(self.inner.rpc_client.clear_embeddings())
-            .map_err(|e| e.to_py_runtime_err())
+            .map_err(|e| e.into())
     }
 
     pub fn dump(&self, dst_dir: String) -> PyResult<()> {
         self.inner
             .async_runtime
             .block_on(self.inner.rpc_client.dump(dst_dir))
-            .map_err(|e| e.to_py_runtime_err())
+            .map_err(|e| e.into())
     }
 
     pub fn load(&self, src_dir: String) -> PyResult<()> {
         self.inner
             .async_runtime
             .block_on(self.inner.rpc_client.load(src_dir))
-            .map_err(|e| e.to_py_runtime_err())
+            .map_err(|e| e.into())
     }
 
     pub fn wait_for_serving(&self) -> PyResult<()> {
         self.inner
             .async_runtime
             .block_on(self.inner.rpc_client.wait_for_serving())
-            .map_err(|e| e.to_py_runtime_err())
+            .map_err(|e| e.into())
     }
 
     pub fn wait_for_emb_loading(&self) -> PyResult<()> {
         self.inner
             .async_runtime
             .block_on(self.inner.rpc_client.wait_for_emb_loading())
-            .map_err(|e| e.to_py_runtime_err())
+            .map_err(|e| e.into())
     }
 
     pub fn wait_for_emb_dumping(&self) -> PyResult<()> {
         self.inner
             .async_runtime
             .block_on(self.inner.rpc_client.wait_for_emb_dumping())
-            .map_err(|e| e.to_py_runtime_err())
+            .map_err(|e| e.into())
     }
 
     pub fn shutdown_servers(&self) -> PyResult<()> {
         self.inner
             .async_runtime
             .block_on(self.inner.rpc_client.shutdown())
-            .map_err(|e| e.to_py_runtime_err())
+            .map_err(|e| e.into())
     }
 
     pub fn send_sparse_to_middleware(&self, batch: &mut PyPersiaBatchData) -> PyResult<()> {
@@ -329,14 +326,10 @@ impl PyPersiaCommonContext {
             .async_runtime
             .block_on(
                 self.inner
-                    .nats_publisher
-                    .read()
-                    .as_ref()
-                    .ok_or_else(|| PersiaError::NatsNotInitializedError)
-                    .map_err(|e| e.to_py_runtime_err())?
+                    .get_nats_publish_service()?
                     .send_sparse_to_middleware(batch),
             )
-            .map_err(|e| e.to_py_runtime_err())
+            .map_err(|e| e.into())
     }
 
     pub fn send_dense_to_trainer(&self, batch: &PyPersiaBatchData) -> PyResult<()> {
@@ -344,14 +337,10 @@ impl PyPersiaCommonContext {
             .async_runtime
             .block_on(
                 self.inner
-                    .nats_publisher
-                    .read()
-                    .as_ref()
-                    .ok_or_else(|| PersiaError::NatsNotInitializedError)
-                    .map_err(|e| e.to_py_runtime_err())?
+                    .get_nats_publish_service()?
                     .send_dense_to_trainer(batch),
             )
-            .map_err(|e| e.to_py_runtime_err())
+            .map_err(|e| e.into())
     }
 
     pub fn configure_embedding_servers(
@@ -366,11 +355,7 @@ impl PyPersiaCommonContext {
             .async_runtime
             .block_on(
                 self.inner
-                    .nats_publisher
-                    .read()
-                    .as_ref()
-                    .ok_or_else(|| PersiaError::NatsNotInitializedError)
-                    .map_err(|e| e.to_py_runtime_err())?
+                    .get_nats_publish_service()?
                     .configure_embedding_servers(
                         initialize_lower,
                         initialize_upper,
@@ -379,7 +364,7 @@ impl PyPersiaCommonContext {
                         weight_bound,
                     ),
             )
-            .map_err(|e| e.to_py_runtime_err())
+            .map_err(|e| e.into())
     }
 
     #[cfg(feature = "cuda")]
@@ -404,11 +389,10 @@ impl PyPersiaCommonContext {
 
     pub fn read_from_file<'a>(&self, file_path: String, py: Python<'a>) -> PyResult<&'a PyBytes> {
         let file_path = PersiaPath::from_string(file_path);
-        let content = file_path
+        file_path
             .read_to_end()
-            .map_err(|e| PersiaError::StorageVisitError(format!("{:?}", &e)).to_py_runtime_err())?;
-
-        Ok(PyBytes::new(py, content.as_slice()))
+            .map_err(|e| PyErr::from(PersiaError::StorageVisitError(format!("{:?}", &e))))
+            .map(|content| PyBytes::new(py, content.as_slice()))
     }
 
     pub fn dump_to_file(
@@ -423,7 +407,7 @@ impl PyPersiaCommonContext {
         let content = content.as_bytes().to_vec();
         file_path
             .write_all(content)
-            .map_err(|e| PersiaError::StorageVisitError(format!("{:?}", &e)).to_py_runtime_err())
+            .map_err(|e| PersiaError::StorageVisitError(format!("{:?}", &e)).into())
     }
 }
 
