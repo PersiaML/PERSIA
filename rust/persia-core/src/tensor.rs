@@ -255,7 +255,6 @@ pub struct Tensor {
     pub device: Device,
 }
 
-
 impl Tensor {
     pub fn new(
         storage: Storage,
@@ -327,11 +326,14 @@ impl Tensor {
             strides: self.stride.as_mut_ptr(),
             byte_offset: 0u64,
         };
-        println!("dltensor device dtype is {:?}, shape is {:?}, strides is {:?}", &dl_tensor.device, &self.shape, &self.stride);
+        println!(
+            "dltensor device dtype is {:?}, shape is {:?}, strides is {:?}",
+            &dl_tensor.device, &self.shape, &self.stride
+        );
         DLManagedTensor {
             dl_tensor,
             manager_ctx: std::ptr::null_mut(),
-            deleter: Some(drop_dl_managed_tensor)
+            deleter: Some(drop_dl_managed_tensor),
         }
     }
 }

@@ -162,7 +162,10 @@ impl PyTensor {
     #[getter]
     pub fn dlpack(&mut self, py: Python) -> PyResult<PyObject> {
         let dlpack = self.inner.dlpack();
-        println!("dlpack struct size is {:?}", std::mem::size_of::<DLManagedTensor>());
+        println!(
+            "dlpack struct size is {:?}",
+            std::mem::size_of::<DLManagedTensor>()
+        );
         let dlpack_managed_tensor = Box::new(dlpack);
         let capsule = unsafe {
             let ptr = pyo3::ffi::PyCapsule_New(
@@ -184,7 +187,7 @@ impl PyTensor {
     }
 
     pub fn check_dlpack(&self, dlpack: PyObject) {
-        // dlpack object can not be used after dlpack checked 
+        // dlpack object can not be used after dlpack checked
         // since the object already be dropped the DLManagedTensor
         let dlpack_managed_tensor = unsafe {
             let ptr = pyo3::ffi::PyCapsule_GetPointer(
