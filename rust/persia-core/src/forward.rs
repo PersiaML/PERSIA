@@ -123,6 +123,7 @@ pub struct PyTensor {
 }
 
 static DL_TENSOR_NAME: &'static [u8] = b"dltensor\0";
+const UNKONW_TENSOR_NAME: &str = "UnkownedTensor";
 
 #[pymethods]
 impl PyTensor {
@@ -160,9 +161,21 @@ impl PyTensor {
     }
 
     #[getter]
-    pub fn dlpack(&mut self, py: Python) -> PyResult<PyObject> {
+    pub fn get_name(&self) -> String {
+        if let Some(name) = self.inner.name.as_ref() {
+            name.to_string()
+        } else {
+            UNKONW_TENSOR_NAME.to_owned()
+        }
+    }
+
+    #[getter]
+    pub fn get_dlpack(&mut self, py: Python) -> PyResult<PyObject> {
         let dlpack = self.inner.dlpack();
-        println!("dlpack struct size is {:?}", std::mem::size_of::<DLManagedTensor>());
+        println!(
+            "dlpack struct size is {:?}",
+            std::mem::size_of::<DLManagedTensor>()
+        );
         let dlpack_managed_tensor = Box::new(dlpack);
         let capsule = unsafe {
             let ptr = pyo3::ffi::PyCapsule_New(
@@ -184,8 +197,8 @@ impl PyTensor {
     }
 
     pub fn check_dlpack(&self, dlpack: PyObject) {
-        // dlpack object can not be used after dlpack checked 
-        // since the object already be dropped the DLManagedTensor
+        // dlpack object can not be used after dlpack checked
+        // since the object already be dropped
         let dlpack_managed_tensor = unsafe {
             let ptr = pyo3::ffi::PyCapsule_GetPointer(
                 dlpack.into_ptr(),
@@ -320,6 +333,7 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch) -> Embedding {
 
             let embedding_shape = raw_embedding.embeddings.shape().to_vec();
             let index_len = raw_embedding.index.len();
+            let feature_name = raw_embedding.feature_name.clone();
             let no_empty_index_list_len = std::cmp::max(non_empty_index_list.len(), 1);
             Embedding::Raw(RawEmbedding {
                 tensor: Tensor::new(
@@ -327,19 +341,19 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch) -> Embedding {
                         raw_embedding.embeddings.into_raw_vec(),
                     )),
                     embedding_shape,
-                    None,
+                    Some(feature_name.clone()),
                     None,
                 ),
                 index: Tensor::new(
                     Storage::CPU(CPUStorage::from_usize(raw_embedding.index)),
                     vec![index_len],
-                    None,
+                    Some(format!("{}_index", &feature_name)),
                     None,
                 ),
                 non_empty_index: Tensor::new(
                     Storage::CPU(CPUStorage::from_u64(non_empty_index_list)),
                     vec![no_empty_index_list_len],
-                    None,
+                    Some(format!("{}_non_empty_index", &feature_name)),
                     None,
                 ),
                 samples_id_num: raw_embedding.sample_id_num,
@@ -352,7 +366,7 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch) -> Embedding {
                     sum_embedding.embeddings.into_raw_vec(),
                 )),
                 embedding_shape,
-                None,
+                Some(sum_embedding.feature_name),
                 None,
             );
             Embedding::Sum(SumEmbedding { tensor })

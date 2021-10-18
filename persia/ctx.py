@@ -385,7 +385,7 @@ class EmbeddingCtx(BaseCtx):
                 )
                 emb_tensors.append(
                     (
-                        raw_embedding.name(),
+                        raw_embedding.name,
                         distinct_id_tensor,
                         index_tensor,
                         non_empty_index_tensor,
@@ -398,7 +398,7 @@ class EmbeddingCtx(BaseCtx):
                 batch.emb_slot.append([emb])
                 sum_tensor = _cast_dlpack2torch_tensor(emb, requires_grad=is_training)
                 forward_tensors.append(sum_tensor)
-                emb_tensors.append((emb.name(), None, None, None, sum_tensor))
+                emb_tensors.append((emb.name, None, None, None, sum_tensor))
 
         batch.forward_tensors = forward_tensors
         batch.emb_tensors = emb_tensors
