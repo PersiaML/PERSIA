@@ -435,7 +435,7 @@ class EmbeddingCtx(BaseCtx):
 
         dense_model_filepath = os.path.join(src_dir, dense_filename)
         if os.path.exists(dense_model_filepath):
-            self.load_dense(self.model, dense_model_filepath)
+            self.load_dense(self.model, dense_model_filepath, map_location=map_location)
 
         self.load_embedding(src_dir, blocking=blocking)
 
@@ -494,17 +494,19 @@ class EmbeddingCtx(BaseCtx):
         self,
         dense: Union[torch.nn.Module, torch.optim.Optimizer],
         src_filepath: str,
+        map_location: Optional[str] = None,
     ):
         """Load the torch state dict from source file path.
 
         Arguments:
             dense (torch.nn.Module or torch.optim.Optimizer): dense model or optimizer to restore.
             src_filepath (str): Source file path.
+            map_location (str, optional): Load the dense checkpoint to specific device.
         """
         dense_bytes = self.common_context.read_from_file(src_filepath)
         buffer = io.BytesIO(dense_bytes)
         buffer.seek(0)
-        state_dict = torch.load(buffer)
+        state_dict = torch.load(buffer, map_location=map_location)
         dense.load_state_dict(state_dict)
 
     def wait_for_dump_embedding(self):
