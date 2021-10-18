@@ -88,7 +88,10 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-#[derive(Copy, Clone, Debug)]
+use persia_libs::serde::{self, Deserialize, Serialize};
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[serde(crate = "self::serde")]
 struct LinkedListNode<T> {
     next_index: u32,
     prev_index: u32,
@@ -130,7 +133,8 @@ impl<T> LinkedListNode<T> {
 }
 
 /// The `ArrayLinkedList` type, which combines the advantages of dynamic arrays and linked lists.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(crate = "self::serde")]
 pub struct ArrayLinkedList<T> {
     count: usize,
     first_index: u32,
