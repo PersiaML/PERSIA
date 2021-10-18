@@ -1,8 +1,8 @@
 use persia_libs::hashbrown::HashMap;
 use std::hash::Hash;
+use std::convert::TryFrom;
 
-// use crate::array_linked_list::ArrayLinkedList;
-use array_linked_list::ArrayLinkedList;
+use crate::array_linked_list::ArrayLinkedList;
 
 pub trait EvictionMapValue<K> {
     fn hashmap_key(&self) -> K;
@@ -13,7 +13,7 @@ where
     K: Hash + Eq + Clone,
     V: EvictionMapValue<K>,
 {
-    pub hashmap: HashMap<K, usize>,
+    pub hashmap: HashMap<K, u32>,
     pub linkedlist: ArrayLinkedList<V>,
     pub capacity: usize,
 }
@@ -26,21 +26,21 @@ where
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             hashmap: HashMap::with_capacity(capacity + 1),
-            linkedlist: ArrayLinkedList::with_capacity(capacity + 1),
+            linkedlist: ArrayLinkedList::with_capacity(capacity as u32 + 1),
             capacity,
         }
     }
 
     pub fn get(&self, key: &K) -> Option<&V> {
         match self.hashmap.get(&key) {
-            Some(idx) => self.linkedlist[*idx].as_ref(),
+            Some(idx) => self.linkedlist[*idx as usize].as_ref(),
             None => None,
         }
     }
 
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
         match self.hashmap.get(&key) {
-            Some(idx) => self.linkedlist[*idx].as_mut(),
+            Some(idx) => self.linkedlist[*idx as usize].as_mut(),
             None => None,
         }
     }
@@ -48,11 +48,12 @@ where
     pub fn get_refresh(&mut self, key: &K) -> Option<&V> {
         match self.hashmap.get(&key) {
             Some(idx) => {
-                let v = self.linkedlist.remove(*idx).unwrap();
+                let idx = u32::try_from(*idx).expect("u32 array linked list overflow");
+                let v = self.linkedlist.remove(idx).unwrap();
                 let new_idx = self.linkedlist.push_back(v);
                 let idx_ref = self.hashmap.get_mut(key).unwrap();
                 *idx_ref = new_idx;
-                self.linkedlist[new_idx].as_ref()
+                self.linkedlist[new_idx as usize].as_ref()
             }
             None => None,
         }
@@ -61,11 +62,12 @@ where
     pub fn get_refresh_mut(&mut self, key: &K) -> Option<&mut V> {
         match self.hashmap.get(&key) {
             Some(idx) => {
-                let v = self.linkedlist.remove(*idx).unwrap();
+                let idx = u32::try_from(*idx).expect("u32 array linked list overflow");
+                let v = self.linkedlist.remove(idx).unwrap();
                 let new_idx = self.linkedlist.push_back(v);
                 let idx_ref = self.hashmap.get_mut(key).unwrap();
                 *idx_ref = new_idx;
-                self.linkedlist[new_idx].as_mut()
+                self.linkedlist[new_idx as usize].as_mut()
             }
             None => None,
         }
@@ -80,7 +82,7 @@ where
         let new_idx = self.linkedlist.push_back(value);
         self.hashmap.insert(key, new_idx);
 
-        let evicted = if self.linkedlist.len() > self.capacity {
+        let evicted = if self.linkedlist.len() as usize > self.capacity {
             let evicted = self.linkedlist.pop_front();
             if let Some(evicted_v) = &evicted {
                 let evicted_k = evicted_v.hashmap_key();
@@ -104,7 +106,7 @@ where
     }
 
     pub fn len(&self) -> usize {
-        self.linkedlist.len()
+        self.linkedlist.len() as usize
     }
 }
 
