@@ -241,8 +241,7 @@ pub fn get_stride_by_shape(shape: &[usize]) -> Vec<i64> {
     let mut result = vec![1i64; dim];
 
     for i in 1..dim {
-        let cnt_idx = dim - i - 1;
-        result[dim - i] = result[dim - i] * shape[dim - i] as i64;
+        result[dim - i - 1] = result[dim - i] * shape[dim - i] as i64;
     }
     result
 }
@@ -255,6 +254,7 @@ pub struct Tensor {
     pub name: Option<String>,
     pub device: Device,
 }
+
 
 impl Tensor {
     pub fn new(
@@ -320,18 +320,18 @@ impl Tensor {
     pub fn dlpack(&mut self) -> DLManagedTensor {
         let dl_tensor = DLTensor {
             data: self.raw_data_ptr(),
-            dtype: self.dtype().to_dldtype(),
             device: self.device.to_dldevicetype(),
             ndim: self.shape.len() as i32,
+            dtype: self.dtype().to_dldtype(),
             shape: self.shape.as_mut_ptr() as *mut i64,
             strides: self.stride.as_mut_ptr(),
             byte_offset: 0u64,
         };
-
+        println!("dltensor device dtype is {:?}, shape is {:?}, strides is {:?}", &dl_tensor.device, &self.shape, &self.stride);
         DLManagedTensor {
             dl_tensor,
             manager_ctx: std::ptr::null_mut(),
-            deleter: None,
+            deleter: Some(drop_dl_managed_tensor)
         }
     }
 }

@@ -36,7 +36,10 @@ def _check_finite(tensors: List[torch.Tensor]) -> bool:
     return all([torch.isfinite(t).all() if t is not None else True for t in tensors])
 
 
-def _cast_dlpack2torch_tensor(pytensor: PyTensor, requires_grad: bool) -> torch.Tensor:
+def _cast_dlpack2torch_tensor(
+    pytensor: PyTensor, requires_grad: bool = False
+) -> torch.Tensor:
+    import torch.utils.dlpack as dlpack
     """Convert the dlpack tensor to torch tensor
 
     Arguments:
@@ -45,7 +48,7 @@ def _cast_dlpack2torch_tensor(pytensor: PyTensor, requires_grad: bool) -> torch.
     Returns: pytorch tensor
     """
 
-    tensor = torch.utils.dlpack.from_dlpack(pytensor.dlpack)
+    tensor = dlpack.from_dlpack(pytensor.dlpack)
     tensor.requires_grad = requires_grad
     return tensor
 
@@ -80,7 +83,7 @@ class BaseCtx:
         self.origin_context = None
 
         if device_id is not None and device_id >= 0:
-            assert (
+            assert torch.cuda.is_available() and (
                 0 <= device_id < torch.cuda.device_count()
             ), f"device_id: {device_id} invalid!"
 

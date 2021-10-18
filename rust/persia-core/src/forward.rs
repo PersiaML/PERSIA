@@ -3,12 +3,14 @@ use crate::cuda::set_device;
 
 use crate::backward::PythonGradientBatch;
 use crate::data::{EmbeddingTensor, PersiaBatchData};
+use crate::dlpack::DLManagedTensor;
 use crate::metrics::MetricsHolder;
 use crate::tensor::{CPUStorage, DType, Storage, Tensor};
 use crate::utils::PyPersiaBatchDataReceiver;
 use crate::PersiaCommonContext;
 
 use std::collections::BinaryHeap;
+use std::os::raw::c_char;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
@@ -120,6 +122,8 @@ pub struct PyTensor {
     inner: Tensor,
 }
 
+static DL_TENSOR_NAME: &'static [u8] = b"dltensor\0";
+
 #[pymethods]
 impl PyTensor {
     #[new]
@@ -157,11 +161,13 @@ impl PyTensor {
 
     #[getter]
     pub fn dlpack(&mut self, py: Python) -> PyResult<PyObject> {
-        let dlpack_managed_tensor = Box::new(self.inner.dlpack());
+        let dlpack = self.inner.dlpack();
+        println!("dlpack struct size is {:?}", std::mem::size_of::<DLManagedTensor>());
+        let dlpack_managed_tensor = Box::new(dlpack);
         let capsule = unsafe {
             let ptr = pyo3::ffi::PyCapsule_New(
-                std::mem::transmute(dlpack_managed_tensor),
-                std::ptr::null(),
+                &*dlpack_managed_tensor as *const DLManagedTensor as *mut _,
+                DL_TENSOR_NAME.as_ptr() as *const c_char,
                 None,
             );
 
@@ -173,11 +179,29 @@ impl PyTensor {
 
             PyObject::from_owned_ptr(py, ptr)
         };
-        // Box::leak(dlpack_managed_tensor);
-        // Box::from_raw
+        Box::leak(dlpack_managed_tensor);
         Ok(capsule)
     }
 
+    pub fn check_dlpack(&self, dlpack: PyObject) {
+        // dlpack object can not be used after dlpack checked 
+        // since the object already be dropped the DLManagedTensor
+        let dlpack_managed_tensor = unsafe {
+            let ptr = pyo3::ffi::PyCapsule_GetPointer(
+                dlpack.into_ptr(),
+                DL_TENSOR_NAME.as_ptr() as *const c_char,
+            );
+            tracing::info!("dlmanaged tensor address is {:?}", ptr);
+
+            if ptr.is_null() {
+                println!("empty pointer");
+            }
+            Box::from_raw(ptr as *mut DLManagedTensor)
+        };
+        tracing::info!("dlpack manager tensor is {:?}", dlpack_managed_tensor);
+    }
+
+    // pub fn drop_dlpack(&)
     #[getter]
     pub fn get_device(&self) -> String {
         self.inner.device()

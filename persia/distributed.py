@@ -142,7 +142,7 @@ class DDPOption(DistributedBaseOption):
             rank=rank_id,
             world_size=world_size,
         )
-        _logger.info("Pytorch ddp init process group done")
+        _logger.info(f"Pytorch ddp init process group done, corresponding backend is {self.backend}, init method is {self.init_method}")
 
         parallel_model = torch.nn.parallel.DistributedDataParallel(
             model,

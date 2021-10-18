@@ -6,8 +6,8 @@ use std::os::raw::c_void;
 use persia_libs::tracing;
 
 #[repr(C)]
-#[derive(Clone, Copy)]
-#[warn(non_camel_case_types)]
+#[derive(Clone, Copy, Debug)]
+// #[warn(non_camel_case_types)]
 pub enum DLDeviceType {
     kDLCPU = 1,
     kDLCUDA = 2,
@@ -34,7 +34,7 @@ pub enum DLDataTypeCode {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct DLDataType {
     pub code: u8,
     pub bits: u8,
@@ -42,17 +42,18 @@ pub struct DLDataType {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct DLDevice {
     pub device_type: DLDeviceType,
     pub device_id: i32,
 }
 
 #[repr(C)]
+#[derive(Clone, Debug)]
 pub struct DLTensor {
     pub data: *mut c_void,
-    pub ndim: i32,
     pub device: DLDevice,
+    pub ndim: i32,
     pub dtype: DLDataType,
     pub shape: *mut i64,
     pub strides: *mut i64,
@@ -66,8 +67,13 @@ impl Drop for DLTensor {
 }
 
 #[repr(C)]
+#[derive(Clone, Debug)]
 pub struct DLManagedTensor {
     pub dl_tensor: DLTensor,
     pub manager_ctx: *mut c_void,
     pub deleter: Option<extern "C" fn(*mut DLManagedTensor)>,
+}
+
+pub extern "C" fn drop_dl_managed_tensor(drop: *mut DLManagedTensor) {
+    unsafe { Box::from_raw(drop) };
 }
