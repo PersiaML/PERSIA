@@ -1926,6 +1926,7 @@ dependencies = [
  "anyhow",
  "async-lock",
  "backoff",
+ "bincode",
  "bytes",
  "chrono",
  "color-eyre",

@@ -12,6 +12,7 @@ use persia_libs::{
     parking_lot::RwLock,
     rayon::{ThreadPool, ThreadPoolBuilder},
     thiserror, tracing,
+    bincode,
 };
 
 use persia_embedding_config::{
@@ -306,10 +307,35 @@ impl PersiaPersistenceManager {
         internal_shard_idx: usize,
         dst_dir: PathBuf,
     ) -> Result<(), PersistenceManagerError> {
-        let shard = self
-            .embedding_holder
-            .get_shard_by_index(internal_shard_idx)
-            .read();
+        let encoded = {
+            let shard = self
+                .embedding_holder
+                .get_shard_by_index(internal_shard_idx)
+                .read();
+            let array_linked_list = &shard.linkedlist;
+            let encoded: Vec<u8> = bincode::serialize(&world).unwrap();
+            encoded
+        };
+        let datetime = chrono::Local::now()
+            .format("%Y-%m-%d-%H-%M-%S")
+            .to_string();
+
+        let file_name = format!("replica_{}_shard_{}.emb", date, self.replica_index, internal_shard_idx);
+        let file_name = PathBuf::from(file_name);
+        let emb_path = PersiaPath::from_vec(vec![&dst_dir, &file_name]);
+
+        emb_path.write_all(encoded)?;
+
+        Ok(())
+    }
+
+    pub fn load_internal_shard_embeddings(
+        &self,
+        file_path: PathBuf,
+    ) -> Result<(), PersistenceManagerError> {
+        let emb_path = PersiaPath::from_pathbuf(file_path);
+        let bytes: Vec<u8> = emb_path.read_to_end()?;
+        let decoded: World = bincode::deserialize(&bytes[..]).unwrap();
     }
 
     pub fn dump_full_amount_embedding(

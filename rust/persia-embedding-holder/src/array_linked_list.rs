@@ -89,10 +89,12 @@ use std::{
 };
 
 use persia_libs::serde::{self, Deserialize, Serialize};
+use persia_speedy::{Readable, Writable};
 
+/// The `LinkedListNode` type, which is elements of `ArrayLinkedList`.
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 #[serde(crate = "self::serde")]
-struct LinkedListNode<T> {
+pub struct LinkedListNode<T> {
     next_index: u32,
     prev_index: u32,
     data: Option<T>,
@@ -133,7 +135,7 @@ impl<T> LinkedListNode<T> {
 }
 
 /// The `ArrayLinkedList` type, which combines the advantages of dynamic arrays and linked lists.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Readable, Writable)]
 #[serde(crate = "self::serde")]
 pub struct ArrayLinkedList<T> {
     count: usize,
