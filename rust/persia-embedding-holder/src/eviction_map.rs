@@ -1,6 +1,6 @@
 use persia_libs::hashbrown::HashMap;
-use std::hash::Hash;
 use std::convert::TryFrom;
+use std::hash::Hash;
 
 use crate::array_linked_list::ArrayLinkedList;
 

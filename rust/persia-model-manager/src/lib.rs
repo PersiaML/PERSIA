@@ -7,12 +7,11 @@ use std::sync::Arc;
 
 use persia_libs::{
     anyhow::Error as AnyhowError,
-    chrono,
+    bincode, chrono,
     once_cell::sync::OnceCell,
     parking_lot::RwLock,
     rayon::{ThreadPool, ThreadPoolBuilder},
     thiserror, tracing,
-    bincode,
 };
 
 use persia_embedding_config::{
@@ -316,11 +315,12 @@ impl PersiaPersistenceManager {
             let encoded: Vec<u8> = bincode::serialize(&world).unwrap();
             encoded
         };
-        let datetime = chrono::Local::now()
-            .format("%Y-%m-%d-%H-%M-%S")
-            .to_string();
+        let datetime = chrono::Local::now().format("%Y-%m-%d-%H-%M-%S").to_string();
 
-        let file_name = format!("replica_{}_shard_{}.emb", date, self.replica_index, internal_shard_idx);
+        let file_name = format!(
+            "replica_{}_shard_{}.emb",
+            date, self.replica_index, internal_shard_idx
+        );
         let file_name = PathBuf::from(file_name);
         let emb_path = PersiaPath::from_vec(vec![&dst_dir, &file_name]);
 
