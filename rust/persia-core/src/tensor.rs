@@ -278,7 +278,7 @@ impl Tensor {
         let shape = self.shape.clone();
         let cpu_storage = self.storage.take_cpu_storage().unwrap();
         let gpu_storage = GPUStorage::new(cpu_storage, shape).unwrap();
-        
+
         Tensor {
             storage: Storage::GPU(gpu_storage),
             shape: self.shape.clone(),
