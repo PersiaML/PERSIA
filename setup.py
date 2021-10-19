@@ -5,6 +5,7 @@ from setuptools import setup, find_packages
 from setuptools_rust import Binding, RustExtension
 
 use_cuda = os.environ.get("USE_CUDA", False)
+native = os.environ.get("NATIVE", False)
 
 if __name__ == "__main__":
 
@@ -45,7 +46,7 @@ if __name__ == "__main__":
             },
             path="rust/persia-embedding-server/Cargo.toml",
             binding=Binding.Exec,
-            native=True,
+            native=native,
         )
     )
 
@@ -55,7 +56,7 @@ if __name__ == "__main__":
             "persia_core",
             path="rust/persia-core/Cargo.toml",
             binding=Binding.PyO3,
-            native=True,
+            native=native,
             features=features,
         )
     )
