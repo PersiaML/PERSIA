@@ -126,8 +126,8 @@ struct Backward {
 fn ptr2vec<T: Clone>(ptr: *mut std::os::raw::c_void, element_num: usize) -> Vec<T> {
     unsafe {
         // NOTE: Current vector construct from ffi C++ pointer the ownership is at the C++ side
-        // use vector from_raw_part will occur double-free issue. 
-        // TODO: Optimization points try to construct vector with zero copy 
+        // use vector from_raw_part will occur double-free issue.
+        // TODO: Optimization points try to construct vector with zero copy
         slice::from_raw_parts(ptr as *mut T, element_num).to_vec()
     }
 }
@@ -145,8 +145,7 @@ fn host_ptr2gradient(
         )
     } else {
         Gradients::F32(
-            ndarray::Array2::from_shape_vec(shape, ptr2vec::<f32>(ptr, num_elements))
-                .unwrap(),
+            ndarray::Array2::from_shape_vec(shape, ptr2vec::<f32>(ptr, num_elements)).unwrap(),
         )
     }
 }
@@ -173,12 +172,7 @@ fn copy_gradients(
         .expect("cannot move tensor to host");
 
         event.synchronize();
-        host_ptr2gradient(
-            host_ptr.inner,
-            x.shape,
-            num_elements,
-            x.is_f16_gradient,
-        )
+        host_ptr2gradient(host_ptr.inner, x.shape, num_elements, x.is_f16_gradient)
     } else {
         host_ptr2gradient(
             x.data_ptr as *mut std::os::raw::c_void,

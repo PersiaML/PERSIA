@@ -399,7 +399,9 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
                 Some(sum_embedding.feature_name),
                 None,
             );
-            Embedding::Sum(SumEmbedding { tensor: copy2device(tensor, &device) })
+            Embedding::Sum(SumEmbedding {
+                tensor: copy2device(tensor, &device),
+            })
         }
     }
 }
@@ -817,7 +819,9 @@ pub fn forward_directly(
             let embeddings: Vec<Embedding> = embeddings
                 .batches
                 .into_iter()
-                .map(|feature_embedding_batch| embedding2tensor(feature_embedding_batch, &device_id))
+                .map(|feature_embedding_batch| {
+                    embedding2tensor(feature_embedding_batch, &device_id)
+                })
                 .collect();
 
             embeddings
