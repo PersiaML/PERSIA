@@ -1,6 +1,7 @@
 use crate::metrics::MetricsHolder;
 use crate::PersiaCommonContext;
 
+use core::slice;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -122,14 +123,12 @@ struct Backward {
     pub running: Arc<AtomicBool>,
 }
 
-fn ptr2vec<T: Clone>(ptr: *mut std::os::raw::c_void, element_num: usize, clone: bool) -> Vec<T> {
+fn ptr2vec<T: Clone>(ptr: *mut std::os::raw::c_void, element_num: usize) -> Vec<T> {
     unsafe {
-        let vec = Vec::from_raw_parts(ptr as *mut T, element_num, element_num);
-        if clone {
-            vec.clone()
-        } else {
-            vec
-        }
+        // NOTE: Current vector construct from ffi C++ pointer the ownership is at the C++ side
+        // use vector from_raw_part will occur double-free issue. 
+        // TODO: Optimization points try to construct vector with zero copy 
+        slice::from_raw_parts(ptr as *mut T, element_num).to_vec()
     }
 }
 
@@ -138,16 +137,15 @@ fn host_ptr2gradient(
     shape: [usize; 2],
     num_elements: usize,
     is_f16: bool,
-    copy: bool,
 ) -> Gradients {
     if is_f16 {
         Gradients::F16(
-            ndarray::Array2::from_shape_vec(shape, ptr2vec::<half::f16>(ptr, num_elements, copy))
+            ndarray::Array2::from_shape_vec(shape, ptr2vec::<half::f16>(ptr, num_elements))
                 .unwrap(),
         )
     } else {
         Gradients::F32(
-            ndarray::Array2::from_shape_vec(shape, ptr2vec::<f32>(ptr, num_elements, copy))
+            ndarray::Array2::from_shape_vec(shape, ptr2vec::<f32>(ptr, num_elements))
                 .unwrap(),
         )
     }
@@ -180,7 +178,6 @@ fn copy_gradients(
             x.shape,
             num_elements,
             x.is_f16_gradient,
-            true,
         )
     } else {
         host_ptr2gradient(
@@ -188,7 +185,6 @@ fn copy_gradients(
             x.shape,
             num_elements,
             x.is_f16_gradient,
-            false,
         )
     }
 }
@@ -207,7 +203,6 @@ fn copy_gradients(
         x.shape,
         num_elements,
         x.is_f16_gradient,
-        false,
     )
 }
 

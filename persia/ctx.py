@@ -103,7 +103,7 @@ class BaseCtx:
         )
 
         self.common_context = PyPersiaCommonContext(
-            threadpool_worker_size, replica_index, replica_size
+            threadpool_worker_size, replica_index, replica_size, device_id
         )
         _logger.info(
             f"init persia context, replica_size: {replica_size} replica_index: {replica_index}"
@@ -753,9 +753,10 @@ class TrainCtx(EmbeddingCtx):
                 self.grad_scaler.update()
             else:
                 self.grad_scaler.update(scale / self.grad_scalar_update_factor)
+        else:
+            self.dense_optimizer.step()
 
         self.dense_optimizer.zero_grad()
-
         return loss
 
     def _on_backward(self, loss_scale: float, embedding_gradient_check_frequency: int):
@@ -807,7 +808,10 @@ class TrainCtx(EmbeddingCtx):
                         grad = None
                 else:
                     grad = emb_tensor.grad  # type: torch.Tensor
-                    is_f16_gradient = self.mixed_precision
+                    is_f16_gradient = True
+
+                if not grad.isfinite().all():
+                    _logger.warn(f"{emb_name} find nan gradient..")
 
                 if grad is not None:
                     grad_slots.append(grad)

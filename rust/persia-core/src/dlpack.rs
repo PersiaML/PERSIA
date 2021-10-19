@@ -62,7 +62,7 @@ pub struct DLTensor {
 
 impl Drop for DLTensor {
     fn drop(&mut self) {
-        tracing::info!("drop dltensor...");
+        tracing::debug!("drop dltensor...");
     }
 }
 
@@ -74,6 +74,10 @@ pub struct DLManagedTensor {
     pub deleter: Option<extern "C" fn(*mut DLManagedTensor)>,
 }
 
-pub extern "C" fn drop_dl_managed_tensor(drop: *mut DLManagedTensor) {
-    unsafe { Box::from_raw(drop) };
+pub extern "C" fn drop_dl_managed_tensor(drop_ptr: *mut DLManagedTensor) {
+    if drop_ptr.is_null() {
+        return;
+    }
+
+    unsafe { Box::from_raw(drop_ptr) };
 }

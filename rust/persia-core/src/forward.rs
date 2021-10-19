@@ -172,7 +172,7 @@ impl PyTensor {
     #[getter]
     pub fn get_dlpack(&mut self, py: Python) -> PyResult<PyObject> {
         let dlpack = self.inner.dlpack();
-        println!(
+        tracing::debug!(
             "dlpack struct size is {:?}",
             std::mem::size_of::<DLManagedTensor>()
         );
@@ -195,6 +195,15 @@ impl PyTensor {
         Box::leak(dlpack_managed_tensor);
         Ok(capsule)
     }
+
+    // #[cfg(feature="cuda")]
+    // #[getter]
+    // pub fn get_cuda(self) -> PyTensor {
+    //     let device_id = PersiaCommonContext::get().device_id.unwrap_or(0);
+    //     PyTensor {
+    //         inner: self.inner.cuda(device_id)
+    //     }
+    // }
 
     pub fn check_dlpack(&self, dlpack: PyObject) {
         // dlpack object can not be used after dlpack checked
@@ -316,7 +325,21 @@ pub struct PersiaTrainingBatch {
     pub embedding_staleness_permit: Option<OwnedSemaphorePermit>,
 }
 
-fn embedding2tensor(embedding: FeatureEmbeddingBatch) -> Embedding {
+#[cfg(feature = "cuda")]
+fn copy2device(t: Tensor, device: &Option<i32>) -> Tensor {
+    if let Some(device_id) = device {
+        t.cuda(*device_id)
+    } else {
+        t
+    }
+}
+
+#[cfg(not(feature = "cuda"))]
+fn copy2device(t: Tensor, _device: &Option<i32>) -> Tensor {
+    t
+}
+
+fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> Embedding {
     match embedding {
         FeatureEmbeddingBatch::RawEmbedding(raw_embedding) => {
             let mut non_empty_index_list = Vec::new();
@@ -335,27 +358,34 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch) -> Embedding {
             let index_len = raw_embedding.index.len();
             let feature_name = raw_embedding.feature_name.clone();
             let no_empty_index_list_len = std::cmp::max(non_empty_index_list.len(), 1);
+
+            let tensor = Tensor::new(
+                Storage::CPU(CPUStorage::from_f16(
+                    raw_embedding.embeddings.into_raw_vec(),
+                )),
+                embedding_shape,
+                Some(feature_name.clone()),
+                None,
+            );
+
+            let index = Tensor::new(
+                Storage::CPU(CPUStorage::from_usize(raw_embedding.index)),
+                vec![index_len],
+                Some(format!("{}_index", &feature_name)),
+                None,
+            );
+
+            let non_empty_index = Tensor::new(
+                Storage::CPU(CPUStorage::from_u64(non_empty_index_list)),
+                vec![no_empty_index_list_len],
+                Some(format!("{}_non_empty_index", &feature_name)),
+                None,
+            );
+
             Embedding::Raw(RawEmbedding {
-                tensor: Tensor::new(
-                    Storage::CPU(CPUStorage::from_f16(
-                        raw_embedding.embeddings.into_raw_vec(),
-                    )),
-                    embedding_shape,
-                    Some(feature_name.clone()),
-                    None,
-                ),
-                index: Tensor::new(
-                    Storage::CPU(CPUStorage::from_usize(raw_embedding.index)),
-                    vec![index_len],
-                    Some(format!("{}_index", &feature_name)),
-                    None,
-                ),
-                non_empty_index: Tensor::new(
-                    Storage::CPU(CPUStorage::from_u64(non_empty_index_list)),
-                    vec![no_empty_index_list_len],
-                    Some(format!("{}_non_empty_index", &feature_name)),
-                    None,
-                ),
+                tensor: copy2device(tensor, &device),
+                index: copy2device(index, &device),
+                non_empty_index: copy2device(non_empty_index, &device),
                 samples_id_num: raw_embedding.sample_id_num,
             })
         }
@@ -369,7 +399,7 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch) -> Embedding {
                 Some(sum_embedding.feature_name),
                 None,
             );
-            Embedding::Sum(SumEmbedding { tensor })
+            Embedding::Sum(SumEmbedding { tensor: copy2device(tensor, &device) })
         }
     }
 }
@@ -580,47 +610,21 @@ impl Forward {
                     let embeddings: Vec<_> = embeddings
                         .batches
                         .into_iter()
-                        .map(|feature_embedding_batch| embedding2tensor(feature_embedding_batch))
+                        .map(|feature_embedding_batch| {
+                            embedding2tensor(feature_embedding_batch, common_ctx.device_id.as_ref())
+                        })
                         .collect();
 
                     let dense_tensors: Vec<Tensor> = batch
                         .dense_data
                         .into_iter()
-                        .map(|d| {
-                            #[cfg(feature = "cuda")]
-                            {
-                                if use_gpu {
-                                    d.cuda(common_ctx.device_id.as_ref().unwrap())
-                                } else {
-                                    d
-                                }
-                            }
-
-                            #[cfg(not(feature = "cuda"))]
-                            {
-                                d
-                            }
-                        })
+                        .map(|d| copy2device(d, common_ctx.device_id.as_ref()))
                         .collect();
 
                     let target_tensors: Vec<Tensor> = batch
                         .target_data
                         .into_iter()
-                        .map(|t| {
-                            #[cfg(feature = "cuda")]
-                            {
-                                if use_gpu {
-                                    t.cuda(common_ctx.device_id.as_ref().unwrap())
-                                } else {
-                                    t
-                                }
-                            }
-
-                            #[cfg(not(feature = "cuda"))]
-                            {
-                                t
-                            }
-                        })
+                        .map(|t| copy2device(t, common_ctx.device_id.as_ref()))
                         .collect();
 
                     let (middleware_addr, forward_id) = batch.sparse_data.to_forward_id();
@@ -813,7 +817,7 @@ pub fn forward_directly(
             let embeddings: Vec<Embedding> = embeddings
                 .batches
                 .into_iter()
-                .map(|feature_embedding_batch| embedding2tensor(feature_embedding_batch))
+                .map(|feature_embedding_batch| embedding2tensor(feature_embedding_batch, &device_id))
                 .collect();
 
             embeddings
