@@ -25,16 +25,17 @@ use persia_common::{
     ndarray_f16_to_f32, ndarray_f32_to_f16,
     optim::OptimizerConfig,
     EmbeddingBatch, FeatureEmbeddingBatch, FeatureRawEmbeddingBatch, FeatureSumEmbeddingBatch,
-    HashMapEmbeddingEntry, SingleSignInFeatureBatch, SparseBatch, SparseBatchRemoteReference,
+    SingleSignInFeatureBatch, SparseBatch, SparseBatchRemoteReference,
 };
 use persia_embedding_config::{
     EmbeddingConfig, InstanceInfo, PersiaGlobalConfigError, PersiaMiddlewareConfig,
     PersiaReplicaInfo, PersiaSparseModelHyperparameters, SlotConfig,
 };
+use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
 use persia_metrics::{
     Gauge, GaugeVec, Histogram, IntCounterVec, PersiaMetricsManager, PersiaMetricsManagerError,
 };
-use persia_model_manager::PersiaPersistenceStatus;
+use persia_model_manager::{PersiaPersistenceStatus, PersistenceManagerError};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::{Readable, Writable};
 
@@ -203,9 +204,7 @@ impl AllEmbeddingServerClient {
         });
 
         let status: Vec<_> = futures::future::try_join_all(futs).await.unwrap_or(vec![
-                PersiaPersistenceStatus::Failed(String::from(
-                    "failed to get status"
-                ));
+                PersiaPersistenceStatus::Failed(PersistenceManagerError::FailedToGetStatus);
                 self.replica_size()
             ]);
 

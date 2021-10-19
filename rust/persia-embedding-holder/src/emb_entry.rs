@@ -151,6 +151,10 @@ impl HashMapEmbeddingEntry {
         let dim = self.embedding_dim();
         self.inner.split_at_mut(dim)
     }
+
+    pub fn sign(&self) -> u64 {
+        self.sign
+    }
 }
 
 impl EvictionMapValue<u64> for HashMapEmbeddingEntry {

@@ -2,8 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use persia_libs::{
-    bytes, bytes::Bytes, hyper, lz4, once_cell, parking_lot, rand, rand::Rng, thiserror, tokio,
-    tracing,
+    bytes, bytes::Bytes, hyper, lz4, once_cell, rand, rand::Rng, thiserror, tokio, tracing,
 };
 use snafu::ResultExt;
 
@@ -204,7 +203,7 @@ impl EmbeddingServiceInner {
                                     embeddings.extend_from_slice(entry.emb());
                                     let _ = shard.insert(*sign, entry);
                                 } else {
-                                    embeddings.extend_from_slice(entry.read().emb());
+                                    embeddings.extend_from_slice(entry.emb());
                                 }
                             }
                         }
@@ -222,7 +221,7 @@ impl EmbeddingServiceInner {
                                     sign, entry_dim, dim);
                                 embeddings.extend_from_slice(vec![0f32; *dim].as_slice());
                             } else {
-                                embeddings.extend_from_slice(entry.read().emb());
+                                embeddings.extend_from_slice(entry.emb());
                             }
                         }
                         None => {
@@ -355,14 +354,13 @@ impl EmbeddingServiceInner {
 
         tokio::task::block_in_place(|| {
             for sign in signs {
-                let shard = self.embedding.shard(&sign).read();
+                let mut shard = self.embedding.shard(&sign).write();
                 if let Some(entry) = shard.get_mut(&sign) {
                     let entry_dim = entry.dim();
                     let (grad, r) = remaining_gradients.split_at(entry_dim);
                     remaining_gradients = r;
 
                     {
-                        let mut entry = entry.write();
                         let emb_entry_slice = entry.as_mut_emb_entry_slice();
                         optimizer.update(emb_entry_slice, grad, entry_dim, &batch_level_state);
 
@@ -391,16 +389,16 @@ impl EmbeddingServiceInner {
             m.gradient_id_miss_count.inc_by(gradient_id_miss_count);
         }
 
-        // if self.server_config.enable_incremental_update {
-        //     let result = self
-        //         .inc_update_manager
-        //         .try_commit_incremental(indices_to_commit);
-        //     if result.is_err() {
-        //         tracing::error!(
-        //             "inc update failed, please try a bigger inc_update_sending_buffer_size"
-        //         );
-        //     }
-        // }
+        if self.server_config.enable_incremental_update {
+            let result = self
+                .inc_update_manager
+                .try_commit_incremental(indices_to_commit);
+            if result.is_err() {
+                tracing::warn!(
+                    "inc update failed, please try a bigger inc_update_sending_buffer_size"
+                );
+            }
+        }
 
         Ok(())
     }
@@ -431,8 +429,7 @@ impl EmbeddingServiceInner {
 
     pub async fn dump(&self, dir: String) -> Result<(), EmbeddingServerError> {
         let dst_dir = PathBuf::from(dir);
-        self.model_persistence_manager
-            .dump_full_amount_embedding(dst_dir)?;
+        self.model_persistence_manager.dump_embedding(dst_dir)?;
         Ok(())
     }
 

@@ -6,28 +6,30 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use griddle::HashMap;
+use griddle::HashSet;
 use persia_libs::{
     chrono,
+    itertools::Itertools,
     once_cell::sync::OnceCell,
-    parking_lot::{Mutex, RwLock},
     rayon::{ThreadPool, ThreadPoolBuilder},
     thiserror, tracing,
 };
 
-use persia_common::{utils::ChannelPair, HashMapEmbeddingEntry};
+use persia_common::utils::ChannelPair;
 use persia_embedding_config::{
     PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig, PersiaGlobalConfigError,
     PersiaReplicaInfo,
 };
-use persia_embedding_holder::{PersiaEmbeddingHolder, PersiaEmbeddingHolderError};
+use persia_embedding_holder::{
+    emb_entry::HashMapEmbeddingEntry, PersiaEmbeddingHolder, PersiaEmbeddingHolderError,
+};
 use persia_metrics::{Gauge, PersiaMetricsManager, PersiaMetricsManagerError};
 use persia_speedy::{Readable, Writable};
 use persia_storage::{PersiaPath, PersiaPathImpl};
 
 #[derive(Readable, Writable, Debug)]
 pub struct PerisaIncrementalPacket {
-    pub content: Vec<(u64, Vec<f32>)>,
+    pub content: Vec<HashMapEmbeddingEntry>,
     pub timestamps: u64,
 }
 
@@ -69,17 +71,16 @@ pub fn current_unix_time() -> u64 {
 }
 
 static INCREMENTAL_UPDATE_MANAGER: OnceCell<Arc<PerisaIncrementalUpdateManager>> = OnceCell::new();
+const INCREMENTAL_UPDATE_CHANNEL_CAPACITY: usize = 1000;
 
 pub struct PerisaIncrementalUpdateManager {
     embedding_holder: PersiaEmbeddingHolder,
     executors: Arc<ThreadPool>,
-    sign_per_file: usize,
     replica_index: usize,
     incremental_buffer_size: usize,
     incremental_dir: std::path::PathBuf,
-    buffer_channel_input: ChannelPair<Vec<(u64, Arc<RwLock<HashMapEmbeddingEntry>>)>>,
-    buffer_channel_output: ChannelPair<Vec<(u64, Arc<RwLock<HashMapEmbeddingEntry>>)>>,
-    _background_threads: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
+    buffer_channel_input: ChannelPair<Vec<u64>>,
+    buffer_channel_output: ChannelPair<Vec<u64>>,
 }
 
 impl PerisaIncrementalUpdateManager {
@@ -94,11 +95,9 @@ impl PerisaIncrementalUpdateManager {
                 embedding_holder,
                 common_comfig.job_type.clone(),
                 server_config.num_persistence_workers,
-                server_config.num_signs_per_file,
                 replica_info.replica_index,
                 server_config.incremental_buffer_size,
                 server_config.incremental_dir.clone(),
-                server_config.incremental_channel_capacity,
             );
 
             Ok(singleton)
@@ -113,11 +112,9 @@ impl PerisaIncrementalUpdateManager {
         embedding_holder: PersiaEmbeddingHolder,
         cur_task: PerisaJobType,
         num_executors: usize,
-        sign_per_file: usize,
         replica_index: usize,
         incremental_buffer_size: usize,
         incremental_dir: String,
-        update_channel_capacity: usize,
     ) -> Arc<Self> {
         let executors = Arc::new(
             ThreadPoolBuilder::new()
@@ -125,56 +122,49 @@ impl PerisaIncrementalUpdateManager {
                 .build()
                 .unwrap(),
         );
-        let buffer_channel_input: ChannelPair<Vec<(u64, Arc<RwLock<HashMapEmbeddingEntry>>)>> =
-            ChannelPair::new(update_channel_capacity);
+        let buffer_channel_input: ChannelPair<Vec<u64>> =
+            ChannelPair::new(INCREMENTAL_UPDATE_CHANNEL_CAPACITY);
 
-        let buffer_channel_output: ChannelPair<Vec<(u64, Arc<RwLock<HashMapEmbeddingEntry>>)>> =
-            ChannelPair::new(update_channel_capacity);
+        let buffer_channel_output: ChannelPair<Vec<u64>> =
+            ChannelPair::new(INCREMENTAL_UPDATE_CHANNEL_CAPACITY);
 
         let incremental_dir = [incremental_dir, format!("s{}", replica_index)]
             .iter()
             .collect();
-        let background_threads = Arc::new(Mutex::new(vec![]));
 
         let instance = Arc::new(Self {
             embedding_holder,
             executors,
-            sign_per_file,
             replica_index,
             incremental_buffer_size,
             incremental_dir,
             buffer_channel_input,
             buffer_channel_output,
-            _background_threads: background_threads.clone(),
         });
 
-        let mut handle_guard = background_threads.lock();
         match cur_task {
             PerisaJobType::Train => {
-                let handle = std::thread::spawn({
+                std::thread::spawn({
                     let instance = instance.clone();
                     move || {
                         instance.buffer_input_thread();
                     }
                 });
-                handle_guard.push(handle);
 
-                let handle = std::thread::spawn({
+                std::thread::spawn({
                     let instance = instance.clone();
                     move || {
                         instance.buffer_output_thread();
                     }
                 });
-                handle_guard.push(handle);
             }
             PerisaJobType::Infer => {
-                let handle = std::thread::spawn({
+                std::thread::spawn({
                     let instance = instance.clone();
                     move || {
                         instance.inc_dir_scan_thread();
                     }
                 });
-                handle_guard.push(handle);
             }
             _ => {}
         }
@@ -185,16 +175,24 @@ impl PerisaIncrementalUpdateManager {
     fn dump_embedding_segment(
         &self,
         dst_dir: PathBuf,
-        segment: Vec<(u64, Vec<f32>)>,
+        signs: Vec<u64>,
         file_index: usize,
         num_dumped_signs: Arc<AtomicUsize>,
         num_total_signs: usize,
     ) -> () {
-        let segment_len = segment.len();
+        let mut entries = Vec::with_capacity(signs.len());
+        signs.iter().for_each(|sign| {
+            let shard = self.embedding_holder.shard(sign).read();
+            if let Some(entry) = shard.get(sign) {
+                entries.push(entry.clone());
+            }
+        });
+
+        let segment_len = entries.len();
         let file_name = PathBuf::from(format!("{}_{}.inc", self.replica_index, file_index));
 
         let content = PerisaIncrementalPacket {
-            content: segment,
+            content: entries,
             timestamps: current_unix_time(),
         };
 
@@ -228,17 +226,16 @@ impl PerisaIncrementalUpdateManager {
             m.inc_update_delay.set(delay as f64);
         }
         tracing::debug!("loading inc packet, delay is {}s", delay);
-        packet.content.into_iter().for_each(|(id, emb)| {
-            self.embedding_holder.insert(
-                id,
-                Arc::new(RwLock::new(HashMapEmbeddingEntry::from_emb(emb))),
-            );
+        packet.content.into_iter().for_each(|entry| {
+            let sign = entry.sign();
+            let mut shard = self.embedding_holder.shard(&sign).write();
+            shard.insert(sign, entry);
         });
     }
 
     pub fn try_commit_incremental(
         &self,
-        incremental: Vec<(u64, Arc<RwLock<HashMapEmbeddingEntry>>)>,
+        incremental: Vec<u64>,
     ) -> Result<(), IncrementalUpdateError> {
         let res = self.buffer_channel_input.sender.try_send(incremental);
         if res.is_err() {
@@ -249,20 +246,19 @@ impl PerisaIncrementalUpdateManager {
     }
 
     fn buffer_input_thread(&self) -> () {
-        let mut sending_buffer = HashMap::with_capacity(self.incremental_buffer_size);
+        let mut sending_buffer = HashSet::with_capacity(self.incremental_buffer_size);
         self.buffer_channel_input
             .receiver
             .iter()
             .for_each(|emb_vec| {
-                for (k, v) in emb_vec.into_iter() {
-                    sending_buffer.insert(k, v);
-                }
+                emb_vec.into_iter().for_each(|sign| {
+                    sending_buffer.insert(sign);
+                });
+
                 if sending_buffer.len() > self.incremental_buffer_size {
-                    let mut indices = Vec::with_capacity(sending_buffer.len());
-                    for (k, v) in sending_buffer.iter() {
-                        indices.push((k.clone(), v.clone()));
-                    }
+                    let indices = sending_buffer.iter().copied().collect_vec();
                     sending_buffer.clear();
+
                     if let Err(_) = self.buffer_channel_output.sender.try_send(indices) {
                         tracing::warn!("failed to inc update, please try a bigger inc buffer size");
                     }
@@ -274,15 +270,19 @@ impl PerisaIncrementalUpdateManager {
         self.buffer_channel_output
             .receiver
             .iter()
-            .for_each(|embeddings| {
-                let num_total_signs = embeddings.len();
+            .for_each(|signs| {
+                let num_total_signs = signs.len();
                 let num_dumped_signs = Arc::new(AtomicUsize::new(0));
-                for (file_index, segment) in embeddings.chunks(self.sign_per_file).enumerate() {
-                    let emb_without_opt = segment
-                        .iter()
-                        .map(|x| (x.0, x.1.read().emb().to_vec()))
-                        .collect();
+                let sign_per_file = num_total_signs / self.executors.current_num_threads();
 
+                let chunk_signs: Vec<Vec<u64>> = signs
+                    .into_iter()
+                    .chunks(sign_per_file)
+                    .into_iter()
+                    .map(|chunk| chunk.collect())
+                    .collect();
+
+                for (file_index, signs_slice) in chunk_signs.into_iter().enumerate() {
                     let inc_dir_name =
                         PathBuf::from(chrono::Local::now().format("inc_%Y%m%d%H%M%S").to_string());
                     let cur_inc_dir: PathBuf = [self.incremental_dir.clone(), inc_dir_name]
@@ -296,7 +296,7 @@ impl PerisaIncrementalUpdateManager {
                             move || {
                                 manager.dump_embedding_segment(
                                     cur_inc_dir,
-                                    emb_without_opt,
+                                    signs_slice,
                                     file_index,
                                     num_dumped_signs,
                                     num_total_signs,

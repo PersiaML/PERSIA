@@ -13,7 +13,7 @@ use persia_embedding_config::{PersiaEmbeddingServerConfig, PersiaGlobalConfigErr
 use persia_speedy::{Readable, Writable};
 use sharded::Sharded;
 
-#[derive(Readable, Writable, thiserror::Error, Debug)]
+#[derive(Clone, Readable, Writable, thiserror::Error, Debug)]
 pub enum PersiaEmbeddingHolderError {
     #[error("global config error: {0}")]
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
@@ -59,6 +59,10 @@ impl PersiaEmbeddingHolder {
             .iter()
             .map(|x| x.read().len())
             .sum::<usize>()
+    }
+
+    pub fn num_internal_shards(&self) -> usize {
+        self.inner.inner.len()
     }
 
     pub fn capacity(&self) -> usize {
