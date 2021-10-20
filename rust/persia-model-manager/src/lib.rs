@@ -367,7 +367,7 @@ impl PersiaPersistenceManager {
             move || {
                 let closure = || -> Result<(), PersistenceManagerError> {
                     tracing::debug!("start to execute load embedding from {:?}", file_path);
-                    manager.load_internal_shard_embeddings(file_path)?;
+                    manager.load_internal_shard_embeddings(file_path.clone())?;
 
                     let loaded = num_loaded_files.fetch_add(1, Ordering::AcqRel) + 1;
                     let loading_progress = (loaded as f32) / (num_total_files as f32);
@@ -376,7 +376,7 @@ impl PersiaPersistenceManager {
 
                     if num_total_files == loaded {
                         *manager.status.write() = PersiaPersistenceStatus::Idle;
-                        let upper = self.get_upper_dir(&file_path);
+                        let upper = manager.get_upper_dir(&file_path);
                         tracing::info!("load checkpoint from {:?} compelete", upper);
                     }
 

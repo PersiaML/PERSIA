@@ -89,7 +89,7 @@ use std::{
 };
 
 use persia_libs::serde::{self, Deserialize, Serialize};
-use persia_speedy::{Readable, Writable};
+use persia_speedy::{Context, Readable, Writable};
 
 /// The `LinkedListNode` type, which is elements of `ArrayLinkedList`.
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
@@ -131,6 +131,72 @@ impl<T> LinkedListNode<T> {
             prev_index: 0,
             data: None,
         }
+    }
+}
+
+impl<'a, C, T> Readable<'a, C> for LinkedListNode<T>
+where
+    C: Context,
+    T: Readable<'a, C>,
+{
+    #[inline]
+    fn read_from<R: persia_speedy::Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+        let next_index: u32 = reader.read_value()?;
+        let prev_index: u32 = reader.read_value()?;
+        let data: Option<T> = {
+            reader.read_u8().and_then(|_flag_| {
+                if _flag_ != 0 {
+                    Ok(Some(reader.read_value()?))
+                } else {
+                    Ok(None)
+                }
+            })
+        }?;
+
+        Ok(Self {
+            next_index,
+            prev_index,
+            data,
+        })
+    }
+
+    #[inline]
+    fn minimum_bytes_needed() -> usize {
+        {
+            let mut out = 0;
+            out += <u32 as persia_speedy::Readable<'a, C>>::minimum_bytes_needed();
+            out += <u32 as persia_speedy::Readable<'a, C>>::minimum_bytes_needed();
+            out += 1;
+            out
+        }
+    }
+}
+
+impl<C, T> Writable<C> for LinkedListNode<T>
+where
+    C: Context,
+    T: Writable<C>,
+{
+    #[inline]
+    fn write_to<W: ?Sized + persia_speedy::Writer<C>>(
+        &self,
+        writer: &mut W,
+    ) -> Result<(), C::Error> {
+        let next_index = &self.next_index;
+        let prev_index = &self.prev_index;
+        let data = &self.data;
+
+        writer.write_value(next_index)?;
+        writer.write_value(prev_index)?;
+
+        if let Some(ref data) = data {
+            writer.write_u8(1)?;
+            writer.write_value(data)?;
+        } else {
+            writer.write_u8(0)?;
+        }
+
+        Ok(())
     }
 }
 
