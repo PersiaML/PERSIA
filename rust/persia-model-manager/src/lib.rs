@@ -235,7 +235,7 @@ impl PersiaPersistenceManager {
                 .get_shard_by_index(internal_shard_idx)
                 .read();
             let array_linked_list = &shard.linkedlist;
-            let encoded: Vec<u8> = bincode::serialize(&array_linked_list).unwrap();
+            let encoded: Vec<u8> = bincode::serialize(array_linked_list).unwrap();
             encoded
         };
 
@@ -254,7 +254,7 @@ impl PersiaPersistenceManager {
         let emb_path = PersiaPath::from_pathbuf(file_path);
         let bytes: Vec<u8> = emb_path.read_to_end()?;
         let decoded: ArrayLinkedList<HashMapEmbeddingEntry> =
-            bincode::deserialize(&bytes[..]).unwrap();
+            bincode::deserialize(bytes.as_slice()).unwrap();
 
         decoded.into_iter().for_each(|entry| {
             let sign = entry.sign();
@@ -296,9 +296,10 @@ impl PersiaPersistenceManager {
                             manager
                                 .waiting_for_all_embedding_server_dump(600, upper_dir.clone())?;
                             manager.mark_embedding_dump_done(upper_dir)?;
-
-                            *manager.status.write() = PersiaPersistenceStatus::Idle;
                         }
+
+                        tracing::info!("dump embedding to {:?} compelete", dst_dir);
+                        *manager.status.write() = PersiaPersistenceStatus::Idle;
                     }
 
                     Ok(())
@@ -375,6 +376,8 @@ impl PersiaPersistenceManager {
 
                     if num_total_files == loaded {
                         *manager.status.write() = PersiaPersistenceStatus::Idle;
+                        let upper = self.get_upper_dir(&file_path);
+                        tracing::info!("load checkpoint from {:?} compelete", upper);
                     }
 
                     Ok(())
