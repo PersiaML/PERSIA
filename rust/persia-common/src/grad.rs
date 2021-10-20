@@ -1,6 +1,6 @@
 use persia_libs::{
     half,
-    ndarray::{Array2, arr2},
+    ndarray::{arr2, Array2},
     serde::{self, Deserialize, Serialize},
 };
 
@@ -15,9 +15,7 @@ pub enum Gradients {
 
 impl Default for Gradients {
     fn default() -> Self {
-        Gradients::F32(
-            arr2(&[[]])
-        ) 
+        Gradients::F32(arr2(&[[]]))
     }
 }
 

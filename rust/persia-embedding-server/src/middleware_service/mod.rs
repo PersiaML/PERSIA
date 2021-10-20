@@ -716,7 +716,7 @@ impl MiddlewareServerInner {
                     }
                     let mut f32_gradients = tokio::task::block_in_place(|| match raw_gradients {
                         Gradients::F16(gradients_array) => ndarray_f16_to_f32(&gradients_array),
-                        Gradients::F32(gradients_array) => gradients_array, 
+                        Gradients::F32(gradients_array) => gradients_array,
                     });
                     if (feature_gradient.scale_factor - 1.0).abs() > f32::EPSILON {
                         let scale = feature_gradient.scale_factor.recip();
