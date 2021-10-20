@@ -7,30 +7,28 @@ use persia_libs::tracing;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-// #[warn(non_camel_case_types)]
 pub enum DLDeviceType {
-    kDLCPU = 1,
-    kDLCUDA = 2,
-    kDLCUDAHost = 3,
-    kDLOpenCL = 4,
-    kDLVulkan = 7,
-    kDLMetal = 8,
-    kDLVPI = 9,
-    kDLROCM = 10,
-    kDLROCMHost = 11,
-    kDLExtDev = 12,
-    kDLCUDAManaged = 13,
+    DLCPU = 1,
+    DLCUDA = 2,
+    DLCUDAHost = 3,
+    DLOpenCL = 4,
+    DLVulkan = 7,
+    DLMetal = 8,
+    DLVPI = 9,
+    DLROCM = 10,
+    DLROCMHost = 11,
+    DLExtDev = 12,
+    DLCUDAManaged = 13,
 }
 
 #[derive(Clone, Copy)]
-#[warn(non_camel_case_types)]
 pub enum DLDataTypeCode {
-    kDLInt = 0,
-    kDLUInt = 1,
-    kDLFloat = 2,
-    kDLOpaqueHandle = 3,
-    kDLBfloat = 4,
-    kDLComplex = 5,
+    DLInt = 0,
+    DLUInt = 1,
+    DLFloat = 2,
+    DLOpaqueHandle = 3,
+    DLBfloat = 4,
+    DLComplex = 5,
 }
 
 #[repr(C)]

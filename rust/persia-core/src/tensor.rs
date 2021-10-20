@@ -71,18 +71,18 @@ impl DType {
 
     pub fn to_dldtype(&self) -> DLDataType {
         let (code, bits) = match self {
-            DType::F16 => (*&DLDataTypeCode::kDLFloat, 16),
-            DType::F32 => (*&DLDataTypeCode::kDLFloat, 32),
-            DType::F64 => (*&DLDataTypeCode::kDLFloat, 64),
-            DType::I8 => (*&DLDataTypeCode::kDLInt, 8),
-            DType::I16 => (*&DLDataTypeCode::kDLInt, 16),
-            DType::I32 => (*&DLDataTypeCode::kDLInt, 32),
-            DType::I64 => (*&DLDataTypeCode::kDLInt, 64),
-            DType::U8 => (*&DLDataTypeCode::kDLUInt, 8),
-            DType::U16 => (*&DLDataTypeCode::kDLUInt, 16),
-            DType::U32 => (*&DLDataTypeCode::kDLUInt, 32),
-            DType::U64 => (*&DLDataTypeCode::kDLUInt, 64),
-            DType::USIZE => (*&DLDataTypeCode::kDLUInt, 64),
+            DType::F16 => (*&DLDataTypeCode::DLFloat, 16),
+            DType::F32 => (*&DLDataTypeCode::DLFloat, 32),
+            DType::F64 => (*&DLDataTypeCode::DLFloat, 64),
+            DType::I8 => (*&DLDataTypeCode::DLInt, 8),
+            DType::I16 => (*&DLDataTypeCode::DLInt, 16),
+            DType::I32 => (*&DLDataTypeCode::DLInt, 32),
+            DType::I64 => (*&DLDataTypeCode::DLInt, 64),
+            DType::U8 => (*&DLDataTypeCode::DLUInt, 8),
+            DType::U16 => (*&DLDataTypeCode::DLUInt, 16),
+            DType::U32 => (*&DLDataTypeCode::DLUInt, 32),
+            DType::U64 => (*&DLDataTypeCode::DLUInt, 64),
+            DType::USIZE => (*&DLDataTypeCode::DLUInt, 64),
         };
         let code = code as u8;
 
@@ -217,11 +217,11 @@ impl Device {
         match self.device_type {
             DeviceType::CPU => DLDevice {
                 device_id: 0i32,
-                device_type: DLDeviceType::kDLCPU,
+                device_type: DLDeviceType::DLCPU,
             },
             DeviceType::GPU => DLDevice {
                 device_id: *self.device_id.as_ref().unwrap(),
-                device_type: DLDeviceType::kDLCUDA,
+                device_type: DLDeviceType::DLCUDA,
             },
         }
     }

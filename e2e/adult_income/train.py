@@ -72,16 +72,16 @@ def test(
         all_pred, all_target = [], []
         for (batch_idx, batch_data) in enumerate(tqdm(test_loader, desc="test...")):
             (pred, target) = ctx.forward(batch_data)
-            loss = loss_fn(output, target)
+            loss = loss_fn(pred, target)
             if cuda:
                 pred = pred.cpu()
                 target = target.cpu()
             else:
                 # cpu mode need copy the target data to avoid use the invalid data.
                 target = target.clone()
-            all_pred.append(output.detach().numpy())
+            all_pred.append(pred.detach().numpy())
             all_target.append(target.detach().numpy())
-            accuracy = (torch.round(output) == target).sum() / target.shape[0]
+            accuracy = (torch.round(pred) == target).sum() / target.shape[0]
             accuracies.append(accuracy)
             losses.append(float(loss))
 

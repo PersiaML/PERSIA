@@ -187,9 +187,9 @@ fn copy_gradients(
 #[inline]
 fn copy_gradients(
     x: &SingleSlotGradient,
-    num_ytes: usize,
+    _num_bytes: usize,
     num_elements: usize,
-    device_id: Arc<Option<i32>>,
+    _device_id: Arc<Option<i32>>,
 ) -> Gradients {
     // zero copy tensor which place in cpu.
     host_ptr2gradient(
