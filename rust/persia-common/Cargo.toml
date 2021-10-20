@@ -7,7 +7,6 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-arr_macro = "0.1"
 hyper = {version = "0.14", features = ["full"]}
 paste = "1.0"
 persia-embedding-config = {path = "../persia-embedding-config"}

@@ -132,7 +132,7 @@ fn ptr2vec<T: Clone>(ptr: *mut std::os::raw::c_void, element_num: usize) -> Vec<
     }
 }
 
-fn host_ptr2gradient(
+fn convert_data_ptr2gradient(
     ptr: *mut std::os::raw::c_void,
     shape: [usize; 2],
     num_elements: usize,
@@ -172,9 +172,9 @@ fn copy_gradients(
         .expect("cannot move tensor to host");
 
         event.synchronize();
-        host_ptr2gradient(host_ptr.inner, x.shape, num_elements, x.is_f16_gradient)
+        convert_data_ptr2gradient(host_ptr.inner, x.shape, num_elements, x.is_f16_gradient)
     } else {
-        host_ptr2gradient(
+        convert_data_ptr2gradient(
             x.data_ptr as *mut std::os::raw::c_void,
             x.shape,
             num_elements,
@@ -191,8 +191,7 @@ fn copy_gradients(
     num_elements: usize,
     _device_id: Arc<Option<i32>>,
 ) -> Gradients {
-    // zero copy tensor which place in cpu.
-    host_ptr2gradient(
+    convert_data_ptr2gradient(
         x.data_ptr as *mut std::os::raw::c_void,
         x.shape,
         num_elements,
