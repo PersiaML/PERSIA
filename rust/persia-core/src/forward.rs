@@ -325,7 +325,6 @@ pub struct PersiaTrainingBatch {
     pub embedding_staleness_permit: Option<OwnedSemaphorePermit>,
 }
 
-
 fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> Embedding {
     match embedding {
         FeatureEmbeddingBatch::RawEmbedding(raw_embedding) => {
