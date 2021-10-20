@@ -362,7 +362,6 @@ impl EmbeddingServiceInner {
                     let emb_opt_state = optimizer.get_emb_state(&batch_level_state, idx);
 
                     {
-                        let mut entry = entry.write();
                         let emb_entry_slice = entry.as_mut_emb_entry_slice();
                         optimizer.update(emb_entry_slice, grad, entry_dim, &emb_opt_state);
 
