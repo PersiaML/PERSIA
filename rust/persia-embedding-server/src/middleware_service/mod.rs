@@ -674,8 +674,8 @@ impl MiddlewareServerInner {
 
     pub async fn update_all_batched_gradients(
         &self,
-        gradients: &EmbeddingGradientBatch,
-        indices: &SparseBatch,
+        embedding_gradient_batch: &mut EmbeddingGradientBatch,
+        indices: SparseBatch,
     ) -> Result<(), MiddlewareServerError> {
         let start_time = std::time::Instant::now();
 
@@ -689,14 +689,14 @@ impl MiddlewareServerInner {
         let mut sharded_gradient_signs =
             vec![vec![]; self.all_embedding_server_client.replica_size()];
 
-        for gradient in &gradients.gradients {
+        for gradient in embedding_gradient_batch.gradients.iter_mut() {
             match gradient {
                 SkippableFeatureEmbeddingGradientBatch::GradientBatch(feature_gradient) => {
                     let feature_batch = indices_kv
                         .get(&feature_gradient.feature_name.as_str())
                         .unwrap();
                     let slot_conf = self.get_slot_conf(feature_batch.feature_name.as_str());
-                    let raw_gradients = &feature_gradient.gradients;
+                    let raw_gradients = std::mem::take(&mut feature_gradient.gradients);
 
                     if tokio::task::block_in_place(|| match &raw_gradients {
                         Gradients::F16(f16_gradients) => {
@@ -716,7 +716,7 @@ impl MiddlewareServerInner {
                     }
                     let mut f32_gradients = tokio::task::block_in_place(|| match raw_gradients {
                         Gradients::F16(gradients_array) => ndarray_f16_to_f32(&gradients_array),
-                        Gradients::F32(gradients_array) => gradients_array.clone(), // FIXME: replace with empty ndarray
+                        Gradients::F32(gradients_array) => gradients_array, 
                     });
                     if (feature_gradient.scale_factor - 1.0).abs() > f32::EPSILON {
                         let scale = feature_gradient.scale_factor.recip();
@@ -1080,7 +1080,7 @@ impl MiddlewareServerInner {
         &self,
         req: (u64, EmbeddingGradientBatch),
     ) -> Result<(), MiddlewareServerError> {
-        let (backward_ref_id, gradients) = req;
+        let (backward_ref_id, mut gradients) = req;
         let indices = self
             .post_forward_buffer
             .write()
@@ -1090,7 +1090,7 @@ impl MiddlewareServerInner {
 
         let inner = self.clone();
         inner
-            .update_all_batched_gradients(&gradients, &indices)
+            .update_all_batched_gradients(&mut gradients, indices)
             .await?;
 
         self.staleness.fetch_sub(1, Ordering::AcqRel);
