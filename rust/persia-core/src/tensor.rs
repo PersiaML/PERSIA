@@ -279,7 +279,7 @@ impl Tensor {
         if let Some(device_id) = device {
             self.cuda(*device_id)
         } else {
-            self 
+            self
         }
     }
 
