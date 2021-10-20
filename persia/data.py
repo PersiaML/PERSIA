@@ -1,7 +1,6 @@
 from threading import Thread
 from typing import Optional
 
-import torch
 from torch.utils.data.dataset import IterableDataset as TorchIterableDataset
 
 import persia.env as env

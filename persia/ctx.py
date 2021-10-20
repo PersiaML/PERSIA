@@ -40,6 +40,7 @@ def _cast_dlpack2torch_tensor(
     pytensor: PyTensor, requires_grad: bool = False
 ) -> torch.Tensor:
     import torch.utils.dlpack as dlpack
+
     """Convert the dlpack tensor to torch tensor
 
     Arguments:
@@ -809,10 +810,8 @@ class TrainCtx(EmbeddingCtx):
                     grad = emb_tensor.grad  # type: torch.Tensor
                     is_f16_gradient = True
 
-                if not grad.isfinite().all():
-                    _logger.warn(f"{emb_name} find nan gradient..")
-
                 if grad is not None:
+
                     grad_slots.append(grad)
                     gradient_batch.add_gradient(
                         emb_name,
