@@ -16,9 +16,7 @@ class DistributedBaseOption(ABC):
 
     This class should not be instantiated directly."""
 
-    def __init__(
-        self, master_port: int, master_addr: Optional[str] = None
-    ):
+    def __init__(self, master_port: int, master_addr: Optional[str] = None):
         """
         Arguments:
             master_port (int): Master of collective communication ip address.

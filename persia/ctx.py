@@ -356,7 +356,6 @@ class EmbeddingCtx(BaseCtx):
                 )  # tensor shape (1, batch_size * sample_fixed_size)
                 max_index = index_tensor.max()
                 size_of_distinct_id_tensor = distinct_id_tensor.shape[0]
-                # torch.cuda.synchronize()
 
                 assert (
                     max_index < size_of_distinct_id_tensor
