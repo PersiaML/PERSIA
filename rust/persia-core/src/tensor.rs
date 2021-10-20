@@ -273,6 +273,21 @@ impl Tensor {
             device,
         }
     }
+
+    #[cfg(feature = "cuda")]
+    pub fn to(self, device: &Option<i32>) -> Tensor {
+        if let Some(device_id) = device {
+            self.cuda(*device_id)
+        } else {
+            self 
+        }
+    }
+
+    #[cfg(not(feature = "cuda"))]
+    pub fn to(self, _device: &Option<i32>) -> Tensor {
+        self
+    }
+
     #[cfg(feature = "cuda")]
     pub fn cuda(self, device_id: i32) -> Tensor {
         let shape = self.shape.clone();
@@ -281,9 +296,9 @@ impl Tensor {
 
         Tensor {
             storage: Storage::GPU(gpu_storage),
-            shape: self.shape.clone(),
-            stride: self.stride.clone(),
-            name: self.name.clone(),
+            shape: self.shape,
+            stride: self.stride,
+            name: self.name,
             device: Device::with_device_id(device_id),
         }
     }

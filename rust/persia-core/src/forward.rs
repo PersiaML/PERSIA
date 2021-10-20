@@ -325,19 +325,6 @@ pub struct PersiaTrainingBatch {
     pub embedding_staleness_permit: Option<OwnedSemaphorePermit>,
 }
 
-#[cfg(feature = "cuda")]
-fn copy2device(t: Tensor, device: &Option<i32>) -> Tensor {
-    if let Some(device_id) = device {
-        t.cuda(*device_id)
-    } else {
-        t
-    }
-}
-
-#[cfg(not(feature = "cuda"))]
-fn copy2device(t: Tensor, _device: &Option<i32>) -> Tensor {
-    t
-}
 
 fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> Embedding {
     match embedding {
@@ -383,9 +370,9 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
             );
 
             Embedding::Raw(RawEmbedding {
-                tensor: copy2device(tensor, &device),
-                index: copy2device(index, &device),
-                non_empty_index: copy2device(non_empty_index, &device),
+                tensor: tensor.to(&device),
+                index: index.to(&device),
+                non_empty_index: non_empty_index.to(&device),
                 samples_id_num: raw_embedding.sample_id_num,
             })
         }
@@ -400,7 +387,7 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
                 None,
             );
             Embedding::Sum(SumEmbedding {
-                tensor: copy2device(tensor, &device),
+                tensor: tensor.to(&device),
             })
         }
     }
@@ -593,10 +580,8 @@ impl Forward {
         let common_ctx = PersiaCommonContext::get();
 
         let handler = std::thread::spawn(move || {
-            let mut use_gpu = false;
             #[cfg(feature = "cuda")]
             {
-                use_gpu = common_ctx.device_id.as_ref().is_some();
                 if let Some(device_id) = common_ctx.device_id.as_ref() {
                     set_device(*device_id);
                 }
@@ -620,13 +605,13 @@ impl Forward {
                     let dense_tensors: Vec<Tensor> = batch
                         .dense_data
                         .into_iter()
-                        .map(|d| copy2device(d, common_ctx.device_id.as_ref()))
+                        .map(|d| d.to(common_ctx.device_id.as_ref()))
                         .collect();
 
                     let target_tensors: Vec<Tensor> = batch
                         .target_data
                         .into_iter()
-                        .map(|t| copy2device(t, common_ctx.device_id.as_ref()))
+                        .map(|t| t.to(common_ctx.device_id.as_ref()))
                         .collect();
 
                     let (middleware_addr, forward_id) = batch.sparse_data.to_forward_id();
@@ -809,7 +794,7 @@ pub fn forward_directly(
     let dense: Vec<Tensor> = batch
         .dense_data
         .into_iter()
-        .map(|d| copy2device(d, &device_id))
+        .map(|d| d.to(&device_id))
         .collect();
 
     let embeddings = match &batch.sparse_data {
@@ -837,7 +822,7 @@ pub fn forward_directly(
     let target = batch
         .target_data
         .into_iter()
-        .map(|t| copy2device(t, &device_id))
+        .map(|t| t.to(&device_id))
         .collect();
 
     let infer_batch = PersiaTrainingBatch {
