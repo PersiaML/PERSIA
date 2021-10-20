@@ -56,7 +56,7 @@ def test(
     model: torch.nn.Module,
     clear_embeddings: bool = False,
     checkpoint_dir: Optional[str] = None,
-    cuda: bool = True
+    cuda: bool = True,
 ):
     logger.info("start to test...")
     model.eval()

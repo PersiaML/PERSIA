@@ -18,9 +18,7 @@ from persia.prelude import (
 _logger = get_default_logger()
 
 
-class IterableDataset(
-    TorchIterableDataset
-): 
+class IterableDataset(TorchIterableDataset):
     r"""IterableChannelBase wrap the PyPersiaBatchDataChannel that provide the channel sender and
     receiver.
 
