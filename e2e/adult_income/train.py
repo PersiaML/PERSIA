@@ -56,6 +56,7 @@ def test(
     model: torch.nn.Module,
     clear_embeddings: bool = False,
     checkpoint_dir: Optional[str] = None,
+    cuda: bool = True
 ):
     logger.info("start to test...")
     model.eval()
@@ -70,10 +71,16 @@ def test(
         accuracies, losses = [], []
         all_pred, all_target = [], []
         for (batch_idx, batch_data) in enumerate(tqdm(test_loader, desc="test...")):
-            (output, target) = ctx.forward(batch_data)
+            (pred, target) = ctx.forward(batch_data)
             loss = loss_fn(output, target)
-            all_pred.append(output.cpu().detach().numpy())
-            all_target.append(target.cpu().detach().numpy())
+            if cuda:
+                pred = pred.cpu()
+                target = target.cpu()
+            else:
+                # cpu mode need copy the target data to avoid use the invalid data.
+                target = target.clone()
+            all_pred.append(output.detach().numpy())
+            all_target.append(target.detach().numpy())
             accuracy = (torch.round(output) == target).sum() / target.shape[0]
             accuracies.append(accuracy)
             losses.append(float(loss))
