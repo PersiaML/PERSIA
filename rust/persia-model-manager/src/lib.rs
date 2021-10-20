@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use persia_libs::{
     anyhow::Error as AnyhowError,
-    bincode,
     once_cell::sync::OnceCell,
     parking_lot::RwLock,
     rayon::{ThreadPool, ThreadPoolBuilder},
@@ -235,7 +234,7 @@ impl PersiaPersistenceManager {
                 .get_shard_by_index(internal_shard_idx)
                 .read();
             let array_linked_list = &shard.linkedlist;
-            let encoded: Vec<u8> = bincode::serialize(array_linked_list).unwrap();
+            let encoded: Vec<u8> = array_linked_list.write_to_vec().unwrap();
             encoded
         };
 
@@ -254,7 +253,7 @@ impl PersiaPersistenceManager {
         let emb_path = PersiaPath::from_pathbuf(file_path);
         let bytes: Vec<u8> = emb_path.read_to_end()?;
         let decoded: ArrayLinkedList<HashMapEmbeddingEntry> =
-            bincode::deserialize(bytes.as_slice()).unwrap();
+            ArrayLinkedList::<HashMapEmbeddingEntry>::read_from_buffer(bytes.as_slice()).unwrap();
 
         decoded.into_iter().for_each(|entry| {
             let sign = entry.sign();
