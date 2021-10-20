@@ -793,6 +793,7 @@ pub fn forward_directly(
     batch: PersiaBatchData,
     device_id: Option<i32>,
 ) -> PyResult<PythonTrainBatch> {
+    let device_id = device_id.or(PersiaCommonContext::get().device_id.as_ref().clone());
     #[cfg(feature = "cuda")]
     {
         if let Some(device_id) = device_id {
@@ -805,7 +806,11 @@ pub fn forward_directly(
     let rpc_client = PersiaCommonContext::get().rpc_client.clone();
     let async_runtime = PersiaCommonContext::get().async_runtime.clone();
 
-    let dense: Vec<Tensor> = batch.dense_data.into_iter().map(|d| d).collect();
+    let dense: Vec<Tensor> = batch
+        .dense_data
+        .into_iter()
+        .map(|d| copy2device(d, &device_id))
+        .collect();
 
     let embeddings = match &batch.sparse_data {
         EmbeddingTensor::SparseBatch(sparse_batch) => {
@@ -829,7 +834,11 @@ pub fn forward_directly(
         _ => Vec::new(),
     };
 
-    let target = batch.target_data.into_iter().map(|t| t).collect();
+    let target = batch
+        .target_data
+        .into_iter()
+        .map(|t| copy2device(t, &device_id))
+        .collect();
 
     let infer_batch = PersiaTrainingBatch {
         dense,

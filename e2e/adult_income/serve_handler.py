@@ -1,4 +1,3 @@
-from torch._C import device
 from persia.ctx import InferCtx
 from persia.service import get_middleware_services
 from ts.torch_handler.base_handler import BaseHandler
