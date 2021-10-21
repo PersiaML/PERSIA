@@ -90,7 +90,7 @@ pub enum PersiaError {
 
 impl From<PersiaError> for PyErr {
     fn from(e: PersiaError) -> Self {
-        PyRuntimeError::new_err(format!("{:?}", e))
+        PyRuntimeError::new_err(e.to_string())
     }
 }
 
@@ -370,7 +370,7 @@ impl PyPersiaCommonContext {
         batch: &mut PyPersiaBatchData,
         device_id: i32,
     ) -> PyResult<PythonTrainBatch> {
-        let batch = std::mem::replace(&mut batch.inner, PersiaBatchData::default());
+        let batch = std::mem::take(&mut batch.inner);
         forward_directly(batch, device_id)
     }
 
@@ -388,7 +388,7 @@ impl PyPersiaCommonContext {
         let file_path = PersiaPath::from_string(file_path);
         file_path
             .read_to_end()
-            .map_err(|e| PyErr::from(PersiaError::StorageVisitError(format!("{:?}", &e))))
+            .map_err(|e| PyErr::from(PersiaError::StorageVisitError(e.to_string())))
             .map(|content| PyBytes::new(py, content.as_slice()))
     }
 
@@ -404,7 +404,7 @@ impl PyPersiaCommonContext {
         let content = content.as_bytes().to_vec();
         file_path
             .write_all(content)
-            .map_err(|e| PersiaError::StorageVisitError(format!("{:?}", &e)).into())
+            .map_err(|e| PersiaError::StorageVisitError(e.to_string()).into())
     }
 }
 
