@@ -35,7 +35,7 @@ use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
 use persia_metrics::{
     Gauge, GaugeVec, Histogram, IntCounterVec, PersiaMetricsManager, PersiaMetricsManagerError,
 };
-use persia_model_manager::{PersiaPersistenceStatus, PersistenceManagerError};
+use persia_model_manager::{SparseModelManagerStatus, SparseModelManagerError};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::{Readable, Writable};
 
@@ -197,14 +197,14 @@ impl AllEmbeddingServerClient {
         futures::future::try_join_all(futs).await.is_ok()
     }
 
-    pub async fn model_manager_status(&self) -> Vec<PersiaPersistenceStatus> {
+    pub async fn model_manager_status(&self) -> Vec<SparseModelManagerStatus> {
         let futs = (0..self.replica_size()).map(|client_idx| async move {
             let client = self.get_client_by_index(client_idx).await;
             client.model_manager_status(&()).await
         });
 
         let status: Vec<_> = futures::future::try_join_all(futs).await.unwrap_or(vec![
-                PersiaPersistenceStatus::Failed(PersistenceManagerError::FailedToGetStatus);
+                SparseModelManagerStatus::Failed(SparseModelManagerError::FailedToGetStatus);
                 self.replica_size()
             ]);
 
@@ -916,7 +916,7 @@ impl MiddlewareServerInner {
         result
     }
 
-    pub async fn model_manager_status(&self) -> Vec<PersiaPersistenceStatus> {
+    pub async fn model_manager_status(&self) -> Vec<SparseModelManagerStatus> {
         let result = self
             .all_embedding_server_client
             .model_manager_status()
@@ -1260,7 +1260,7 @@ impl MiddlewareServer {
         self.inner.ready_for_serving().await
     }
 
-    pub async fn model_manager_status(&self, _req: ()) -> Vec<PersiaPersistenceStatus> {
+    pub async fn model_manager_status(&self, _req: ()) -> Vec<SparseModelManagerStatus> {
         self.inner.model_manager_status().await
     }
 
@@ -1379,7 +1379,7 @@ impl MiddlewareNatsService {
         self.inner.ready_for_serving().await
     }
 
-    pub async fn model_manager_status(&self, _req: ()) -> Vec<PersiaPersistenceStatus> {
+    pub async fn model_manager_status(&self, _req: ()) -> Vec<SparseModelManagerStatus> {
         self.inner.model_manager_status().await
     }
 

@@ -25,7 +25,7 @@ use persia_speedy::{Readable, Writable};
 use persia_storage::{PersiaPath, PersiaPathImpl};
 
 #[derive(Clone, Readable, Writable, thiserror::Error, Debug)]
-pub enum PersistenceManagerError {
+pub enum SparseModelManagerError {
     #[error("storage error")]
     StorageError(String),
     #[error("embedding holder error: {0}")]
@@ -44,27 +44,27 @@ pub enum PersistenceManagerError {
     FailedToGetStatus,
 }
 
-impl From<AnyhowError> for PersistenceManagerError {
+impl From<AnyhowError> for SparseModelManagerError {
     fn from(e: AnyhowError) -> Self {
         let msg = format!("{:?}", e);
-        PersistenceManagerError::StorageError(msg)
+        SparseModelManagerError::StorageError(msg)
     }
 }
 
 #[derive(Clone, Readable, Writable, Debug)]
-pub enum PersiaPersistenceStatus {
+pub enum SparseModelManagerStatus {
     Dumping(f32),
     Loading(f32),
     Idle,
-    Failed(PersistenceManagerError),
+    Failed(SparseModelManagerError),
 }
 
-static MODEL_PERSISTENCE_MANAGER: OnceCell<Arc<PersiaPersistenceManager>> = OnceCell::new();
+static sparse_model_manager: OnceCell<Arc<SparseModelManager>> = OnceCell::new();
 
 #[derive(Clone)]
-pub struct PersiaPersistenceManager {
+pub struct SparseModelManager {
     embedding_holder: PersiaEmbeddingHolder,
-    status: Arc<RwLock<PersiaPersistenceStatus>>,
+    status: Arc<RwLock<SparseModelManagerStatus>>,
     thread_pool: Arc<ThreadPool>,
     sign_per_file: usize,
     replica_index: usize,
@@ -72,9 +72,9 @@ pub struct PersiaPersistenceManager {
     cur_task: PerisaJobType,
 }
 
-impl PersiaPersistenceManager {
-    pub fn get() -> Result<Arc<Self>, PersistenceManagerError> {
-        let singleton = MODEL_PERSISTENCE_MANAGER.get_or_try_init(|| {
+impl SparseModelManager {
+    pub fn get() -> Result<Arc<Self>, SparseModelManagerError> {
+        let singleton = sparse_model_manager.get_or_try_init(|| {
             let server_config = PersiaEmbeddingServerConfig::get()?;
             let common_config = PersiaCommonConfig::get()?;
             let embedding_holder = PersiaEmbeddingHolder::get()?;
@@ -107,7 +107,7 @@ impl PersiaPersistenceManager {
     ) -> Self {
         Self {
             embedding_holder,
-            status: Arc::new(RwLock::new(PersiaPersistenceStatus::Idle)),
+            status: Arc::new(RwLock::new(SparseModelManagerStatus::Idle)),
             thread_pool: Arc::new(
                 ThreadPoolBuilder::new()
                     .num_threads(concurrent_size)
@@ -125,7 +125,7 @@ impl PersiaPersistenceManager {
         self.replica_index == 0
     }
 
-    pub fn get_status(&self) -> PersiaPersistenceStatus {
+    pub fn get_status(&self) -> SparseModelManagerStatus {
         let status = self.status.read().clone();
         status
     }
@@ -165,7 +165,7 @@ impl PersiaPersistenceManager {
     pub fn mark_embedding_dump_done(
         &self,
         emb_dir: PathBuf,
-    ) -> Result<(), PersistenceManagerError> {
+    ) -> Result<(), SparseModelManagerError> {
         let emb_dump_done_file = self.get_emb_dump_done_file_name();
         let emb_dump_done_path = PersiaPath::from_vec(vec![&emb_dir, &emb_dump_done_file]);
         emb_dump_done_path.create(false)?;
@@ -175,7 +175,7 @@ impl PersiaPersistenceManager {
     pub fn check_embedding_dump_done(
         &self,
         emb_dir: &PathBuf,
-    ) -> Result<bool, PersistenceManagerError> {
+    ) -> Result<bool, SparseModelManagerError> {
         let emb_dump_done_file = self.get_emb_dump_done_file_name();
         let emb_dump_done_path = PersiaPath::from_vec(vec![emb_dir, &emb_dump_done_file]);
         let res = emb_dump_done_path.is_file()?;
@@ -186,7 +186,7 @@ impl PersiaPersistenceManager {
         &self,
         timeout_sec: usize,
         dst_dir: PathBuf,
-    ) -> Result<(), PersistenceManagerError> {
+    ) -> Result<(), SparseModelManagerError> {
         let replica_size = self.replica_size;
         if replica_size < 2 {
             tracing::info!("replica_size < 2, will not wait for other embedding servers");
@@ -216,7 +216,7 @@ impl PersiaPersistenceManager {
 
             if start_time.elapsed().as_secs() as usize > timeout_sec {
                 tracing::error!("waiting for other embedding server to dump embedding TIMEOUT");
-                return Err(PersistenceManagerError::WaitForOtherServerTimeOut);
+                return Err(SparseModelManagerError::WaitForOtherServerTimeOut);
             }
         }
 
@@ -227,7 +227,7 @@ impl PersiaPersistenceManager {
         &self,
         internal_shard_idx: usize,
         dst_dir: PathBuf,
-    ) -> Result<(), PersistenceManagerError> {
+    ) -> Result<(), SparseModelManagerError> {
         let shard = self
             .embedding_holder
             .get_shard_by_index(internal_shard_idx)
@@ -244,7 +244,7 @@ impl PersiaPersistenceManager {
     pub fn load_internal_shard_embeddings(
         &self,
         file_path: PathBuf,
-    ) -> Result<(), PersistenceManagerError> {
+    ) -> Result<(), SparseModelManagerError> {
         tracing::debug!("loading from {:?}", file_path);
         let emb_path = PersiaPath::from_pathbuf(file_path);
         let decoded: ArrayLinkedList<HashMapEmbeddingEntry> = emb_path.read_to_end_speedy()?;
@@ -258,8 +258,8 @@ impl PersiaPersistenceManager {
         Ok(())
     }
 
-    pub fn dump_embedding(&self, dst_dir: PathBuf) -> Result<(), PersistenceManagerError> {
-        *self.status.write() = PersiaPersistenceStatus::Dumping(0.0);
+    pub fn dump_embedding(&self, dst_dir: PathBuf) -> Result<(), SparseModelManagerError> {
+        *self.status.write() = SparseModelManagerStatus::Dumping(0.0);
         tracing::info!("start to dump embedding to {:?}", dst_dir);
 
         let shard_dir = self.get_shard_dir(&dst_dir);
@@ -273,13 +273,13 @@ impl PersiaPersistenceManager {
             let manager = manager.clone();
 
             self.thread_pool.spawn(move || {
-                let closure = || -> Result<(), PersistenceManagerError> {
+                let closure = || -> Result<(), SparseModelManagerError> {
                     manager.dump_internal_shard_embeddings(internal_shard_idx, dst_dir.clone())?;
 
                     let dumped = num_dumped_shards.fetch_add(1, Ordering::AcqRel) + 1;
                     let dumping_progress = (dumped as f32) / (num_internal_shards as f32);
 
-                    *manager.status.write() = PersiaPersistenceStatus::Dumping(dumping_progress);
+                    *manager.status.write() = SparseModelManagerStatus::Dumping(dumping_progress);
                     tracing::debug!("dumping progress is {}", dumping_progress);
 
                     if dumped >= num_internal_shards {
@@ -292,14 +292,14 @@ impl PersiaPersistenceManager {
                         }
 
                         tracing::info!("dump embedding to {:?} compelete", dst_dir);
-                        *manager.status.write() = PersiaPersistenceStatus::Idle;
+                        *manager.status.write() = SparseModelManagerStatus::Idle;
                     }
 
                     Ok(())
                 };
 
                 if let Err(e) = closure() {
-                    *manager.status.write() = PersiaPersistenceStatus::Failed(e);
+                    *manager.status.write() = SparseModelManagerStatus::Failed(e);
                 }
             })
         });
@@ -307,17 +307,17 @@ impl PersiaPersistenceManager {
         Ok(())
     }
 
-    pub fn load_embedding_from_dir(&self, dst_dir: PathBuf) -> Result<(), PersistenceManagerError> {
+    pub fn load_embedding_from_dir(&self, dst_dir: PathBuf) -> Result<(), SparseModelManagerError> {
         tracing::info!("start to load embedding from dir {:?}", dst_dir);
         let done = self.check_embedding_dump_done(&dst_dir)?;
         if !done {
             tracing::error!("trying to load embedding from uncompelete checkpoint");
-            return Err(PersistenceManagerError::LoadingFromUncompeleteCheckpoint);
+            return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint);
         }
         let dst_dir = self.get_shard_dir(&dst_dir);
         let done = self.check_embedding_dump_done(&dst_dir)?;
         if !done {
-            return Err(PersistenceManagerError::LoadingFromUncompeleteCheckpoint);
+            return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint);
         }
         let dst_dir = PersiaPath::from_pathbuf(dst_dir);
         let file_list = dst_dir.list()?;
@@ -331,7 +331,7 @@ impl PersiaPersistenceManager {
 
         if file_list.len() == 0 {
             tracing::error!("trying to load embedding from an empty dir");
-            return Err(PersistenceManagerError::LoadingFromUncompeleteCheckpoint);
+            return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint);
         }
 
         let num_total_files = file_list.len();
@@ -341,7 +341,7 @@ impl PersiaPersistenceManager {
             self.load_embedding_from_file(file, num_loaded_files.clone(), num_total_files)?;
         }
 
-        *self.status.write() = PersiaPersistenceStatus::Loading(0.0);
+        *self.status.write() = SparseModelManagerStatus::Loading(0.0);
 
         Ok(())
     }
@@ -351,24 +351,24 @@ impl PersiaPersistenceManager {
         file_path: PathBuf,
         num_loaded_files: Arc<AtomicUsize>,
         num_total_files: usize,
-    ) -> Result<(), PersistenceManagerError> {
+    ) -> Result<(), SparseModelManagerError> {
         tracing::debug!("spawn to load embedding from {:?}", file_path);
         let manager = Self::get()?;
 
         self.thread_pool.spawn({
             let manager = manager.clone();
             move || {
-                let closure = || -> Result<(), PersistenceManagerError> {
+                let closure = || -> Result<(), SparseModelManagerError> {
                     tracing::debug!("start to execute load embedding from {:?}", file_path);
                     manager.load_internal_shard_embeddings(file_path.clone())?;
 
                     let loaded = num_loaded_files.fetch_add(1, Ordering::AcqRel) + 1;
                     let loading_progress = (loaded as f32) / (num_total_files as f32);
-                    *manager.status.write() = PersiaPersistenceStatus::Loading(loading_progress);
+                    *manager.status.write() = SparseModelManagerStatus::Loading(loading_progress);
                     tracing::debug!("load embedding progress is {}", loading_progress);
 
                     if num_total_files == loaded {
-                        *manager.status.write() = PersiaPersistenceStatus::Idle;
+                        *manager.status.write() = SparseModelManagerStatus::Idle;
                         let upper = manager.get_upper_dir(&file_path);
                         tracing::info!("load checkpoint from {:?} compelete", upper);
                     }
@@ -377,7 +377,7 @@ impl PersiaPersistenceManager {
                 };
 
                 if let Err(e) = closure() {
-                    *manager.status.write() = PersiaPersistenceStatus::Failed(e);
+                    *manager.status.write() = SparseModelManagerStatus::Failed(e);
                 }
             }
         });

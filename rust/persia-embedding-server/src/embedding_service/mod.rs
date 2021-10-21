@@ -18,7 +18,7 @@ use persia_metrics::{
     Gauge, Histogram, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError,
 };
 use persia_model_manager::{
-    PersiaPersistenceManager, PersiaPersistenceStatus, PersistenceManagerError,
+    SparseModelManager, SparseModelManagerStatus, SparseModelManagerError,
 };
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::{Readable, Writable};
@@ -71,7 +71,7 @@ pub enum EmbeddingServerError {
     #[error("service not configured error")]
     NotConfiguredError,
     #[error("model manager error: {0}")]
-    PersistenceManagerError(#[from] PersistenceManagerError),
+    SparseModelManagerError(#[from] SparseModelManagerError),
     #[error("nats error: {0}")]
     NatsError(#[from] NatsError),
     #[error("optimizer not found error")]
@@ -92,7 +92,7 @@ pub struct EmbeddingServiceInner {
     pub common_config: Arc<PersiaCommonConfig>,
     pub embedding_config: Arc<EmbeddingConfig>,
     pub inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
-    pub model_persistence_manager: Arc<PersiaPersistenceManager>,
+    pub sparse_model_manager: Arc<SparseModelManager>,
     pub replica_index: usize,
 }
 
@@ -103,7 +103,7 @@ impl EmbeddingServiceInner {
         common_config: Arc<PersiaCommonConfig>,
         embedding_config: Arc<EmbeddingConfig>,
         inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
-        model_persistence_manager: Arc<PersiaPersistenceManager>,
+        sparse_model_manager: Arc<SparseModelManager>,
         replica_index: usize,
     ) -> Self {
         Self {
@@ -115,7 +115,7 @@ impl EmbeddingServiceInner {
             common_config,
             embedding_config,
             inc_update_manager,
-            model_persistence_manager,
+            sparse_model_manager,
             replica_index,
         }
     }
@@ -244,12 +244,12 @@ impl EmbeddingServiceInner {
     }
 
     pub async fn ready_for_serving(&self) -> bool {
-        let model_status = self.model_persistence_manager.get_status();
+        let model_status = self.sparse_model_manager.get_status();
         let model_ready = match model_status {
-            PersiaPersistenceStatus::Dumping(_) => true,
-            PersiaPersistenceStatus::Idle => true,
-            PersiaPersistenceStatus::Loading(_) => false,
-            PersiaPersistenceStatus::Failed(_) => false,
+            SparseModelManagerStatus::Dumping(_) => true,
+            SparseModelManagerStatus::Idle => true,
+            SparseModelManagerStatus::Loading(_) => false,
+            SparseModelManagerStatus::Failed(_) => false,
         };
         if !model_ready {
             return false;
@@ -261,8 +261,8 @@ impl EmbeddingServiceInner {
         }
     }
 
-    pub async fn model_manager_status(&self) -> PersiaPersistenceStatus {
-        let status = self.model_persistence_manager.get_status();
+    pub async fn model_manager_status(&self) -> SparseModelManagerStatus {
+        let status = self.sparse_model_manager.get_status();
         status
     }
 
@@ -430,13 +430,13 @@ impl EmbeddingServiceInner {
 
     pub async fn dump(&self, dir: String) -> Result<(), EmbeddingServerError> {
         let dst_dir = PathBuf::from(dir);
-        self.model_persistence_manager.dump_embedding(dst_dir)?;
+        self.sparse_model_manager.dump_embedding(dst_dir)?;
         Ok(())
     }
 
     pub async fn load(&self, dir: String) -> Result<(), EmbeddingServerError> {
         let dst_dir = PathBuf::from(dir);
-        self.model_persistence_manager
+        self.sparse_model_manager
             .load_embedding_from_dir(dst_dir)?;
         Ok(())
     }
@@ -475,7 +475,7 @@ impl EmbeddingService {
         self.inner.ready_for_serving().await
     }
 
-    pub async fn model_manager_status(&self, _req: ()) -> PersiaPersistenceStatus {
+    pub async fn model_manager_status(&self, _req: ()) -> SparseModelManagerStatus {
         self.inner.model_manager_status().await
     }
 
@@ -571,7 +571,7 @@ impl EmbeddingServerNatsService {
         self.inner.ready_for_serving().await
     }
 
-    pub async fn model_manager_status(&self, _req: ()) -> PersiaPersistenceStatus {
+    pub async fn model_manager_status(&self, _req: ()) -> SparseModelManagerStatus {
         self.inner.model_manager_status().await
     }
 

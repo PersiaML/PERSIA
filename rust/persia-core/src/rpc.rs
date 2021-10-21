@@ -8,7 +8,7 @@ use persia_libs::{
 };
 
 use persia_embedding_server::middleware_service::MiddlewareServerClient;
-use persia_model_manager::PersiaPersistenceStatus;
+use persia_model_manager::SparseModelManagerStatus;
 
 pub struct PersiaRpcClient {
     pub clients: RwLock<IndexMap<String, Arc<MiddlewareServerClient>>>,
@@ -105,7 +105,7 @@ impl PersiaRpcClient {
                     return Ok(());
                 }
                 std::thread::sleep(Duration::from_secs(5));
-                let status: Vec<PersiaPersistenceStatus> =
+                let status: Vec<SparseModelManagerStatus> =
                     client.model_manager_status(&()).await.unwrap();
 
                 match self.process_status(status) {
@@ -159,11 +159,11 @@ impl PersiaRpcClient {
 
         loop {
             std::thread::sleep(Duration::from_secs(5));
-            let status: Result<Vec<PersiaPersistenceStatus>, _> =
+            let status: Result<Vec<SparseModelManagerStatus>, _> =
                 client.model_manager_status(&()).await;
             if let Ok(status) = status {
                 if status.iter().any(|s| match s {
-                    PersiaPersistenceStatus::Loading(_) => true,
+                    SparseModelManagerStatus::Loading(_) => true,
                     _ => false,
                 }) {
                     let err_msg = String::from("emb status is loading but waiting for dump.");
@@ -186,31 +186,31 @@ impl PersiaRpcClient {
         }
     }
 
-    fn process_status(&self, status: Vec<PersiaPersistenceStatus>) -> Result<usize, String> {
+    fn process_status(&self, status: Vec<SparseModelManagerStatus>) -> Result<usize, String> {
         let mut num_compeleted: usize = 0;
         let mut errors = Vec::new();
         status
             .into_iter()
             .enumerate()
             .for_each(|(replica_index, s)| match s {
-                PersiaPersistenceStatus::Failed(e) => {
+                SparseModelManagerStatus::Failed(e) => {
                     let err_msg = format!(
                         "emb dump FAILED for server {}, due to {}.",
                         replica_index, e
                     );
                     errors.push(err_msg);
                 }
-                PersiaPersistenceStatus::Loading(p) => {
+                SparseModelManagerStatus::Loading(p) => {
                     tracing::info!(
                         "loading emb for server {}, pregress: {:?}%",
                         replica_index,
                         p * 100.0
                     );
                 }
-                PersiaPersistenceStatus::Idle => {
+                SparseModelManagerStatus::Idle => {
                     num_compeleted = num_compeleted + 1;
                 }
-                PersiaPersistenceStatus::Dumping(p) => {
+                SparseModelManagerStatus::Dumping(p) => {
                     tracing::info!(
                         "dumping emb for server {}, pregress: {:?}%",
                         replica_index,
