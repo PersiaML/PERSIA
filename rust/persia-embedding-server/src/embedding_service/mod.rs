@@ -428,13 +428,15 @@ impl EmbeddingServiceInner {
 
     pub async fn dump(&self, dir: String) -> Result<(), EmbeddingServerError> {
         let dst_dir = PathBuf::from(dir);
-        self.sparse_model_manager.dump_embedding(dst_dir)?;
+        self.sparse_model_manager
+            .dump_embedding(dst_dir, self.embedding.clone())?;
         Ok(())
     }
 
     pub async fn load(&self, dir: String) -> Result<(), EmbeddingServerError> {
         let dst_dir = PathBuf::from(dir);
-        self.sparse_model_manager.load_embedding_from_dir(dst_dir)?;
+        self.sparse_model_manager
+            .load_embedding_from_dir(dst_dir, self.embedding.clone())?;
         Ok(())
     }
 

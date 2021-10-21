@@ -7,7 +7,7 @@ embedding_server_config:
   capacity: 1000000
   num_hashmap_internal_shards: 1
   full_amount_manager_buffer_size: 1000
-  num_persistence_workers: 4
+  num_embedding_io_workers: 4
   num_signs_per_file: 5000000
   enable_incremental_update: false
   incremental_buffer_size: 5000000

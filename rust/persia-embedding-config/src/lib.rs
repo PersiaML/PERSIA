@@ -396,7 +396,7 @@ pub struct PersiaEmbeddingServerConfig {
 
     // model persistence config
     #[serde(default = "get_four")]
-    pub num_persistence_workers: usize,
+    pub num_embedding_io_workers: usize,
     #[serde(default = "get_million")]
     pub num_signs_per_file: usize,
 
@@ -421,7 +421,7 @@ impl Default for PersiaEmbeddingServerConfig {
             num_hashmap_internal_shards: 1000,
             full_amount_manager_buffer_size: 1000,
             embedding_recycle_pool_capacity: 1_000_000,
-            num_persistence_workers: 4,
+            num_embedding_io_workers: 4,
             num_signs_per_file: 1_000_000,
             local_buffer_dir: get_default_local_buffer_dir(),
             enable_incremental_update: false,

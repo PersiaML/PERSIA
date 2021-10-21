@@ -3,6 +3,7 @@ use crate::embedding_service::{
 };
 
 use std::ops::MulAssign;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
@@ -35,7 +36,7 @@ use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
 use persia_metrics::{
     Gauge, GaugeVec, Histogram, IntCounterVec, PersiaMetricsManager, PersiaMetricsManagerError,
 };
-use persia_model_manager::{SparseModelManagerError, SparseModelManagerStatus};
+use persia_model_manager::{SparseModelManager, SparseModelManagerError, SparseModelManagerStatus};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::{Readable, Writable};
 
@@ -90,6 +91,8 @@ pub enum MiddlewareServerError {
     RpcError(String),
     #[error("embedding server error: {0}")]
     EmbeddingServerError(#[from] EmbeddingServerError),
+    #[error("sparse model manager error: {0}")]
+    SparseModelManagerError(#[from] SparseModelManagerError),
     #[error("forward id not found")]
     ForwardIdNotFound(u64),
     #[error("forward failed")]
@@ -610,6 +613,7 @@ pub struct MiddlewareServerInner {
     pub staleness: AtomicUsize,
     pub embedding_config: Arc<EmbeddingConfig>,
     pub middleware_config: Arc<PersiaMiddlewareConfig>,
+    pub sparse_model_manager: Arc<SparseModelManager>,
 }
 
 impl MiddlewareServerInner {
@@ -1117,6 +1121,29 @@ impl MiddlewareServerInner {
     }
 
     pub async fn load(&self, req: String) -> Result<(), MiddlewareServerError> {
+        let emb_dir = PathBuf::from(req.clone());
+        if let Some(model_info) = self
+            .sparse_model_manager
+            .check_embedding_dump_done(&emb_dir)?
+        {
+            if model_info.num_shards == self.all_embedding_server_client.dst_replica_size {
+                self.load_embedding_via_emb_servers(req).await?;
+            } else {
+                self.load_embedding_via_middlewares(req, model_info.num_shards)
+                    .await?;
+            }
+            Ok(())
+        } else {
+            Err(MiddlewareServerError::SparseModelManagerError(
+                SparseModelManagerError::LoadingFromUncompeleteCheckpoint,
+            ))
+        }
+    }
+
+    pub async fn load_embedding_via_emb_servers(
+        &self,
+        req: String,
+    ) -> Result<(), MiddlewareServerError> {
         let inner = self.clone();
         let futs = (0..inner.all_embedding_server_client.replica_size()).map(|client_idx| {
             let req = req.clone();
@@ -1134,6 +1161,39 @@ impl MiddlewareServerInner {
         });
         let result = futures::future::try_join_all(futs).await.map(|_| ());
         result
+    }
+
+    pub async fn load_embedding_via_middlewares(
+        &self,
+        req: String,
+        num_model_shards: usize,
+    ) -> Result<(), MiddlewareServerError> {
+        let root_dir = PathBuf::from(req);
+        let repilca_info = PersiaReplicaInfo::get()?;
+        let mut dst_shard_idx = repilca_info.replica_index;
+
+        let mut emb_file_list: Vec<PathBuf> = Vec::new();
+        while dst_shard_idx < num_model_shards {
+            let shard_dir = self
+                .sparse_model_manager
+                .get_other_shard_dir(&root_dir, dst_shard_idx);
+            let mut shard_file_list = self
+                .sparse_model_manager
+                .get_emb_file_list_in_dir(shard_dir)?;
+            emb_file_list.append(&mut shard_file_list);
+
+            dst_shard_idx += repilca_info.replica_size;
+        }
+
+        tracing::debug!("embedding filelist: {:?}", emb_file_list);
+
+        let num_files = emb_file_list.len();
+
+        if num_files > 0 {
+            let loaded = Arc::new(AtomicUsize::new(0));
+        }
+
+        Ok(())
     }
 
     pub async fn configure_embedding_servers(

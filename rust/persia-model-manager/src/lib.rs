@@ -4,17 +4,19 @@ use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use persia_libs::{
     anyhow::Error as AnyhowError,
     once_cell::sync::OnceCell,
     parking_lot::RwLock,
     rayon::{ThreadPool, ThreadPoolBuilder},
-    thiserror, tracing,
+    serde::{self, Deserialize, Serialize},
+    serde_yaml, thiserror, tracing,
 };
 
 use persia_embedding_config::{
-    PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig, PersiaGlobalConfigError,
+    PersiaEmbeddingServerConfig, PersiaGlobalConfigError,
     PersiaReplicaInfo,
 };
 use persia_embedding_holder::{
@@ -51,6 +53,14 @@ impl From<AnyhowError> for SparseModelManagerError {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(crate = "self::serde")]
+pub struct SparseModelInfo {
+    pub num_shards: usize,
+    pub num_internal_shards: usize,
+    pub datetime: SystemTime,
+}
+
 #[derive(Clone, Readable, Writable, Debug)]
 pub enum SparseModelManagerStatus {
     Dumping(f32),
@@ -63,30 +73,22 @@ static SPARSE_MODEL_MANAGER: OnceCell<Arc<SparseModelManager>> = OnceCell::new()
 
 #[derive(Clone)]
 pub struct SparseModelManager {
-    embedding_holder: PersiaEmbeddingHolder,
-    status: Arc<RwLock<SparseModelManagerStatus>>,
-    thread_pool: Arc<ThreadPool>,
-    sign_per_file: usize,
-    replica_index: usize,
-    replica_size: usize,
-    cur_task: PerisaJobType,
+    pub status: Arc<RwLock<SparseModelManagerStatus>>,
+    pub thread_pool: Arc<ThreadPool>,
+    pub replica_index: usize,
+    pub replica_size: usize,
 }
 
 impl SparseModelManager {
     pub fn get() -> Result<Arc<Self>, SparseModelManagerError> {
         let singleton = SPARSE_MODEL_MANAGER.get_or_try_init(|| {
             let server_config = PersiaEmbeddingServerConfig::get()?;
-            let common_config = PersiaCommonConfig::get()?;
-            let embedding_holder = PersiaEmbeddingHolder::get()?;
             let replica_info = PersiaReplicaInfo::get()?;
 
             let singleton = Arc::new(Self::new(
-                embedding_holder,
-                server_config.num_persistence_workers,
-                server_config.num_signs_per_file,
+                server_config.num_embedding_io_workers,
                 replica_info.replica_index,
                 replica_info.replica_size,
-                common_config.job_type.clone(),
             ));
             Ok(singleton)
         });
@@ -97,16 +99,8 @@ impl SparseModelManager {
         }
     }
 
-    fn new(
-        embedding_holder: PersiaEmbeddingHolder,
-        concurrent_size: usize,
-        sign_per_file: usize,
-        replica_index: usize,
-        replica_size: usize,
-        cur_task: PerisaJobType,
-    ) -> Self {
+    fn new(concurrent_size: usize, replica_index: usize, replica_size: usize) -> Self {
         Self {
-            embedding_holder,
             status: Arc::new(RwLock::new(SparseModelManagerStatus::Idle)),
             thread_pool: Arc::new(
                 ThreadPoolBuilder::new()
@@ -114,10 +108,8 @@ impl SparseModelManager {
                     .build()
                     .unwrap(),
             ),
-            sign_per_file,
             replica_index,
             replica_size,
-            cur_task,
         }
     }
 
@@ -165,21 +157,38 @@ impl SparseModelManager {
     pub fn mark_embedding_dump_done(
         &self,
         emb_dir: PathBuf,
+        num_internal_shards: usize,
     ) -> Result<(), SparseModelManagerError> {
         let emb_dump_done_file = self.get_emb_dump_done_file_name();
         let emb_dump_done_path = PersiaPath::from_vec(vec![&emb_dir, &emb_dump_done_file]);
         emb_dump_done_path.create(false)?;
+
+        let model_info = SparseModelInfo {
+            num_shards: self.replica_size,
+            num_internal_shards,
+            datetime: SystemTime::now(),
+        };
+
+        let s = serde_yaml::to_string(&model_info).expect("failed to serialize model info to yaml");
+        emb_dump_done_path.append(s)?;
+
         Ok(())
     }
 
     pub fn check_embedding_dump_done(
         &self,
         emb_dir: &PathBuf,
-    ) -> Result<bool, SparseModelManagerError> {
+    ) -> Result<Option<SparseModelInfo>, SparseModelManagerError> {
         let emb_dump_done_file = self.get_emb_dump_done_file_name();
         let emb_dump_done_path = PersiaPath::from_vec(vec![emb_dir, &emb_dump_done_file]);
-        let res = emb_dump_done_path.is_file()?;
-        Ok(res)
+        if emb_dump_done_path.is_file()? {
+            let s: String = emb_dump_done_path.read_to_string()?;
+            let info: SparseModelInfo =
+                serde_yaml::from_str(&s).expect("failed to deserialize model info from yaml");
+            Ok(Some(info))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn waiting_for_all_embedding_server_dump(
@@ -202,7 +211,7 @@ impl SparseModelManager {
                 }
                 let shard_dir = self.get_other_shard_dir(&dst_dir, replica_index);
                 let done = self.check_embedding_dump_done(&shard_dir)?;
-                if done {
+                if done.is_some() {
                     tracing::info!("dump complete for index {}", replica_index);
                     compeleted.insert(replica_index);
                 } else {
@@ -227,9 +236,9 @@ impl SparseModelManager {
         &self,
         internal_shard_idx: usize,
         dst_dir: PathBuf,
+        embedding_holder: PersiaEmbeddingHolder,
     ) -> Result<(), SparseModelManagerError> {
-        let shard = self
-            .embedding_holder
+        let shard = embedding_holder
             .get_shard_by_index(internal_shard_idx)
             .read();
 
@@ -244,6 +253,7 @@ impl SparseModelManager {
     pub fn load_internal_shard_embeddings(
         &self,
         file_path: PathBuf,
+        embedding_holder: PersiaEmbeddingHolder,
     ) -> Result<(), SparseModelManagerError> {
         tracing::debug!("loading from {:?}", file_path);
         let emb_path = PersiaPath::from_pathbuf(file_path);
@@ -251,19 +261,23 @@ impl SparseModelManager {
 
         decoded.into_iter().for_each(|entry| {
             let sign = entry.sign();
-            let mut shard = self.embedding_holder.shard(&sign).write();
+            let mut shard = embedding_holder.shard(&sign).write();
             shard.insert(sign, entry);
         });
 
         Ok(())
     }
 
-    pub fn dump_embedding(&self, dst_dir: PathBuf) -> Result<(), SparseModelManagerError> {
+    pub fn dump_embedding(
+        &self,
+        dst_dir: PathBuf,
+        embedding_holder: PersiaEmbeddingHolder,
+    ) -> Result<(), SparseModelManagerError> {
         *self.status.write() = SparseModelManagerStatus::Dumping(0.0);
         tracing::info!("start to dump embedding to {:?}", dst_dir);
 
         let shard_dir = self.get_shard_dir(&dst_dir);
-        let num_internal_shards = self.embedding_holder.num_internal_shards();
+        let num_internal_shards = embedding_holder.num_internal_shards();
         let num_dumped_shards = Arc::new(AtomicUsize::new(0));
         let manager = Self::get()?;
 
@@ -271,10 +285,15 @@ impl SparseModelManager {
             let dst_dir = shard_dir.clone();
             let num_dumped_shards = num_dumped_shards.clone();
             let manager = manager.clone();
+            let embedding_holder = embedding_holder.clone();
 
             self.thread_pool.spawn(move || {
                 let closure = || -> Result<(), SparseModelManagerError> {
-                    manager.dump_internal_shard_embeddings(internal_shard_idx, dst_dir.clone())?;
+                    manager.dump_internal_shard_embeddings(
+                        internal_shard_idx,
+                        dst_dir.clone(),
+                        embedding_holder,
+                    )?;
 
                     let dumped = num_dumped_shards.fetch_add(1, Ordering::AcqRel) + 1;
                     let dumping_progress = (dumped as f32) / (num_internal_shards as f32);
@@ -283,12 +302,12 @@ impl SparseModelManager {
                     tracing::debug!("dumping progress is {}", dumping_progress);
 
                     if dumped >= num_internal_shards {
-                        manager.mark_embedding_dump_done(dst_dir.clone())?;
+                        manager.mark_embedding_dump_done(dst_dir.clone(), num_internal_shards)?;
                         if manager.is_master_server() {
                             let upper_dir = manager.get_upper_dir(&dst_dir);
                             manager
                                 .waiting_for_all_embedding_server_dump(600, upper_dir.clone())?;
-                            manager.mark_embedding_dump_done(upper_dir)?;
+                            manager.mark_embedding_dump_done(upper_dir, num_internal_shards)?;
                         }
 
                         tracing::info!("dump embedding to {:?} compelete", dst_dir);
@@ -307,16 +326,18 @@ impl SparseModelManager {
         Ok(())
     }
 
-    pub fn load_embedding_from_dir(&self, dst_dir: PathBuf) -> Result<(), SparseModelManagerError> {
-        tracing::info!("start to load embedding from dir {:?}", dst_dir);
+    pub fn get_emb_file_list_in_dir(
+        &self,
+        dst_dir: PathBuf,
+    ) -> Result<Vec<PathBuf>, SparseModelManagerError> {
         let done = self.check_embedding_dump_done(&dst_dir)?;
-        if !done {
+        if done.is_none() {
             tracing::error!("trying to load embedding from uncompelete checkpoint");
             return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint);
         }
         let dst_dir = self.get_shard_dir(&dst_dir);
         let done = self.check_embedding_dump_done(&dst_dir)?;
-        if !done {
+        if done.is_none() {
             return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint);
         }
         let dst_dir = PersiaPath::from_pathbuf(dst_dir);
@@ -334,53 +355,57 @@ impl SparseModelManager {
             return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint);
         }
 
+        Ok(file_list)
+    }
+
+    pub fn load_embedding_from_dir(
+        &self,
+        dst_dir: PathBuf,
+        embedding_holder: PersiaEmbeddingHolder,
+    ) -> Result<(), SparseModelManagerError> {
+        tracing::info!("start to load embedding from dir {:?}", dst_dir);
+
+        let file_list = self.get_emb_file_list_in_dir(dst_dir)?;
+
         let num_total_files = file_list.len();
         let num_loaded_files = Arc::new(AtomicUsize::new(0));
 
-        for file in file_list.into_iter() {
-            self.load_embedding_from_file(file, num_loaded_files.clone(), num_total_files)?;
-        }
+        for file_path in file_list.into_iter() {
+            tracing::debug!("spawn to load embedding from {:?}", file_path);
+            let manager = Self::get()?;
 
-        *self.status.write() = SparseModelManagerStatus::Loading(0.0);
+            self.thread_pool.spawn({
+                let manager = manager.clone();
+                let num_loaded_files = num_loaded_files.clone();
+                let embedding_holder = embedding_holder.clone();
+                move || {
+                    let closure = || -> Result<(), SparseModelManagerError> {
+                        tracing::debug!("start to execute load embedding from {:?}", file_path);
+                        manager
+                            .load_internal_shard_embeddings(file_path.clone(), embedding_holder)?;
 
-        Ok(())
-    }
+                        let loaded = num_loaded_files.fetch_add(1, Ordering::AcqRel) + 1;
+                        let loading_progress = (loaded as f32) / (num_total_files as f32);
+                        *manager.status.write() =
+                            SparseModelManagerStatus::Loading(loading_progress);
+                        tracing::debug!("load embedding progress is {}", loading_progress);
 
-    pub fn load_embedding_from_file(
-        &self,
-        file_path: PathBuf,
-        num_loaded_files: Arc<AtomicUsize>,
-        num_total_files: usize,
-    ) -> Result<(), SparseModelManagerError> {
-        tracing::debug!("spawn to load embedding from {:?}", file_path);
-        let manager = Self::get()?;
+                        if num_total_files == loaded {
+                            *manager.status.write() = SparseModelManagerStatus::Idle;
+                            let upper = manager.get_upper_dir(&file_path);
+                            tracing::info!("load checkpoint from {:?} compelete", upper);
+                        }
 
-        self.thread_pool.spawn({
-            let manager = manager.clone();
-            move || {
-                let closure = || -> Result<(), SparseModelManagerError> {
-                    tracing::debug!("start to execute load embedding from {:?}", file_path);
-                    manager.load_internal_shard_embeddings(file_path.clone())?;
+                        Ok(())
+                    };
 
-                    let loaded = num_loaded_files.fetch_add(1, Ordering::AcqRel) + 1;
-                    let loading_progress = (loaded as f32) / (num_total_files as f32);
-                    *manager.status.write() = SparseModelManagerStatus::Loading(loading_progress);
-                    tracing::debug!("load embedding progress is {}", loading_progress);
-
-                    if num_total_files == loaded {
-                        *manager.status.write() = SparseModelManagerStatus::Idle;
-                        let upper = manager.get_upper_dir(&file_path);
-                        tracing::info!("load checkpoint from {:?} compelete", upper);
+                    if let Err(e) = closure() {
+                        *manager.status.write() = SparseModelManagerStatus::Failed(e);
                     }
-
-                    Ok(())
-                };
-
-                if let Err(e) = closure() {
-                    *manager.status.write() = SparseModelManagerStatus::Failed(e);
                 }
-            }
-        });
+            });
+        }
+        *self.status.write() = SparseModelManagerStatus::Loading(0.0);
 
         Ok(())
     }

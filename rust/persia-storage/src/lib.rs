@@ -49,6 +49,8 @@ pub trait PersiaPathImpl {
 
     fn read_to_end(&self) -> Result<Vec<u8>>;
 
+    fn read_to_string(&self) -> Result<String>;
+
     fn read_to_end_speedy<'a, R>(&self) -> Result<R>
     where
         R: Readable<'a, LittleEndian>;
@@ -101,6 +103,14 @@ impl PersiaPathImpl for PersiaDiskPathImpl {
         f.read(&mut buffer)?;
 
         Ok(buffer)
+    }
+
+    fn read_to_string(&self) -> Result<String> {
+        let mut content = String::with_capacity(INIT_BUFFER_SIZE);
+        let mut f = File::open(&self.inner)?;
+        f.read_to_string(&mut content)?;
+
+        Ok(content)
     }
 
     fn read_to_end_speedy<'a, R>(&self) -> Result<R>
@@ -225,6 +235,20 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
         let mut stdout = text_cmd.stdout.unwrap();
         let mut result = Vec::with_capacity(INIT_BUFFER_SIZE);
         stdout.read_to_end(&mut result)?;
+        Ok(result)
+    }
+
+    fn read_to_string(&self) -> Result<String> {
+        let text_cmd = Command::new("hadoop")
+            .arg("fs")
+            .arg("-text")
+            .arg(self.inner.as_os_str())
+            .stdout(Stdio::piped())
+            .spawn()?;
+
+        let mut stdout = text_cmd.stdout.unwrap();
+        let mut result = String::with_capacity(INIT_BUFFER_SIZE);
+        stdout.read_to_string(&mut result)?;
         Ok(result)
     }
 

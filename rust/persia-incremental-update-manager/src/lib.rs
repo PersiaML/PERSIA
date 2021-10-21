@@ -94,7 +94,7 @@ impl PerisaIncrementalUpdateManager {
             let singleton = Self::new(
                 embedding_holder,
                 common_comfig.job_type.clone(),
-                server_config.num_persistence_workers,
+                server_config.num_embedding_io_workers,
                 replica_info.replica_index,
                 server_config.incremental_buffer_size,
                 server_config.incremental_dir.clone(),
