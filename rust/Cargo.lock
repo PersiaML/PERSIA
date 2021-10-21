@@ -2500,9 +2500,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.11.5"
+version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51c732d463dd300362ffb44b7b125f299c23d2990411a4253824630ebc7467fb"
+checksum = "66d2927ca2f685faf0fc620ac4834690d29e7abb153add10f5812eef20b5e280"
 dependencies = [
  "base64",
  "bytes",
@@ -3052,9 +3052,9 @@ dependencies = [
 
 [[package]]
 name = "tinystr"
-version = "0.4.10"
+version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01e8700bce17d12d9653596139d85039dd63b8728839a9f2e0c540d5301ea0cd"
+checksum = "3169b0bf6d91040e9ac3d98f6e847d1b6312054634f7e61874c116205e96d984"
 dependencies = [
  "tinystr-macros",
  "tinystr-raw",
