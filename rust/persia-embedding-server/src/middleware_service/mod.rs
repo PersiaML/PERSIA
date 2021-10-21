@@ -35,7 +35,7 @@ use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
 use persia_metrics::{
     Gauge, GaugeVec, Histogram, IntCounterVec, PersiaMetricsManager, PersiaMetricsManagerError,
 };
-use persia_model_manager::{SparseModelManagerStatus, SparseModelManagerError};
+use persia_model_manager::{SparseModelManagerError, SparseModelManagerStatus};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::{Readable, Writable};
 

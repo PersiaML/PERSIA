@@ -59,7 +59,7 @@ pub enum SparseModelManagerStatus {
     Failed(SparseModelManagerError),
 }
 
-static sparse_model_manager: OnceCell<Arc<SparseModelManager>> = OnceCell::new();
+static SPARSE_MODEL_MANAGER: OnceCell<Arc<SparseModelManager>> = OnceCell::new();
 
 #[derive(Clone)]
 pub struct SparseModelManager {
@@ -74,7 +74,7 @@ pub struct SparseModelManager {
 
 impl SparseModelManager {
     pub fn get() -> Result<Arc<Self>, SparseModelManagerError> {
-        let singleton = sparse_model_manager.get_or_try_init(|| {
+        let singleton = SPARSE_MODEL_MANAGER.get_or_try_init(|| {
             let server_config = PersiaEmbeddingServerConfig::get()?;
             let common_config = PersiaCommonConfig::get()?;
             let embedding_holder = PersiaEmbeddingHolder::get()?;

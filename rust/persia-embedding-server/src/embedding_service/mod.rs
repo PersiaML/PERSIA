@@ -17,9 +17,7 @@ use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
 use persia_metrics::{
     Gauge, Histogram, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError,
 };
-use persia_model_manager::{
-    SparseModelManager, SparseModelManagerStatus, SparseModelManagerError,
-};
+use persia_model_manager::{SparseModelManager, SparseModelManagerError, SparseModelManagerStatus};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::{Readable, Writable};
 
@@ -436,8 +434,7 @@ impl EmbeddingServiceInner {
 
     pub async fn load(&self, dir: String) -> Result<(), EmbeddingServerError> {
         let dst_dir = PathBuf::from(dir);
-        self.sparse_model_manager
-            .load_embedding_from_dir(dst_dir)?;
+        self.sparse_model_manager.load_embedding_from_dir(dst_dir)?;
         Ok(())
     }
 
