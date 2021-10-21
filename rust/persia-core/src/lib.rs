@@ -29,7 +29,6 @@ use persia_libs::{
     anyhow::Result,
     color_eyre,
     once_cell::sync::OnceCell,
-    parking_lot::RwLock,
     thiserror,
     tokio::{self, runtime::Runtime},
     tracing, tracing_subscriber,
@@ -99,8 +98,8 @@ static PERSIA_COMMON_CONTEXT: OnceCell<Arc<PersiaCommonContext>> = OnceCell::new
 
 struct PersiaCommonContext {
     pub rpc_client: Arc<PersiaRpcClient>,
-    pub nats_publisher: Arc<RwLock<Option<nats::PersiaBatchFlowNatsServicePublisherWrapper>>>,
-    pub master_discovery_service: Arc<RwLock<Option<nats::MasterDiscoveryNatsServiceWrapper>>>,
+    pub nats_publisher: Option<Arc<nats::PersiaBatchFlowNatsServicePublisherWrapper>>,
+    pub master_discovery_service: Option<Arc<nats::MasterDiscoveryNatsServiceWrapper>>,
     pub async_runtime: Arc<Runtime>,
 }
 
@@ -133,8 +132,8 @@ impl PersiaCommonContext {
 
         let common_context = Self {
             rpc_client,
-            nats_publisher: Arc::new(RwLock::new(None)),
-            master_discovery_service: Arc::new(RwLock::new(None)),
+            nats_publisher: None,
+            master_discovery_service: None,
             async_runtime: runtime,
         };
 
@@ -147,22 +146,18 @@ impl PersiaCommonContext {
         Ok(instance)
     }
 
-    pub fn register_optimizer(&self, opt: &PyOptimizerBase) -> Result<(), PersiaError> {
+    pub fn register_optimizer(&self, optimizer: &PyOptimizerBase) -> Result<(), PersiaError> {
         self.async_runtime.block_on(
-            self.nats_publisher
-                .read()
-                .as_ref()
-                .ok_or_else(|| PersiaError::NatsNotInitializedError)?
-                .register_optimizer(opt),
+            self.get_nats_publish_service()?
+                .register_optimizer(optimizer),
         )
     }
 
     fn get_nats_publish_service(
         &self,
-    ) -> Result<&nats::PersiaBatchFlowNatsServicePublisherWrapper, PersiaError> {
+    ) -> Result<Arc<nats::PersiaBatchFlowNatsServicePublisherWrapper>, PersiaError> {
         self.nats_publisher
-            .read()
-            .as_ref()
+            .clone()
             .ok_or_else(|| PersiaError::NatsNotInitializedError)
     }
 
@@ -190,11 +185,11 @@ impl PyPersiaCommonContext {
         Ok(Self { inner })
     }
 
-    pub fn init_nats_publisher(&self, world_size: Option<usize>) -> PyResult<()> {
-        if self.inner.nats_publisher.read().is_some() {
+    pub fn init_nats_publisher(&mut self, world_size: Option<usize>) -> PyResult<()> {
+        if self.inner.nats_publisher.is_some() {
             return Ok(());
         }
-        let instance = self
+        let nats_publisher = self
             .inner
             .async_runtime
             .block_on(nats::PersiaBatchFlowNatsServicePublisherWrapper::new(
@@ -202,13 +197,13 @@ impl PyPersiaCommonContext {
             ))
             .map_err(|e| PyErr::from(e))?;
 
-        let mut nats_publisher = self.inner.nats_publisher.write();
-        *nats_publisher = Some(instance);
+        Arc::get_mut(&mut self.inner).unwrap().nats_publisher = Some(Arc::new(nats_publisher));
+
         Ok(())
     }
 
-    pub fn init_master_discovery_service(&self, master_addr: Option<String>) -> PyResult<()> {
-        if self.inner.master_discovery_service.read().is_some() {
+    pub fn init_master_discovery_service(&mut self, master_addr: Option<String>) -> PyResult<()> {
+        if self.inner.master_discovery_service.is_some() {
             return Ok(());
         }
         let replica_info = PersiaReplicaInfo::get().expect("not in persia context");
@@ -216,12 +211,15 @@ impl PyPersiaCommonContext {
             return Err(PyErr::from(PersiaError::MasterServiceEmpty));
         }
 
-        let instance = self
+        let master_discovery_service = self
             .inner
             .async_runtime
             .block_on(nats::MasterDiscoveryNatsServiceWrapper::new(master_addr));
-        let mut master_discovery_service = self.inner.master_discovery_service.write();
-        *master_discovery_service = Some(instance);
+
+        Arc::get_mut(&mut self.inner)
+            .unwrap()
+            .master_discovery_service = Some(Arc::new(master_discovery_service));
+
         Ok(())
     }
 
@@ -232,7 +230,6 @@ impl PyPersiaCommonContext {
             .block_on(
                 self.inner
                     .master_discovery_service
-                    .read()
                     .as_ref()
                     .ok_or_else(|| PersiaError::MasterDiscoveryServiceNotInitializedError)
                     .map_err(|e| PyErr::from(e))?
