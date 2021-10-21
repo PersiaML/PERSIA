@@ -197,7 +197,7 @@ impl PerisaIncrementalUpdateManager {
         };
 
         let emb_path = PersiaPath::from_vec(vec![&dst_dir, &file_name]);
-        if let Err(e) = emb_path.write_all_speedy(content) {
+        if let Err(e) = emb_path.write_all_speedy(&content) {
             tracing::error!(
                 "failed to dump {:?} inc update packet to {:?}, because {:?}",
                 file_name,

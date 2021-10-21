@@ -55,7 +55,7 @@ pub trait PersiaPathImpl {
 
     fn write_all(&self, content: Vec<u8>) -> Result<()>;
 
-    fn write_all_speedy<W>(&self, content: W) -> Result<()>
+    fn write_all_speedy<W>(&self, content: &W) -> Result<()>
     where
         W: Writable<LittleEndian>;
 
@@ -125,7 +125,7 @@ impl PersiaPathImpl for PersiaDiskPathImpl {
         Ok(())
     }
 
-    fn write_all_speedy<W>(&self, content: W) -> Result<()>
+    fn write_all_speedy<W>(&self, content: &W) -> Result<()>
     where
         W: Writable<LittleEndian>,
     {
@@ -269,7 +269,7 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
         }
     }
 
-    fn write_all_speedy<W>(&self, content: W) -> Result<()>
+    fn write_all_speedy<W>(&self, content: &W) -> Result<()>
     where
         W: Writable<LittleEndian>,
     {

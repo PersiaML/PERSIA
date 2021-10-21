@@ -228,20 +228,15 @@ impl PersiaPersistenceManager {
         internal_shard_idx: usize,
         dst_dir: PathBuf,
     ) -> Result<(), PersistenceManagerError> {
-        let encoded = {
-            let shard = self
-                .embedding_holder
-                .get_shard_by_index(internal_shard_idx)
-                .read();
-            let array_linked_list = &shard.linkedlist;
-            let encoded: Vec<u8> = array_linked_list.write_to_vec().unwrap();
-            encoded
-        };
+        let shard = self
+            .embedding_holder
+            .get_shard_by_index(internal_shard_idx)
+            .read();
 
         let file_name = self.get_internam_shard_filename(internal_shard_idx);
         let emb_path = PersiaPath::from_vec(vec![&dst_dir, &file_name]);
 
-        emb_path.write_all(encoded)?;
+        emb_path.write_all_speedy(&shard.linkedlist)?;
 
         Ok(())
     }
@@ -250,10 +245,9 @@ impl PersiaPersistenceManager {
         &self,
         file_path: PathBuf,
     ) -> Result<(), PersistenceManagerError> {
+        tracing::debug!("loading from {:?}", file_path);
         let emb_path = PersiaPath::from_pathbuf(file_path);
-        let bytes: Vec<u8> = emb_path.read_to_end()?;
-        let decoded: ArrayLinkedList<HashMapEmbeddingEntry> =
-            ArrayLinkedList::<HashMapEmbeddingEntry>::read_from_buffer(bytes.as_slice()).unwrap();
+        let decoded: ArrayLinkedList<HashMapEmbeddingEntry> = emb_path.read_to_end_speedy()?;
 
         decoded.into_iter().for_each(|entry| {
             let sign = entry.sign();
