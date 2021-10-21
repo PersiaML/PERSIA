@@ -899,3 +899,7 @@ class InferCtx(EmbeddingCtx):
 
         for addr in middleware_addrs:
             self.common_context.init_rpc_client_with_addr(addr)
+
+    r"""Wait for middleware and embedding server ready for serving."""
+    def wait_for_serving(self):
+        self.common_context.wait_for_serving()
