@@ -16,8 +16,7 @@ use persia_libs::{
 };
 
 use persia_embedding_config::{
-    PersiaEmbeddingServerConfig, PersiaGlobalConfigError,
-    PersiaReplicaInfo,
+    PersiaEmbeddingServerConfig, PersiaGlobalConfigError, PersiaReplicaInfo,
 };
 use persia_embedding_holder::{
     array_linked_list::ArrayLinkedList, emb_entry::HashMapEmbeddingEntry, PersiaEmbeddingHolder,
@@ -255,9 +254,7 @@ impl SparseModelManager {
         file_path: PathBuf,
         embedding_holder: PersiaEmbeddingHolder,
     ) -> Result<(), SparseModelManagerError> {
-        tracing::debug!("loading from {:?}", file_path);
-        let emb_path = PersiaPath::from_pathbuf(file_path);
-        let decoded: ArrayLinkedList<HashMapEmbeddingEntry> = emb_path.read_to_end_speedy()?;
+        let decoded = self.load_array_linked_list(file_path)?;
 
         decoded.into_iter().for_each(|entry| {
             let sign = entry.sign();
@@ -266,6 +263,16 @@ impl SparseModelManager {
         });
 
         Ok(())
+    }
+
+    pub fn load_array_linked_list(
+        &self,
+        file_path: PathBuf,
+    ) -> Result<ArrayLinkedList<HashMapEmbeddingEntry>, SparseModelManagerError> {
+        tracing::debug!("loading from {:?}", file_path);
+        let emb_path = PersiaPath::from_pathbuf(file_path);
+        let decoded: ArrayLinkedList<HashMapEmbeddingEntry> = emb_path.read_to_end_speedy()?;
+        Ok(decoded)
     }
 
     pub fn dump_embedding(

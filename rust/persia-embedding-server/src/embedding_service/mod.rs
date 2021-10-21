@@ -266,12 +266,13 @@ impl EmbeddingServiceInner {
 
     pub async fn set_embedding(
         &self,
-        embeddings: Vec<(u64, HashMapEmbeddingEntry)>,
+        embeddings: Vec<HashMapEmbeddingEntry>,
     ) -> Result<(), EmbeddingServerError> {
         let start_time = std::time::Instant::now();
 
         tokio::task::block_in_place(|| {
-            embeddings.into_iter().for_each(|(id, entry)| {
+            embeddings.into_iter().for_each(|entry| {
+                let id = entry.sign();
                 let mut shard = self.embedding.shard(&id).write();
                 let _ = shard.insert(id, entry);
             });
@@ -480,7 +481,7 @@ impl EmbeddingService {
 
     pub async fn set_embedding(
         &self,
-        req: Vec<(u64, HashMapEmbeddingEntry)>,
+        req: Vec<HashMapEmbeddingEntry>,
     ) -> Result<(), EmbeddingServerError> {
         self.inner.set_embedding(req).await
     }

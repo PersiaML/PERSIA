@@ -2,6 +2,7 @@ use crate::embedding_service::{
     EmbeddingServerError, EmbeddingServerNatsServicePublisher, EmbeddingServiceClient,
 };
 
+use std::iter::FromIterator;
 use std::ops::MulAssign;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -931,14 +932,14 @@ impl MiddlewareServerInner {
 
     pub async fn set_embedding(
         &self,
-        req: Vec<(u64, HashMapEmbeddingEntry)>,
+        req: Vec<HashMapEmbeddingEntry>,
     ) -> Result<(), MiddlewareServerError> {
         let replica_size = self.replica_size;
         let futs: Vec<_> = tokio::task::block_in_place(|| {
             let grouped_entries = req
                 .into_iter()
-                .sorted_by_key(|(k, _)| sign_to_shard_modulo(*k, replica_size))
-                .group_by(|(k, _)| sign_to_shard_modulo(*k, replica_size));
+                .sorted_by_key(|e| sign_to_shard_modulo(e.sign(), replica_size))
+                .group_by(|e| sign_to_shard_modulo(e.sign(), replica_size));
 
             grouped_entries
                 .into_iter()
@@ -1187,10 +1188,21 @@ impl MiddlewareServerInner {
 
         tracing::debug!("embedding filelist: {:?}", emb_file_list);
 
-        let num_files = emb_file_list.len();
+        for file_path in emb_file_list.into_iter() {
+            let array_linked_list = self
+                .sparse_model_manager
+                .load_array_linked_list(file_path)?;
+            let entries = Vec::from_iter(array_linked_list.into_iter());
+            let entries: Vec<Vec<HashMapEmbeddingEntry>> = entries
+                .into_iter()
+                .chunks(2560)
+                .into_iter()
+                .map(|chunk| chunk.collect())
+                .collect();
 
-        if num_files > 0 {
-            let loaded = Arc::new(AtomicUsize::new(0));
+            for chunk_entries in entries.into_iter() {
+                self.set_embedding(chunk_entries).await?;
+            }
         }
 
         Ok(())
@@ -1326,7 +1338,7 @@ impl MiddlewareServer {
 
     pub async fn set_embedding(
         &self,
-        req: Vec<(u64, HashMapEmbeddingEntry)>,
+        req: Vec<HashMapEmbeddingEntry>,
     ) -> Result<(), MiddlewareServerError> {
         self.inner.set_embedding(req).await
     }
