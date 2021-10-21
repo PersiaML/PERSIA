@@ -1991,7 +1991,7 @@ version = "0.1.0"
 dependencies = [
  "persia-embedding-config",
  "persia-libs",
- "prometheus 0.13.0",
+ "prometheus",
  "prometheus_exporter",
  "scheduled-thread-pool",
 ]
@@ -2237,20 +2237,6 @@ dependencies = [
 
 [[package]]
 name = "prometheus"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5986aa8d62380092d2f50f8b1cdba9cb9b6731ffd4b25b51fd126b6c3e05b99c"
-dependencies = [
- "cfg-if 1.0.0",
- "fnv",
- "lazy_static",
- "memchr",
- "parking_lot",
- "thiserror",
-]
-
-[[package]]
-name = "prometheus"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7f64969ffd5dd8f39bd57a68ac53c163a095ed9d0fb707146da1b27025a3504"
@@ -2268,14 +2254,14 @@ dependencies = [
 
 [[package]]
 name = "prometheus_exporter"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ea6d5eedcb1dcef5d7153c5d74a58ca2c743ba6b5d950ee3b2bf92d1a830f4c"
+checksum = "674814aa0557c64298bae4b50d42bb87c4c40abe47b37fec822761ae4226126c"
 dependencies = [
  "ascii",
  "lazy_static",
  "log",
- "prometheus 0.12.0",
+ "prometheus",
  "thiserror",
  "tiny_http",
 ]
@@ -3039,9 +3025,9 @@ dependencies = [
 
 [[package]]
 name = "tiny_http"
-version = "0.8.2"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ce51b50006056f590c9b7c3808c3bd70f0d1101666629713866c227d6e58d39"
+checksum = "96155b5f7149ba7a99ea5d516c538250b26eab60b4485c0f5344432573e7a450"
 dependencies = [
  "ascii",
  "chrono",
