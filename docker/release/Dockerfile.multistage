@@ -3,7 +3,7 @@ ARG BASE_IMAGE=nvidia/cuda:11.2.0-devel-ubuntu20.04
 
 FROM ${BASE_IMAGE} AS base
 ARG PYTHON_VERSION=3.8
-ARG PYTORCH_VERSION=1.7
+ARG PYTORCH_VERSION=1.9
 ARG MAGMA_CUDA_VERSION=magma-cuda110
 ARG DEVICE
 
@@ -75,6 +75,8 @@ ENV PATH=/cargo/bin:/rust/bin:/opt/conda/bin:$PATH
 
 RUN curl -sSf https://sh.rustup.rs | sh -s -- --default-toolchain stable -y --profile default --no-modify-path 
 
+FROM builder AS persia-builder
+
 WORKDIR /workspace
 COPY . /workspace
 RUN cd /workspace && pip3 install click colorlog colorama setuptools setuptools-rust setuptools_scm \
@@ -82,7 +84,7 @@ RUN cd /workspace && pip3 install click colorlog colorama setuptools setuptools-
 
 FROM base AS runtime
 
-COPY --from=builder /root/dist .
+COPY --from=persia-builder /root/dist .
 RUN pip3 install *.whl && rm -rf *.whl
 
 FROM runtime AS inference-runtime
@@ -90,21 +92,18 @@ RUN echo "install deploy image requirement, openjdk and torch serve"; \
     /opt/conda/bin/conda install torchserve torch-model-archiver torch-workflow-archiver -c pytorch -y; \
     /opt/conda/bin/conda clean -yapf; \
     /opt/conda/bin/pip install --no-cache-dir \ 
-        captum \
-        grpcio \
-        protobuf \
-        grpcio-tools; \
+    captum \
+    grpcio \
+    protobuf \
+    grpcio-tools; \
     apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-11-jdk; \
     apt-get purge --auto-remove; \
     apt-get clean
 
 FROM builder AS bagua-builder
-RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libhwloc-dev \
-    software-properties-common \
-    libssl-dev && \
-    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
-    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main' && \ 
-    apt remove --purge cmake -y && apt-get update && apt-get install -y --no-install-recommends cmake
+RUN rm -rf /etc/apt/sources.list.d && apt-get update &&\
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends zlib1g-dev libhwloc-dev && \
+    pip3 install cmake --no-cache-dir
 
 RUN git clone https://github.com/BaguaSys/bagua.git; \
     /opt/conda/bin/pip install setuptools-rust colorama tqdm wheel; \
@@ -115,12 +114,5 @@ RUN git clone https://github.com/BaguaSys/bagua.git; \
     rm -rf bagua
 
 FROM runtime AS bagua-runtime
-RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libhwloc-dev \
-    software-properties-common \
-    libssl-dev && \
-    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
-    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main' && \ 
-    apt remove --purge cmake -y && apt-get update && apt-get install -y --no-install-recommends cmake && mkdir /root/bagua-dist /root/bagua-core-dist
-
 COPY --from=bagua-builder /root/bagua-dist /root/bagua-dist
 RUN pip3 install /root/bagua-dist/*.whl && rm -rf /root/bagua-*

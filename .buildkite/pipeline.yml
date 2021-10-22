@@ -1,19 +1,42 @@
 steps:
-  - label: "Build docker ci image for latest persiaml framework"
-    command: make build_test_image 
+  - label: "Build docker ci image for latest persiaml framework(CPU)"
+    command: make build_test_cpu_image 
+
+  - label: "Build docker ci image for latest persiaml framework(GPU)"
+    command: make build_test_gpu_image 
 
   - wait
 
-  - label: "launch e2e test"
+  - label: "launch e2e gpu test"
     key: "e2e-test"
     plugins:
       - docker-compose#v3.8.0::
           config: "e2e/docker-compose.train.yml"
           run: trainer
+          env:
+            USE_GPU=1
           graceful-shutdown: true
       - docker-compose#v3.8.0::
           config: "e2e/docker-compose.infer.yml"
           run: torch_serve
+          env:
+            USE_GPU=1
+          graceful-shutdown: true
+
+  - label: "launch e2e cpu test"
+    key: "e2e-test"
+    plugins:
+      - docker-compose#v3.8.0::
+          config: "e2e/docker-compose.train.yml"
+          run: trainer
+          env:
+            USE_GPU=0
+          graceful-shutdown: true
+      - docker-compose#v3.8.0::
+          config: "e2e/docker-compose.infer.yml"
+          run: torch_serve
+          env:
+            USE_GPU=0
           graceful-shutdown: true
 
 
@@ -21,23 +44,4 @@ steps:
     branches: "main"
     command: 
       - docker login -u $$DOCKER_USER -p $$DOCKER_TOKEN
-      - make build_ci_image && docker push persiaml/persia-ci:latest 
-
-  - label: "build and upload the latest cuda image"
-    branches: "main"
-    command: 
-      - docker login -u $$DOCKER_USER -p $$DOCKER_TOKEN
-      - make build_cuda_image && docker push persiaml/persia-cuda-runtime:latest 
-
-  - label: "build and upload the latest cpu image"
-    branches: "main"
-    command: 
-      - docker login -u $$DOCKER_USER -p $$DOCKER_TOKEN
-      - make build_cpu_image && docker push persiaml/persia-cpu-runtime:latest 
-
-  - label: "build and upload the latest inference image"
-    branches: "main"
-    command: 
-      - docker login -u $$DOCKER_USER -p $$DOCKER_TOKEN
-      - make build_inference_image && docker push persiaml/persia-inference-runtime:latest
-
+      - ./buildkite/upload_docker_image.sh
