@@ -778,15 +778,6 @@ pub fn forward_directly(
     device_id: Option<i32>,
 ) -> PyResult<PythonTrainBatch> {
     let device_id = device_id.or(PersiaCommonContext::get().device_id.as_ref().clone());
-    #[cfg(feature = "cuda")]
-    {
-        if let Some(device_id) = device_id {
-            {
-                set_device(device_id);
-            }
-        }
-    }
-
     let rpc_client = PersiaCommonContext::get().rpc_client.clone();
     let async_runtime = PersiaCommonContext::get().async_runtime.clone();
 
