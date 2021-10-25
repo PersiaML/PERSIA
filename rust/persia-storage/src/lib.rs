@@ -184,7 +184,10 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
             .arg(parent.as_os_str())
             .output()?;
         if !mkdir_out.status.success() {
-            let err_msg = format!("hdfs mkdir error: {:?}", mkdir_out.stderr);
+            let err_msg = format!(
+                "hdfs mkdir error: {:?}",
+                String::from_utf8(mkdir_out.stderr)
+            );
             return Err(anyhow!(err_msg));
         }
 
@@ -201,7 +204,10 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
         if touch_out.status.success() {
             Ok(())
         } else {
-            let err_msg = format!("hdfs touch error: {:?}", mkdir_out.stderr);
+            let err_msg = format!(
+                "hdfs touch error: {:?}",
+                String::from_utf8(mkdir_out.stderr)
+            );
             Err(anyhow!(err_msg))
         }
     }
@@ -291,8 +297,7 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
         if out.success() {
             return Ok(());
         } else {
-            let err_msg = format!("hdfs appendToFile error: {:?}", append_cmd.stderr);
-            return Err(anyhow!(err_msg));
+            return Err(anyhow!("hdfs appendToFile error"));
         }
     }
 
@@ -318,8 +323,7 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
         if out.success() {
             return Ok(());
         } else {
-            let err_msg = format!("hdfs appendToFile error: {:?}", append_cmd.stderr);
-            return Err(anyhow!(err_msg));
+            return Err(anyhow!("hdfs appendToFile error"));
         }
     }
 
@@ -353,7 +357,7 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
         if rm_out.status.success() {
             Ok(())
         } else {
-            let err_msg = format!("hdfs rm error: {:?}", rm_out.stderr);
+            let err_msg = format!("hdfs rm error: {:?}", String::from_utf8(rm_out.stderr));
             Err(anyhow!(err_msg))
         }
     }
@@ -377,7 +381,10 @@ impl PersiaPathImpl for PersiaHdfsPathImpl {
         if append_out.status.success() {
             Ok(())
         } else {
-            let err_msg = format!("hdfs appendToFile error: {:?}", append_out.stderr);
+            let err_msg = format!(
+                "hdfs appendToFile error: {:?}",
+                String::from_utf8(append_out.stderr)
+            );
             Err(anyhow!(err_msg))
         }
     }
