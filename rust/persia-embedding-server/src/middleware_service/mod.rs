@@ -1123,22 +1123,17 @@ impl MiddlewareServerInner {
 
     pub async fn load(&self, req: String) -> Result<(), MiddlewareServerError> {
         let emb_dir = PathBuf::from(req.clone());
-        if let Some(model_info) = self
+        let first_shard_dir = self.sparse_model_manager.get_shard_dir(&emb_dir);
+        let model_info = self
             .sparse_model_manager
-            .check_embedding_dump_done(&emb_dir)?
-        {
-            if model_info.num_shards == self.all_embedding_server_client.dst_replica_size {
-                self.load_embedding_via_emb_servers(req).await?;
-            } else {
-                self.load_embedding_via_middlewares(req, model_info.num_shards)
-                    .await?;
-            }
-            Ok(())
+            .load_embedding_checkpoint_info(&first_shard_dir)?;
+        if model_info.num_shards == self.all_embedding_server_client.dst_replica_size {
+            self.load_embedding_via_emb_servers(req).await?;
         } else {
-            Err(MiddlewareServerError::SparseModelManagerError(
-                SparseModelManagerError::LoadingFromUncompeleteCheckpoint,
-            ))
+            self.load_embedding_via_middlewares(req, model_info.num_shards)
+                .await?;
         }
+        Ok(())
     }
 
     pub async fn load_embedding_via_emb_servers(

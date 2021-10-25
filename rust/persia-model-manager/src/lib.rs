@@ -158,6 +158,7 @@ impl SparseModelManager {
         emb_dir: PathBuf,
         num_internal_shards: usize,
     ) -> Result<(), SparseModelManagerError> {
+        tracing::info!("mark_embedding_dump_done {:?}", emb_dir);
         let emb_dump_done_file = self.get_emb_dump_done_file_name();
         let emb_dump_done_path = PersiaPath::from_vec(vec![&emb_dir, &emb_dump_done_file]);
         emb_dump_done_path.create(false)?;
@@ -177,17 +178,22 @@ impl SparseModelManager {
     pub fn check_embedding_dump_done(
         &self,
         emb_dir: &PathBuf,
-    ) -> Result<Option<SparseModelInfo>, SparseModelManagerError> {
+    ) -> Result<bool, SparseModelManagerError> {
         let emb_dump_done_file = self.get_emb_dump_done_file_name();
         let emb_dump_done_path = PersiaPath::from_vec(vec![emb_dir, &emb_dump_done_file]);
-        if emb_dump_done_path.is_file()? {
-            let s: String = emb_dump_done_path.read_to_string()?;
-            let info: SparseModelInfo =
-                serde_yaml::from_str(&s).expect("failed to deserialize model info from yaml");
-            Ok(Some(info))
-        } else {
-            Ok(None)
-        }
+        Ok(emb_dump_done_path.is_file()?)
+    }
+
+    pub fn load_embedding_checkpoint_info(
+        &self,
+        emb_dir: &PathBuf,
+    ) -> Result<SparseModelInfo, SparseModelManagerError> {
+        let emb_dump_done_file = self.get_emb_dump_done_file_name();
+        let emb_dump_done_path = PersiaPath::from_vec(vec![emb_dir, &emb_dump_done_file]);
+        let s: String = emb_dump_done_path.read_to_string()?;
+
+        serde_yaml::from_str(&s)
+            .map_err(|_| SparseModelManagerError::LoadingFromUncompeleteCheckpoint)
     }
 
     pub fn waiting_for_all_embedding_server_dump(
@@ -200,6 +206,7 @@ impl SparseModelManager {
             tracing::info!("replica_size < 2, will not wait for other embedding servers");
             return Ok(());
         }
+        tracing::info!("start to wait for all embedding server dump compelete");
         let start_time = std::time::Instant::now();
         let mut compeleted = std::collections::HashSet::with_capacity(replica_size);
         loop {
@@ -210,7 +217,7 @@ impl SparseModelManager {
                 }
                 let shard_dir = self.get_other_shard_dir(&dst_dir, replica_index);
                 let done = self.check_embedding_dump_done(&shard_dir)?;
-                if done.is_some() {
+                if done {
                     tracing::info!("dump complete for index {}", replica_index);
                     compeleted.insert(replica_index);
                 } else {
@@ -338,13 +345,13 @@ impl SparseModelManager {
         dst_dir: PathBuf,
     ) -> Result<Vec<PathBuf>, SparseModelManagerError> {
         let done = self.check_embedding_dump_done(&dst_dir)?;
-        if done.is_none() {
+        if !done {
             tracing::error!("trying to load embedding from uncompelete checkpoint");
             return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint);
         }
         let dst_dir = self.get_shard_dir(&dst_dir);
         let done = self.check_embedding_dump_done(&dst_dir)?;
-        if done.is_none() {
+        if !done {
             return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint);
         }
         let dst_dir = PersiaPath::from_pathbuf(dst_dir);
