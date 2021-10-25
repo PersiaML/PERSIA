@@ -178,6 +178,11 @@ impl AllEmbeddingServerClient {
             dst_replica_size: servers.len(),
         };
 
+        while !instance.ready_for_serving().await {
+            tracing::info!("waiting for embedding server ready...");
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        }
+
         instance
             .update_rpc_clients(servers)
             .await
