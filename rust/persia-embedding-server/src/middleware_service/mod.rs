@@ -160,7 +160,7 @@ impl AllEmbeddingServerClient {
             .expect("failed to get ips of servers");
 
         instance
-            .update_rpc_clients(servers)
+            .update_rpc_clients(servers, false)
             .await
             .expect("failed to init rpc client for embedding server");
 
@@ -179,7 +179,7 @@ impl AllEmbeddingServerClient {
         };
 
         instance
-            .update_rpc_clients(servers)
+            .update_rpc_clients(servers, true)
             .await
             .expect("failed to init rpc client for embedding server");
 
@@ -271,6 +271,7 @@ impl AllEmbeddingServerClient {
     pub async fn update_rpc_clients(
         &self,
         servers: Vec<String>,
+        ready_for_serving: bool,
     ) -> Result<(), MiddlewareServerError> {
         let mut clients = self.clients.write().await;
         clients.clear();
@@ -282,7 +283,7 @@ impl AllEmbeddingServerClient {
         }
 
         for (i, c) in clients.iter().enumerate() {
-            while !c.ready_for_serving(&()).await.unwrap_or(false) {
+            while ready_for_serving && !c.ready_for_serving(&()).await.unwrap_or(false) {
                 tracing::info!("waiting for embedding server ready...");
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             }
@@ -1275,7 +1276,7 @@ impl MiddlewareServerInner {
             MiddlewareServerError::RpcError(_) => {
                 let servers = self.all_embedding_server_client.get_all_addresses().await?;
                 self.all_embedding_server_client
-                    .update_rpc_clients(servers)
+                    .update_rpc_clients(servers, false)
                     .await
             }
             _ => Ok(()),
