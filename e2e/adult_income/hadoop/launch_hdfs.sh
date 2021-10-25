@@ -16,3 +16,5 @@ mkdir -p /usr/local/hadoop/tmp/dfs/name
 mkdir -p /usr/local/hadoop/tmp/dfs/data
 
 cd /opt/hadoop/hadoop-3.3.1 && hdfs namenode -format && sbin/start-dfs.sh
+
+sleep infinity

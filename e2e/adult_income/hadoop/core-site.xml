@@ -24,6 +24,6 @@
    </property>
    <property>
      <name>fs.defaultFS</name>
-     <value>hdfs://localhost:9000</value>
+     <value>hdfs://hdfsserver:9000</value>
     </property>
 </configuration>
