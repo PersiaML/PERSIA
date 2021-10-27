@@ -1,17 +1,11 @@
 import os
-import torch
 
 
 _WORLD_SIZE = int(os.environ.get("WORLD_SIZE", -1))
 _REPLICA_SIZE = int(os.environ.get("REPLICA_SIZE", 1))
 _REPLICA_INDEX = int(os.environ.get("REPLICA_INDEX", 0))
-
-if torch.cuda.is_available():
-    _RANK_ID = int(os.environ.get("RANK", 0))
-    _LOCAL_RANK = int(os.environ.get("LOCAL_RANK", 0))
-else:
-    _RANK_ID = -1
-    _LOCAL_RANK = -1
+_RANK_ID = int(os.environ.get("RANK", 0))
+_LOCAL_RANK = int(os.environ.get("LOCAL_RANK", 0))
 
 
 def get_world_size() -> int:

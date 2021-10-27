@@ -468,18 +468,14 @@ fn persia_core(py: Python, m: &PyModule) -> PyResult<()> {
 
     m.add_class::<PyPersiaCommonContext>()?;
 
+    forward::init_module(m, py)?;
+    backward::init_module(m, py)?;
     data::init_module(m, py)?;
     utils::init_module(m, py)?;
     optim::init_module(m, py)?;
     nats::init_module(m, py)?;
 
     m.add_function(wrap_pyfunction!(is_cuda_feature_available, m)?)?;
-
-    #[cfg(feature = "cuda")]
-    {
-        forward::init_module(m, py)?;
-        backward::init_module(m, py)?;
-    }
 
     shadow!(build);
     eprintln!("project_name: {}", build::PROJECT_NAME);

@@ -42,11 +42,21 @@ if __name__ == "__main__":
         )
     )
 
+    install_requires = [
+        "retrying",
+        "colorlog",
+        "pyyaml",
+        "click"
+    ]
+
+    if use_cuda:
+        install_requires.append("bagua>=0.8")
+
     setup(
         name="persia",
         use_scm_version={"local_scheme": "no-local-version"},
         setup_requires=["setuptools_scm"],
-        install_requires=["pyyaml", "colorlog", "click"],
+        install_requires=install_requires,
         url="https://github.com/PersiaML/PersiaML",
         author="Kuaishou AI Platform Persia Team",
         author_email="admin@mail.xrlian.com",
@@ -58,5 +68,5 @@ if __name__ == "__main__":
                 "persia_launcher= persia.launcher:cli",
             ]
         },
-        python_requires=">=3.7",
+        python_requires=">=3.6",
     )
