@@ -628,6 +628,11 @@ impl MiddlewareServerInner {
         self.forward_id.fetch_add(1, Ordering::AcqRel)
     }
 
+    fn is_master_server(&self) -> Result<bool, MiddlewareServerError> {
+        let repilca_info = PersiaReplicaInfo::get()?;
+        Ok(repilca_info.is_master())
+    }
+
     async fn forward_batched(
         &self,
         indices: SparseBatch,
@@ -1146,6 +1151,9 @@ impl MiddlewareServerInner {
         &self,
         req: String,
     ) -> Result<(), MiddlewareServerError> {
+        if !self.is_master_server()? {
+            return Ok(());
+        }
         let inner = self.clone();
         let futs = (0..inner.all_embedding_server_client.replica_size()).map(|client_idx| {
             let req = req.clone();

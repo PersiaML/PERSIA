@@ -87,6 +87,8 @@ pub enum PersiaError {
     MasterDiscoveryError(#[from] nats::master_discovery_service::Error),
     #[error("Dataflow error: {0}")]
     PersiaBatchFlowError(#[from] nats::persia_dataflow_service::Error),
+    #[error("Load emb error")]
+    LoadEmbError,
 }
 
 impl PersiaError {

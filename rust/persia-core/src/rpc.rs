@@ -76,7 +76,20 @@ impl PersiaRpcClient {
 
     // TODO(zhuxuefeng): move to nats
     pub async fn load(&self, src_dir: String) -> Result<(), PersiaError> {
-        self.get_first_client().load(&src_dir).await??;
+        // self.get_first_client().load(&src_dir).await??;
+
+        let clients = self.clients.read();
+        let futs = clients.iter().map(|client| {
+            let src_dir = src_dir.clone();
+            async move { client.1.load(&src_dir).await }
+        });
+
+        let results = futures::future::try_join_all(futs).await?;
+
+        for res in results {
+            res?;
+        }
+
         Ok(())
     }
 
