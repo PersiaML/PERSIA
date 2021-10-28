@@ -28,6 +28,7 @@ use std::sync::Arc;
 use persia_libs::{
     anyhow::Result,
     color_eyre,
+    numpy::PyArray1,
     once_cell::sync::OnceCell,
     parking_lot::RwLock,
     thiserror,
@@ -43,6 +44,7 @@ use pyo3::wrap_pyfunction;
 use persia_common::utils::start_deadlock_detection_thread;
 use persia_common::PersiaBatchData;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaReplicaInfo};
+use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
 use persia_embedding_server::middleware_service::MiddlewareServerError;
 use persia_speedy::Readable;
 use persia_storage::{PersiaPath, PersiaPathImpl};
@@ -426,6 +428,25 @@ impl PyPersiaCommonContext {
         file_path
             .write_all(content)
             .map_err(|e| PersiaError::StorageVisitError(format!("{:?}", &e)).to_py_runtime_err())
+    }
+
+    // Currently only used for debug
+    pub fn set_embedding(
+        &self,
+        embeddings: Vec<(u64, &PyArray1<f32>, &PyArray1<f32>)>,
+    ) -> PyResult<()> {
+        let entries: Vec<HashMapEmbeddingEntry> = embeddings
+            .iter()
+            .map(|(sign, emb, opt)| {
+                let emb = emb.to_vec().expect("convert ndarray to vec failed");
+                let opt = opt.to_vec().expect("convert ndarray to vec failed");
+                HashMapEmbeddingEntry::from_emb_and_opt(emb, opt.as_slice(), *sign)
+            })
+            .collect();
+        self.inner
+            .async_runtime
+            .block_on(self.inner.rpc_client.set_embedding(entries))
+            .map_err(|e| e.to_py_runtime_err())
     }
 }
 

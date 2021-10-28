@@ -4,9 +4,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use persia_libs::{
-    anyhow::Result, futures, indexmap::IndexMap, parking_lot::RwLock, rand, tracing,
+    anyhow::Result, futures, indexmap::IndexMap, itertools::Itertools, parking_lot::RwLock, rand,
+    tracing,
 };
 
+use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
 use persia_embedding_server::middleware_service::MiddlewareServerClient;
 use persia_model_manager::SparseModelManagerStatus;
 
@@ -41,6 +43,15 @@ impl PersiaRpcClient {
             .clone()
     }
 
+    pub fn get_client_by_index(&self, client_index: usize) -> Arc<MiddlewareServerClient> {
+        self.clients
+            .read()
+            .get_index(client_index)
+            .expect("clients not initialized")
+            .1
+            .clone()
+    }
+
     pub fn get_client_by_addr(&self, middleware_addr: &str) -> Arc<MiddlewareServerClient> {
         if self.clients.read().contains_key(middleware_addr) {
             self.clients.read().get(middleware_addr).unwrap().clone()
@@ -56,25 +67,52 @@ impl PersiaRpcClient {
         }
     }
 
-    // TODO(zhuxuefeng): move to nats
+    pub async fn set_embedding(
+        &self,
+        entries: Vec<HashMapEmbeddingEntry>,
+    ) -> Result<(), PersiaError> {
+        let num_middlewares = self.clients.read().len();
+        let num_entries = entries.len();
+
+        let grouped_entries: Vec<Vec<HashMapEmbeddingEntry>> = entries
+            .into_iter()
+            .chunks(num_entries / num_middlewares)
+            .into_iter()
+            .map(|chunk| chunk.collect())
+            .collect();
+
+        let futs = grouped_entries
+            .into_iter()
+            .enumerate()
+            .map(|(client_index, entries)| {
+                let client = self.get_client_by_index(client_index);
+                async move { client.set_embedding(&entries).await }
+            });
+
+        let results = futures::future::try_join_all(futs).await?;
+
+        for res in results {
+            res?;
+        }
+
+        Ok(())
+    }
+
     pub async fn get_embedding_size(&self) -> Result<Vec<usize>, PersiaError> {
         let res = self.get_random_client().get_embedding_size(&()).await??;
         Ok(res)
     }
 
-    // TODO(zhuxuefeng): move to nats
     pub async fn clear_embeddings(&self) -> Result<(), PersiaError> {
         self.get_random_client().clear_embeddings(&()).await??;
         Ok(())
     }
 
-    // TODO(zhuxuefeng): move to nats
     pub async fn dump(&self, dst_dir: String) -> Result<(), PersiaError> {
         self.get_first_client().dump(&dst_dir).await??;
         Ok(())
     }
 
-    // TODO(zhuxuefeng): move to nats
     pub async fn load(&self, src_dir: String) -> Result<(), PersiaError> {
         let clients = self.clients.read();
         let futs = clients.iter().map(|client| {
@@ -91,7 +129,6 @@ impl PersiaRpcClient {
         Ok(())
     }
 
-    // TODO(zhuxuefeng): move to nats
     pub async fn wait_for_serving(&self) -> Result<(), PersiaError> {
         let client = self.get_first_client().clone();
 
@@ -164,7 +201,6 @@ impl PersiaRpcClient {
         }
     }
 
-    // TODO(zhuxuefeng): move to nats
     pub async fn wait_for_emb_dumping(&self) -> Result<(), PersiaError> {
         let client = self.get_first_client().clone();
 

@@ -1838,6 +1838,7 @@ dependencies = [
  "paste 1.0.5",
  "persia-common",
  "persia-embedding-config",
+ "persia-embedding-holder",
  "persia-embedding-server",
  "persia-libs",
  "persia-metrics",
