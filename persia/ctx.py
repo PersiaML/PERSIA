@@ -820,8 +820,10 @@ class TrainCtx(EmbeddingCtx):
                         is_f16_gradient,
                         loss_scale,
                     )
+                    
+        if self.device_id is not None:
+            torch.cuda.synchronize()
 
-        torch.cuda.synchronize()
         self.backward_engine.update_sparse_gradient_batched(gradient_batch)
         self.grad_queue.put(grad_slots)
 
