@@ -62,7 +62,8 @@ RUN /opt/conda/bin/pip install --no-cache-dir \
     apt-get purge --auto-remove && \
     apt-get clean
 
-ENV PATH=/opt/conda/bin:$PATH
+ENV PATH=/opt/conda/bin:/opt/hadoop/hadoop-3.3.1/bin/:$PATH
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64/
 ENV LIBRARY_PATH="/usr/local/lib64:/usr/local/lib:/usr/lib"
 ENV LD_LIBRARY_PATH="/opt/conda/lib/python${PYTHON_VERSION}/site-packages/torch/lib/:/opt/conda/lib/"
 

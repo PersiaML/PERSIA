@@ -20,7 +20,7 @@ steps:
           config: "e2e/docker-compose.infer.yml"
           run: torch_serve
           graceful-shutdown: true
-
+  # TODO: add bagua testcase
   - label: "launch e2e cpu test"
     key: "e2e-cpu-test"
     env:
