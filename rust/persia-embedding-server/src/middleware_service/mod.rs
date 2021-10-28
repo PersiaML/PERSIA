@@ -429,7 +429,7 @@ pub fn lookup_batched_all_slots_preprocess(
                 .slots_config
                 .get(&feature_batch.feature_name)
                 .expect("slot not found");
-                
+
             for (sign_idx, single_sign) in feature_batch.index_batch.iter().enumerate() {
                 let replica_index = sign_to_shard_modulo(single_sign.sign, replica_size);
                 unsafe {
