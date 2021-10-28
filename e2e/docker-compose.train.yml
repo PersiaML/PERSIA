@@ -23,7 +23,7 @@ services:
                 JOB_ID: 1
                 GPU_NUM: 1
             image: persia-${IMAGE_TYPE}-runtime:test
-            command: bash -c "hadoop/launch_hdfs.sh && persia_launcher trainer /workspace/train.py"
+            command: bash -c "/workspace/hadoop/launch_hdfs.sh && persia_launcher trainer /workspace/train.py"
             depends_on:
                 - data_compose
                 - middleware
@@ -49,6 +49,6 @@ services:
             environment:
                 JOB_ID: 1
             image: persia-${IMAGE_TYPE}-runtime:test
-            command: bash -c "hadoop/launch_hdfs.sh &&  persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml"
+            command: bash -c "/workspace/hadoop/launch_hdfs.sh &&  persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml"
             volumes:
                 - ./adult_income:/workspace
