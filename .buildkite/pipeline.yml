@@ -1,42 +1,38 @@
 steps:
   - label: "Build docker ci image for latest persiaml framework(CPU)"
-    command: make build_test_cpu_image 
+    command: make build_cuda_runtime_image 
 
   - label: "Build docker ci image for latest persiaml framework(GPU)"
-    command: make build_test_gpu_image 
+    command: make build_cpu_runtime_image 
 
   - wait
 
   - label: "launch e2e gpu test"
     key: "e2e-test"
+    env:
+      IMAGE_TYPE: "cuda"
     plugins:
-      - docker-compose#v3.8.0::
+      - docker-compose#v3.8.0:
           config: "e2e/docker-compose.train.yml"
           run: trainer
-          env:
-            USE_GPU=1
           graceful-shutdown: true
       - docker-compose#v3.8.0::
           config: "e2e/docker-compose.infer.yml"
           run: torch_serve
-          env:
-            USE_GPU=1
           graceful-shutdown: true
 
   - label: "launch e2e cpu test"
-    key: "e2e-test"
+    key: "e2e-cpu-test"
+    env:
+      IMAGE_TYPE: "cpu"
     plugins:
-      - docker-compose#v3.8.0::
+      - docker-compose#v3.8.0:
           config: "e2e/docker-compose.train.yml"
           run: trainer
-          env:
-            USE_GPU=0
           graceful-shutdown: true
       - docker-compose#v3.8.0::
           config: "e2e/docker-compose.infer.yml"
           run: torch_serve
-          env:
-            USE_GPU=0
           graceful-shutdown: true
 
 

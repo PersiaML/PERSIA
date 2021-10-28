@@ -49,9 +49,6 @@ if __name__ == "__main__":
         "click"
     ]
 
-    if use_cuda:
-        install_requires.append("bagua>=0.8")
-
     setup(
         name="persia",
         use_scm_version={"local_scheme": "no-local-version"},

@@ -3,7 +3,7 @@ ARG BASE_IMAGE=nvidia/cuda:11.2.0-devel-ubuntu20.04
 
 FROM ${BASE_IMAGE} AS base
 ARG PYTHON_VERSION=3.8
-ARG PYTORCH_VERSION=1.9
+ARG PYTORCH_VERSION=1.8
 ARG MAGMA_CUDA_VERSION=magma-cuda110
 ARG DEVICE
 
@@ -22,35 +22,43 @@ RUN apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-
     apt-utils \
     rlwrap \
     ethtool \
-    telnet && \
-    apt-get purge --auto-remove && apt-get clean
+    telnet \
+    openjdk-11-jdk \
+    openssh-server 
 
 RUN curl -o ~/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
     chmod +x ~/miniconda.sh && \
     ~/miniconda.sh -b -p /opt/conda && \
     rm ~/miniconda.sh && \
-    /opt/conda/bin/conda install -y python=${PYTHON_VERSION} numpy pyyaml scipy ipython mkl mkl-include ninja cython typing && \
+    /opt/conda/bin/conda install -y python=${PYTHON_VERSION} numpy scipy mkl mkl-include ninja cython typing && \
     /opt/conda/bin/conda install -y -c conda-forge mpi4py && \
     ln -s /usr/share/pyshared /opt/conda/lib/python${PYTHON_VERSION}/site-packages && \
     if [ "${DEVICE}" = "cuda" ]; then \
     /opt/conda/bin/conda install -y -c pytorch -c conda-forge ${MAGMA_CUDA_VERSION} pytorch=${PYTORCH_VERSION} torchvision; \
+    pip install bagua-cuda113 --no-cache-dir; \
     else \ 
     /opt/conda/bin/conda install -y -c pytorch -c conda-forge pytorch=${PYTORCH_VERSION} torchvision cpuonly; \
     fi && \
+    /opt/conda/bin/conda install torchserve torch-model-archiver torch-workflow-archiver -c pytorch -y; \
     /opt/conda/bin/conda clean -yapf;
 
+RUN mkdir -p /opt/hadoop/; \
+    cd /opt/hadoop/; \
+    wget https://dlcdn.apache.org/hadoop/common/hadoop-3.3.1/hadoop-3.3.1.tar.gz; \
+    tar -zxvf hadoop-3.3.1.tar.gz; \
+    rm hadoop-3.3.1.tar.gz; 
+
 RUN /opt/conda/bin/pip install --no-cache-dir \ 
-    pyyaml \
     remote-pdb \
-    colorlog \
     pytest \
     tqdm \
-    retrying \
     pandas \
     tensorboard \
-    scikit-learn==0.24.2 \
-    ipython && \
-    rm -rf /var/lib/apt/lists/* && \
+    ipython \
+    captum \
+    grpcio \
+    protobuf \
+    grpcio-tools && \
     apt-get purge --auto-remove && \
     apt-get clean
 
@@ -79,40 +87,29 @@ FROM builder AS persia-builder
 
 WORKDIR /workspace
 COPY . /workspace
-RUN cd /workspace && pip3 install click colorlog colorama setuptools setuptools-rust setuptools_scm \
+RUN cd /workspace && pip3 install colorama setuptools setuptools-rust setuptools_scm \
     && python setup.py bdist_wheel --dist-dir=/root/dist && rm -rf /workspace
 
+# Build bagua distributed training framework manully
+# RUN if [ "${DEVICE}" = "cuda" ]; then \
+#     rm -rf /etc/apt/sources.list.d; \
+#     apt-get update; \
+#     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends zlib1g-dev libhwloc-dev; \ 
+#     git clone https://github.com/BaguaSys/bagua.git; \
+#     cd bagua; \
+#     pip3 install cmake setuptools-rust colorama tqdm wheel --no-cache-dir; \
+#     git submodule update --init --recursive; \
+#     python setup.py bdist_wheel --dist-dir=/root/dist; \
+#     cd ..; \
+#     rm -rf bagua; \
+#     /opt/conda/bin/conda clean -yapf; \
+#     fi 
+
+ARG DEVICE
 FROM base AS runtime
 
+# Install the persia-runtime and bagua (Optional for cpu-runtime)
 COPY --from=persia-builder /root/dist .
 RUN pip3 install *.whl && rm -rf *.whl
 
-FROM runtime AS inference-runtime
-RUN echo "install deploy image requirement, openjdk and torch serve"; \
-    /opt/conda/bin/conda install torchserve torch-model-archiver torch-workflow-archiver -c pytorch -y; \
-    /opt/conda/bin/conda clean -yapf; \
-    /opt/conda/bin/pip install --no-cache-dir \ 
-    captum \
-    grpcio \
-    protobuf \
-    grpcio-tools; \
-    apt-get -y update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-11-jdk; \
-    apt-get purge --auto-remove; \
-    apt-get clean
 
-FROM builder AS bagua-builder
-RUN rm -rf /etc/apt/sources.list.d && apt-get update &&\
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends zlib1g-dev libhwloc-dev && \
-    pip3 install cmake --no-cache-dir
-
-RUN git clone https://github.com/BaguaSys/bagua.git; \
-    /opt/conda/bin/pip install setuptools-rust colorama tqdm wheel; \
-    cd bagua; \
-    git submodule update --init --recursive; \
-    python setup.py bdist_wheel --dist-dir=/root/bagua-dist; \
-    cd ..; \
-    rm -rf bagua
-
-FROM runtime AS bagua-runtime
-COPY --from=bagua-builder /root/bagua-dist /root/bagua-dist
-RUN pip3 install /root/bagua-dist/*.whl && rm -rf /root/bagua-*

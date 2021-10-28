@@ -117,7 +117,6 @@ if __name__ == "__main__":
     dense_optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     sparse_optimizer = Adagrad(lr=1e-2)
     loss_fn = torch.nn.BCELoss(reduction="mean")
-    logger.info("finish genreate dense ctx")
 
     eval_checkpoint_dir = os.environ["EVAL_CHECKPOINT_DIR"]
     infer_checkpoint_dir = os.environ["INFER_CHECKPOINT_DIR"]
