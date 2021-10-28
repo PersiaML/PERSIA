@@ -87,14 +87,14 @@ impl PerisaIncrementalUpdateManager {
     pub fn get() -> Result<Arc<Self>, IncrementalUpdateError> {
         let singleton = INCREMENTAL_UPDATE_MANAGER.get_or_try_init(|| {
             let server_config = PersiaEmbeddingServerConfig::get()?;
-            let common_comfig = PersiaCommonConfig::get()?;
+            let common_config = PersiaCommonConfig::get()?;
             let embedding_holder = PersiaEmbeddingHolder::get()?;
             let replica_info = PersiaReplicaInfo::get()?;
 
             let singleton = Self::new(
                 embedding_holder,
-                common_comfig.job_type.clone(),
-                server_config.num_embedding_io_workers,
+                common_config.job_type.clone(),
+                common_config.num_embedding_io_workers,
                 replica_info.replica_index,
                 server_config.incremental_buffer_size,
                 server_config.incremental_dir.clone(),

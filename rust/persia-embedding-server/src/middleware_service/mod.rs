@@ -30,8 +30,8 @@ use persia_common::{
     SingleSignInFeatureBatch, SparseBatch, SparseBatchRemoteReference,
 };
 use persia_embedding_config::{
-    EmbeddingConfig, InstanceInfo, PersiaGlobalConfigError, PersiaMiddlewareConfig,
-    PersiaReplicaInfo, PersiaSparseModelHyperparameters, SlotConfig,
+    EmbeddingConfig, InstanceInfo, PersiaCommonConfig, PersiaGlobalConfigError,
+    PersiaMiddlewareConfig, PersiaReplicaInfo, PersiaSparseModelHyperparameters, SlotConfig,
 };
 use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
 use persia_metrics::{
@@ -1197,24 +1197,35 @@ impl MiddlewareServerInner {
 
         tracing::debug!("embedding filelist: {:?}", emb_file_list);
 
-        for file_path in emb_file_list.into_iter() {
-            let array_linked_list = self
-                .sparse_model_manager
-                .load_array_linked_list(file_path)?;
-            let entries = Vec::from_iter(array_linked_list.into_iter());
-            let entries: Vec<Vec<HashMapEmbeddingEntry>> = entries
-                .into_iter()
-                .chunks(2560)
-                .into_iter()
-                .map(|chunk| chunk.collect())
-                .collect();
+        let num_embedding_io_workers = PersiaCommonConfig::get()?.num_embedding_io_workers;
+        let num_file_per_worker = emb_file_list.len() / num_embedding_io_workers;
 
-            for chunk_entries in entries.into_iter() {
-                self.set_embedding(chunk_entries).await?;
-            }
-        }
+        let grouped_emb_file_list: Vec<Vec<PathBuf>> = emb_file_list
+            .into_iter()
+            .chunks(num_file_per_worker)
+            .into_iter()
+            .map(|chunk| chunk.collect())
+            .collect();
 
-        Ok(())
+        let futs: Vec<_> = grouped_emb_file_list
+            .into_iter()
+            .map(|file_list| {
+                let middleware_inner = self.clone();
+                let sparse_model_manager = self.sparse_model_manager.clone();
+                async move {
+                    for file_path in file_list.into_iter() {
+                        let array_linked_list = tokio::task::block_in_place(|| {
+                            sparse_model_manager.load_array_linked_list(file_path)
+                        })?;
+                        let entries = Vec::from_iter(array_linked_list.into_iter());
+                        middleware_inner.set_embedding(entries).await?;
+                    }
+                    Ok(())
+                }
+            })
+            .collect();
+
+        futures::future::try_join_all(futs).await.map(|_| ())
     }
 
     pub async fn configure_embedding_servers(

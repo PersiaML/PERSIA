@@ -254,10 +254,6 @@ fn get_billion() -> usize {
     1_000_000_000
 }
 
-fn get_default_local_buffer_dir() -> String {
-    String::from("/workspace/buffer_dir/")
-}
-
 fn get_default_incremental_dir() -> String {
     String::from("/workspace/incremental_dir/")
 }
@@ -331,6 +327,8 @@ pub struct PersiaCommonConfig {
     pub job_type: PerisaJobType,
     #[serde(default = "get_default_infer_config")]
     pub infer_config: InferConfig,
+    #[serde(default = "get_four")]
+    pub num_embedding_io_workers: usize,
 }
 
 impl Default for PersiaCommonConfig {
@@ -339,6 +337,7 @@ impl Default for PersiaCommonConfig {
             metrics_config: PersiaMetricsConfig::default(),
             job_type: PerisaJobType::Train,
             infer_config: InferConfig::default(),
+            num_embedding_io_workers: 4,
         }
     }
 }
@@ -389,20 +388,6 @@ pub struct PersiaEmbeddingServerConfig {
     pub capacity: usize,
     #[serde(default = "get_hundred")]
     pub num_hashmap_internal_shards: usize,
-    #[serde(default = "get_thousand")]
-    pub full_amount_manager_buffer_size: usize,
-    #[serde(default = "get_million")]
-    pub embedding_recycle_pool_capacity: usize,
-
-    // model persistence config
-    #[serde(default = "get_four")]
-    pub num_embedding_io_workers: usize,
-    #[serde(default = "get_million")]
-    pub num_signs_per_file: usize,
-
-    #[serde(default = "get_default_local_buffer_dir")]
-    pub local_buffer_dir: String,
-
     // incremental dump config
     #[serde(default = "get_false")]
     pub enable_incremental_update: bool,
@@ -419,11 +404,6 @@ impl Default for PersiaEmbeddingServerConfig {
         Self {
             capacity: 1_000_000_000,
             num_hashmap_internal_shards: 1000,
-            full_amount_manager_buffer_size: 1000,
-            embedding_recycle_pool_capacity: 1_000_000,
-            num_embedding_io_workers: 4,
-            num_signs_per_file: 1_000_000,
-            local_buffer_dir: get_default_local_buffer_dir(),
             enable_incremental_update: false,
             incremental_buffer_size: 1_000_000,
             incremental_dir: get_default_incremental_dir(),

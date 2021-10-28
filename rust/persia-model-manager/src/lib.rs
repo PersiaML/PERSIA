@@ -15,9 +15,7 @@ use persia_libs::{
     serde_yaml, thiserror, tracing,
 };
 
-use persia_embedding_config::{
-    PersiaEmbeddingServerConfig, PersiaGlobalConfigError, PersiaReplicaInfo,
-};
+use persia_embedding_config::{PersiaCommonConfig, PersiaGlobalConfigError, PersiaReplicaInfo};
 use persia_embedding_holder::{
     array_linked_list::ArrayLinkedList, emb_entry::HashMapEmbeddingEntry, PersiaEmbeddingHolder,
     PersiaEmbeddingHolderError,
@@ -81,11 +79,11 @@ pub struct SparseModelManager {
 impl SparseModelManager {
     pub fn get() -> Result<Arc<Self>, SparseModelManagerError> {
         let singleton = SPARSE_MODEL_MANAGER.get_or_try_init(|| {
-            let server_config = PersiaEmbeddingServerConfig::get()?;
+            let common_config = PersiaCommonConfig::get()?;
             let replica_info = PersiaReplicaInfo::get()?;
 
             let singleton = Arc::new(Self::new(
-                server_config.num_embedding_io_workers,
+                common_config.num_embedding_io_workers,
                 replica_info.replica_index,
                 replica_info.replica_size,
             ));
