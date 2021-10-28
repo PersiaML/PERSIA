@@ -312,7 +312,7 @@ pub fn indices_to_hashstack_indices(indices: &mut SparseBatch, config: &Embeddin
         let slot_conf = config
             .slots_config
             .get(&feature_batch.feature_name)
-            .expect("slot not found");
+            .expect(format!("slot: {} not found", feature_batch.feature_name).as_str());
 
         if slot_conf.hash_stack_config.hash_stack_rounds > 0 {
             let mut hash_stack_indices: Vec<HashMap<u64, Vec<(u16, u16)>>> =
@@ -372,7 +372,7 @@ pub fn indices_add_prefix(indices: &mut SparseBatch, config: &EmbeddingConfig) -
         let slot_conf = config
             .slots_config
             .get(&feature_batch.feature_name)
-            .expect("slot not found");
+            .expect(format!("slot: {} not found", &feature_batch.feature_name).as_str());
         if slot_conf.index_prefix > 0 {
             for single_sign in feature_batch.index_batch.iter_mut() {
                 single_sign.sign %= feature_spacing;
@@ -428,7 +428,7 @@ pub fn lookup_batched_all_slots_preprocess(
             let slot_conf = config
                 .slots_config
                 .get(&feature_batch.feature_name)
-                .expect("slot not found");
+                .expect(format!("slot: {} not found", feature_batch.feature_name).as_str());
             for (sign_idx, single_sign) in feature_batch.index_batch.iter().enumerate() {
                 let replica_index = sign_to_shard_modulo(single_sign.sign, replica_size);
                 unsafe {
@@ -469,7 +469,7 @@ pub fn lookup_batched_all_slots_postprocess<'a>(
             let slot_conf = config
                 .slots_config
                 .get(x.feature_name.as_str())
-                .expect("slot not found");
+                .expect(format!("slot: {} not found", x.feature_name).as_str());
             let (feature_len, sign2idx) = if slot_conf.embedding_summation {
                 (x.batch_size as usize, HashMap::new())
             } else {
@@ -669,7 +669,7 @@ impl MiddlewareServerInner {
         self.embedding_config
             .slots_config
             .get(slot_name)
-            .expect("slot not found")
+            .expect(format!("slot: {} not found", slot_name).as_str())
     }
 
     pub async fn update_all_batched_gradients(

@@ -462,15 +462,15 @@ fn persia_core(py: Python, m: &PyModule) -> PyResult<()> {
     }
 
     shadow!(build);
-    eprintln!("project_name: {}", build::PROJECT_NAME);
-    eprintln!("is_debug: {}", shadow_rs::is_debug());
-    eprintln!("version: {}", build::version());
-    eprintln!("tag: {}", build::TAG);
-    eprintln!("commit_hash: {}", build::COMMIT_HASH);
-    eprintln!("commit_date: {}", build::COMMIT_DATE);
-    eprintln!("build_os: {}", build::BUILD_OS);
-    eprintln!("rust_version: {}", build::RUST_VERSION);
-    eprintln!("build_time: {}", build::BUILD_TIME);
+    tracing::debug!("project_name: {}", build::PROJECT_NAME);
+    tracing::debug!("is_debug: {}", shadow_rs::is_debug());
+    tracing::debug!("version: {}", build::version());
+    tracing::debug!("tag: {}", build::TAG);
+    tracing::debug!("commit_hash: {}", build::COMMIT_HASH);
+    tracing::debug!("commit_date: {}", build::COMMIT_DATE);
+    tracing::debug!("build_os: {}", build::BUILD_OS);
+    tracing::debug!("rust_version: {}", build::RUST_VERSION);
+    tracing::debug!("build_time: {}", build::BUILD_TIME);
 
     start_deadlock_detection_thread();
 
