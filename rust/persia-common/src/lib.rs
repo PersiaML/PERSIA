@@ -27,7 +27,7 @@ use persia_speedy::{Readable, Writable};
 #[derive(Serialize, Deserialize, Readable, Writable, Clone, Debug)]
 #[serde(crate = "self::serde")]
 pub struct HashMapEmbeddingEntry {
-    inner: Vec<f32>, 
+    inner: Vec<f32>,
     embedding_dim: usize,
 }
 
