@@ -1205,6 +1205,9 @@ impl MiddlewareServerInner {
         let num_embedding_io_workers = PersiaCommonConfig::get()?.num_embedding_io_workers;
         let num_file_per_worker = emb_file_list.len() / num_embedding_io_workers;
 
+        let num_files = emb_file_list.len();
+        let loaded = Arc::new(AtomicUsize::new(0));
+
         let grouped_emb_file_list: Vec<Vec<PathBuf>> = emb_file_list
             .into_iter()
             .chunks(num_file_per_worker)
@@ -1217,6 +1220,7 @@ impl MiddlewareServerInner {
             .map(|file_list| {
                 let middleware_inner = self.clone();
                 let sparse_model_manager = self.sparse_model_manager.clone();
+                let loaded = loaded.clone();
                 async move {
                     for file_path in file_list.into_iter() {
                         let array_linked_list = tokio::task::block_in_place(|| {
@@ -1224,6 +1228,9 @@ impl MiddlewareServerInner {
                         })?;
                         let entries = Vec::from_iter(array_linked_list.into_iter());
                         middleware_inner.set_embedding(entries).await?;
+                        let cur_loaded = loaded.fetch_add(1, Ordering::AcqRel) + 1;
+                        let progress = (cur_loaded as f32 / num_files as f32) * 100.0_f32;
+                        tracing::info!("loading embedding via middleware, pregress: {}%", progress);
                     }
                     Ok(())
                 }
