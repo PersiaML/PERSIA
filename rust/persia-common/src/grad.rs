@@ -1,6 +1,6 @@
 use persia_libs::{
     half,
-    ndarray::Array2,
+    ndarray::{arr2, Array2},
     serde::{self, Deserialize, Serialize},
 };
 
@@ -11,6 +11,12 @@ use persia_speedy::{Readable, Writable};
 pub enum Gradients {
     F16(Array2<half::f16>),
     F32(Array2<f32>),
+}
+
+impl Default for Gradients {
+    fn default() -> Self {
+        Gradients::F32(arr2(&[[]]))
+    }
 }
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug)]

@@ -6,17 +6,17 @@ from colorlog import ColoredFormatter
 
 
 class levelFilter(logging.Filter):
-    r"""log level filter to ensure log fileter
+    r"""log level filter.
 
     Arguments:
-        level (int): filter log level, remain the log greater than the setting level
+        level (int): filter log level. Only logs with level higher than ``level`` will be kept.
     """
 
     def __init__(self, level: int):
         self.level = level
 
     def filter(self, record: logging.LogRecord) -> bool:
-        """filter the record that level greater than the setting log level
+        """Filter the log record whose level is greater than the preset log level
 
         Arguments:
             record (logging.LogRecord): callback function input record items
@@ -61,8 +61,8 @@ def setLogger(
     enable_err_redirect: bool = False,
     err_redirect_level: int = logging.INFO,
 ) -> logging.Logger:
-    r"""this function make logger configuration simplify, provide the
-    log_level and log filename.It also make error log redirect available
+    r"""Helper function to simplify the logger setup process with provided log_level and log_filename.
+    Also makes it possible to redirect logs above a certain level to a different file.
 
     Arguments:
         name (str): logger name
@@ -93,7 +93,7 @@ def setLogger(
 
 
 def get_logger(name: str) -> logging.Logger:
-    r"""get logger by name
+    r"""Get logger by name
 
     Arguments:
         name (str): logger name
@@ -102,7 +102,7 @@ def get_logger(name: str) -> logging.Logger:
 
 
 def _set_default_logger(name: str, **kwargs) -> logging.Logger:
-    r"""set default logger
+    r"""Set the default logger
 
     Arguments:
         name (str): default logger name
@@ -116,7 +116,7 @@ def _set_default_logger(name: str, **kwargs) -> logging.Logger:
 
 
 def get_default_logger(name: Optional[str] = None, **kwargs) -> logging.Logger:
-    r"""get default logger or init the default by given name
+    r"""Get the default logger. If default logger is not set, init the default by the given name.
 
     Arguments:
         name (str, optional): logger name

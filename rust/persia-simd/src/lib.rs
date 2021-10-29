@@ -147,8 +147,8 @@ pub unsafe fn decayed_sgd_avx2(emb: &mut [f32], grad: &[f32], wd: f32, lr: f32) 
 pub unsafe fn adam_avx2(
     adam_m: &mut [f32],
     adam_v: &mut [f32],
-    beta1_power: &[f32],
-    beta2_power: &[f32],
+    beta1_power: f32,
+    beta2_power: f32,
     emb: &mut [f32],
     grad: &[f32],
     lr: f32,
@@ -160,42 +160,38 @@ pub unsafe fn adam_avx2(
     let end = (length / 8) * 8; // divide by simd step
     let adam_m_ptr = adam_m.as_ptr();
     let adam_v_ptr = adam_v.as_ptr();
-    let beta1_power_ptr = beta1_power.as_ptr();
-    let beta2_power_ptr = beta2_power.as_ptr();
     let grad_ptr = grad.as_ptr();
     let emb_ptr = emb.as_ptr();
+
+    // precomputed the constant value
+    let one_minus_beta1_power_recip = (1.0_f32 - beta1_power).recip();
+    let one_minus_beta2_power_recip = (1.0_f32 - beta2_power).recip();
+    let one_minus_beta1 = 1.0_f32 - beta1;
+    let one_minus_beta2 = 1.0_f32 - beta2;
 
     for i in (0..end as isize).step_by(8) {
         let grad_vec = _mm256_loadu_ps(grad_ptr.offset(i));
         let emb_vec = _mm256_loadu_ps(emb_ptr.offset(i));
         let adam_v_vec = _mm256_loadu_ps(adam_v_ptr.offset(i));
         let adam_m_vec = _mm256_loadu_ps(adam_m_ptr.offset(i));
-        let beta1_power_vec = _mm256_loadu_ps(beta1_power_ptr.offset(i));
-        let beta2_power_vec = _mm256_loadu_ps(beta2_power_ptr.offset(i));
 
         let updated_m = _mm256_fmadd_ps(
             _mm256_set1_ps(beta1),
             adam_m_vec,
-            _mm256_mul_ps(_mm256_set1_ps(1.0_f32 - beta1), grad_vec),
+            _mm256_mul_ps(_mm256_set1_ps(one_minus_beta1), grad_vec),
         );
 
         let updated_v = _mm256_fmadd_ps(
             _mm256_set1_ps(beta2),
             adam_v_vec,
             _mm256_mul_ps(
-                _mm256_set1_ps(1.0 - beta2),
+                _mm256_set1_ps(one_minus_beta2),
                 _mm256_mul_ps(grad_vec, grad_vec),
             ),
         );
 
-        let m_bias_corr = _mm256_div_ps(
-            updated_m,
-            _mm256_sub_ps(_mm256_set1_ps(1.0_f32), beta1_power_vec),
-        );
-        let v_bias_corr = _mm256_div_ps(
-            updated_v,
-            _mm256_sub_ps(_mm256_set1_ps(1.0_f32), beta2_power_vec),
-        );
+        let m_bias_corr = _mm256_mul_ps(updated_m, _mm256_set1_ps(one_minus_beta1_power_recip));
+        let v_bias_corr = _mm256_mul_ps(updated_v, _mm256_set1_ps(one_minus_beta2_power_recip));
 
         let descent = _mm256_div_ps(
             m_bias_corr,
@@ -214,14 +210,12 @@ pub unsafe fn adam_avx2(
         let emb_val = &emb[i];
         let adam_v_val = &adam_v[i];
         let adam_m_val = &adam_m[i];
-        let beta1_power_val = &beta1_power[i];
-        let beta2_power_val = &beta2_power[i];
 
-        let updated_m = beta1 * adam_m_val + (1.0_f32 - beta1) * grad_val;
-        let updated_v = beta2 * adam_v_val + (1.0_f32 - beta2) * grad_val * grad_val;
+        let updated_m = beta1 * adam_m_val + (one_minus_beta1) * grad_val;
+        let updated_v = beta2 * adam_v_val + (one_minus_beta2) * grad_val * grad_val;
 
-        let m_bias_corr = updated_m / (1.0_f32 - beta1_power_val);
-        let v_bias_corr = updated_v / (1.0_f32 - beta2_power_val);
+        let m_bias_corr = updated_m * one_minus_beta1_power_recip;
+        let v_bias_corr = updated_v * one_minus_beta2_power_recip;
 
         let descent = m_bias_corr / (eps + v_bias_corr.sqrt());
 
