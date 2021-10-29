@@ -241,7 +241,7 @@ impl AllEmbeddingServerClient {
     pub async fn get_all_addresses(&self) -> Result<Vec<String>, MiddlewareServerError> {
         let futs = (0..self.dst_replica_size).map(|replica_index| async move {
             tracing::info!(
-                "trying to get ip address of embedding-server {}",
+                "trying to get ip address of embedding server {}",
                 replica_index
             );
             retry(ExponentialBackoff::default(), || async {
