@@ -452,7 +452,7 @@ impl Forward {
                     }
                     let start_time = std::time::Instant::now();
                     if let Ok(batch) = channel_r.recv_async().await {
-                        tracing::info!(
+                        tracing::debug!(
                             "get deserialized message time cost {:?}",
                             start_time.elapsed()
                         );
@@ -498,7 +498,7 @@ impl Forward {
                         }
                         let embedding_batch = embeddings_rpc_result.unwrap();
 
-                        tracing::info!("forward done, got embeddings");
+                        tracing::debug!("forward done, got embeddings");
                         if let Ok(m) = MetricsHolder::get() {
                             m.forward_client_time_cost
                                 .observe(start_time.elapsed().as_secs_f64());
