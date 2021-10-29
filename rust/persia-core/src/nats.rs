@@ -33,12 +33,12 @@ pub mod master_discovery_service {
     }
 
     #[derive(Clone)]
-    pub struct Service {
+    pub struct MasterDiscoveryService {
         pub master_addr: Arc<RwLock<Option<String>>>,
     }
 
     #[persia_nats_marcos::service]
-    impl Service {
+    impl MasterDiscoveryService {
         pub async fn get_master_addr(&self, _placeholder: ()) -> Result<String, Error> {
             self.master_addr
                 .read()
@@ -50,20 +50,21 @@ pub mod master_discovery_service {
 }
 
 pub struct MasterDiscoveryComponent {
-    publisher: master_discovery_service::ServicePublisher,
-    _responder: master_discovery_service::ServiceResponder,
+    publisher: master_discovery_service::MasterDiscoveryServicePublisher,
+    _responder: master_discovery_service::MasterDiscoveryServiceResponder,
     master_addr: Option<String>,
 }
 
 impl MasterDiscoveryComponent {
     pub async fn new(master_addr: Option<String>) -> Self {
-        let service = master_discovery_service::Service {
+        let service = master_discovery_service::MasterDiscoveryService {
             master_addr: Arc::new(RwLock::new(master_addr.clone())),
         };
 
         let instance = Self {
-            publisher: master_discovery_service::ServicePublisher::new().await,
-            _responder: master_discovery_service::ServiceResponder::new(service).await,
+            publisher: master_discovery_service::MasterDiscoveryServicePublisher::new().await,
+            _responder: master_discovery_service::MasterDiscoveryServiceResponder::new(service)
+                .await,
             master_addr,
         };
         instance
@@ -112,14 +113,15 @@ pub mod persia_dataflow_service {
     }
 
     #[derive(Clone)]
-    pub struct Service {
+    pub struct DataflowService {
         pub output_channel: flume::Sender<PersiaBatchData>,
         pub world_size: usize,
     }
 
     #[persia_nats_marcos::service]
-    impl Service {
+    impl DataflowService {
         pub async fn batch(&self, batch: PersiaBatchData) -> Result<(), Error> {
+            tracing::info!("nats get batch");
             let result = self
                 .output_channel
                 .send_timeout(batch, std::time::Duration::from_millis(500));
@@ -136,7 +138,8 @@ pub mod persia_dataflow_service {
     }
 }
 
-static RESPONDER: OnceCell<Arc<persia_dataflow_service::ServiceResponder>> = OnceCell::new();
+static RESPONDER: OnceCell<Arc<persia_dataflow_service::DataflowServiceResponder>> =
+    OnceCell::new();
 
 pub struct PersiaDataFlowComponent {
     middleware_publish_service: MiddlewareNatsServicePublisher,
@@ -144,13 +147,14 @@ pub struct PersiaDataFlowComponent {
     cur_middleware_id: AtomicUsize,
     cur_batch_id: AtomicUsize,
     replica_info: Arc<PersiaReplicaInfo>,
-    dataflow_publish_service: persia_dataflow_service::ServicePublisher,
+    dataflow_publish_service: persia_dataflow_service::DataflowServicePublisher,
     world_size: usize,
 }
 
 impl PersiaDataFlowComponent {
     pub async fn new_initialized(world_size: Option<usize>) -> Result<Self, PersiaError> {
-        let dataflow_publish_service = persia_dataflow_service::ServicePublisher::new().await;
+        let dataflow_publish_service =
+            persia_dataflow_service::DataflowServicePublisher::new().await;
 
         let world_size = match world_size {
             Some(w) => Ok(w),
@@ -277,7 +281,7 @@ impl PersiaDataFlowComponent {
                 let batch_id = local_batch_id * self.replica_info.replica_size
                     + self.replica_info.replica_index;
                 batch.inner.batch_id = Some(batch_id);
-                tracing::info!(
+                tracing::debug!(
                     "send_sparse_to_middleware time cost {} ms",
                     start.elapsed().as_millis()
                 );
@@ -316,9 +320,10 @@ impl PersiaDataFlowComponent {
                 );
             }
             Ok(resp?)
-        });
+        })
+        .await?;
 
-        tracing::info!(
+        tracing::debug!(
             "send_dense_to_trainer {} time cost {} ms",
             rank_id,
             start.elapsed().as_millis()
@@ -384,15 +389,13 @@ impl PersiaDataFlowComponent {
 pub fn init_responder(world_size: usize, channel: &PyPersiaBatchDataSender) -> PyResult<()> {
     let common_context = PersiaCommonContext::get();
     RESPONDER.get_or_init(|| {
-        let nats_service = persia_dataflow_service::Service {
+        let nats_service = persia_dataflow_service::DataflowService {
             output_channel: channel.inner.clone(),
             world_size,
         };
-        Arc::new(
-            common_context
-                .async_runtime
-                .block_on(persia_dataflow_service::ServiceResponder::new(nats_service)),
-        )
+        Arc::new(common_context.async_runtime.block_on(
+            persia_dataflow_service::DataflowServiceResponder::new(nats_service),
+        ))
     });
 
     Ok(())
