@@ -328,7 +328,7 @@ impl EmbeddingServiceInner {
             tokio::task::block_in_place(|| Vec::<(u64, usize)>::read_from_buffer(req.as_ref()));
         if indices.is_err() {
             return Err(EmbeddingServerError::RpcError(
-                "fail to deserialize look_up_inference request".to_string(),
+                "fail to deserialize lookup inference request".to_string(),
             ));
         }
         let indices = indices.unwrap();
@@ -421,7 +421,7 @@ impl EmbeddingServiceInner {
         });
 
         tracing::debug!(
-            "{} update gradient corresponding embedding not found, skipped",
+            "Gradient update failed {} times due to embedding not found",
             gradient_id_miss_count
         );
         if let Ok(m) = MetricsHolder::get() {
