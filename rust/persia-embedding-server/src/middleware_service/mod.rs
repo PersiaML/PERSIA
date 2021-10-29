@@ -678,7 +678,9 @@ impl MiddlewareServerInner {
                     let feature_batch = indices_kv
                         .get(&feature_gradient.feature_name.as_str())
                         .unwrap();
-                    let slot_conf = self.get_slot_conf(feature_batch.feature_name.as_str());
+                    let slot_conf = self
+                        .embedding_config
+                        .get_slot_by_feature_name(feature_batch.feature_name.as_str());
                     let raw_gradients = std::mem::take(&mut feature_gradient.gradients);
 
                     if tokio::task::block_in_place(|| match &raw_gradients {
