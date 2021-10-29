@@ -820,7 +820,7 @@ class TrainCtx(EmbeddingCtx):
                         is_f16_gradient,
                         loss_scale,
                     )
-                    
+
         if self.device_id is not None:
             torch.cuda.synchronize()
 

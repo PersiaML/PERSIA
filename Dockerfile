@@ -35,9 +35,10 @@ RUN curl -o ~/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest
     ln -s /usr/share/pyshared /opt/conda/lib/python${PYTHON_VERSION}/site-packages && \
     if [ "${DEVICE}" = "cuda" ]; then \
     /opt/conda/bin/conda install -y -c pytorch -c conda-forge ${MAGMA_CUDA_VERSION} pytorch=${PYTORCH_VERSION} torchvision; \
-    pip install bagua-cuda113 --no-cache-dir; \
+    /opt/conda/bin/pip3 install bagua-cuda113 --no-cache-dir; \
     else \ 
     /opt/conda/bin/conda install -y -c pytorch -c conda-forge pytorch=${PYTORCH_VERSION} torchvision cpuonly; \
+    /opt/conda/bin/pip3 install scikit-learn --no-cache-dir; \
     fi && \
     /opt/conda/bin/conda install torchserve torch-model-archiver torch-workflow-archiver -c pytorch -y; \
     /opt/conda/bin/conda clean -yapf;

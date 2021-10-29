@@ -42,12 +42,7 @@ if __name__ == "__main__":
         )
     )
 
-    install_requires = [
-        "retrying",
-        "colorlog",
-        "pyyaml",
-        "click"
-    ]
+    install_requires = ["retrying", "colorlog", "pyyaml", "click"]
 
     setup(
         name="persia",
