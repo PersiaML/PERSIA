@@ -4,7 +4,6 @@ from ts.torch_handler.base_handler import BaseHandler
 
 from abc import ABC
 import torch
-import os
 
 
 class PersiaHandler(BaseHandler, ABC):

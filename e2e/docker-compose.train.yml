@@ -22,6 +22,7 @@ services:
             environment:
                 JOB_ID: 1
                 GPU_NUM: 1
+                CUBLAS_WORKSPACE_CONFIG: :4096:8
             image: persia-${IMAGE_TYPE}-runtime:test
             command: bash -c "/workspace/hadoop/launch_hdfs.sh && persia_launcher trainer /workspace/train.py"
             depends_on:

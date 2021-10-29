@@ -110,9 +110,14 @@ if __name__ == "__main__":
     model = DNN()
     logger.info("init Simple DNN model...")
     rank, device_id, world_size = get_rank(), get_local_rank(), get_world_size()
+    mixed_precision = True
 
-    torch.cuda.set_device(device_id)
-    model.cuda(device_id)
+    if torch.cuda.is_available():
+        torch.cuda.set_device(device_id)
+        model.cuda(device_id)
+    else:
+        mixed_precision = False
+        device_id = None
 
     dense_optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     sparse_optimizer = Adagrad(lr=1e-2)
@@ -130,6 +135,7 @@ if __name__ == "__main__":
         sparse_optimizer=sparse_optimizer,
         dense_optimizer=dense_optimizer,
         device_id=device_id,
+        mixed_precision=mixed_precision,
         embedding_config=embedding_config,
     ) as ctx:
         train_dataloader = Dataloder(
