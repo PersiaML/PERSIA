@@ -156,8 +156,7 @@ impl PersiaCommonContext {
 
     fn get_nats_publish_service(
         &self,
-    ) -> Result<MappedRwLockReadGuard<nats::PersiaBatchFlowNatsServicePublisherWrapper>, PersiaError>
-    {
+    ) -> Result<MappedRwLockReadGuard<nats::PersiaDataFlowComponent>, PersiaError> {
         let guard = self.nats_publisher.read();
         if guard.as_ref().is_none() {
             return Err(PersiaError::NatsNotInitializedError);
@@ -197,9 +196,7 @@ impl PyPersiaCommonContext {
         let nats_publisher = self
             .inner
             .async_runtime
-            .block_on(nats::PersiaDataFlowComponent::new(
-                world_size,
-            ))
+            .block_on(nats::PersiaDataFlowComponent::new_initialized(world_size))
             .map_err(|e| PyErr::from(e))?;
 
         *self.inner.nats_publisher.write() = Some(nats_publisher);
