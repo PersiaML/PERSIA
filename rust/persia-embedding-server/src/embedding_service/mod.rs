@@ -206,7 +206,7 @@ impl EmbeddingServiceInner {
                                 if let Some(entry) = entry.upgrade() {
                                     let entry_dim = { entry.read().dim() };
                                     if entry_dim != *dim {
-                                        tracing::error!("dimensional mismatch on sign {}, in hashmap dim {}, requested dim {}", sign, entry_dim, dim);
+                                        tracing::error!("dimension not match on sign {}. Expected dimension {}, got dimension {}.", sign, entry_dim, dim);
                                         let entry = HashMapEmbeddingEntry::new(
                                             &conf.initialization_method,
                                             *dim,
@@ -247,7 +247,7 @@ impl EmbeddingServiceInner {
                                 if let Some(entry) = entry.upgrade() {
                                     let entry_dim = { entry.read().dim() };
                                     if entry_dim != *dim {
-                                        tracing::error!("dimensional mismatch on sign {}, in hashmap dim {}, requested dim {}",
+                                        tracing::error!("dimension not match on sign {}. Expected dimension {}, got dimension {}.",
                                             sign, entry_dim, dim);
                                         embeddings.extend_from_slice(vec![0f32; *dim].as_slice());
                                     } else {
@@ -328,7 +328,7 @@ impl EmbeddingServiceInner {
             tokio::task::block_in_place(|| Vec::<(u64, usize)>::read_from_buffer(req.as_ref()));
         if indices.is_err() {
             return Err(EmbeddingServerError::RpcError(
-                "fail to des request".to_string(),
+                "fail to deserialize look_up_inference request".to_string(),
             ));
         }
         let indices = indices.unwrap();
