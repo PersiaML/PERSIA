@@ -429,7 +429,7 @@ impl PyPersiaCommonContext {
         self.inner
             .async_runtime
             .block_on(self.inner.rpc_client.set_embedding(entries))
-            .map_err(|e| e.to_py_runtime_err())
+            .map_err(|e| e.into())
     }
 }
 
