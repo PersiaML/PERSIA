@@ -1139,8 +1139,10 @@ impl MiddlewareServerInner {
             .sparse_model_manager
             .load_embedding_checkpoint_info(&first_shard_dir)?;
         if model_info.num_shards == self.all_embedding_server_client.dst_replica_size {
+            tracing::info!("loading embedding from {} via embedding servers", req);
             self.load_embedding_via_emb_servers(req).await?;
         } else {
+            tracing::info!("loading embedding from {} via middleware servers", req);
             self.load_embedding_via_middlewares(req, model_info.num_shards)
                 .await?;
         }

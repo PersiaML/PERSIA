@@ -33,14 +33,16 @@ pub enum SparseModelManagerError {
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
     #[error("wait for other server time out when dump embedding")]
     WaitForOtherServerTimeOut,
-    #[error("loading from an uncompelete embedding ckpt")]
-    LoadingFromUncompeleteCheckpoint,
+    #[error("loading from an uncompelete embedding ckpt {0}")]
+    LoadingFromUncompeleteCheckpoint(String),
     #[error("embedding file type worong")]
     WrongEmbeddingFileType,
     #[error("not ready error")]
     NotReadyError,
     #[error("failed to get status error")]
     FailedToGetStatus,
+    #[error("failed to decode checkpoint info error")]
+    DecodeInfoError,
 }
 
 impl From<AnyhowError> for SparseModelManagerError {
@@ -189,9 +191,9 @@ impl SparseModelManager {
         let emb_dump_done_file = self.get_emb_dump_done_file_name();
         let emb_dump_done_path = PersiaPath::from_vec(vec![emb_dir, &emb_dump_done_file]);
         let s: String = emb_dump_done_path.read_to_string()?;
+        tracing::debug!("load_embedding_checkpoint_info {}", s);
 
-        serde_yaml::from_str(&s)
-            .map_err(|_| SparseModelManagerError::LoadingFromUncompeleteCheckpoint)
+        serde_yaml::from_str(&s).map_err(|_| SparseModelManagerError::DecodeInfoError)
     }
 
     pub fn waiting_for_all_embedding_server_dump(
@@ -344,16 +346,12 @@ impl SparseModelManager {
     ) -> Result<Vec<PathBuf>, SparseModelManagerError> {
         let done = self.check_embedding_dump_done(&dst_dir)?;
         if !done {
-            tracing::error!("trying to load embedding from uncompelete checkpoint");
-            return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint);
+            return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint(
+                format!("{:?}", &dst_dir),
+            ));
         }
-        let dst_dir = self.get_shard_dir(&dst_dir);
-        let done = self.check_embedding_dump_done(&dst_dir)?;
-        if !done {
-            return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint);
-        }
-        let dst_dir = PersiaPath::from_pathbuf(dst_dir);
-        let file_list = dst_dir.list()?;
+        let persia_dst_dir = PersiaPath::from_pathbuf(dst_dir.clone());
+        let file_list = persia_dst_dir.list()?;
         tracing::debug!("file_list is {:?}", file_list);
 
         let file_list: Vec<PathBuf> = file_list
@@ -364,7 +362,9 @@ impl SparseModelManager {
 
         if file_list.len() == 0 {
             tracing::error!("trying to load embedding from an empty dir");
-            return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint);
+            return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint(
+                format!("{:?}", &dst_dir),
+            ));
         }
 
         Ok(file_list)

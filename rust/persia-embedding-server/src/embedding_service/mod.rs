@@ -436,8 +436,9 @@ impl EmbeddingServiceInner {
 
     pub async fn load(&self, dir: String) -> Result<(), EmbeddingServerError> {
         let dst_dir = PathBuf::from(dir);
+        let shard_dir = self.sparse_model_manager.get_shard_dir(&dst_dir);
         self.sparse_model_manager
-            .load_embedding_from_dir(dst_dir, self.embedding.clone())?;
+            .load_embedding_from_dir(shard_dir, self.embedding.clone())?;
         Ok(())
     }
 
