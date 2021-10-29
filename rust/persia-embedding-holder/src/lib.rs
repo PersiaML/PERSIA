@@ -33,14 +33,25 @@ impl PersiaEmbeddingHolder {
     pub fn get() -> Result<PersiaEmbeddingHolder, PersiaEmbeddingHolderError> {
         let singleton = PERSIA_EMBEDDING_HOLDER.get_or_try_init(|| {
             let config = PersiaEmbeddingServerConfig::get()?;
-            let mut inner = Vec::with_capacity(config.num_hashmap_internal_shards);
-            (0..config.num_hashmap_internal_shards).for_each(|_| {
-                inner.push(RwLock::new(EvictionMap::with_capacity(
-                    config.capacity / config.num_hashmap_internal_shards,
-                )))
-            });
+
+            let bucket_size = config.num_hashmap_internal_shards;
+            let cpapacity_per_bucket = config.capacity / bucket_size;
+
+            let handles: Vec<std::thread::JoinHandle<_>> = (0..bucket_size)
+                .map(|_| {
+                    std::thread::spawn(move || {
+                        EvictionMap::with_capacity(cpapacity_per_bucket as usize)
+                    })
+                })
+                .collect();
+
+            let maps: Vec<_> = handles
+                .into_iter()
+                .map(|h| RwLock::new(h.join().expect("failed to create map")))
+                .collect();
+
             let sharded = Sharded {
-                inner,
+                inner: maps,
                 phantom: std::marker::PhantomData::default(),
             };
             Ok(PersiaEmbeddingHolder {

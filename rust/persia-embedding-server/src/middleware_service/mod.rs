@@ -1134,10 +1134,9 @@ impl MiddlewareServerInner {
 
     pub async fn load(&self, req: String) -> Result<(), MiddlewareServerError> {
         let emb_dir = PathBuf::from(req.clone());
-        let first_shard_dir = self.sparse_model_manager.get_shard_dir(&emb_dir);
         let model_info = self
             .sparse_model_manager
-            .load_embedding_checkpoint_info(&first_shard_dir)?;
+            .load_embedding_checkpoint_info(&emb_dir)?;
         if model_info.num_shards == self.all_embedding_server_client.dst_replica_size {
             tracing::info!("loading embedding from {} via embedding servers", req);
             self.load_embedding_via_emb_servers(req).await?;
@@ -1198,6 +1197,10 @@ impl MiddlewareServerInner {
         }
 
         tracing::debug!("embedding filelist: {:?}", emb_file_list);
+
+        if emb_file_list.len() == 0 {
+            return Ok(());
+        }
 
         let num_embedding_io_workers = PersiaCommonConfig::get()?.num_embedding_io_workers;
         let num_file_per_worker = emb_file_list.len() / num_embedding_io_workers;
