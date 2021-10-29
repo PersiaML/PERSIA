@@ -1,4 +1,5 @@
 import os
+import json
 
 from typing import Optional
 
@@ -7,9 +8,9 @@ import numpy as np
 
 from tqdm import tqdm
 from sklearn import metrics
-import json
 
 from persia.ctx import TrainCtx, eval_ctx, EmbeddingConfig
+from persia.distributed import DDPOption
 from persia.sparse.optim import Adagrad
 from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
@@ -115,9 +116,11 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         torch.cuda.set_device(device_id)
         model.cuda(device_id)
+        backend = "nccl"
     else:
         mixed_precision = False
         device_id = None
+        backend = "gloo"
 
     dense_optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     sparse_optimizer = Adagrad(lr=1e-2)
@@ -137,6 +140,7 @@ if __name__ == "__main__":
         device_id=device_id,
         mixed_precision=mixed_precision,
         embedding_config=embedding_config,
+        distributed_option=DDPOption(backend=backend),
     ) as ctx:
         train_dataloader = Dataloder(
             StreamingDataset(buffer_size), reproducible=True, embedding_staleness=1

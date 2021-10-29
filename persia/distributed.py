@@ -267,10 +267,6 @@ class BaguaDistributedOption(DistributedBaseOption):
             raise e
 
         current_env = os.environ
-        # current_env["WORLD_SIZE"] = str(world_size)
-        # current_env["LOCAL_WORLD_SIZE"] = str(local_world_size)
-        # current_env["RANK"] = str(rank_id)
-        # current_env["LOCAL_RANK"] = str(device_id)
         current_env["MASTER_ADDR"] = self.master_addr or master_addr
         current_env["MASTER_PORT"] = str(self.master_port)
         current_env["BAGUA_DEFAULT_BUCKET_SIZE"] = str(
