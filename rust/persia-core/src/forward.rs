@@ -196,15 +196,6 @@ impl PyTensor {
         Ok(capsule)
     }
 
-    // #[cfg(feature="cuda")]
-    // #[getter]
-    // pub fn get_cuda(self) -> PyTensor {
-    //     let device_id = PersiaCommonContext::get().device_id.unwrap_or(0);
-    //     PyTensor {
-    //         inner: self.inner.cuda(device_id)
-    //     }
-    // }
-
     pub fn check_dlpack(&self, dlpack: PyObject) {
         // dlpack object can not be used after dlpack checked
         // since the object already be dropped
@@ -223,7 +214,6 @@ impl PyTensor {
         tracing::info!("dlpack manager tensor is {:?}", dlpack_managed_tensor);
     }
 
-    // pub fn drop_dlpack(&)
     #[getter]
     pub fn get_device(&self) -> String {
         self.inner.device()
