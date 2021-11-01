@@ -10,7 +10,7 @@ torch-model-archiver \
 
 torchserve --start --ncs --model-store $INFER_CHECKPOINT_DIR \
     --models adult_income.mar \
-    --ts-config config/ts_config.properties &
+    --ts-config /workspace/config/ts_config.properties &
 
 python -m grpc_tools.protoc \
     --proto_path=/workspace/proto/ \
@@ -20,4 +20,4 @@ python -m grpc_tools.protoc \
 
 sleep 10s
 
-python serve_client.py && torchserve --stop
+python /workspace/serve_client.py && torchserve --stop
