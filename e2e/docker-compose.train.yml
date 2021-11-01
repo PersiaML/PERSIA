@@ -53,13 +53,12 @@ services:
         volumes:
             - ./adult_income:/workspace
 
-    pushgateway:
+    metrics_gateway:
         image: prom/pushgateway:latest
         deploy:
             replicas: 1
 
     prometheus:
-        user: root
         image: prom/prometheus:latest
         ports:
             - "9090:9090/tcp"
@@ -68,4 +67,3 @@ services:
         command: "--config.file=/workspace/config/prometheus.yml"
         volumes:
             - ./adult_income:/workspace
-            - /var/run/docker.sock:/var/run/docker.sock:ro
