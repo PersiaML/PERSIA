@@ -401,7 +401,6 @@ impl PyPersiaCommonContext {
             .map_err(|e| e.to_py_runtime_err())
     }
 
-    #[cfg(feature = "cuda")]
     pub fn get_embedding_from_data(
         &self,
         batch: &mut PyPersiaBatchData,
@@ -411,7 +410,6 @@ impl PyPersiaCommonContext {
         forward_directly(batch, device_id)
     }
 
-    #[cfg(feature = "cuda")]
     pub fn get_embedding_from_bytes(
         &self,
         batch: &PyBytes,
