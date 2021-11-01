@@ -60,10 +60,15 @@ services:
 
     prometheus:
         image: prom/prometheus:latest
-        ports:
-            - "9090:9090/tcp"
         deploy:
             replicas: 1
         command: "--config.file=/workspace/config/prometheus.yml"
         volumes:
             - ./adult_income:/workspace
+
+    grafana:
+        image: grafana/grafana:latest
+        ports:
+            - "3000:3000/tcp"
+        deploy:
+            replicas: 1
