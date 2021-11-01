@@ -5,17 +5,19 @@ from ts.torch_handler.base_handler import BaseHandler
 from abc import ABC
 import torch
 
+device_id = 0 if torch.cuda.is_available() else None
+
 
 class PersiaHandler(BaseHandler, ABC):
     def initialize(self, context):
         super().initialize(context)
         middleware_addrs = get_middleware_services()
-        self.persia_context = InferCtx(middleware_addrs, device_id=0)
+        self.persia_context = InferCtx(middleware_addrs, device_id=device_id)
 
     def preprocess(self, data):
         batch = data[0].get("batch")
         batch = bytes(batch)
-        batch = self.persia_context.get_embedding_from_bytes(batch, 0)
+        batch = self.persia_context.get_embedding_from_bytes(batch, device_id)
 
         model_input = self.persia_context.prepare_features(batch)
         return model_input
