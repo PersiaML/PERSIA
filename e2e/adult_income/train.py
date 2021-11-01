@@ -117,10 +117,12 @@ if __name__ == "__main__":
         torch.cuda.set_device(device_id)
         model.cuda(device_id)
         backend = "nccl"
+        cuda = True
     else:
         mixed_precision = False
         device_id = None
         backend = "gloo"
+        cuda = False
 
     dense_optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     sparse_optimizer = Adagrad(lr=1e-2)
@@ -155,7 +157,7 @@ if __name__ == "__main__":
             )
 
             if batch_idx % test_interval == 0 and batch_idx != 0:
-                test_auc, test_acc = test(model)
+                test_auc, test_acc = test(model, cuda=cuda)
                 np.testing.assert_equal(
                     np.array([test_auc]), np.array([0.8934601372796367])
                 )
