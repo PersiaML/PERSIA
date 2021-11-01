@@ -28,6 +28,9 @@ device_id = get_local_rank()
 
 setup_seed(3)
 
+CPU_TEST_AUC = 0.8936692224423999
+GPU_TEST_AUC = 0.8934601372796367
+
 
 class TestDataset(PersiaDataset):
     def __init__(self, test_dir: str, batch_size: int = 128):
@@ -159,7 +162,8 @@ if __name__ == "__main__":
             if batch_idx % test_interval == 0 and batch_idx != 0:
                 test_auc, test_acc = test(model, cuda=cuda)
                 np.testing.assert_equal(
-                    np.array([test_auc]), np.array([0.8934601372796367])
+                    np.array([test_auc]),
+                    np.array([GPU_TEST_AUC if cuda else CPU_TEST_AUC]),
                 )
                 break
 
