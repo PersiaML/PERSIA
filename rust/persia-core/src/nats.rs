@@ -121,7 +121,7 @@ pub mod persia_dataflow_service {
     #[persia_nats_marcos::service]
     impl DataflowService {
         pub async fn batch(&self, batch: PersiaBatchData) -> Result<(), Error> {
-            tracing::info!("nats get batch");
+            tracing::debug!("nats get batch");
             let result = self
                 .output_channel
                 .send_timeout(batch, std::time::Duration::from_millis(500));
