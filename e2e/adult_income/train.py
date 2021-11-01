@@ -181,12 +181,12 @@ if __name__ == "__main__":
         assert num_ids == 0, f"clear embedding failed"
 
     eval_auc, eval_acc = test(
-        model, clear_embeddings=True, checkpoint_dir=eval_checkpoint_dir
+        model, clear_embeddings=True, checkpoint_dir=eval_checkpoint_dir, cuda=cuda
     )
     np.testing.assert_equal(np.array([test_auc]), np.array([eval_auc]))
 
     eval_auc, eval_acc = test(
-        model, clear_embeddings=True, checkpoint_dir=hdfs_checkpoint_dir
+        model, clear_embeddings=True, checkpoint_dir=hdfs_checkpoint_dir, cuda=cuda
     )
     np.testing.assert_equal(np.array([test_auc]), np.array([eval_auc]))
 
