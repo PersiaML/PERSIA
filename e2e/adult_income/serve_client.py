@@ -1,10 +1,10 @@
 import grpc
 import os
-import re
 import sys
 import json
 
-sys.path.append("/workspace/proto/")
+sys.path.append("/resource/proto/")
+
 import numpy as np
 from tqdm import tqdm
 from sklearn import metrics

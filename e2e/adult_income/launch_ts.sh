@@ -14,8 +14,8 @@ torchserve --start --ncs --model-store $INFER_CHECKPOINT_DIR \
 
 python -m grpc_tools.protoc \
     --proto_path=/workspace/proto/ \
-    --python_out=/workspace/proto/ \
-    --grpc_python_out=/workspace/proto/ \
+    --python_out=/resource/proto/ \
+    --grpc_python_out=/resource/proto/ \
     /workspace/proto/inference.proto
 
 sleep 10s
