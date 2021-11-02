@@ -103,8 +103,8 @@ static PERSIA_COMMON_CONTEXT: OnceCell<Arc<PersiaCommonContext>> = OnceCell::new
 
 struct PersiaCommonContext {
     pub rpc_client: Arc<PersiaRpcClient>,
-    pub nats_publisher: RwLock<Option<nats::PersiaBatchFlowNatsServicePublisherWrapper>>,
-    pub master_discovery_service: RwLock<Option<nats::MasterDiscoveryNatsServiceWrapper>>,
+    pub nats_publisher: RwLock<Option<nats::PersiaDataFlowComponent>>,
+    pub master_discovery_service: RwLock<Option<nats::MasterDiscoveryComponent>>,
     pub async_runtime: Arc<Runtime>,
 }
 
@@ -160,8 +160,7 @@ impl PersiaCommonContext {
 
     fn get_nats_publish_service(
         &self,
-    ) -> Result<MappedRwLockReadGuard<nats::PersiaBatchFlowNatsServicePublisherWrapper>, PersiaError>
-    {
+    ) -> Result<MappedRwLockReadGuard<nats::PersiaDataFlowComponent>, PersiaError> {
         let guard = self.nats_publisher.read();
         if guard.as_ref().is_none() {
             return Err(PersiaError::NatsNotInitializedError);
@@ -201,9 +200,7 @@ impl PyPersiaCommonContext {
         let nats_publisher = self
             .inner
             .async_runtime
-            .block_on(nats::PersiaBatchFlowNatsServicePublisherWrapper::new(
-                world_size,
-            ))
+            .block_on(nats::PersiaDataFlowComponent::new_initialized(world_size))
             .map_err(|e| PyErr::from(e))?;
 
         *self.inner.nats_publisher.write() = Some(nats_publisher);
@@ -222,7 +219,7 @@ impl PyPersiaCommonContext {
         let master_discovery_service = self
             .inner
             .async_runtime
-            .block_on(nats::MasterDiscoveryNatsServiceWrapper::new(master_addr));
+            .block_on(nats::MasterDiscoveryComponent::new(master_addr));
 
         *self.inner.master_discovery_service.write() = Some(master_discovery_service);
         Ok(())

@@ -8,7 +8,7 @@ common_config:
     servers:
       - emb_server:8888
     embedding_checkpoint: /workspace/infer_checkpoint/
-shard_server_config:
+embedding_server_config:
   capacity: 1000000
   num_hashmap_internal_shards: 1
   enable_incremental_update: false

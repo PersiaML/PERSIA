@@ -8,8 +8,6 @@ from typing import List, Tuple, Optional, NewType, Union
 
 import torch
 
-from retrying import retry
-
 import persia.env as env
 
 from persia.logger import get_default_logger
@@ -135,14 +133,12 @@ class DataCtx(BaseCtx):
         self.prepare()
         _logger.info("Data ctx prepare done.")
 
-    @retry(wait_fixed=2000)
     def prepare(self):
         """Do some preparation to init `DataCtx`."""
 
         self.common_context.init_nats_publisher(None)
         self.common_context.wait_servers_ready()
 
-    @retry(wait_fixed=2000)
     def send_sparse_to_middleware(self, data: PyPersiaBatchData):
         """Send PersiaBatchData from data compose to middleware side.
 
@@ -151,7 +147,6 @@ class DataCtx(BaseCtx):
         """
         self.common_context.send_sparse_to_middleware(data)
 
-    @retry(wait_fixed=2000)
     def send_dense_to_trainer(self, data: PyPersiaBatchData):
         """Send PersiaBatchData from data compose to trainer side.
 
@@ -239,7 +234,6 @@ class EmbeddingCtx(BaseCtx):
         if self.embedding_config is not None:
             self.configure_embedding_servers(self.embedding_config)
 
-    @retry(wait_fixed=2000)
     def configure_embedding_servers(
         self,
         embedding_config: EmbeddingConfig,
@@ -525,7 +519,6 @@ class EmbeddingCtx(BaseCtx):
         """Clear all embeddings on all embedding servers."""
         self.common_context.clear_embeddings()
 
-    @retry(wait_fixed=2000)
     def get_embedding_from_data(
         self, data: PyPersiaBatchData, device_id: int = 0
     ) -> PythonTrainBatch:
@@ -540,7 +533,6 @@ class EmbeddingCtx(BaseCtx):
         """
         return self.common_context.get_embedding_from_data(data, device_id)
 
-    @retry(wait_fixed=2000)
     def get_embedding_from_bytes(
         self, data: bytes, device_id: int = 0
     ) -> PythonTrainBatch:
@@ -681,7 +673,6 @@ class TrainCtx(EmbeddingCtx):
 
         self.backward_engine.shutdown()
 
-    @retry(wait_fixed=2000)
     def _get_master_addr(self) -> str:
         """Get leader(rank 0) ip address."""
         if self.rank_id == 0:
@@ -694,7 +685,6 @@ class TrainCtx(EmbeddingCtx):
             _logger.info(f"master addr is {master_addr}")
         return master_addr
 
-    @retry(wait_fixed=2000)
     def _init_middlewrae_rpc_client(self) -> int:
         middleware_addr_list = self.common_context.get_middleware_addr_list()
         assert len(middleware_addr_list) > 0, "Not available middleware."
@@ -702,7 +692,6 @@ class TrainCtx(EmbeddingCtx):
             self.common_context.init_rpc_client_with_addr(middleware_addr)
         return len(middleware_addr_list)
 
-    @retry(wait_fixed=2000)
     def wait_servers_ready(self):
         """query embedding server to check if servers are ready"""
 
