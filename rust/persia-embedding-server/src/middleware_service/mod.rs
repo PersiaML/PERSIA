@@ -46,11 +46,11 @@ struct MetricsHolder {
     pub staleness: Gauge,
     pub nan_count: IntCounterVec,
     pub nan_grad_skipped: IntCounterVec,
-    pub lookup_create_requests_time_cost_ms: Gauge,
-    pub lookup_rpc_time_cost_ms: Gauge,
-    pub update_gradient_time_cost_ms: Gauge,
-    pub summation_time_cost_ms: Gauge,
-    pub lookup_batched_time_cost_ms: Gauge,
+    pub lookup_create_requests_time_cost_sec: Gauge,
+    pub lookup_rpc_time_cost_sec: Gauge,
+    pub update_gradient_time_cost_sec: Gauge,
+    pub summation_time_cost_sec: Gauge,
+    pub lookup_batched_time_cost_sec: Gauge,
 }
 
 impl MetricsHolder {
@@ -74,18 +74,18 @@ impl MetricsHolder {
                 )?,
                 nan_count: m.create_counter_vec("nan_count","nan count of gradient pushed to emb server")?,
                 nan_grad_skipped: m.create_counter_vec("nan_grad_skipped","nan count of gradient filtered by gpu node")?,
-                lookup_create_requests_time_cost_ms: m.create_gauge(
-                    "lookup_create_requests_time_cost_ms", 
+                lookup_create_requests_time_cost_sec: m.create_gauge(
+                    "lookup_create_requests_time_cost_sec", 
                     "lookup preprocess time cost on middleware. Include ID hashing, dividing id accroding feature groups and embedding servers."
                 )?,
-                lookup_rpc_time_cost_ms: m.create_gauge(
-                    "lookup_rpc_time_cost_ms", 
+                lookup_rpc_time_cost_sec: m.create_gauge(
+                    "lookup_rpc_time_cost_sec", 
                     "lookup embedding time cost on middleware server for a batch, include lookup on embedding server and network transmission."
                 )?,
-                update_gradient_time_cost_ms: m
-                    .create_gauge("update_gradient_time_cost_ms", "update gradient time cost on middleware server for a batch.")?,
-                summation_time_cost_ms: m.create_gauge("summation_time_cost_ms", "lookup postprocess time cost on middleware, mainly is embedding summation.")?,
-                lookup_batched_time_cost_ms: m.create_gauge("lookup_batched_time_cost_ms", "lookup and pre/post process time cost on middleware server.")?,
+                update_gradient_time_cost_sec: m
+                    .create_gauge("update_gradient_time_cost_sec", "update gradient time cost on middleware server for a batch.")?,
+                summation_time_cost_sec: m.create_gauge("summation_time_cost_sec", "lookup postprocess time cost on middleware, mainly is embedding summation.")?,
+                lookup_batched_time_cost_sec: m.create_gauge("lookup_batched_time_cost_sec", "lookup and pre/post process time cost on middleware server.")?,
             };
             Ok(holder)
         })
@@ -843,7 +843,7 @@ impl MiddlewareServerInner {
         );
 
         if let Ok(m) = MetricsHolder::get() {
-            m.update_gradient_time_cost_ms
+            m.update_gradient_time_cost_sec
                 .set(start_time.elapsed().as_secs_f64());
         }
 
@@ -890,7 +890,7 @@ impl MiddlewareServerInner {
             start_time.elapsed()
         );
         if let Ok(m) = MetricsHolder::get() {
-            m.lookup_create_requests_time_cost_ms
+            m.lookup_create_requests_time_cost_sec
                 .set(start_time.elapsed().as_secs_f64());
         }
         let start_time = std::time::Instant::now();
@@ -899,7 +899,7 @@ impl MiddlewareServerInner {
 
         tracing::debug!("rpc time cost {:?}", start_time.elapsed());
         if let Ok(m) = MetricsHolder::get() {
-            m.lookup_rpc_time_cost_ms
+            m.lookup_rpc_time_cost_sec
                 .set(start_time.elapsed().as_secs_f64());
         }
 
@@ -911,9 +911,9 @@ impl MiddlewareServerInner {
 
         tracing::debug!("summation time cost {:?}", start_time.elapsed());
         if let Ok(m) = MetricsHolder::get() {
-            m.summation_time_cost_ms
+            m.summation_time_cost_sec
                 .set(start_time.elapsed().as_secs_f64());
-            m.lookup_batched_time_cost_ms
+            m.lookup_batched_time_cost_sec
                 .set(start_time_all.elapsed().as_secs_f64());
         }
 

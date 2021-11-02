@@ -414,7 +414,7 @@ impl Forward {
                     }
 
                     if let Ok(m) = MetricsHolder::get() {
-                        m.forward_client_to_gpu_time_cost_ms
+                        m.forward_client_to_gpu_time_cost_sec
                             .set(start_time.elapsed().as_secs_f64());
                     }
                 }
@@ -500,7 +500,7 @@ impl Forward {
 
                         tracing::debug!("forward done, got embeddings");
                         if let Ok(m) = MetricsHolder::get() {
-                            m.forward_client_time_cost_ms
+                            m.forward_client_time_cost_sec
                                 .set(start_time.elapsed().as_secs_f64());
                         }
                         match embedding_batch {
@@ -675,7 +675,7 @@ impl PyForward {
                     rank_id = rank_id,
                 );
                 if let Ok(m) = MetricsHolder::get() {
-                    m.long_get_train_batch_time_cost_ms
+                    m.long_get_train_batch_time_cost_sec
                         .set(start_time.elapsed().as_secs_f64());
                 }
             }

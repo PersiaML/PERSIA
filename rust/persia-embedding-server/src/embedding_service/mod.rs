@@ -31,11 +31,11 @@ static METRICS_HOLDER: once_cell::sync::OnceCell<MetricsHolder> = once_cell::syn
 struct MetricsHolder {
     pub index_miss_count: IntCounter,
     pub index_miss_ratio: Gauge,
-    pub set_embedding_time_cost_ms: Gauge,
-    pub decode_indices_time_cost_ms: Gauge,
-    pub encode_embedding_time_cost_ms: Gauge,
-    pub lookup_inference_batch_time_cost_ms: Gauge,
-    pub lookup_mixed_batch_time_cost_ms: Gauge,
+    pub set_embedding_time_cost_sec: Gauge,
+    pub decode_indices_time_cost_sec: Gauge,
+    pub encode_embedding_time_cost_sec: Gauge,
+    pub lookup_inference_batch_time_cost_sec: Gauge,
+    pub lookup_mixed_batch_time_cost_sec: Gauge,
     pub gradient_id_miss_count: IntCounter,
 }
 
@@ -52,24 +52,24 @@ impl MetricsHolder {
                     "index_miss_ratio",
                     "miss ratio of index when lookup on embedding server",
                 )?,
-                set_embedding_time_cost_ms: m.create_gauge(
-                    "set_embedding_time_cost_ms",
+                set_embedding_time_cost_sec: m.create_gauge(
+                    "set_embedding_time_cost_sec",
                     "set embedding time cost on embedding server",
                 )?,
-                decode_indices_time_cost_ms: m.create_gauge(
-                    "decode_indices_time_cost_ms",
+                decode_indices_time_cost_sec: m.create_gauge(
+                    "decode_indices_time_cost_sec",
                     "decode time cost for a inference bytes request on embedding server",
                 )?,
-                encode_embedding_time_cost_ms: m.create_gauge(
-                    "encode_embedding_time_cost_ms",
+                encode_embedding_time_cost_sec: m.create_gauge(
+                    "encode_embedding_time_cost_sec",
                     "encode time cost for a inference bytes response on embedding server",
                 )?,
-                lookup_inference_batch_time_cost_ms: m.create_gauge(
-                    "lookup_inference_batch_time_cost_ms",
+                lookup_inference_batch_time_cost_sec: m.create_gauge(
+                    "lookup_inference_batch_time_cost_sec",
                     "lookup time cost for a inference request",
                 )?,
-                lookup_mixed_batch_time_cost_ms: m.create_gauge(
-                    "lookup_mixed_batch_time_cost_ms",
+                lookup_mixed_batch_time_cost_sec: m.create_gauge(
+                    "lookup_mixed_batch_time_cost_sec",
                     "batched lookup time cost on embedding server when training",
                 )?,
                 gradient_id_miss_count: m.create_counter(
@@ -333,7 +333,7 @@ impl EmbeddingServiceInner {
                 );
         }
         if let Ok(m) = MetricsHolder::get() {
-            m.set_embedding_time_cost_ms
+            m.set_embedding_time_cost_sec
                 .set(start_time.elapsed().as_secs_f64());
         }
         Ok(())
@@ -350,7 +350,7 @@ impl EmbeddingServiceInner {
         }
         let indices = indices.unwrap();
         if let Ok(m) = MetricsHolder::get() {
-            m.decode_indices_time_cost_ms
+            m.decode_indices_time_cost_sec
                 .set(start_time.elapsed().as_secs_f64());
         }
 
@@ -359,9 +359,9 @@ impl EmbeddingServiceInner {
             let encode_start_time = std::time::Instant::now();
             let buffer = tokio::task::block_in_place(|| emb.write_to_vec().unwrap());
             if let Ok(m) = MetricsHolder::get() {
-                m.encode_embedding_time_cost_ms
+                m.encode_embedding_time_cost_sec
                     .set(encode_start_time.elapsed().as_secs_f64());
-                m.lookup_inference_batch_time_cost_ms
+                m.lookup_inference_batch_time_cost_sec
                     .set(start_time.elapsed().as_secs_f64());
             }
             Ok(Bytes::from(buffer))
@@ -380,7 +380,7 @@ impl EmbeddingServiceInner {
         let start_time = std::time::Instant::now();
         let embedding = self.batched_lookup(indices, is_training).await;
         if let Ok(m) = MetricsHolder::get() {
-            m.lookup_mixed_batch_time_cost_ms
+            m.lookup_mixed_batch_time_cost_sec
                 .set(start_time.elapsed().as_secs_f64());
         }
 
