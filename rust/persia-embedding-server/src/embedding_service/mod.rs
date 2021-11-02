@@ -279,7 +279,7 @@ impl EmbeddingServiceInner {
         })?;
 
         if let Ok(m) = MetricsHolder::get() {
-            m.index_miss_count.inc();
+            m.index_miss_count.inc_by(index_miss_count);
             let index_miss_ratio = index_miss_count as f32 / req.len() as f32;
             m.index_miss_ratio.set(index_miss_ratio.into());
         }
