@@ -14,6 +14,7 @@ services:
             command: persia_launcher compose /workspace/data_compose.py
             volumes:
                 - ./adult_income:/workspace
+                - ./adult_income/${BUILDKITE_STEP_ID}:/resource
                 - /data/adult_income:/data/
 
         trainer:
@@ -23,10 +24,10 @@ services:
                 JOB_ID: 1
                 GPU_NUM: 1
                 CUBLAS_WORKSPACE_CONFIG: :4096:8
-                EVAL_CHECKPOINT_DIR: /workspace/eval_checkpoint/${IMAGE_TYPE}
-                INFER_CHECKPOINT_DIR: /workspace/infer_checkpoint/${IMAGE_TYPE}
-                HDFS_CHECKPOINT_DIR: hdfs://localhost:9000//workspace/hdfs_checkpoint/${IMAGE_TYPE}
-                RESULT_FILE_PATH: /workspace/result_${IMAGE_TYPE}.json
+                EVAL_CHECKPOINT_DIR: /resource/eval_checkpoint
+                INFER_CHECKPOINT_DIR: /resource/infer_checkpoint
+                HDFS_CHECKPOINT_DIR: hdfs://localhost:9000//resource/hdfs_checkpoint
+                RESULT_FILE_PATH: /resource/result.json
             image: persia-${IMAGE_TYPE}-runtime:test
             command: bash -c "/workspace/hadoop/launch_hdfs.sh && persia_launcher trainer /workspace/train.py"
             depends_on:
@@ -36,6 +37,7 @@ services:
                 - persia_nats_service
             volumes:
                 - ./adult_income:/workspace
+                - ./adult_income/${BUILDKITE_STEP_ID}:/resource
                 - /data/adult_income:/data/
 
         middleware:
@@ -47,6 +49,7 @@ services:
             command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
             volumes:
                 - ./adult_income:/workspace
+                - ./adult_income/${BUILDKITE_STEP_ID}:/resource
 
         server:
             env_file:
@@ -57,3 +60,4 @@ services:
             command: bash -c "/workspace/hadoop/launch_hdfs.sh &&  persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml"
             volumes:
                 - ./adult_income:/workspace
+                - ./adult_income/${BUILDKITE_STEP_ID}:/resource

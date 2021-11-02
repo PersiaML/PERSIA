@@ -8,17 +8,21 @@ steps:
   - wait
 
   - label: "launch e2e gpu test"
-    key: "e2e-test"
+    key: "e2e-gpu-test"
     env:
       IMAGE_TYPE: "cuda"
     plugins:
       - docker-compose#v3.8.0:
           config: "e2e/docker-compose.train.yml"
           run: trainer
+          env:
+            - BUILDKITE_STEP_ID
           graceful-shutdown: true
       - docker-compose#v3.8.0:
           config: "e2e/docker-compose.infer.yml"
           run: torch_serve
+          env:
+            - BUILDKITE_STEP_ID
           graceful-shutdown: true
   # TODO: add bagua testcase
   - label: "launch e2e cpu test"
@@ -29,11 +33,16 @@ steps:
       - docker-compose#v3.8.0:
           config: "e2e/docker-compose.train.yml"
           run: trainer
+          env:
+            - BUILDKITE_STEP_ID
           graceful-shutdown: true
       - docker-compose#v3.8.0:
           config: "e2e/docker-compose.infer.yml"
           run: torch_serve
+          env:
+            - BUILDKITE_STEP_ID
           graceful-shutdown: true
+          
   - wait  
 
   - label: "clear workspace, e2e folder will be remove after thie step"
