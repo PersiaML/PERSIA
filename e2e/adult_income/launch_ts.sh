@@ -12,7 +12,7 @@ torchserve --start --ncs --model-store $INFER_CHECKPOINT_DIR \
     --models adult_income.mar \
     --ts-config /workspace/config/ts_config.properties &
 
-python -m grpc_tools.protoc \
+mkdir /resource/proto/ && python -m grpc_tools.protoc \
     --proto_path=/workspace/proto/ \
     --python_out=/resource/proto/ \
     --grpc_python_out=/resource/proto/ \
