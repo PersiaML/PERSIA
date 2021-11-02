@@ -84,8 +84,14 @@ impl MetricsHolder {
                 )?,
                 update_gradient_time_cost_sec: m
                     .create_gauge("update_gradient_time_cost_sec", "update gradient time cost on middleware server for a batch.")?,
-                summation_time_cost_sec: m.create_gauge("summation_time_cost_sec", "lookup postprocess time cost on middleware, mainly is embedding summation.")?,
-                lookup_batched_time_cost_sec: m.create_gauge("lookup_batched_time_cost_sec", "lookup and pre/post process time cost on middleware server.")?,
+                summation_time_cost_sec: m.create_gauge(
+                    "summation_time_cost_sec",
+                     "lookup postprocess time cost on middleware, mainly is embedding summation."
+                )?,
+                lookup_batched_time_cost_sec: m.create_gauge(
+                    "lookup_batched_time_cost_sec",
+                    "lookup and pre/post process time cost on middleware server."
+                )?,
             };
             Ok(holder)
         })
