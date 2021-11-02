@@ -15,12 +15,14 @@ steps:
       - docker-compose#v3.8.0:
           config: "e2e/docker-compose.train.yml"
           run: trainer
+          propagate-uid-gid: true
           env:
             - BUILDKITE_STEP_ID
           graceful-shutdown: true
       - docker-compose#v3.8.0:
           config: "e2e/docker-compose.infer.yml"
           run: torch_serve
+          propagate-uid-gid: true
           env:
             - BUILDKITE_STEP_ID
           graceful-shutdown: true
@@ -33,16 +35,18 @@ steps:
       - docker-compose#v3.8.0:
           config: "e2e/docker-compose.train.yml"
           run: trainer
+          propagate-uid-gid: true
           env:
             - BUILDKITE_STEP_ID
           graceful-shutdown: true
       - docker-compose#v3.8.0:
           config: "e2e/docker-compose.infer.yml"
           run: torch_serve
+          propagate-uid-gid: true
           env:
             - BUILDKITE_STEP_ID
           graceful-shutdown: true
-          
+
   - wait  
 
   - label: "clear workspace, e2e folder will be remove after thie step"
