@@ -72,3 +72,7 @@ services:
             - "3000:3000/tcp"
         deploy:
             replicas: 1
+        volumes:
+            - ./adult_income:/workspace
+        environment:
+            GF_PATHS_PROVISIONING: /workspace/grafana/provisioning/
