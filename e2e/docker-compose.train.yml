@@ -14,7 +14,7 @@ services:
             command: persia_launcher compose /workspace/data_compose.py
             volumes:
                 - ./adult_income:/workspace
-                - ./adult_income/${BUILDKITE_STEP_ID}:/resource
+                - ./${BUILDKITE_STEP_ID}:/resource
                 - /data/adult_income:/data/
 
         trainer:
@@ -37,7 +37,7 @@ services:
                 - persia_nats_service
             volumes:
                 - ./adult_income:/workspace
-                - ./adult_income/${BUILDKITE_STEP_ID}:/resource
+                - ./${BUILDKITE_STEP_ID}:/resource
                 - /data/adult_income:/data/
 
         middleware:
@@ -49,7 +49,7 @@ services:
             command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
             volumes:
                 - ./adult_income:/workspace
-                - ./adult_income/${BUILDKITE_STEP_ID}:/resource
+                - ./${BUILDKITE_STEP_ID}:/resource
 
         server:
             env_file:
@@ -60,4 +60,4 @@ services:
             command: bash -c "/workspace/hadoop/launch_hdfs.sh &&  persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml"
             volumes:
                 - ./adult_income:/workspace
-                - ./adult_income/${BUILDKITE_STEP_ID}:/resource
+                - ./${BUILDKITE_STEP_ID}:/resource
