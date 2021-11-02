@@ -174,7 +174,7 @@ impl EmbeddingServiceInner {
         let num_elements: usize = req.iter().map(|x| x.1).sum();
         let mut embeddings = Vec::with_capacity(num_elements);
 
-        let mut index_miss_count: usize = 0;
+        let mut index_miss_count: u64 = 0;
 
         let conf = match is_training {
             true => Some(self.get_configuration().await?),
