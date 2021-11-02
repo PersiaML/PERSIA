@@ -26,7 +26,7 @@ services:
             environment:
                 JOB_ID: 1
             image: persia-${IMAGE_TYPE}-runtime:test
-            command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
+            command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_${IMAGE_TYPE}_infer.yml
             volumes:
                 - ./adult_income:/workspace
             deploy:
@@ -40,7 +40,7 @@ services:
             environment:
                 JOB_ID: 1
             image: persia-${IMAGE_TYPE}-runtime:test
-            command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
+            command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_${IMAGE_TYPE}_infer.yml
             volumes:
                 - ./adult_income:/workspace
             deploy:
