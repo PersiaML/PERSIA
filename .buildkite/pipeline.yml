@@ -34,7 +34,11 @@ steps:
           config: "e2e/docker-compose.infer.yml"
           run: torch_serve
           graceful-shutdown: true
+  - wait  
 
+  - label: "clear workspace, e2e folder will be remove after thie step"
+    key: "clear"
+    command: echo "finish e2e test"
 
   - label: "build and upload the latest ci image"
     branches: "main"
