@@ -44,7 +44,7 @@ pub enum IncrementalUpdateError {
 static METRICS_HOLDER: OnceCell<MetricsHolder> = OnceCell::new();
 
 struct MetricsHolder {
-    pub inc_update_delay: Gauge,
+    pub inc_update_delay_sec: Gauge,
 }
 
 impl MetricsHolder {
@@ -52,7 +52,10 @@ impl MetricsHolder {
         METRICS_HOLDER.get_or_try_init(|| {
             let m = PersiaMetricsManager::get()?;
             let holder = Self {
-                inc_update_delay: m.create_gauge("inc_update_delay", "ATT")?,
+                inc_update_delay_sec: m.create_gauge(
+                    "inc_update_delay_sec",
+                    "The time delay between the package being dumped and being loaded",
+                )?,
             };
             Ok(holder)
         })
@@ -225,7 +228,7 @@ impl PerisaIncrementalUpdateManager {
         let packet: PerisaIncrementalPacket = file_path.read_to_end_speedy().unwrap();
         let delay = current_unix_time() - packet.timestamps;
         if let Ok(m) = MetricsHolder::get() {
-            m.inc_update_delay.set(delay as f64);
+            m.inc_update_delay_sec.set(delay as f64);
         }
         tracing::debug!("loading inc packet, delay is {}s", delay);
         packet.content.into_iter().for_each(|(id, emb)| {

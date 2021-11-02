@@ -178,7 +178,7 @@ impl PersiaMetricsManager {
             metric_families,
             None,
         ) {
-            tracing::error!("failed to push metrics to gateway, {:?}", e);
+            tracing::warn!("failed to push metrics to gateway due to {:?}, please check if prometheus gateway deployed", e);
             self.log_metrics();
         } else {
             tracing::debug!("successed to push metrics");
@@ -205,6 +205,6 @@ impl PersiaMetricsManager {
         let encoder = TextEncoder::new();
         let metric_families = prometheus::gather();
         encoder.encode(&metric_families, &mut buffer).unwrap();
-        tracing::info!("{}", String::from_utf8(buffer).unwrap());
+        tracing::debug!("{}", String::from_utf8(buffer).unwrap());
     }
 }
