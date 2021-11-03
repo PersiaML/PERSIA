@@ -135,7 +135,7 @@ impl SparseModelManager {
         shard_dir
     }
 
-    pub fn get_parrent_dir(&self, root_dir: &PathBuf) -> PathBuf {
+    pub fn get_parent_dir(&self, root_dir: &PathBuf) -> PathBuf {
         let mut parent = root_dir.clone();
         parent.pop();
         parent
@@ -319,7 +319,7 @@ impl SparseModelManager {
                     if dumped >= num_internal_shards {
                         manager.mark_embedding_dump_done(dst_dir.clone(), num_internal_shards)?;
                         if manager.is_master_server() {
-                            let parent_dir = manager.get_parrent_dir(&dst_dir);
+                            let parent_dir = manager.get_parent_dir(&dst_dir);
                             manager
                                 .waiting_for_all_embedding_server_dump(600, parent_dir.clone())?;
                             manager.mark_embedding_dump_done(parent_dir, num_internal_shards)?;
@@ -405,7 +405,7 @@ impl SparseModelManager {
 
                         if num_total_files == loaded {
                             *manager.status.write() = SparseModelManagerStatus::Idle;
-                            let parent = manager.get_parrent_dir(&file_path);
+                            let parent = manager.get_parent_dir(&file_path);
                             tracing::info!("load checkpoint from {:?} compelete", parent);
                         }
 
