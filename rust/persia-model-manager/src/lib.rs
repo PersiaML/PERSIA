@@ -39,7 +39,7 @@ pub enum SparseModelManagerError {
     WrongEmbeddingFileType,
     #[error("not ready error")]
     NotReadyError,
-    #[error("failed to get status error")]
+    #[error("failed to get embedding servers model manager status error")]
     FailedToGetStatus,
     #[error("failed to decode checkpoint info error {0}")]
     DecodeInfoError(String),
