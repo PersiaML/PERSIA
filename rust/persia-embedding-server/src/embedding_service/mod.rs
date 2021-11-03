@@ -14,9 +14,7 @@ use persia_embedding_config::{
 use persia_embedding_holder::{emb_entry::HashMapEmbeddingEntry, PersiaEmbeddingHolder};
 use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
 
-use persia_metrics::{
-    Gauge, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError,
-};
+use persia_metrics::{Gauge, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError};
 use persia_model_manager::{SparseModelManager, SparseModelManagerError, SparseModelManagerStatus};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::{Readable, Writable};
