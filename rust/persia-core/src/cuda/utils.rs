@@ -71,7 +71,7 @@ pub(crate) fn cuda_tensor_h2d<T>(mut tensor: PersiaDenseTensor<T>) -> Result<Asy
     }
 }
 
-pub(crate) fn cuda_dense_tensor_h2d(mut tensor: DenseTensor) -> Result<AsyncTensorOnCuda> {
+pub(crate) fn cuda_dense_tensor_h2d(tensor: DenseTensor) -> Result<AsyncTensorOnCuda> {
     unsafe {
         let stream = CUDA_STREAM_POOL.allocate(0);
         let byte_count = tensor.shape.iter().product::<usize>() * tensor.data.type_size();

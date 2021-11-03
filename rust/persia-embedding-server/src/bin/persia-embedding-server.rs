@@ -18,9 +18,8 @@ use persia_embedding_server::embedding_service::{
     EmbeddingServerNatsService, EmbeddingServerNatsServiceResponder, EmbeddingService,
     EmbeddingServiceInner,
 };
-use persia_full_amount_manager::FullAmountManager;
 use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
-use persia_model_manager::PersiaPersistenceManager;
+use persia_model_manager::SparseModelManager;
 
 #[derive(Debug, StructOpt, Clone)]
 #[structopt()]
@@ -71,9 +70,8 @@ async fn main() -> Result<()> {
     let common_config = PersiaCommonConfig::get()?;
     let server_config = PersiaEmbeddingServerConfig::get()?;
     let embedding_holder = PersiaEmbeddingHolder::get()?;
-    let full_amount_manager = FullAmountManager::get()?;
     let inc_update_manager = PerisaIncrementalUpdateManager::get()?;
-    let model_persistence_manager = PersiaPersistenceManager::get()?;
+    let sparse_model_manager = SparseModelManager::get()?;
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
 
     let inner = Arc::new(EmbeddingServiceInner::new(
@@ -82,8 +80,7 @@ async fn main() -> Result<()> {
         common_config,
         embedding_config,
         inc_update_manager,
-        model_persistence_manager,
-        full_amount_manager,
+        sparse_model_manager,
         args.replica_index,
     ));
 

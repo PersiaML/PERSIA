@@ -4,11 +4,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use persia_libs::{
-    anyhow::Result, futures, indexmap::IndexMap, parking_lot::RwLock, rand, tracing,
+    anyhow::Result, futures, indexmap::IndexMap, itertools::Itertools, parking_lot::RwLock, rand,
+    tracing,
 };
 
+use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
 use persia_embedding_server::middleware_service::MiddlewareServerClient;
-use persia_model_manager::PersiaPersistenceStatus;
+use persia_model_manager::SparseModelManagerStatus;
 
 pub struct PersiaRpcClient {
     pub clients: RwLock<IndexMap<String, Arc<MiddlewareServerClient>>>,
@@ -41,6 +43,15 @@ impl PersiaRpcClient {
             .clone()
     }
 
+    pub fn get_client_by_index(&self, client_index: usize) -> Arc<MiddlewareServerClient> {
+        self.clients
+            .read()
+            .get_index(client_index)
+            .expect("clients not initialized")
+            .1
+            .clone()
+    }
+
     pub fn get_client_by_addr(&self, middleware_addr: &str) -> Arc<MiddlewareServerClient> {
         if self.clients.read().contains_key(middleware_addr) {
             self.clients.read().get(middleware_addr).unwrap().clone()
@@ -56,31 +67,68 @@ impl PersiaRpcClient {
         }
     }
 
-    // TODO(zhuxuefeng): move to nats
+    pub async fn set_embedding(
+        &self,
+        entries: Vec<HashMapEmbeddingEntry>,
+    ) -> Result<(), PersiaError> {
+        let num_middlewares = self.clients.read().len();
+        let num_entries = entries.len();
+
+        let grouped_entries: Vec<Vec<HashMapEmbeddingEntry>> = entries
+            .into_iter()
+            .chunks(num_entries / num_middlewares)
+            .into_iter()
+            .map(|chunk| chunk.collect())
+            .collect();
+
+        let futs = grouped_entries
+            .into_iter()
+            .enumerate()
+            .map(|(client_index, entries)| {
+                let client = self.get_client_by_index(client_index);
+                async move { client.set_embedding(&entries).await }
+            });
+
+        let results = futures::future::try_join_all(futs).await?;
+
+        for res in results {
+            res?;
+        }
+
+        Ok(())
+    }
+
     pub async fn get_embedding_size(&self) -> Result<Vec<usize>, PersiaError> {
         let res = self.get_random_client().get_embedding_size(&()).await??;
         Ok(res)
     }
 
-    // TODO(zhuxuefeng): move to nats
     pub async fn clear_embeddings(&self) -> Result<(), PersiaError> {
         self.get_random_client().clear_embeddings(&()).await??;
         Ok(())
     }
 
-    // TODO(zhuxuefeng): move to nats
     pub async fn dump(&self, dst_dir: String) -> Result<(), PersiaError> {
         self.get_first_client().dump(&dst_dir).await??;
         Ok(())
     }
 
-    // TODO(zhuxuefeng): move to nats
     pub async fn load(&self, src_dir: String) -> Result<(), PersiaError> {
-        self.get_first_client().load(&src_dir).await??;
+        let clients = self.clients.read();
+        let futs = clients.iter().map(|client| {
+            let src_dir = src_dir.clone();
+            async move { client.1.load(&src_dir).await }
+        });
+
+        let results = futures::future::try_join_all(futs).await?;
+
+        for res in results {
+            res?;
+        }
+
         Ok(())
     }
 
-    // TODO(zhuxuefeng): move to nats
     pub async fn wait_for_serving(&self) -> Result<(), PersiaError> {
         let client = self.get_first_client().clone();
 
@@ -105,7 +153,7 @@ impl PersiaRpcClient {
                     return Ok(());
                 }
                 std::thread::sleep(Duration::from_secs(5));
-                let status: Vec<PersiaPersistenceStatus> =
+                let status: Vec<SparseModelManagerStatus> =
                     client.model_manager_status(&()).await.unwrap();
 
                 match self.process_status(status) {
@@ -153,17 +201,16 @@ impl PersiaRpcClient {
         }
     }
 
-    // TODO(zhuxuefeng): move to nats
     pub async fn wait_for_emb_dumping(&self) -> Result<(), PersiaError> {
         let client = self.get_first_client().clone();
 
         loop {
             std::thread::sleep(Duration::from_secs(5));
-            let status: Result<Vec<PersiaPersistenceStatus>, _> =
+            let status: Result<Vec<SparseModelManagerStatus>, _> =
                 client.model_manager_status(&()).await;
             if let Ok(status) = status {
                 if status.iter().any(|s| match s {
-                    PersiaPersistenceStatus::Loading(_) => true,
+                    SparseModelManagerStatus::Loading(_) => true,
                     _ => false,
                 }) {
                     let err_msg = String::from("emb status is loading but waiting for dump.");
@@ -186,31 +233,31 @@ impl PersiaRpcClient {
         }
     }
 
-    fn process_status(&self, status: Vec<PersiaPersistenceStatus>) -> Result<usize, String> {
+    fn process_status(&self, status: Vec<SparseModelManagerStatus>) -> Result<usize, String> {
         let mut num_compeleted: usize = 0;
         let mut errors = Vec::new();
         status
             .into_iter()
             .enumerate()
             .for_each(|(replica_index, s)| match s {
-                PersiaPersistenceStatus::Failed(e) => {
+                SparseModelManagerStatus::Failed(e) => {
                     let err_msg = format!(
                         "emb dump FAILED for server {}, due to {}.",
                         replica_index, e
                     );
                     errors.push(err_msg);
                 }
-                PersiaPersistenceStatus::Loading(p) => {
+                SparseModelManagerStatus::Loading(p) => {
                     tracing::info!(
                         "loading emb for server {}, pregress: {:?}%",
                         replica_index,
                         p * 100.0
                     );
                 }
-                PersiaPersistenceStatus::Idle => {
+                SparseModelManagerStatus::Idle => {
                     num_compeleted = num_compeleted + 1;
                 }
-                PersiaPersistenceStatus::Dumping(p) => {
+                SparseModelManagerStatus::Dumping(p) => {
                     tracing::info!(
                         "dumping emb for server {}, pregress: {:?}%",
                         replica_index,

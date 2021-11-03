@@ -2,7 +2,9 @@ use crate::embedding_service::{
     EmbeddingServerError, EmbeddingServerNatsServicePublisher, EmbeddingServiceClient,
 };
 
+use std::iter::FromIterator;
 use std::ops::MulAssign;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
@@ -25,16 +27,17 @@ use persia_common::{
     ndarray_f16_to_f32, ndarray_f32_to_f16,
     optim::OptimizerConfig,
     EmbeddingBatch, FeatureEmbeddingBatch, FeatureRawEmbeddingBatch, FeatureSumEmbeddingBatch,
-    HashMapEmbeddingEntry, SingleSignInFeatureBatch, SparseBatch, SparseBatchRemoteReference,
+    SingleSignInFeatureBatch, SparseBatch, SparseBatchRemoteReference,
 };
 use persia_embedding_config::{
-    EmbeddingConfig, InstanceInfo, PersiaGlobalConfigError, PersiaMiddlewareConfig,
-    PersiaReplicaInfo, PersiaSparseModelHyperparameters, SlotConfig,
+    EmbeddingConfig, InstanceInfo, PersiaCommonConfig, PersiaGlobalConfigError,
+    PersiaMiddlewareConfig, PersiaReplicaInfo, PersiaSparseModelHyperparameters, SlotConfig,
 };
+use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
 use persia_metrics::{
     Gauge, GaugeVec, Histogram, IntCounterVec, PersiaMetricsManager, PersiaMetricsManagerError,
 };
-use persia_model_manager::PersiaPersistenceStatus;
+use persia_model_manager::{SparseModelManager, SparseModelManagerError, SparseModelManagerStatus};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::{Readable, Writable};
 
@@ -89,6 +92,8 @@ pub enum MiddlewareServerError {
     RpcError(String),
     #[error("embedding server error: {0}")]
     EmbeddingServerError(#[from] EmbeddingServerError),
+    #[error("sparse model manager error: {0}")]
+    SparseModelManagerError(#[from] SparseModelManagerError),
     #[error("forward id not found")]
     ForwardIdNotFound(u64),
     #[error("forward failed")]
@@ -155,7 +160,7 @@ impl AllEmbeddingServerClient {
             .expect("failed to get ips of embedding servers");
 
         instance
-            .update_rpc_clients(servers)
+            .update_rpc_clients(servers, false)
             .await
             .expect("failed to init rpc client for embedding servers");
 
@@ -174,7 +179,7 @@ impl AllEmbeddingServerClient {
         };
 
         instance
-            .update_rpc_clients(servers)
+            .update_rpc_clients(servers, true)
             .await
             .expect("failed to init rpc client for embedding server");
 
@@ -196,16 +201,14 @@ impl AllEmbeddingServerClient {
         futures::future::try_join_all(futs).await.is_ok()
     }
 
-    pub async fn model_manager_status(&self) -> Vec<PersiaPersistenceStatus> {
+    pub async fn model_manager_status(&self) -> Vec<SparseModelManagerStatus> {
         let futs = (0..self.replica_size()).map(|client_idx| async move {
             let client = self.get_client_by_index(client_idx).await;
             client.model_manager_status(&()).await
         });
 
         let status: Vec<_> = futures::future::try_join_all(futs).await.unwrap_or(vec![
-                PersiaPersistenceStatus::Failed(String::from(
-                    "failed to get embedding servers model manager status"
-                ));
+                SparseModelManagerStatus::Failed(SparseModelManagerError::FailedToGetStatus);
                 self.replica_size()
             ]);
 
@@ -271,6 +274,7 @@ impl AllEmbeddingServerClient {
     pub async fn update_rpc_clients(
         &self,
         servers: Vec<String>,
+        ready_for_serving: bool,
     ) -> Result<(), MiddlewareServerError> {
         let mut clients = self.clients.write().await;
         clients.clear();
@@ -282,6 +286,11 @@ impl AllEmbeddingServerClient {
         }
 
         for (i, c) in clients.iter().enumerate() {
+            while ready_for_serving && !c.ready_for_serving(&()).await.unwrap_or(false) {
+                tracing::info!("waiting for embedding server ready...");
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            }
+
             tracing::info!("start to call replica_index");
             match c.replica_index(&()).await {
                 Ok(idx) => {
@@ -601,11 +610,17 @@ pub struct MiddlewareServerInner {
     pub staleness: AtomicUsize,
     pub embedding_config: Arc<EmbeddingConfig>,
     pub middleware_config: Arc<PersiaMiddlewareConfig>,
+    pub sparse_model_manager: Arc<SparseModelManager>,
 }
 
 impl MiddlewareServerInner {
     fn get_id(&self) -> u64 {
         self.forward_id.fetch_add(1, Ordering::AcqRel)
+    }
+
+    fn is_master_server(&self) -> Result<bool, MiddlewareServerError> {
+        let repilca_info = PersiaReplicaInfo::get()?;
+        Ok(repilca_info.is_master())
     }
 
     async fn forward_batched(
@@ -902,7 +917,7 @@ impl MiddlewareServerInner {
         result
     }
 
-    pub async fn model_manager_status(&self) -> Vec<PersiaPersistenceStatus> {
+    pub async fn model_manager_status(&self) -> Vec<SparseModelManagerStatus> {
         let result = self
             .all_embedding_server_client
             .model_manager_status()
@@ -913,14 +928,14 @@ impl MiddlewareServerInner {
 
     pub async fn set_embedding(
         &self,
-        req: Vec<(u64, HashMapEmbeddingEntry)>,
+        req: Vec<HashMapEmbeddingEntry>,
     ) -> Result<(), MiddlewareServerError> {
         let replica_size = self.replica_size;
         let futs: Vec<_> = tokio::task::block_in_place(|| {
             let grouped_entries = req
                 .into_iter()
-                .sorted_by_key(|(k, _)| sign_to_shard_modulo(*k, replica_size))
-                .group_by(|(k, _)| sign_to_shard_modulo(*k, replica_size));
+                .sorted_by_key(|e| sign_to_shard_modulo(e.sign(), replica_size))
+                .group_by(|e| sign_to_shard_modulo(e.sign(), replica_size));
 
             grouped_entries
                 .into_iter()
@@ -1103,6 +1118,28 @@ impl MiddlewareServerInner {
     }
 
     pub async fn load(&self, req: String) -> Result<(), MiddlewareServerError> {
+        let emb_dir = PathBuf::from(req.clone());
+        let model_info = self
+            .sparse_model_manager
+            .load_embedding_checkpoint_info(&emb_dir)?;
+        if model_info.num_shards == self.all_embedding_server_client.dst_replica_size {
+            tracing::info!("loading embedding from {} via embedding servers", req);
+            self.load_embedding_via_emb_servers(req).await?;
+        } else {
+            tracing::info!("loading embedding from {} via middleware servers", req);
+            self.load_embedding_via_middlewares(req, model_info.num_shards)
+                .await?;
+        }
+        Ok(())
+    }
+
+    pub async fn load_embedding_via_emb_servers(
+        &self,
+        req: String,
+    ) -> Result<(), MiddlewareServerError> {
+        if !self.is_master_server()? {
+            return Ok(());
+        }
         let inner = self.clone();
         let futs = (0..inner.all_embedding_server_client.replica_size()).map(|client_idx| {
             let req = req.clone();
@@ -1120,6 +1157,72 @@ impl MiddlewareServerInner {
         });
         let result = futures::future::try_join_all(futs).await.map(|_| ());
         result
+    }
+
+    pub async fn load_embedding_via_middlewares(
+        &self,
+        req: String,
+        num_model_shards: usize,
+    ) -> Result<(), MiddlewareServerError> {
+        let root_dir = PathBuf::from(req);
+        let repilca_info = PersiaReplicaInfo::get()?;
+        let mut dst_shard_idx = repilca_info.replica_index;
+
+        let mut emb_file_list: Vec<PathBuf> = Vec::new();
+        while dst_shard_idx < num_model_shards {
+            let shard_dir = self
+                .sparse_model_manager
+                .get_other_shard_dir(&root_dir, dst_shard_idx);
+            let mut shard_file_list = self
+                .sparse_model_manager
+                .get_emb_file_list_in_dir(shard_dir)?;
+            emb_file_list.append(&mut shard_file_list);
+
+            dst_shard_idx += repilca_info.replica_size;
+        }
+
+        tracing::debug!("embedding filelist: {:?}", emb_file_list);
+
+        if emb_file_list.len() == 0 {
+            return Ok(());
+        }
+
+        let num_embedding_io_workers = PersiaCommonConfig::get()?.num_embedding_io_workers;
+        let num_file_per_worker = emb_file_list.len() / num_embedding_io_workers;
+
+        let num_files = emb_file_list.len();
+        let loaded = Arc::new(AtomicUsize::new(0));
+
+        let grouped_emb_file_list: Vec<Vec<PathBuf>> = emb_file_list
+            .into_iter()
+            .chunks(num_file_per_worker)
+            .into_iter()
+            .map(|chunk| chunk.collect())
+            .collect();
+
+        let futs: Vec<_> = grouped_emb_file_list
+            .into_iter()
+            .map(|file_list| {
+                let middleware_inner = self.clone();
+                let sparse_model_manager = self.sparse_model_manager.clone();
+                let loaded = loaded.clone();
+                async move {
+                    for file_path in file_list.into_iter() {
+                        let array_linked_list = tokio::task::block_in_place(|| {
+                            sparse_model_manager.load_array_linked_list(file_path)
+                        })?;
+                        let entries = Vec::from_iter(array_linked_list.into_iter());
+                        middleware_inner.set_embedding(entries).await?;
+                        let cur_loaded = loaded.fetch_add(1, Ordering::AcqRel) + 1;
+                        let progress = (cur_loaded as f32 / num_files as f32) * 100.0_f32;
+                        tracing::info!("loading embedding via middleware, pregress: {}%", progress);
+                    }
+                    Ok(())
+                }
+            })
+            .collect();
+
+        futures::future::try_join_all(futs).await.map(|_| ())
     }
 
     pub async fn configure_embedding_servers(
@@ -1189,7 +1292,7 @@ impl MiddlewareServerInner {
             MiddlewareServerError::RpcError(_) => {
                 let servers = self.all_embedding_server_client.get_all_addresses().await?;
                 self.all_embedding_server_client
-                    .update_rpc_clients(servers)
+                    .update_rpc_clients(servers, false)
                     .await
             }
             _ => Ok(()),
@@ -1246,13 +1349,13 @@ impl MiddlewareServer {
         self.inner.ready_for_serving().await
     }
 
-    pub async fn model_manager_status(&self, _req: ()) -> Vec<PersiaPersistenceStatus> {
+    pub async fn model_manager_status(&self, _req: ()) -> Vec<SparseModelManagerStatus> {
         self.inner.model_manager_status().await
     }
 
     pub async fn set_embedding(
         &self,
-        req: Vec<(u64, HashMapEmbeddingEntry)>,
+        req: Vec<HashMapEmbeddingEntry>,
     ) -> Result<(), MiddlewareServerError> {
         self.inner.set_embedding(req).await
     }
@@ -1365,7 +1468,7 @@ impl MiddlewareNatsService {
         self.inner.ready_for_serving().await
     }
 
-    pub async fn model_manager_status(&self, _req: ()) -> Vec<PersiaPersistenceStatus> {
+    pub async fn model_manager_status(&self, _req: ()) -> Vec<SparseModelManagerStatus> {
         self.inner.model_manager_status().await
     }
 

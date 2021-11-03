@@ -72,7 +72,7 @@ pub trait Optimizable {
         emb_opt_state: &Option<Vec<f32>>,
     );
 
-    fn get_emb_state(&self, state: &Option<Vec<f32>>, idx: usize) -> Option<Vec<f32>> {
+    fn get_emb_state(&self, _state: &Option<Vec<f32>>, _idx: usize) -> Option<Vec<f32>> {
         None
     }
 

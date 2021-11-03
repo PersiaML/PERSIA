@@ -18,6 +18,7 @@ paste = "1"
 persia-common = {path = "../persia-common"}
 persia-embedding-config = {path = "../persia-embedding-config"}
 persia-embedding-server = {path = "../persia-embedding-server"}
+persia-embedding-holder = {path = "../persia-embedding-holder"}
 persia-libs = {path = "../persia-libs"}
 persia-metrics = {path = "../persia-metrics"}
 persia-model-manager = {path = "../persia-model-manager"}
