@@ -1,4 +1,4 @@
-use persia_libs::{async_lock, hashbrown::HashMap, parking_lot};
+use persia_libs::parking_lot;
 use std::hash::{Hash, Hasher};
 
 #[derive(Debug)]
@@ -32,41 +32,5 @@ impl<T, K> Sharded<T, K> {
         K: Hash + Eq + Clone,
     {
         unsafe { self.inner.get_unchecked(idx) }
-    }
-}
-
-#[derive(Debug)]
-pub struct ShardedAsync<T, K> {
-    pub inner: Vec<async_lock::RwLock<T>>,
-    pub phantom: std::marker::PhantomData<K>,
-}
-
-impl<T, K> ShardedAsync<T, K> {
-    #[inline]
-    pub fn shard(&self, key: &K) -> &async_lock::RwLock<T>
-    where
-        K: Hash + Eq + Clone,
-    {
-        unsafe { self.inner.get_unchecked(get_index(key, self.inner.len())) }
-    }
-}
-
-pub type ShardedMap<K, V> = Sharded<HashMap<K, V>, K>;
-
-impl<K, V> ShardedMap<K, V> {
-    pub fn len(&self) -> usize {
-        self.inner.iter().map(|x| x.read().len()).sum::<usize>()
-    }
-}
-
-pub type ShardedAsyncMap<K, V> = ShardedAsync<HashMap<K, V>, K>;
-
-impl<K, V> ShardedAsyncMap<K, V> {
-    pub async fn len(&self) -> usize {
-        let mut total = 0;
-        for x in self.inner.iter() {
-            total += x.read().await.len();
-        }
-        total
     }
 }

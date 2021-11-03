@@ -41,8 +41,8 @@ pub enum SparseModelManagerError {
     NotReadyError,
     #[error("failed to get status error")]
     FailedToGetStatus,
-    #[error("failed to decode checkpoint info error")]
-    DecodeInfoError,
+    #[error("failed to decode checkpoint info error {0}")]
+    DecodeInfoError(String),
 }
 
 impl From<AnyhowError> for SparseModelManagerError {
@@ -135,10 +135,10 @@ impl SparseModelManager {
         shard_dir
     }
 
-    pub fn get_upper_dir(&self, root_dir: &PathBuf) -> PathBuf {
-        let mut upper = root_dir.clone();
-        upper.pop();
-        upper
+    pub fn get_parrent_dir(&self, root_dir: &PathBuf) -> PathBuf {
+        let mut parent = root_dir.clone();
+        parent.pop();
+        parent
     }
 
     pub fn get_internam_shard_filename(&self, internal_shard_idx: usize) -> PathBuf {
@@ -193,7 +193,8 @@ impl SparseModelManager {
         let s: String = emb_dump_done_path.read_to_string()?;
         tracing::debug!("load_embedding_checkpoint_info {}", s);
 
-        serde_yaml::from_str(&s).map_err(|_| SparseModelManagerError::DecodeInfoError)
+        serde_yaml::from_str(&s)
+            .map_err(|e| SparseModelManagerError::DecodeInfoError(format!("{:?}", e)))
     }
 
     pub fn waiting_for_all_embedding_server_dump(
@@ -276,7 +277,7 @@ impl SparseModelManager {
         &self,
         file_path: PathBuf,
     ) -> Result<ArrayLinkedList<HashMapEmbeddingEntry>, SparseModelManagerError> {
-        tracing::debug!("loading from {:?}", file_path);
+        tracing::debug!("loading embedding linked list from {:?}", file_path);
         let emb_path = PersiaPath::from_pathbuf(file_path);
         let decoded: ArrayLinkedList<HashMapEmbeddingEntry> = emb_path.read_to_end_speedy()?;
         Ok(decoded)
@@ -318,10 +319,10 @@ impl SparseModelManager {
                     if dumped >= num_internal_shards {
                         manager.mark_embedding_dump_done(dst_dir.clone(), num_internal_shards)?;
                         if manager.is_master_server() {
-                            let upper_dir = manager.get_upper_dir(&dst_dir);
+                            let parent_dir = manager.get_parrent_dir(&dst_dir);
                             manager
-                                .waiting_for_all_embedding_server_dump(600, upper_dir.clone())?;
-                            manager.mark_embedding_dump_done(upper_dir, num_internal_shards)?;
+                                .waiting_for_all_embedding_server_dump(600, parent_dir.clone())?;
+                            manager.mark_embedding_dump_done(parent_dir, num_internal_shards)?;
                         }
 
                         tracing::info!("dump embedding to {:?} compelete", dst_dir);
@@ -342,16 +343,16 @@ impl SparseModelManager {
 
     pub fn get_emb_file_list_in_dir(
         &self,
-        dst_dir: PathBuf,
+        dir: PathBuf,
     ) -> Result<Vec<PathBuf>, SparseModelManagerError> {
-        let done = self.check_embedding_dump_done(&dst_dir)?;
+        let done = self.check_embedding_dump_done(&dir)?;
         if !done {
             return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint(
-                format!("{:?}", &dst_dir),
+                format!("{:?}", &dir),
             ));
         }
-        let persia_dst_dir = PersiaPath::from_pathbuf(dst_dir.clone());
-        let file_list = persia_dst_dir.list()?;
+        let persia_dir = PersiaPath::from_pathbuf(dir.clone());
+        let file_list = persia_dir.list()?;
         tracing::debug!("file_list is {:?}", file_list);
 
         let file_list: Vec<PathBuf> = file_list
@@ -363,7 +364,7 @@ impl SparseModelManager {
         if file_list.len() == 0 {
             tracing::error!("trying to load embedding from an empty dir");
             return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint(
-                format!("{:?}", &dst_dir),
+                format!("{:?}", &dir),
             ));
         }
 
@@ -372,12 +373,12 @@ impl SparseModelManager {
 
     pub fn load_embedding_from_dir(
         &self,
-        dst_dir: PathBuf,
+        dir: PathBuf,
         embedding_holder: PersiaEmbeddingHolder,
     ) -> Result<(), SparseModelManagerError> {
-        tracing::info!("start to load embedding from dir {:?}", dst_dir);
+        tracing::info!("start to load embedding from dir {:?}", dir);
 
-        let file_list = self.get_emb_file_list_in_dir(dst_dir)?;
+        let file_list = self.get_emb_file_list_in_dir(dir)?;
 
         let num_total_files = file_list.len();
         let num_loaded_files = Arc::new(AtomicUsize::new(0));
@@ -404,8 +405,8 @@ impl SparseModelManager {
 
                         if num_total_files == loaded {
                             *manager.status.write() = SparseModelManagerStatus::Idle;
-                            let upper = manager.get_upper_dir(&file_path);
-                            tracing::info!("load checkpoint from {:?} compelete", upper);
+                            let parent = manager.get_parrent_dir(&file_path);
+                            tracing::info!("load checkpoint from {:?} compelete", parent);
                         }
 
                         Ok(())
