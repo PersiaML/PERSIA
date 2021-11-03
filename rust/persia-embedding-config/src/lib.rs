@@ -575,6 +575,12 @@ impl EmbeddingConfig {
             None => Err(PersiaGlobalConfigError::NotReadyError),
         }
     }
+
+    pub fn get_slot_by_feature_name(&self, feature_name: &str) -> &SlotConfig {
+        self.slots_config
+            .get(feature_name)
+            .expect(format!("slot: {} not found", feature_name).as_str())
+    }
 }
 
 pub fn parse_embedding_config(config: EmbeddingConfig) -> EmbeddingConfig {

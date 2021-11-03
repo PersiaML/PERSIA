@@ -141,7 +141,7 @@ impl AllEmbeddingServerClient {
             .await;
 
         let dst_replica_info =
-            dst_replica_info.expect("failed to get replica info of embedding server");
+            dst_replica_info.expect("failed to get replica info of embedding servers");
 
         let instance = Self {
             clients: RwLock::new(Vec::with_capacity(dst_replica_info.replica_size)),
@@ -152,19 +152,19 @@ impl AllEmbeddingServerClient {
         let servers = instance
             .get_all_addresses()
             .await
-            .expect("failed to get ips of servers");
+            .expect("failed to get ips of embedding servers");
 
         instance
             .update_rpc_clients(servers)
             .await
-            .expect("failed to init rpc client for embedding server");
+            .expect("failed to init rpc client for embedding servers");
 
         instance
     }
 
     pub async fn with_addrs(servers: Vec<String>) -> Self {
         tracing::info!(
-            "AllEmbeddingServerClient::with_addrs, servers are {:?}",
+            "AllEmbeddingServerClient::with_addrs, embedding servers are {:?}",
             servers
         );
         let instance = Self {
@@ -204,7 +204,7 @@ impl AllEmbeddingServerClient {
 
         let status: Vec<_> = futures::future::try_join_all(futs).await.unwrap_or(vec![
                 PersiaPersistenceStatus::Failed(String::from(
-                    "failed to get status"
+                    "failed to get embedding servers model manager status"
                 ));
                 self.replica_size()
             ]);
@@ -232,7 +232,7 @@ impl AllEmbeddingServerClient {
         let addr = self
             .nats_publisher
             .as_ref()
-            .expect("nats_publisher is None, you are using infer mode")
+            .expect("nats_publisher is None, you are using inference mode")
             .publish_get_address(&(), Some(replica_index))
             .await??;
         Ok(addr)
@@ -240,18 +240,21 @@ impl AllEmbeddingServerClient {
 
     pub async fn get_all_addresses(&self) -> Result<Vec<String>, MiddlewareServerError> {
         let futs = (0..self.dst_replica_size).map(|replica_index| async move {
-            tracing::info!("trying to get ip address of server {}", replica_index);
+            tracing::info!(
+                "trying to get ip address of embedding server {}",
+                replica_index
+            );
             retry(ExponentialBackoff::default(), || async {
                 let addr = self.get_address(replica_index).await;
                 if addr.is_err() {
                     tracing::warn!(
-                        "failed to get address of server {}, due to {:?}, retrying",
+                        "failed to get address of embedding servers {}, due to {:?}, retrying",
                         replica_index,
                         addr
                     );
                 } else {
                     tracing::info!(
-                        "succeed to get address of embedding server {}, {:?}",
+                        "succeed to get address of embedding servers {}, {:?}",
                         replica_index,
                         addr
                     );
@@ -309,11 +312,7 @@ pub fn sign_to_shard_modulo(sign: u64, replica_size: u64) -> u64 {
 #[inline]
 pub fn indices_to_hashstack_indices(indices: &mut SparseBatch, config: &EmbeddingConfig) -> () {
     for feature_batch in indices.batches.iter_mut() {
-        let slot_conf = config
-            .slots_config
-            .get(&feature_batch.feature_name)
-            .expect("slot not found");
-
+        let slot_conf = config.get_slot_by_feature_name(&feature_batch.feature_name);
         if slot_conf.hash_stack_config.hash_stack_rounds > 0 {
             let mut hash_stack_indices: Vec<HashMap<u64, Vec<(u16, u16)>>> =
                 vec![HashMap::new(); slot_conf.hash_stack_config.hash_stack_rounds];
@@ -369,10 +368,7 @@ pub fn indices_add_prefix(indices: &mut SparseBatch, config: &EmbeddingConfig) -
         u64::MAX
     };
     for feature_batch in indices.batches.iter_mut() {
-        let slot_conf = config
-            .slots_config
-            .get(&feature_batch.feature_name)
-            .expect("slot not found");
+        let slot_conf = config.get_slot_by_feature_name(&feature_batch.feature_name);
         if slot_conf.index_prefix > 0 {
             for single_sign in feature_batch.index_batch.iter_mut() {
                 single_sign.sign %= feature_spacing;
@@ -425,10 +421,7 @@ pub fn lookup_batched_all_slots_preprocess(
         // Vec<Vec<SignWithConfig>> into Vec<Vec<id>>,
         let mut results = vec![Vec::new(); replica_size as usize];
         for (feature_idx, feature_batch) in indices.batches.iter().enumerate() {
-            let slot_conf = config
-                .slots_config
-                .get(&feature_batch.feature_name)
-                .expect("slot not found");
+            let slot_conf = config.get_slot_by_feature_name(&feature_batch.feature_name);
             for (sign_idx, single_sign) in feature_batch.index_batch.iter().enumerate() {
                 let replica_index = sign_to_shard_modulo(single_sign.sign, replica_size);
                 unsafe {
@@ -466,10 +459,7 @@ pub fn lookup_batched_all_slots_postprocess<'a>(
         .batches
         .iter()
         .map(|x| {
-            let slot_conf = config
-                .slots_config
-                .get(x.feature_name.as_str())
-                .expect("slot not found");
+            let slot_conf = config.get_slot_by_feature_name(&x.feature_name);
             let (feature_len, sign2idx) = if slot_conf.embedding_summation {
                 (x.batch_size as usize, HashMap::new())
             } else {
@@ -665,13 +655,6 @@ impl MiddlewareServerInner {
         Ok(id)
     }
 
-    fn get_slot_conf(&self, slot_name: &str) -> &SlotConfig {
-        self.embedding_config
-            .slots_config
-            .get(slot_name)
-            .expect("slot not found")
-    }
-
     pub async fn update_all_batched_gradients(
         &self,
         embedding_gradient_batch: &mut EmbeddingGradientBatch,
@@ -695,7 +678,9 @@ impl MiddlewareServerInner {
                     let feature_batch = indices_kv
                         .get(&feature_gradient.feature_name.as_str())
                         .unwrap();
-                    let slot_conf = self.get_slot_conf(feature_batch.feature_name.as_str());
+                    let slot_conf = self
+                        .embedding_config
+                        .get_slot_by_feature_name(feature_batch.feature_name.as_str());
                     let raw_gradients = std::mem::take(&mut feature_gradient.gradients);
 
                     if tokio::task::block_in_place(|| match &raw_gradients {

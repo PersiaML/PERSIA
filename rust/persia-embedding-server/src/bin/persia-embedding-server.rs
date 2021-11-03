@@ -43,6 +43,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_env("LOG_LEVEL"))
         .init();
+
     shadow!(build);
     eprintln!("project_name: {}", build::PROJECT_NAME);
     eprintln!("is_debug: {}", shadow_rs::is_debug());
