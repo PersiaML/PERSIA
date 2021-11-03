@@ -433,7 +433,7 @@ class EmbeddingCtx(BaseCtx):
 
         self.load_embedding(src_dir, blocking=blocking)
 
-    def dump_embedding(self, dst_dir: str, blocking: bool = False):
+    def dump_embedding(self, dst_dir: str, blocking: bool = True):
         """Dump embeddings to ``dst_dir``. Use ``TrainCtx.wait_for_dump_embedding`` to wait until finished
         if ``blocking=False``.
 
@@ -888,3 +888,8 @@ class InferCtx(EmbeddingCtx):
 
         for addr in middleware_addrs:
             self.common_context.init_rpc_client_with_addr(addr)
+
+    r"""Wait for middleware and embedding server ready for serving."""
+
+    def wait_for_serving(self):
+        self.common_context.wait_for_serving()

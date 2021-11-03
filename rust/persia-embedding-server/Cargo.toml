@@ -11,8 +11,6 @@ farmhash = "1"
 persia-common = {path = "../persia-common", default-features = false}
 persia-embedding-config = {path = "../persia-embedding-config"}
 persia-embedding-holder = {path = "../persia-embedding-holder"}
-persia-eviction-map = {path = "../persia-eviction-map"}
-persia-full-amount-manager = {path = "../persia-full-amount-manager"}
 persia-incremental-update-manager = {path = "../persia-incremental-update-manager"}
 persia-libs = {path = "../persia-libs"}
 persia-metrics = {path = "../persia-metrics"}

@@ -89,6 +89,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "array-linked-list"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7a2da8beedbfae0b5ec522abb1a1436ff693f2e16829704a4f8538888558079"
+
+[[package]]
 name = "ascii"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1075,15 +1081,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hashlink"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7249a3129cbc1ffccd74857f81464a323a152173cdb134e0fd81bc803b29facf"
-dependencies = [
- "hashbrown 0.11.2",
-]
-
-[[package]]
 name = "heck"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1841,6 +1838,7 @@ dependencies = [
  "paste 1.0.5",
  "persia-common",
  "persia-embedding-config",
+ "persia-embedding-holder",
  "persia-embedding-server",
  "persia-libs",
  "persia-metrics",
@@ -1869,11 +1867,16 @@ dependencies = [
 name = "persia-embedding-holder"
 version = "0.1.0"
 dependencies = [
+ "ahash 0.7.5",
+ "array-linked-list",
+ "linked-hash-map",
  "persia-common",
  "persia-embedding-config",
- "persia-eviction-map",
  "persia-libs",
  "persia-speedy",
+ "rand 0.8.4",
+ "rand_distr",
+ "tracing",
 ]
 
 [[package]]
@@ -1885,8 +1888,6 @@ dependencies = [
  "persia-common",
  "persia-embedding-config",
  "persia-embedding-holder",
- "persia-eviction-map",
- "persia-full-amount-manager",
  "persia-incremental-update-manager",
  "persia-libs",
  "persia-metrics",
@@ -1903,32 +1904,6 @@ dependencies = [
  "structopt",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "persia-eviction-map"
-version = "0.1.0"
-dependencies = [
- "ahash 0.7.5",
- "hashlink",
- "linked-hash-map",
- "persia-common",
- "persia-embedding-config",
- "persia-libs",
- "rand 0.8.4",
- "rand_distr",
- "tracing",
-]
-
-[[package]]
-name = "persia-full-amount-manager"
-version = "0.1.0"
-dependencies = [
- "persia-common",
- "persia-embedding-config",
- "persia-eviction-map",
- "persia-libs",
- "persia-speedy",
 ]
 
 [[package]]
@@ -1952,6 +1927,7 @@ dependencies = [
  "anyhow",
  "async-lock",
  "backoff",
+ "bincode",
  "bytes",
  "chrono",
  "color-eyre",
@@ -2001,8 +1977,6 @@ dependencies = [
  "persia-common",
  "persia-embedding-config",
  "persia-embedding-holder",
- "persia-eviction-map",
- "persia-full-amount-manager",
  "persia-libs",
  "persia-speedy",
  "persia-storage",

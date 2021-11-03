@@ -9,6 +9,14 @@ version = "0.1.0"
 [dependencies]
 persia-embedding-config = {path = "../persia-embedding-config"}
 persia-common = {path = "../persia-common"}
-persia-eviction-map = {path = "../persia-eviction-map"}
 persia-libs = {path = "../persia-libs"}
 persia-speedy = "0.9"
+array-linked-list = "0.1.0"
+ahash = "0.7"
+
+
+[dev-dependencies]
+linked-hash-map = "0.5"
+rand = "0.8"
+rand_distr = "0.4"
+tracing = "0.1"

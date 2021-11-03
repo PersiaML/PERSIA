@@ -2,27 +2,22 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use persia_libs::{
-    bytes, bytes::Bytes, hyper, lz4, once_cell, parking_lot, rand, rand::Rng, thiserror, tokio,
-    tracing,
+    bytes, bytes::Bytes, hyper, lz4, once_cell, rand, rand::Rng, thiserror, tokio, tracing,
 };
 use snafu::ResultExt;
 
-use persia_common::{
-    optim::{Optimizable, Optimizer, OptimizerConfig},
-    HashMapEmbeddingEntry,
-};
+use persia_common::optim::{Optimizable, Optimizer, OptimizerConfig};
 use persia_embedding_config::{
     EmbeddingConfig, InstanceInfo, PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig,
     PersiaGlobalConfigError, PersiaReplicaInfo, PersiaSparseModelHyperparameters,
 };
-use persia_embedding_holder::PersiaEmbeddingHolder;
-use persia_full_amount_manager::FullAmountManager;
+use persia_embedding_holder::{emb_entry::HashMapEmbeddingEntry, PersiaEmbeddingHolder};
 use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
 
-use persia_metrics::{Gauge, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError};
-use persia_model_manager::{
-    PersiaPersistenceManager, PersiaPersistenceStatus, PersistenceManagerError,
+use persia_metrics::{
+    Gauge, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError,
 };
+use persia_model_manager::{SparseModelManager, SparseModelManagerError, SparseModelManagerStatus};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::{Readable, Writable};
 
@@ -93,7 +88,7 @@ pub enum EmbeddingServerError {
     #[error("service not configured error")]
     NotConfiguredError,
     #[error("model manager error: {0}")]
-    PersistenceManagerError(#[from] PersistenceManagerError),
+    SparseModelManagerError(#[from] SparseModelManagerError),
     #[error("nats error: {0}")]
     NatsError(#[from] NatsError),
     #[error("optimizer not found error")]
@@ -114,8 +109,7 @@ pub struct EmbeddingServiceInner {
     pub common_config: Arc<PersiaCommonConfig>,
     pub embedding_config: Arc<EmbeddingConfig>,
     pub inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
-    pub model_persistence_manager: Arc<PersiaPersistenceManager>,
-    pub full_amount_manager: Arc<FullAmountManager>,
+    pub sparse_model_manager: Arc<SparseModelManager>,
     pub replica_index: usize,
 }
 
@@ -126,8 +120,7 @@ impl EmbeddingServiceInner {
         common_config: Arc<PersiaCommonConfig>,
         embedding_config: Arc<EmbeddingConfig>,
         inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
-        model_persistence_manager: Arc<PersiaPersistenceManager>,
-        full_amount_manager: Arc<FullAmountManager>,
+        sparse_model_manager: Arc<SparseModelManager>,
         replica_index: usize,
     ) -> Self {
         Self {
@@ -139,8 +132,7 @@ impl EmbeddingServiceInner {
             common_config,
             embedding_config,
             inc_update_manager,
-            model_persistence_manager,
-            full_amount_manager,
+            sparse_model_manager,
             replica_index,
         }
     }
@@ -190,11 +182,10 @@ impl EmbeddingServiceInner {
                 }
                 let optimizer = optimizer.as_ref().unwrap();
 
-                let mut evcited_ids = Vec::with_capacity(req.len());
-
                 req.iter().for_each(|(sign, dim)| {
                         let conf = conf.as_ref().unwrap();
-                        let e = self.embedding.get_value_refresh(sign);
+                        let mut shard = self.embedding.shard(sign).write();
+                        let e = shard.get_refresh(&sign);
                         match e {
                             None => {
                                 if rand::thread_rng().gen_range(0f32..1f32) < conf.admit_probability {
@@ -203,16 +194,12 @@ impl EmbeddingServiceInner {
                                         *dim,
                                         optimizer.require_space(*dim),
                                         *sign,
+                                        *sign,
                                     );
 
                                     optimizer.state_initialization(emb_entry.as_mut_emb_entry_slice(), *dim);
                                     embeddings.extend_from_slice(&emb_entry.as_emb_entry_slice()[..*dim]);
-                                    let evcited = self.embedding
-                                        .insert(*sign, Arc::new(parking_lot::RwLock::new(emb_entry)));
-
-                                    if evcited.is_some() {
-                                        evcited_ids.push(sign.clone());
-                                    }
+                                    let _ = shard.insert(*sign, emb_entry);
 
                                     index_miss_count += 1;
                                 } else {
@@ -220,60 +207,46 @@ impl EmbeddingServiceInner {
                                 }
                             }
                             Some(entry) => {
-                                if let Some(entry) = entry.upgrade() {
-                                    let entry_dim = { entry.read().dim() };
-                                    if entry_dim != *dim {
-                                        tracing::error!("dimensional mismatch on sign {}, in hashmap dim {}, requested dim {}", sign, entry_dim, dim);
-                                        let entry = HashMapEmbeddingEntry::new(
-                                            &conf.initialization_method,
-                                            *dim,
-                                            0,
-                                            *sign,
-                                        );
-                                        embeddings.extend_from_slice(entry.emb());
-                                        let evcited = self
-                                            .embedding
-                                            .insert(*sign, Arc::new(parking_lot::RwLock::new(entry)));
-                                        if evcited.is_some() {
-                                            evcited_ids.push(sign.clone());
-                                        }
-                                    } else {
-                                        embeddings.extend_from_slice(entry.read().emb());
-                                    }
+                                let entry_dim = entry.dim();
+                                if entry_dim != *dim {
+                                    tracing::error!("dimension not match on sign {}. Expected dimension {}, got dimension {}.", sign, entry_dim, dim);
+                                    let entry = HashMapEmbeddingEntry::new(
+                                        &conf.initialization_method,
+                                        *dim,
+                                        optimizer.require_space(*dim),
+                                        *sign,
+                                        *sign,
+                                    );
+                                    embeddings.extend_from_slice(entry.emb());
+                                    let _ = shard.insert(*sign, entry);
+                                } else {
+                                    embeddings.extend_from_slice(entry.emb());
                                 }
                             }
                         }
                     });
-                if let Err(_) = self.full_amount_manager.try_commit_evicted_ids(evcited_ids) {
-                    tracing::warn!(
-                            "commit to full_amount_manager failed, it is ok when dumping emb, otherwise, 
-                            please try a bigger full_amount_manager_buffer_size or num_hashmap_internal_shards"
-                        );
-                }
                 Ok(())
             }
             false => {
                 req.iter().for_each(|(sign, dim)| {
-                        let e = self.embedding.get_value(sign);
-                        match e {
-                            None => {
+                    let shard = self.embedding.shard(sign).read();
+                    match shard.get(sign) {
+                        Some(entry) => {
+                            let entry_dim = entry.dim();
+                            if entry_dim != *dim {
+                                tracing::error!("dimension not match on sign {}. Expected dimension {}, got dimension {}.",
+                                    sign, entry_dim, dim);
                                 embeddings.extend_from_slice(vec![0f32; *dim].as_slice());
-                                index_miss_count += 1;
-                            }
-                            Some(entry) => {
-                                if let Some(entry) = entry.upgrade() {
-                                    let entry_dim = { entry.read().dim() };
-                                    if entry_dim != *dim {
-                                        tracing::error!("dimensional mismatch on sign {}, in hashmap dim {}, requested dim {}",
-                                            sign, entry_dim, dim);
-                                        embeddings.extend_from_slice(vec![0f32; *dim].as_slice());
-                                    } else {
-                                        embeddings.extend_from_slice(entry.read().emb());
-                                    }
-                                }
+                            } else {
+                                embeddings.extend_from_slice(entry.emb());
                             }
                         }
-                    });
+                        None => {
+                            embeddings.extend_from_slice(vec![0f32; *dim].as_slice());
+                            index_miss_count += 1;
+                        },
+                    }
+                });
                 Ok(())
             }
         })?;
@@ -288,12 +261,12 @@ impl EmbeddingServiceInner {
     }
 
     pub async fn ready_for_serving(&self) -> bool {
-        let model_status = self.model_persistence_manager.get_status();
+        let model_status = self.sparse_model_manager.get_status();
         let model_ready = match model_status {
-            PersiaPersistenceStatus::Dumping(_) => true,
-            PersiaPersistenceStatus::Idle => true,
-            PersiaPersistenceStatus::Loading(_) => false,
-            PersiaPersistenceStatus::Failed(_) => false,
+            SparseModelManagerStatus::Dumping(_) => true,
+            SparseModelManagerStatus::Idle => true,
+            SparseModelManagerStatus::Loading(_) => false,
+            SparseModelManagerStatus::Failed(_) => false,
         };
         if !model_ready {
             return false;
@@ -305,33 +278,25 @@ impl EmbeddingServiceInner {
         }
     }
 
-    pub async fn model_manager_status(&self) -> PersiaPersistenceStatus {
-        let status = self.model_persistence_manager.get_status();
+    pub async fn model_manager_status(&self) -> SparseModelManagerStatus {
+        let status = self.sparse_model_manager.get_status();
         status
     }
 
     pub async fn set_embedding(
         &self,
-        embeddings: Vec<(u64, HashMapEmbeddingEntry)>,
+        embeddings: Vec<HashMapEmbeddingEntry>,
     ) -> Result<(), EmbeddingServerError> {
         let start_time = std::time::Instant::now();
-        let mut evcited_ids = Vec::with_capacity(embeddings.len());
+
         tokio::task::block_in_place(|| {
-            embeddings.into_iter().for_each(|(id, entry)| {
-                let evcited = self
-                    .embedding
-                    .insert(id, Arc::new(parking_lot::RwLock::new(entry)));
-                if evcited.is_some() {
-                    evcited_ids.push(id);
-                }
+            embeddings.into_iter().for_each(|entry| {
+                let id = entry.sign();
+                let mut shard = self.embedding.shard(&id).write();
+                let _ = shard.insert(id, entry);
             });
         });
-        if let Err(_) = self.full_amount_manager.try_commit_evicted_ids(evcited_ids) {
-            tracing::warn!(
-                    "commit to full_amount_manager failed, it is ok when dumping emb, otherwise, 
-                    please try a bigger full_amount_manager_buffer_size or num_hashmap_internal_shards"
-                );
-        }
+
         if let Ok(m) = MetricsHolder::get() {
             m.set_embedding_time_cost_sec
                 .set(start_time.elapsed().as_secs_f64());
@@ -345,7 +310,7 @@ impl EmbeddingServiceInner {
             tokio::task::block_in_place(|| Vec::<(u64, usize)>::read_from_buffer(req.as_ref()));
         if indices.is_err() {
             return Err(EmbeddingServerError::RpcError(
-                "fail to des request".to_string(),
+                "fail to deserialize lookup inference request".to_string(),
             ));
         }
         let indices = indices.unwrap();
@@ -407,30 +372,28 @@ impl EmbeddingServiceInner {
 
         tokio::task::block_in_place(|| {
             for (idx, sign) in signs.iter().enumerate() {
-                if let Some(entry) = self.embedding.get_value(&sign) {
-                    if let Some(entry) = entry.upgrade() {
-                        let entry_dim = { entry.read().dim() };
-                        let (grad, r) = remaining_gradients.split_at(entry_dim);
-                        remaining_gradients = r;
-                        let emb_opt_state = optimizer.get_emb_state(&batch_level_state, idx);
+                let mut shard = self.embedding.shard(sign).write();
+                if let Some(entry) = shard.get_mut(sign) {
+                    let entry_dim = entry.dim();
+                    let (grad, r) = remaining_gradients.split_at(entry_dim);
+                    remaining_gradients = r;
+                    let emb_opt_state = optimizer.get_emb_state(&batch_level_state, idx);
 
-                        {
-                            let mut entry = entry.write();
-                            let emb_entry_slice = entry.as_mut_emb_entry_slice();
-                            optimizer.update(emb_entry_slice, grad, entry_dim, &emb_opt_state);
+                    {
+                        let emb_entry_slice = entry.as_mut_emb_entry_slice();
+                        optimizer.update(emb_entry_slice, grad, entry_dim, &emb_opt_state);
 
-                            if conf.enable_weight_bound {
-                                unsafe {
-                                    persia_simd::weight_bound(
-                                        &mut emb_entry_slice[..entry_dim],
-                                        conf.weight_bound,
-                                    );
-                                }
+                        if conf.enable_weight_bound {
+                            unsafe {
+                                persia_simd::weight_bound(
+                                    &mut emb_entry_slice[..entry_dim],
+                                    conf.weight_bound,
+                                );
                             }
                         }
-
-                        indices_to_commit.push((*sign, entry.clone()));
                     }
+
+                    indices_to_commit.push(*sign);
                 } else {
                     gradient_id_miss_count += 1;
                 }
@@ -438,23 +401,11 @@ impl EmbeddingServiceInner {
         });
 
         tracing::debug!(
-            "{} update gradient corresponding embedding not found, skipped",
+            "Gradient update failed {} times due to embedding not found",
             gradient_id_miss_count
         );
         if let Ok(m) = MetricsHolder::get() {
             m.gradient_id_miss_count.inc_by(gradient_id_miss_count);
-        }
-
-        let weak_ptrs = indices_to_commit
-            .iter()
-            .map(|(k, v)| (k.clone(), Arc::downgrade(v)))
-            .collect();
-        let commit_result = self.full_amount_manager.try_commit_weak_ptrs(weak_ptrs);
-        if commit_result.is_err() {
-            tracing::warn!(
-                "commit to full_amount_manager failed, it is ok when dumping emb, otherwise, 
-                please try a bigger full_amount_manager_buffer_size or num_hashmap_internal_shards"
-            );
         }
 
         if self.server_config.enable_incremental_update {
@@ -462,7 +413,7 @@ impl EmbeddingServiceInner {
                 .inc_update_manager
                 .try_commit_incremental(indices_to_commit);
             if result.is_err() {
-                tracing::error!(
+                tracing::warn!(
                     "inc update failed, please try a bigger inc_update_sending_buffer_size"
                 );
             }
@@ -497,15 +448,16 @@ impl EmbeddingServiceInner {
 
     pub async fn dump(&self, dir: String) -> Result<(), EmbeddingServerError> {
         let dst_dir = PathBuf::from(dir);
-        self.model_persistence_manager
-            .dump_full_amount_embedding(dst_dir)?;
+        self.sparse_model_manager
+            .dump_embedding(dst_dir, self.embedding.clone())?;
         Ok(())
     }
 
     pub async fn load(&self, dir: String) -> Result<(), EmbeddingServerError> {
         let dst_dir = PathBuf::from(dir);
-        self.model_persistence_manager
-            .load_embedding_from_dir(dst_dir)?;
+        let shard_dir = self.sparse_model_manager.get_shard_dir(&dst_dir);
+        self.sparse_model_manager
+            .load_embedding_from_dir(shard_dir, self.embedding.clone())?;
         Ok(())
     }
 
@@ -543,13 +495,13 @@ impl EmbeddingService {
         self.inner.ready_for_serving().await
     }
 
-    pub async fn model_manager_status(&self, _req: ()) -> PersiaPersistenceStatus {
+    pub async fn model_manager_status(&self, _req: ()) -> SparseModelManagerStatus {
         self.inner.model_manager_status().await
     }
 
     pub async fn set_embedding(
         &self,
-        req: Vec<(u64, HashMapEmbeddingEntry)>,
+        req: Vec<HashMapEmbeddingEntry>,
     ) -> Result<(), EmbeddingServerError> {
         self.inner.set_embedding(req).await
     }
@@ -639,7 +591,7 @@ impl EmbeddingServerNatsService {
         self.inner.ready_for_serving().await
     }
 
-    pub async fn model_manager_status(&self, _req: ()) -> PersiaPersistenceStatus {
+    pub async fn model_manager_status(&self, _req: ()) -> SparseModelManagerStatus {
         self.inner.model_manager_status().await
     }
 
