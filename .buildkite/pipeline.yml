@@ -29,18 +29,17 @@ steps:
       - docker-compose#v3.8.0:
           config: "e2e/docker-compose.train.yml"
           run: trainer
-          env:
           graceful-shutdown: true
       - docker-compose#v3.8.0:
           config: "e2e/docker-compose.infer.yml"
           run: torch_serve
           graceful-shutdown: true
 
-  - wait  
+  - wait
 
   - label: "upload docker image"
     # branches: "main"
-    command: 
+    command:
       - docker login -u $$DOCKER_USER -p $$DOCKER_TOKEN
       - ./buildkite/script/docker_image_process.sh upload
 
