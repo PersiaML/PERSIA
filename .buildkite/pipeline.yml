@@ -41,8 +41,8 @@ steps:
     # branches: "main"
     command:
       - docker login -u $$DOCKER_USER -p $$DOCKER_TOKEN
-      - ./buildkite/script/docker_image_process.sh upload
+      - .buildkite/script/docker_image_process.sh upload
 
   - wait
   - label: "remove docker image"
-    command: ./buildkite/script/docker_image_process.sh remove
+    command: .buildkite/script/docker_image_process.sh remove
