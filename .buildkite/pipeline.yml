@@ -1,9 +1,9 @@
 steps:
   - label: "Build docker ci image for latest persiaml framework(CPU)"
-    command: IMAGE_TAG=$BUILDKITE_PIPELINE_ID make build_cuda_runtime_image 
+    command: IMAGE_TAG=$BUILDKITE_PIPELINE_ID make build_cuda_runtime_image -e
 
   - label: "Build docker ci image for latest persiaml framework(GPU)"
-    command: IMAGE_TAG=$BUILDKITE_PIPELINE_ID make build_cpu_runtime_image 
+    command: IMAGE_TAG=$BUILDKITE_PIPELINE_ID make build_cpu_runtime_image -e
 
   - wait
 

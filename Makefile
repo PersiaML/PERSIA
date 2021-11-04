@@ -19,10 +19,6 @@ build_ci_image:
 	DOCKER_BUILDKIT=1 docker build --build-arg DEVICE=cuda \
 	-t persia-ci:$(IMAGE_TAG) --target builder .
 
-build_ci_image:
-	DOCKER_BUILDKIT=1 docker build --build-arg DEVICE=cuda \
-	-t persia-ci:$(IMAGE_TAG) --target builder .
-
 build_dev_image:
 	IMAGE_TAG=dev make build_cuda_runtime_image
 
