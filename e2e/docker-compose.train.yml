@@ -10,11 +10,11 @@ services:
                 - adult_income/.test_env
             environment:
                 JOB_ID: 1
-            image: persia-${IMAGE_TYPE}-runtime:test
+            image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
             command: persia_launcher compose /workspace/data_compose.py
             volumes:
                 - ./adult_income:/workspace
-                - ./${BUILDKITE_STEP_ID}:/resource
+                - ./resource:/resource
                 - /data/adult_income:/data/
 
         trainer:
@@ -23,12 +23,12 @@ services:
             environment:
                 JOB_ID: 1
                 GPU_NUM: 1
-                CUBLAS_WORKSPACE_CONFIG: :4096:8
+                CUBLAS_WORKSPACE_CONFIG: :4096:8 # Adapt to pytorch deterministic feature
                 EVAL_CHECKPOINT_DIR: /resource/eval_checkpoint
                 INFER_CHECKPOINT_DIR: /resource/infer_checkpoint
                 HDFS_CHECKPOINT_DIR: hdfs://localhost:9000//resource/hdfs_checkpoint
                 RESULT_FILE_PATH: /resource/result.json
-            image: persia-${IMAGE_TYPE}-runtime:test
+            image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
             command: bash -c "/workspace/hadoop/launch_hdfs.sh && persia_launcher trainer /workspace/train.py"
             depends_on:
                 - data_compose
@@ -36,8 +36,8 @@ services:
                 - server
                 - persia_nats_service
             volumes:
+                - ./resource/:/resource
                 - ./adult_income:/workspace
-                - ./${BUILDKITE_STEP_ID}:/resource
                 - /data/adult_income:/data/
 
         middleware:
@@ -45,19 +45,19 @@ services:
                 - adult_income/.test_env
             environment:
                 JOB_ID: 1
-            image: persia-${IMAGE_TYPE}-runtime:test
+            image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
             command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
             volumes:
                 - ./adult_income:/workspace
-                - ./${BUILDKITE_STEP_ID}:/resource
+                - ./resource:/resource
 
         server:
             env_file:
                 - adult_income/.test_env
             environment:
                 JOB_ID: 1
-            image: persia-${IMAGE_TYPE}-runtime:test
+            image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
             command: bash -c "/workspace/hadoop/launch_hdfs.sh &&  persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml"
             volumes:
                 - ./adult_income:/workspace
-                - ./${BUILDKITE_STEP_ID}:/resource
+                - ./resource:/resource

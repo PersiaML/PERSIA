@@ -170,7 +170,7 @@ def _select_bagua_algorithm(
 ):
     """Select corresponding bagua algorithm for current training
     Arguments:
-        algorithm (str): Name of bagua algorithm.
+        algorithm (str): Name of Bagua algorithm.
         model (torch.nn.Model): The pytorch model that need to converted to dataparallel model which is needed when apply bagua QAdam algorithm.
         options (dict): Options for bagua algorithm.
     Returns:
