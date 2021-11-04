@@ -567,7 +567,7 @@ impl Forward {
 
         let running = self.running.clone();
         let common_ctx = PersiaCommonContext::get();
-        
+
         let handler = std::thread::spawn(move || {
             #[cfg(feature = "cuda")]
             {

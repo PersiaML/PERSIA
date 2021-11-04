@@ -22,8 +22,8 @@ pub enum DLDeviceType {
     DLCUDAManaged = 13,
 }
 
-/// Enum type of Dlpack DataTypeCode 
-// 
+/// Enum type of Dlpack DataTypeCode
+//
 /// Use enum to represent the generic datatype. This struct can't infer concrete datatype directly,
 /// the concrete datatype should compose with the bits field in [`DLDataType`].
 #[derive(Clone, Copy)]
@@ -84,8 +84,8 @@ pub struct DLManagedTensor {
     pub deleter: Option<extern "C" fn(*mut DLManagedTensor)>,
 }
 
-/// [`DLManagedTensor`] FFI C drop function 
-/// 
+/// [`DLManagedTensor`] FFI C drop function
+///
 /// Ensure drop the instance of after ownership changes.
 pub extern "C" fn drop_dl_managed_tensor(drop_ptr: *mut DLManagedTensor) {
     if drop_ptr.is_null() {
