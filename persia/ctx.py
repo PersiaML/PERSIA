@@ -8,8 +8,6 @@ from typing import List, Tuple, Optional, NewType, Union
 
 import torch
 
-from retrying import retry
-
 import persia.env as env
 
 from persia.logger import get_default_logger
@@ -164,14 +162,12 @@ class DataCtx(BaseCtx):
         self.prepare()
         _logger.info("Data ctx prepare done.")
 
-    @retry(wait_fixed=2000)
     def prepare(self):
         """Do some preparation to init `DataCtx`."""
 
         self.common_context.init_nats_publisher(None)
         self.common_context.wait_servers_ready()
 
-    @retry(wait_fixed=2000)
     def send_sparse_to_middleware(self, data: PyPersiaBatchData):
         """Send PersiaBatchData from data compose to middleware side.
 
@@ -180,7 +176,6 @@ class DataCtx(BaseCtx):
         """
         self.common_context.send_sparse_to_middleware(data)
 
-    @retry(wait_fixed=2000)
     def send_dense_to_trainer(self, data: PyPersiaBatchData):
         """Send PersiaBatchData from data compose to trainer side.
 
@@ -268,7 +263,6 @@ class EmbeddingCtx(BaseCtx):
         if self.embedding_config is not None:
             self.configure_embedding_servers(self.embedding_config)
 
-    @retry(wait_fixed=2000)
     def configure_embedding_servers(
         self,
         embedding_config: EmbeddingConfig,
@@ -450,11 +444,11 @@ class EmbeddingCtx(BaseCtx):
 
         dense_model_filepath = os.path.join(src_dir, dense_filename)
         if os.path.exists(dense_model_filepath):
-            self.load_dense(self.model, dense_model_filepath)
+            self.load_dense(self.model, dense_model_filepath, map_location=map_location)
 
         self.load_embedding(src_dir, blocking=blocking)
 
-    def dump_embedding(self, dst_dir: str, blocking: bool = False):
+    def dump_embedding(self, dst_dir: str, blocking: bool = True):
         """Dump embeddings to ``dst_dir``. Use ``TrainCtx.wait_for_dump_embedding`` to wait until finished
         if ``blocking=False``.
 
@@ -509,17 +503,19 @@ class EmbeddingCtx(BaseCtx):
         self,
         dense: Union[torch.nn.Module, torch.optim.Optimizer],
         src_filepath: str,
+        map_location: Optional[str] = None,
     ):
         """Load the torch state dict from source file path.
 
         Arguments:
             dense (torch.nn.Module or torch.optim.Optimizer): dense model or optimizer to restore.
             src_filepath (str): Source file path.
+            map_location (str, optional): Load the dense checkpoint to specific device.
         """
         dense_bytes = self.common_context.read_from_file(src_filepath)
         buffer = io.BytesIO(dense_bytes)
         buffer.seek(0)
-        state_dict = torch.load(buffer)
+        state_dict = torch.load(buffer, map_location=map_location)
         dense.load_state_dict(state_dict)
 
     def wait_for_dump_embedding(self):
@@ -538,7 +534,6 @@ class EmbeddingCtx(BaseCtx):
         """Clear all embeddings on all embedding servers."""
         self.common_context.clear_embeddings()
 
-    @retry(wait_fixed=2000)
     def get_embedding_from_data(
         self, data: PyPersiaBatchData, device_id: Optional[int] = None
     ) -> PythonTrainBatch:
@@ -553,7 +548,6 @@ class EmbeddingCtx(BaseCtx):
         """
         return self.common_context.get_embedding_from_data(data, device_id)
 
-    @retry(wait_fixed=2000)
     def get_embedding_from_bytes(
         self, data: bytes, device_id: Optional[int] = None
     ) -> PythonTrainBatch:
@@ -696,7 +690,6 @@ class TrainCtx(EmbeddingCtx):
 
         self.backward_engine.shutdown()
 
-    @retry(wait_fixed=2000)
     def _get_master_addr(self) -> str:
         """Get leader(rank 0) ip address."""
         if self.rank_id == 0:
@@ -709,7 +702,6 @@ class TrainCtx(EmbeddingCtx):
             _logger.info(f"master addr is {master_addr}")
         return master_addr
 
-    @retry(wait_fixed=2000)
     def _init_middlewrae_rpc_client(self) -> int:
         middleware_addr_list = self.common_context.get_middleware_addr_list()
         assert len(middleware_addr_list) > 0, "Not available middleware."
@@ -717,7 +709,6 @@ class TrainCtx(EmbeddingCtx):
             self.common_context.init_rpc_client_with_addr(middleware_addr)
         return len(middleware_addr_list)
 
-    @retry(wait_fixed=2000)
     def wait_servers_ready(self):
         """query embedding server to check if servers are ready"""
 
@@ -925,3 +916,8 @@ class InferCtx(EmbeddingCtx):
 
         for addr in middleware_addrs:
             self.common_context.init_rpc_client_with_addr(addr)
+
+    r"""Wait for middleware and embedding server ready for serving."""
+
+    def wait_for_serving(self):
+        self.common_context.wait_for_serving()

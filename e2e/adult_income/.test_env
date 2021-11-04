@@ -8,3 +8,9 @@ LOG_LEVEL=info
 RUST_BACKTRACE=full
 
 PYTHONDONTWRITEBYTECODE=1
+
+EVAL_CHECKPOINT_DIR=/resource/eval_checkpoint/
+INFER_CHECKPOINT_DIR=/resource/infer_checkpoint/
+HDFS_CHECKPOINT_DIR=hdfs://hdfsserver:9000//resource/hdfs_checkpoint/
+
+RESULT_FILE_PATH=/resource/result.json

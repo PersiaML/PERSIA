@@ -19,6 +19,7 @@ use persia_embedding_server::middleware_service::{
     AllEmbeddingServerClient, MiddlewareNatsService, MiddlewareNatsServiceResponder,
     MiddlewareServer, MiddlewareServerInner,
 };
+use persia_model_manager::SparseModelManager;
 
 #[derive(Debug, StructOpt, Clone)]
 #[structopt()]
@@ -79,6 +80,7 @@ async fn main() -> Result<()> {
     let replica_size = all_embedding_server_client.replica_size() as u64;
     let middleware_config = PersiaMiddlewareConfig::get()?;
     let embedding_config = EmbeddingConfig::get()?;
+    let sparse_model_manager = SparseModelManager::get()?;
 
     let inner = Arc::new(MiddlewareServerInner {
         all_embedding_server_client,
@@ -92,6 +94,7 @@ async fn main() -> Result<()> {
         embedding_config,
         staleness: Default::default(),
         middleware_config,
+        sparse_model_manager,
     });
 
     let _responder = match &common_config.job_type {

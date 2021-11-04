@@ -71,6 +71,7 @@ def test(
     with eval_ctx(model=model) as ctx:
         test_loader = Dataloder(test_dataset, is_training=False)
         if checkpoint_dir is not None:
+            logger.info(f"loading checkpoint {checkpoint_dir}")
             ctx.load_checkpoint(checkpoint_dir)
         accuracies, losses = [], []
         all_pred, all_target = [], []

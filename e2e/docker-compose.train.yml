@@ -24,17 +24,14 @@ services:
                 JOB_ID: 1
                 GPU_NUM: 1
                 CUBLAS_WORKSPACE_CONFIG: :4096:8 # Adapt to pytorch deterministic feature
-                EVAL_CHECKPOINT_DIR: /resource/eval_checkpoint
-                INFER_CHECKPOINT_DIR: /resource/infer_checkpoint
-                HDFS_CHECKPOINT_DIR: hdfs://localhost:9000//resource/hdfs_checkpoint
-                RESULT_FILE_PATH: /resource/result.json
             image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-            command: bash -c "/workspace/hadoop/launch_hdfs.sh && persia_launcher trainer /workspace/train.py"
+            command: persia_launcher trainer /workspace/train.py"
             depends_on:
                 - data_compose
                 - middleware
                 - server
                 - persia_nats_service
+                - hdfsserver
             volumes:
                 - ./resource/:/resource
                 - ./adult_income:/workspace
@@ -57,7 +54,16 @@ services:
             environment:
                 JOB_ID: 1
             image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-            command: bash -c "/workspace/hadoop/launch_hdfs.sh &&  persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml"
+            command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
             volumes:
                 - ./adult_income:/workspace
                 - ./resource:/resource
+
+        hdfsserver:
+            image: persiaml-test:latest
+            command: bash -c "hadoop/launch_hdfs.sh"
+            volumes:
+                - ./adult_income:/workspace
+                - ./resource:/resource
+            hostname:
+                hdfsserver

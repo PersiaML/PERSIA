@@ -10,12 +10,13 @@ version = "0.1.0"
 anyhow = "1.0"
 async-lock = "2.1"
 backoff = {version = "0.3.0", features = ["tokio"]}
+bincode = "1.3.3"
 bytes = {version = "1.0", features = ["serde"]}
 chrono = "0.4"
 color-eyre = "0.5"
 flume = "0.10"
 futures = "0.3"
-half = {version = "1.6", features = ["alloc", "std", "serde"]}
+half = {version = "1.8", features = ["alloc", "std", "serde"]}
 hashbrown = {version = "0.11.2", features = ["serde"]}
 indexmap = {version = "1.5", features = ["serde-1"]}
 itertools = "0.10"

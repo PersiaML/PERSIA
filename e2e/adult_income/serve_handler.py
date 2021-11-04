@@ -13,6 +13,7 @@ class PersiaHandler(BaseHandler, ABC):
         super().initialize(context)
         middleware_addrs = get_middleware_services()
         self.persia_context = InferCtx(middleware_addrs, device_id=device_id)
+        self.persia_context.wait_for_serving()
 
     def preprocess(self, data):
         batch = data[0].get("batch")

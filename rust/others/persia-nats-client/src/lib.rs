@@ -61,6 +61,7 @@ impl NatsClient {
     }
 
     pub async fn subscribe(&self, subject: &str) -> Result<Subscription, NatsError> {
+        tracing::debug!("subscribing nats subject {}", subject);
         match self.nc.subscribe(subject).await {
             Ok(subscription) => Ok(subscription),
             Err(err) => Err(NatsError::from(err)),
@@ -68,6 +69,7 @@ impl NatsClient {
     }
 
     pub async fn request(&self, subject: &str, msg: &[u8]) -> Result<Vec<u8>, NatsError> {
+        tracing::debug!("requesting nats subject {}", subject);
         match self.nc.request_timeout(subject, msg, self.timeout).await {
             Ok(msg) => Ok(msg.data),
             Err(err) => Err(NatsError::from(err)),
