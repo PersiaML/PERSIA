@@ -5,6 +5,7 @@ use std::os::raw::c_void;
 
 use persia_libs::tracing;
 
+/// DLpack DeviceType representation. Most of the scene is DLCPU and DLCUDA
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub enum DLDeviceType {
@@ -21,6 +22,10 @@ pub enum DLDeviceType {
     DLCUDAManaged = 13,
 }
 
+/// Enum type of Dlpack DataTypeCode 
+// 
+/// Use enum to represent the generic datatype. This struct can't infer concrete datatype directly,
+/// the concrete datatype should compose with the bits field in [`DLDataType`].
 #[derive(Clone, Copy)]
 pub enum DLDataTypeCode {
     DLInt = 0,
@@ -31,6 +36,10 @@ pub enum DLDataTypeCode {
     DLComplex = 5,
 }
 
+/// Dlpack DataType representation.It can describe almost general datatype in DeepLearning framework.
+///
+/// For example the [`i32`] should represent as [`DLDataType`].code=0 and [`DLDataType`].bits=4
+/// The [`i64`] should represent as [`DLDataType`].code=2 and [`DLDataType`].bits=8
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DLDataType {
@@ -39,6 +48,7 @@ pub struct DLDataType {
     pub lanes: u16,
 }
 
+/// Dlpack Device representation.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DLDevice {
@@ -46,6 +56,7 @@ pub struct DLDevice {
     pub device_id: i32,
 }
 
+/// Dlpack tensor format. Almost all fields are required except strides.
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct DLTensor {
@@ -64,6 +75,7 @@ impl Drop for DLTensor {
     }
 }
 
+/// A wrapper of [`DLTensor`] that holds the dl_tensor data and corresponding deleter function.
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct DLManagedTensor {
@@ -72,6 +84,9 @@ pub struct DLManagedTensor {
     pub deleter: Option<extern "C" fn(*mut DLManagedTensor)>,
 }
 
+/// [`DLManagedTensor`] FFI C drop function 
+/// 
+/// Ensure drop the instance of after ownership changes.
 pub extern "C" fn drop_dl_managed_tensor(drop_ptr: *mut DLManagedTensor) {
     if drop_ptr.is_null() {
         return;

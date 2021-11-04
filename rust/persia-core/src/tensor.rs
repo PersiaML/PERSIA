@@ -1,3 +1,5 @@
+//! This library implement the basic [`Tensor`] struct From help of [`DLTensor`].It can accept the data from different device and datatype.
+
 use std::fmt;
 
 use paste::paste;
@@ -10,13 +12,7 @@ use crate::dlpack::*;
 
 use persia_speedy::{Readable, Writable};
 
-// pub trait Storage_ {
-//     pub fn get_dtype() -> DType;
-//     pub fn data_ptr();
-//     pub fn type_size();
-//     pub fn device() -> String ;
-// }
-
+/// TensorError cover the error of [`Tensor`].
 #[derive(Debug, thiserror::Error)]
 pub enum TensorError {
     #[error("cpu storagea not found")]
@@ -25,6 +21,7 @@ pub enum TensorError {
     GPUStorageNotFound,
 }
 
+/// Enum representation of rust datatype.
 #[derive(Readable, Writable, Copy, Clone, Debug)]
 pub enum DType {
     F16 = 1,
@@ -48,6 +45,7 @@ impl fmt::Display for DType {
 }
 
 impl DType {
+    /// Bit size of current datatype.
     pub fn get_type_size(&self) -> usize {
         match self {
             DType::F16 => std::mem::size_of::<f16>(),
@@ -65,10 +63,12 @@ impl DType {
         }
     }
 
+    /// Name of current datatype
     pub fn get_type_name(&self) -> String {
         self.to_string()
     }
 
+    /// Convert to [`DLDataType`].
     pub fn to_dldtype(&self) -> DLDataType {
         let (code, bits) = match self {
             DType::F16 => (*&DLDataTypeCode::DLFloat, 16),
@@ -94,6 +94,7 @@ impl DType {
     }
 }
 
+/// Storarge that store the vector data.
 #[derive(Readable, Writable, Debug)]
 pub enum CPUStorage {
     F16(Vec<f16>),
