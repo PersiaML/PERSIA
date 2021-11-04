@@ -38,7 +38,7 @@ steps:
   - wait
 
   - label: "upload docker image"
-    # branches: "main"
+    branches: "main"
     command:
       - docker login -u $$DOCKER_USER -p $$DOCKER_TOKEN
       - .buildkite/script/docker_image_process.sh upload
