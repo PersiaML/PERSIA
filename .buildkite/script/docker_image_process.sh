@@ -9,7 +9,7 @@ upload_image() {
 }
 
 remove_image() {
-    docker rmi $1
+    docker rmi -f $1
 }
 
 for image_name in "persia-cuda-runtime" "persia-cpu-runtime"
