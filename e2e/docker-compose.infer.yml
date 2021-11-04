@@ -9,7 +9,7 @@ services:
                 INFER_CHECKPOINT_DIR: /resource/infer_checkpoint
                 HDFS_CHECKPOINT_DIR: hdfs://localhost:9000//resource/hdfs_checkpoint
                 RESULT_FILE_PATH: /resource/result.json
-            image: persia-${IMAGE_TYPE}-runtime:test
+            image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
             command: bash -c "/workspace/launch_ts.sh"
             volumes:
                 - ./adult_income:/workspace
@@ -26,7 +26,7 @@ services:
                 - adult_income/.test_env
             environment:
                 JOB_ID: 1
-            image: persia-${IMAGE_TYPE}-runtime:test
+            image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
             command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
             volumes:
                 - ./adult_income:/workspace
@@ -41,7 +41,7 @@ services:
                 - adult_income/.test_env
             environment:
                 JOB_ID: 1
-            image: persia-${IMAGE_TYPE}-runtime:test
+            image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
             command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
             volumes:
                 - ./adult_income:/workspace
