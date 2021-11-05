@@ -1,0 +1,20 @@
+[package]
+authors = ["Kuaishou AI Platform PersiaML Team <zhuxuefeng@kuaishou.com>"]
+edition = "2018"
+license = "MIT"
+name = "persia-operator"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+tokio = { version = "~1.0", features = ["macros", "rt-multi-thread"] }
+kube = { version = "~0.60", default-features = true, features = ["derive"] }
+kube-derive = "~0.60"
+kube-runtime = "~0.60"
+k8s-openapi = { version = "~0.13", default-features = false, features = ["v1_17"] }
+futures = "~0.3"
+serde = "~1.0"
+serde_json = "~1.0"
+schemars = "~0.8"
+thiserror = "~1.0"
+parking_lot = {version = "0.11", features = ["deadlock_detection"]}
