@@ -35,7 +35,10 @@ pub struct PersiaJobSpec {
 
 impl PersiaJobSpec {
     fn gen_podspec_template(&self) -> PodSpec {
-        let persia_version = self.persia_version.unwrap_or(String::from("latest"));
+        let persia_version = self
+            .persia_version
+            .clone()
+            .unwrap_or(String::from("latest"));
         PodSpec {
             containers: vec![Container {
                 command: Some(vec!["persia_launcher".to_string()]),
@@ -117,9 +120,9 @@ impl PersiaJobSpec {
                 .into_iter()
                 .map(|replica_idx| {
                     let mut podspec = self.gen_podspec_template();
-                    let container = &mut podspec
+                    let container = podspec
                         .containers
-                        .first()
+                        .first_mut()
                         .expect("no containers in a persia podspec template");
 
                     container.name = "emb-server".to_string();
@@ -143,7 +146,10 @@ impl PersiaJobSpec {
                     container.resources = embedding_server.resources.clone();
                     container.volume_mounts = embedding_server.volume_mounts.clone();
 
-                    let env = &mut container.env.expect("no env in a persia podspec template");
+                    let env = container
+                        .env
+                        .as_mut()
+                        .expect("no env in a persia podspec template");
                     env.push(EnvVar {
                         name: String::from("REPLICA_INDEX"),
                         value: Some(replica_idx.to_string()),
@@ -179,7 +185,7 @@ impl PersiaJobSpec {
                     let mut podspec = self.gen_podspec_template();
                     let container = &mut podspec
                         .containers
-                        .first()
+                        .first_mut()
                         .expect("no containers in a persia podspec template");
 
                     container.name = "middleware-server".to_string();
@@ -203,7 +209,10 @@ impl PersiaJobSpec {
                     container.resources = middleware_server.resources.clone();
                     container.volume_mounts = middleware_server.volume_mounts.clone();
 
-                    let env = &mut container.env.expect("no env in a persia podspec template");
+                    let env = container
+                        .env
+                        .as_mut()
+                        .expect("no env in a persia podspec template");
                     env.push(EnvVar {
                         name: String::from("REPLICA_INDEX"),
                         value: Some(replica_idx.to_string()),
@@ -239,7 +248,7 @@ impl PersiaJobSpec {
                     let mut podspec = self.gen_podspec_template();
                     let container = &mut podspec
                         .containers
-                        .first()
+                        .first_mut()
                         .expect("no containers in a persia podspec template");
 
                     container.name = "trainer".to_string();
@@ -262,7 +271,10 @@ impl PersiaJobSpec {
                     container.resources = trainer.resources.clone();
                     container.volume_mounts = trainer.volume_mounts.clone();
 
-                    let env = &mut container.env.expect("no env in a persia podspec template");
+                    let env = container
+                        .env
+                        .as_mut()
+                        .expect("no env in a persia podspec template");
                     env.push(EnvVar {
                         name: String::from("REPLICA_INDEX"),
                         value: Some(replica_idx.to_string()),
@@ -302,7 +314,7 @@ impl PersiaJobSpec {
                     let mut podspec = self.gen_podspec_template();
                     let container = &mut podspec
                         .containers
-                        .first()
+                        .first_mut()
                         .expect("no containers in a persia podspec template");
 
                     container.name = "dataloader".to_string();
@@ -323,7 +335,10 @@ impl PersiaJobSpec {
                     container.resources = dataloader.resources.clone();
                     container.volume_mounts = dataloader.volume_mounts.clone();
 
-                    let env = &mut container.env.expect("no env in a persia podspec template");
+                    let env = container
+                        .env
+                        .as_mut()
+                        .expect("no env in a persia podspec template");
                     env.push(EnvVar {
                         name: String::from("REPLICA_INDEX"),
                         value: Some(replica_idx.to_string()),
