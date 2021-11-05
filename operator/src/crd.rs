@@ -1,14 +1,8 @@
-use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
 use k8s_openapi::api::core::v1::{
-    Container, ContainerPort, EnvVar, Pod, PodSpec, PodTemplateSpec, ResourceRequirements, Volume,
-    VolumeMount,
+    Container, EnvVar, Pod, PodSpec, ResourceRequirements, Volume, VolumeMount,
 };
-use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
-use k8s_openapi::Metadata;
-use kube::api::{DeleteParams, ObjectMeta, PostParams};
+use kube::api::ObjectMeta;
 use kube::CustomResource;
-use kube::{Api, Client, Error};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -116,7 +110,7 @@ impl PersiaJobSpec {
         let mut results = Vec::new();
 
         let mut labels: BTreeMap<String, String> = BTreeMap::new();
-        labels.insert("app".to_owned(), name.to_owned());
+        labels.insert("app".to_owned(), job_name.to_owned());
 
         if let Some(embedding_server) = &self.embedding_server {
             let mut emb_server_spec: Vec<Pod> = (0..embedding_server.replicas)

@@ -3,12 +3,9 @@ mod finalizer;
 mod op;
 mod utils;
 
-use crate::crd::{PersiaJob, PersiaJobSpec};
+use crate::crd::PersiaJob;
 use futures::stream::StreamExt;
-use k8s_openapi::api::core::v1::{
-    Container, ContainerPort, EnvVar, Pod, PodSpec, PodTemplateSpec, ResourceRequirements, Volume,
-    VolumeMount,
-};
+use k8s_openapi::api::core::v1::Pod;
 use kube::Resource;
 use kube::ResourceExt;
 use kube::{api::ListParams, client::Client, Api};

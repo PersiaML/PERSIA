@@ -1,10 +1,6 @@
-use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
-use k8s_openapi::api::core::v1::{Container, ContainerPort, Pod, PodSpec, PodTemplateSpec};
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
-use k8s_openapi::Metadata;
-use kube::api::{DeleteParams, ObjectMeta, PostParams};
+use k8s_openapi::api::core::v1::Pod;
+use kube::api::{DeleteParams, PostParams};
 use kube::{Api, Client, Error};
-use std::collections::BTreeMap;
 
 pub async fn deploy(client: Client, pods: &Vec<Pod>, namespace: &str) -> Result<Vec<Pod>, Error> {
     let pod_api: Api<Pod> = Api::namespaced(client, namespace);
