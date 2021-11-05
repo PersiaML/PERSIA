@@ -1,7 +1,7 @@
 common_config:
   num_embedding_io_workers: 4
   metrics_config:
-    enable_metrics: false
+    enable_metrics: true
     push_interval_sec: 10
   job_type: Train
 embedding_server_config:
