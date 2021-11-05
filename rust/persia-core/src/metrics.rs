@@ -9,8 +9,8 @@ pub struct MetricsHolder {
     pub forward_client_time_cost_sec: Gauge,
     pub forward_error: IntCounter,
     pub backward_client_time_cost_sec: Gauge,
-    pub long_get_train_batch_time_cost_sec: Gauge,
-    pub long_update_gradient_batched_time_cost_sec: Gauge,
+    pub get_train_batch_time_cost_more_than_1ms_sec: Gauge,
+    pub update_gradient_batched_time_cost_more_than_1ms_sec: Gauge,
 }
 
 impl MetricsHolder {
@@ -28,12 +28,12 @@ impl MetricsHolder {
                     "backward_client_time_cost_sec", 
                     "get graident of sparse feature and update it to server time cost"
                 )?,
-                long_get_train_batch_time_cost_sec: m.create_gauge(
-                    "long_get_train_batch_time_cost_sec",
+                get_train_batch_time_cost_more_than_1ms_sec: m.create_gauge(
+                    "get_train_batch_time_cost_more_than_1ms_sec",
                     "get train batch time cost when it takes more than 1ms"
                 )?,
-                long_update_gradient_batched_time_cost_sec: m.create_gauge(
-                    "long_update_gradient_batched_time_cost_sec",
+                update_gradient_batched_time_cost_more_than_1ms_sec: m.create_gauge(
+                    "update_gradient_batched_time_cost_more_than_1ms_sec",
                     "send gradient of sparse feature to gradient update buffer time cost when it takes more than 1ms"
                 )?,
             };

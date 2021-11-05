@@ -675,7 +675,7 @@ impl PyForward {
                     rank_id = rank_id,
                 );
                 if let Ok(m) = MetricsHolder::get() {
-                    m.long_get_train_batch_time_cost_sec
+                    m.get_train_batch_time_cost_more_than_1ms_sec
                         .set(start_time.elapsed().as_secs_f64());
                 }
             }

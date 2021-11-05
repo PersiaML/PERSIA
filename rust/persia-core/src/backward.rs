@@ -340,7 +340,7 @@ impl PyBackward {
                 took_time = tracing::field::debug(&elapsed)
             );
             if let Ok(m) = MetricsHolder::get() {
-                m.long_update_gradient_batched_time_cost_sec
+                m.update_gradient_batched_time_cost_more_than_1ms_sec
                     .set(start_time.elapsed().as_secs_f64());
             }
         }
