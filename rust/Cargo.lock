@@ -620,16 +620,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ctor"
-version = "0.1.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccc0a48a9b826acdf4028595adc9db92caea352f7af011a3034acd172a52a0aa"
-dependencies = [
- "quote",
- "syn",
-]
-
-[[package]]
 name = "cuda-config"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -988,17 +978,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ghost"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a5bcf1bbeab73aa4cf2fde60a846858dc036163c7c33bec309f8d17de785479"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "gimli"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1236,28 +1215,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "716d3d89f35ac6a34fd0eed635395f4c3b76fa889338a4632e5231a8684216bd"
 dependencies = [
  "cfg-if 1.0.0",
-]
-
-[[package]]
-name = "inventory"
-version = "0.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f0f7efb804ec95e33db9ad49e4252f049e37e8b0a4652e3cd61f7999f2eff7f"
-dependencies = [
- "ctor",
- "ghost",
- "inventory-impl",
-]
-
-[[package]]
-name = "inventory-impl"
-version = "0.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75c094e94816723ab936484666968f5b58060492e880f3c8d00489a1e244fa51"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -1660,7 +1617,7 @@ dependencies = [
  "ndarray 0.15.3",
  "num-complex 0.4.0",
  "num-traits",
- "pyo3",
+ "pyo3 0.13.2",
 ]
 
 [[package]]
@@ -1849,7 +1806,7 @@ dependencies = [
  "persia-rpc-macro",
  "persia-speedy",
  "persia-storage",
- "pyo3",
+ "pyo3 0.15.0",
  "shadow-rs",
 ]
 
@@ -2251,21 +2208,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4837b8e8e18a102c23f79d1e9a110b597ea3b684c95e874eb1ad88f8683109c3"
 dependencies = [
  "cfg-if 1.0.0",
- "ctor",
+ "libc",
+ "parking_lot",
+]
+
+[[package]]
+name = "pyo3"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64664505ce285a59b8b7e940fbe54ad65b1758a0810eddc5bc26df6f6ec8c557"
+dependencies = [
+ "cfg-if 1.0.0",
  "indoc",
- "inventory",
  "libc",
  "parking_lot",
  "paste 0.1.18",
+ "pyo3-build-config",
  "pyo3-macros",
  "unindent",
 ]
 
 [[package]]
-name = "pyo3-macros"
-version = "0.13.2"
+name = "pyo3-build-config"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a47f2c300ceec3e58064fd5f8f5b61230f2ffd64bde4970c81fdd0563a2db1bb"
+checksum = "5f1e4a72de84cdcd69f62211b62f62753d0c11b7b5715f3467f3754dab22a7ca"
+dependencies = [
+ "once_cell",
+]
+
+[[package]]
+name = "pyo3-macros"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "244f21d0a3887a9c02018b94e3b78d693dc7eca5c56839b7796a499cc364deb4"
 dependencies = [
  "pyo3-macros-backend",
  "quote",
@@ -2274,11 +2250,12 @@ dependencies = [
 
 [[package]]
 name = "pyo3-macros-backend"
-version = "0.13.2"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87b097e5d84fcbe3e167f400fbedd657820a375b034c78bd852050749a575d66"
+checksum = "b3d3d18ac41d05199bb82645d56e39f8c8b4909a0137c6f2640f03685b29f672"
 dependencies = [
  "proc-macro2",
+ "pyo3-build-config",
  "quote",
  "syn",
 ]
