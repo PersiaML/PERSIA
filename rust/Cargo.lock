@@ -1651,16 +1651,16 @@ dependencies = [
 
 [[package]]
 name = "numpy"
-version = "0.13.2"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a996bcd58fb29bef9debf717330cd8876c3b4adbeea4939020a5326a3afad4d9"
+checksum = "e590538dba8432d54d3587b06df73d7c044e83cfa4b200cbc7d0567f924ac0a7"
 dependencies = [
  "cfg-if 0.1.10",
  "libc",
  "ndarray 0.15.3",
  "num-complex 0.4.0",
  "num-traits",
- "pyo3",
+ "pyo3 0.15.0",
 ]
 
 [[package]]
@@ -1849,7 +1849,7 @@ dependencies = [
  "persia-rpc-macro",
  "persia-speedy",
  "persia-storage",
- "pyo3",
+ "pyo3 0.13.2",
  "shadow-rs",
 ]
 
@@ -2259,6 +2259,27 @@ dependencies = [
  "paste 0.1.18",
  "pyo3-macros",
  "unindent",
+]
+
+[[package]]
+name = "pyo3"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64664505ce285a59b8b7e940fbe54ad65b1758a0810eddc5bc26df6f6ec8c557"
+dependencies = [
+ "cfg-if 1.0.0",
+ "libc",
+ "parking_lot",
+ "pyo3-build-config",
+]
+
+[[package]]
+name = "pyo3-build-config"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f1e4a72de84cdcd69f62211b62f62753d0c11b7b5715f3467f3754dab22a7ca"
+dependencies = [
+ "once_cell",
 ]
 
 [[package]]
