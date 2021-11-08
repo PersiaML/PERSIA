@@ -1,0 +1,15 @@
+common_config:
+  num_embedding_io_workers: 4
+  metrics_config:
+    enable_metrics: false
+    push_interval_sec: 10
+  job_type: Train
+embedding_server_config:
+  capacity: 1000000
+  num_hashmap_internal_shards: 1
+  num_embedding_io_workers: 4
+  enable_incremental_update: false
+  incremental_buffer_size: 5000000
+  incremental_channel_capacity: 1000
+middleware_config:
+  forward_buffer_size: 1000

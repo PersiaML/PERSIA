@@ -79,5 +79,5 @@ if __name__ == "__main__":
                 "persia_launcher= persia.launcher:cli",
             ]
         },
-        python_requires=">=3.7",
+        python_requires=">=3.6",
     )

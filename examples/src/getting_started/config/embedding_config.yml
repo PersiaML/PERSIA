@@ -1,0 +1,27 @@
+feature_index_prefix_bit: 12
+slots_config:
+  workclass:
+    dim: 8
+    embedding_summation: true
+  education:
+    dim: 8
+    embedding_summation: true
+  marital_status:
+    dim: 8
+    embedding_summation: true
+  occupation:
+    dim: 8
+    embedding_summation: true
+  relationship:
+    dim: 8
+    embedding_summation: true
+  race:
+    dim: 8
+    embedding_summation: true
+  gender:
+    dim: 8
+    embedding_summation: true
+  native_country:
+    dim: 8
+    embedding_summation: true
+feature_groups: {}
