@@ -6,6 +6,7 @@ mod utils;
 use crate::crd::PersiaJob;
 use futures::stream::StreamExt;
 use k8s_openapi::api::core::v1::Pod;
+use kube::CustomResourceExt;
 use kube::Resource;
 use kube::ResourceExt;
 use kube::{api::ListParams, client::Client, Api};
@@ -17,6 +18,14 @@ use tokio::time::Duration;
 
 #[tokio::main]
 async fn main() {
+    if std::env::var("GEN_CRD")
+        .unwrap_or(String::from("false"))
+        .parse::<bool>()
+        .expect("GEN_CRD should be true or false")
+    {
+        print!("{}", serde_yaml::to_string(&PersiaJob::crd()).unwrap());
+    }
+
     let kubernetes_client: Client = Client::try_default()
         .await
         .expect("Expected a valid KUBECONFIG environment variable.");
