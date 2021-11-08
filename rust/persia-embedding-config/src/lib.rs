@@ -300,7 +300,7 @@ fn get_default_feature_groups() -> indexmap::IndexMap<String, Vec<String>> {
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
 #[serde(crate = "self::serde")]
 pub struct PersiaMetricsConfig {
-    #[serde(default = "get_false")]
+    #[serde(default = "get_true")]
     pub enable_metrics: bool,
     #[serde(default = "get_default_job_name")]
     pub job_name: String,
@@ -311,7 +311,7 @@ pub struct PersiaMetricsConfig {
 impl Default for PersiaMetricsConfig {
     fn default() -> Self {
         Self {
-            enable_metrics: false,
+            enable_metrics: true,
             job_name: get_default_job_name(),
             push_interval_seconds: 10,
         }

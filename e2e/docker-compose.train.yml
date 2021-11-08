@@ -1,9 +1,9 @@
 version: "3.3"
 services:
-        persia_nats_service:
-            image: nats:latest
-            deploy:
-                replicas: 1
+    persia_nats_service:
+        image: nats:latest
+        deploy:
+            replicas: 1
                 
         data_compose:
             env_file:
@@ -60,10 +60,34 @@ services:
                 - ./resource:/resource
 
         hdfsserver:
-            image: persiaml-test:latest
-            command: bash -c "hadoop/launch_hdfs.sh"
+            image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
+            command: bash -c "/workspace/hadoop/launch_hdfs.sh"
             volumes:
                 - ./adult_income:/workspace
                 - ./resource:/resource
             hostname:
                 hdfsserver
+
+        metrics_gateway:
+            image: prom/pushgateway:latest
+            deploy:
+                replicas: 1
+
+        prometheus:
+            image: prom/prometheus:latest
+            deploy:
+                replicas: 1
+            command: "--config.file=/workspace/config/prometheus.yml"
+            volumes:
+                - ./adult_income:/workspace
+
+        grafana:
+            image: grafana/grafana:latest
+            ports:
+                - "3000:3000/tcp"
+            deploy:
+                replicas: 1
+            volumes:
+                - ../resources/:/workspace
+            environment:
+                GF_PATHS_PROVISIONING: /workspace/grafana/provisioning/

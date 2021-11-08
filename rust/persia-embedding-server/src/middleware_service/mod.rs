@@ -35,7 +35,7 @@ use persia_embedding_config::{
 };
 use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
 use persia_metrics::{
-    Gauge, GaugeVec, Histogram, IntCounterVec, PersiaMetricsManager, PersiaMetricsManagerError,
+    Gauge, GaugeVec, IntCounterVec, PersiaMetricsManager, PersiaMetricsManagerError,
 };
 use persia_model_manager::{SparseModelManager, SparseModelManagerError, SparseModelManagerStatus};
 use persia_nats_client::{NatsClient, NatsError};
@@ -49,11 +49,11 @@ struct MetricsHolder {
     pub staleness: Gauge,
     pub nan_count: IntCounterVec,
     pub nan_grad_skipped: IntCounterVec,
-    pub lookup_create_requests_time_cost: Histogram,
-    pub lookup_rpc_time_cost: Histogram,
-    pub update_gradient_time_cost: Histogram,
-    pub summation_time_cost: Histogram,
-    pub lookup_batched_time_cost: Histogram,
+    pub lookup_create_requests_time_cost_sec: Gauge,
+    pub lookup_rpc_time_cost_sec: Gauge,
+    pub update_gradient_time_cost_sec: Gauge,
+    pub summation_time_cost_sec: Gauge,
+    pub lookup_batched_time_cost_sec: Gauge,
 }
 
 impl MetricsHolder {
@@ -62,24 +62,39 @@ impl MetricsHolder {
             let m = PersiaMetricsManager::get()?;
             let holder = Self {
                 batch_unique_indices_rate: m
-                    .create_gauge_vec("batch_unique_indices_rate", "ATT")?,
-                num_pending_batches: m.create_gauge("num_pending_batches", "ATT")?,
-                staleness: m.create_gauge("staleness", "ATT")?,
-                nan_count: m.create_counter_vec(
-                    "nan_count",
-                    "nan count of gradient pushed to emb server",
+                    .create_gauge_vec("batch_unique_indices_rate", "unique indices rate in a batch for different features")?,
+                num_pending_batches: m.create_gauge(
+                    "num_pending_batches", 
+                    "num batches already sent to middleware but still waiting for trainer to trigger lookup.
+                    The pending batches will stored in forward buffer, which capacity is configurable by global_config.yaml. 
+                    Once the buffer full, middleware server may not accept new batches."
                 )?,
-                nan_grad_skipped: m.create_counter_vec(
-                    "nan_grad_skipped",
-                    "nan count of gradient filtered by gpu node",
+                staleness: m.create_gauge(
+                    "staleness", 
+                    "staleness of sparse model. The iteration of dense model run one by one, while the embedding lookup happened 
+                    before concurrently. The staleness describe the delay of embeddings. The value of staleness start with 0, 
+                    increase one when lookup a batch, decrease one when a batch update its gradients"
                 )?,
-                lookup_create_requests_time_cost: m
-                    .create_histogram("lookup_create_requests_time_cost", "ATT")?,
-                lookup_rpc_time_cost: m.create_histogram("lookup_rpc_time_cost", "ATT")?,
-                update_gradient_time_cost: m
-                    .create_histogram("update_gradient_time_cost", "ATT")?,
-                summation_time_cost: m.create_histogram("summation_time_cost", "ATT")?,
-                lookup_batched_time_cost: m.create_histogram("lookup_batched_time_cost", "ATT")?,
+                nan_count: m.create_counter_vec("nan_count","nan count of gradient pushed to emb server")?,
+                nan_grad_skipped: m.create_counter_vec("nan_grad_skipped","nan count of gradient filtered by gpu node")?,
+                lookup_create_requests_time_cost_sec: m.create_gauge(
+                    "lookup_create_requests_time_cost_sec", 
+                    "lookup preprocess time cost on middleware. Include ID hashing, dividing id accroding feature groups and embedding servers."
+                )?,
+                lookup_rpc_time_cost_sec: m.create_gauge(
+                    "lookup_rpc_time_cost_sec", 
+                    "lookup embedding time cost on middleware server for a batch, include lookup on embedding server and network transmission."
+                )?,
+                update_gradient_time_cost_sec: m
+                    .create_gauge("update_gradient_time_cost_sec", "update gradient time cost on middleware server for a batch.")?,
+                summation_time_cost_sec: m.create_gauge(
+                    "summation_time_cost_sec",
+                     "lookup postprocess time cost on middleware, mainly is embedding summation."
+                )?,
+                lookup_batched_time_cost_sec: m.create_gauge(
+                    "lookup_batched_time_cost_sec",
+                    "lookup and pre/post process time cost on middleware server."
+                )?,
             };
             Ok(holder)
         })
@@ -834,8 +849,8 @@ impl MiddlewareServerInner {
         );
 
         if let Ok(m) = MetricsHolder::get() {
-            m.update_gradient_time_cost
-                .observe(start_time.elapsed().as_secs_f64());
+            m.update_gradient_time_cost_sec
+                .set(start_time.elapsed().as_secs_f64());
         }
 
         Ok(())
@@ -881,8 +896,8 @@ impl MiddlewareServerInner {
             start_time.elapsed()
         );
         if let Ok(m) = MetricsHolder::get() {
-            m.lookup_create_requests_time_cost
-                .observe(start_time.elapsed().as_secs_f64());
+            m.lookup_create_requests_time_cost_sec
+                .set(start_time.elapsed().as_secs_f64());
         }
         let start_time = std::time::Instant::now();
 
@@ -890,8 +905,8 @@ impl MiddlewareServerInner {
 
         tracing::debug!("rpc time cost {:?}", start_time.elapsed());
         if let Ok(m) = MetricsHolder::get() {
-            m.lookup_rpc_time_cost
-                .observe(start_time.elapsed().as_secs_f64());
+            m.lookup_rpc_time_cost_sec
+                .set(start_time.elapsed().as_secs_f64());
         }
 
         let start_time = std::time::Instant::now();
@@ -902,10 +917,10 @@ impl MiddlewareServerInner {
 
         tracing::debug!("summation time cost {:?}", start_time.elapsed());
         if let Ok(m) = MetricsHolder::get() {
-            m.summation_time_cost
-                .observe(start_time.elapsed().as_secs_f64());
-            m.lookup_batched_time_cost
-                .observe(start_time_all.elapsed().as_secs_f64());
+            m.summation_time_cost_sec
+                .set(start_time.elapsed().as_secs_f64());
+            m.lookup_batched_time_cost_sec
+                .set(start_time_all.elapsed().as_secs_f64());
         }
 
         return Ok(batches);
