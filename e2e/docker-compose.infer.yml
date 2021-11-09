@@ -9,7 +9,7 @@ services:
         command: bash -c "/workspace/launch_ts.sh"
         volumes:
             - ./adult_income:/workspace
-            - ./resource:/resource
+            - ./cache:/cache
             - /data/adult_income:/data/
         deploy:
             endpoint_mode: dnsrr
@@ -26,7 +26,7 @@ services:
         command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
         volumes:
             - ./adult_income:/workspace
-            - ./resource:/resource
+            - ./cache:/cache
         deploy:
             endpoint_mode: dnsrr
         depends_on:
@@ -41,6 +41,6 @@ services:
         command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
         volumes:
             - ./adult_income:/workspace
-            - ./resource:/resource
+            - ./cache:/cache
         deploy:
             endpoint_mode: dnsrr

@@ -14,7 +14,7 @@ services:
         command: persia_launcher compose /workspace/data_compose.py
         volumes:
             - ./adult_income:/workspace
-            - ./resource:/resource
+            - ./cache:/cache
             - /data/adult_income:/data/
 
     trainer:
@@ -33,7 +33,7 @@ services:
             - persia_nats_service
             - hdfsserver
         volumes:
-            - ./resource/:/resource
+            - ./cache/:/cache
             - ./adult_income:/workspace
             - /data/adult_income:/data/
 
@@ -46,7 +46,7 @@ services:
         command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
         volumes:
             - ./adult_income:/workspace
-            - ./resource:/resource
+            - ./cache:/cache
 
     server:
         env_file:
@@ -57,14 +57,14 @@ services:
         command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
         volumes:
             - ./adult_income:/workspace
-            - ./resource:/resource
+            - ./cache:/cache
 
     hdfsserver:
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
         command: bash -c "/workspace/hadoop/launch_hdfs.sh"
         volumes:
             - ./adult_income:/workspace
-            - ./resource:/resource
+            - ./cache:/cache
         hostname:
             hdfsserver
 

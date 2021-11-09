@@ -3,7 +3,7 @@ import os
 import sys
 import json
 
-sys.path.append("/resource/proto/")
+sys.path.append("/cache/proto/")
 
 import numpy as np
 from tqdm import tqdm

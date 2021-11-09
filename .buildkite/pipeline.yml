@@ -44,5 +44,6 @@ steps:
       - .buildkite/script/docker_image_process.sh upload
 
   - wait
+  
   - label: "remove docker image"
     command: .buildkite/script/docker_image_process.sh remove
