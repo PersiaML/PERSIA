@@ -7,7 +7,7 @@ common_config:
   infer_config:
     servers:
       - emb_server:8888
-    embedding_checkpoint: /resource/infer_checkpoint
+    embedding_checkpoint: /cache/infer_checkpoint
 embedding_server_config:
   capacity: 1000000
   num_hashmap_internal_shards: 1
