@@ -1,46 +1,46 @@
 version: "3.3"
 services:
-        torch_serve:
-            env_file:
-                - adult_income/.test_env
-            environment:
-                JOB_ID: 1
-            image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-            command: bash -c "/workspace/launch_ts.sh"
-            volumes:
-                - ./adult_income:/workspace
-                - ./resource:/resource
-                - /data/adult_income:/data/
-            deploy:
-                endpoint_mode: dnsrr
-            depends_on:
-                - middleware
-                - emb_server
+    torch_serve:
+        env_file:
+            - adult_income/.test_env
+        environment:
+            JOB_ID: 1
+        image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
+        command: bash -c "/workspace/launch_ts.sh"
+        volumes:
+            - ./adult_income:/workspace
+            - ./resource:/resource
+            - /data/adult_income:/data/
+        deploy:
+            endpoint_mode: dnsrr
+        depends_on:
+            - middleware
+            - emb_server
 
-        middleware:
-            env_file:
-                - adult_income/.test_env
-            environment:
-                JOB_ID: 1
-            image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-            command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
-            volumes:
-                - ./adult_income:/workspace
-                - ./resource:/resource
-            deploy:
-                endpoint_mode: dnsrr
-            depends_on:
-                - emb_server
+    middleware:
+        env_file:
+            - adult_income/.test_env
+        environment:
+            JOB_ID: 1
+        image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
+        command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
+        volumes:
+            - ./adult_income:/workspace
+            - ./resource:/resource
+        deploy:
+            endpoint_mode: dnsrr
+        depends_on:
+            - emb_server
 
-        emb_server:
-            env_file:
-                - adult_income/.test_env
-            environment:
-                JOB_ID: 1
-            image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-            command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
-            volumes:
-                - ./adult_income:/workspace
-                - ./resource:/resource
-            deploy:
-                endpoint_mode: dnsrr
+    emb_server:
+        env_file:
+            - adult_income/.test_env
+        environment:
+            JOB_ID: 1
+        image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
+        command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
+        volumes:
+            - ./adult_income:/workspace
+            - ./resource:/resource
+        deploy:
+            endpoint_mode: dnsrr
