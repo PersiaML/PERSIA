@@ -12,10 +12,10 @@ torchserve --start --ncs --model-store $INFER_CHECKPOINT_DIR \
     --models adult_income.mar \
     --ts-config /workspace/config/ts_config.properties &
 
-mkdir /resource/proto/ && python -m grpc_tools.protoc \
+mkdir /cache/proto/ && python -m grpc_tools.protoc \
     --proto_path=/workspace/proto/ \
-    --python_out=/resource/proto/ \
-    --grpc_python_out=/resource/proto/ \
+    --python_out=/cache/proto/ \
+    --grpc_python_out=/cache/proto/ \
     /workspace/proto/inference.proto
 
 sleep 10s
