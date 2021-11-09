@@ -18,13 +18,12 @@ pub enum EmbeddingTensor {
 }
 
 impl EmbeddingTensor {
-    pub fn to_forward_id(&self) -> (&str, u64) {
+    pub fn get_remote_ref_info(&self) -> (&str, u64) {
         match &self {
             EmbeddingTensor::SparseBatchRemoteReference(sparse_ref) => {
                 (&sparse_ref.middleware_addr, sparse_ref.ref_id)
             }
-            EmbeddingTensor::SparseBatch(_) => ("", 0u64),
-            _ => panic!("forward id not found on embedding tensor"),
+            _ => unreachable!(),
         }
     }
 }

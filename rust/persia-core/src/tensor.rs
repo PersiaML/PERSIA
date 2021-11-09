@@ -173,7 +173,7 @@ pub enum Storage {
 }
 
 impl Storage {
-    pub fn take_cpu_storage(self) -> Result<CPUStorage, TensorError> {
+    pub fn consume_cpu_storage(self) -> Result<CPUStorage, TensorError> {
         match self {
             Storage::CPU(val) => Ok(val),
             _ => Err(TensorError::CPUStorageNotFound),
@@ -194,23 +194,17 @@ pub struct Device {
 }
 
 impl Device {
-    fn with_device_id_opt(device_id: Option<i32>) -> Self {
-        match device_id {
+
+    fn with_device_id(device_id: Option<i32>) -> Self {
+        match &device_id {
             Some(device_id) => Device {
                 device_type: DeviceType::GPU,
-                device_id: Some(device_id),
+                device_id: Some(*device_id),
             },
             None => Device {
                 device_type: DeviceType::CPU,
                 device_id: None,
             },
-        }
-    }
-
-    fn with_device_id(device_id: i32) -> Self {
-        Device {
-            device_id: Some(device_id),
-            device_type: DeviceType::GPU,
         }
     }
 
@@ -264,7 +258,7 @@ impl Tensor {
         device_id: Option<i32>,
     ) -> Self {
         let stride = get_stride_by_shape(shape.as_slice());
-        let device = Device::with_device_id_opt(device_id);
+        let device = Device::with_device_id(device_id);
 
         Self {
             storage,
@@ -292,7 +286,7 @@ impl Tensor {
     #[cfg(feature = "cuda")]
     pub fn cuda(self, device_id: i32) -> Tensor {
         let shape = self.shape.clone();
-        let cpu_storage = self.storage.take_cpu_storage().unwrap();
+        let cpu_storage = self.storage.consume_cpu_storage().unwrap();
         let gpu_storage = GPUStorage::new(cpu_storage, shape).unwrap();
 
         Tensor {
@@ -300,7 +294,7 @@ impl Tensor {
             shape: self.shape,
             stride: self.stride,
             name: self.name,
-            device: Device::with_device_id(device_id),
+            device: Device::with_device_id(Some(device_id)),
         }
     }
 

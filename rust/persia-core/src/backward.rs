@@ -161,7 +161,7 @@ fn copy_gradients(
     use crate::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
     use crate::cuda::utils::cuda_d2h;
 
-    // judge the tensor with device
+    // Discriminate the tensor device type by device_id
     if device_id.as_ref().is_some() {
         let host_ptr = PINNED_MEMORY_POOL.allocate(num_bytes);
         let event = cuda_d2h(

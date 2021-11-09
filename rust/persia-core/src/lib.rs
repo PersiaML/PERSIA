@@ -18,7 +18,7 @@ mod utils;
 mod cuda;
 
 use crate::data::{PersiaBatchData, PyPersiaBatchData};
-use crate::forward::{forward_directly, PythonTrainBatch};
+use crate::forward::{forward_directly, PyTrainBatch};
 use crate::optim::PyOptimizerBase;
 use crate::rpc::PersiaRpcClient;
 
@@ -390,7 +390,7 @@ impl PyPersiaCommonContext {
         &self,
         batch: &mut PyPersiaBatchData,
         device_id: Option<i32>,
-    ) -> PyResult<PythonTrainBatch> {
+    ) -> PyResult<PyTrainBatch> {
         let batch = std::mem::take(&mut batch.inner);
         forward_directly(batch, device_id)
     }
@@ -399,7 +399,7 @@ impl PyPersiaCommonContext {
         &self,
         batch: &PyBytes,
         device_id: Option<i32>,
-    ) -> PyResult<PythonTrainBatch> {
+    ) -> PyResult<PyTrainBatch> {
         let batch: PersiaBatchData = PersiaBatchData::read_from_buffer(batch.as_bytes()).unwrap();
         forward_directly(batch, device_id)
     }

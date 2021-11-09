@@ -251,12 +251,12 @@ impl PyTensor {
 }
 
 #[pyclass(dict)]
-pub struct PythonTrainBatch {
+pub struct PyTrainBatch {
     pub inner: PersiaTrainingBatch,
 }
 
 #[pymethods]
-impl PythonTrainBatch {
+impl PyTrainBatch {
     pub fn middleware_server_addr(&self) -> &str {
         self.inner.middleware_server_addr.as_str()
     }
@@ -297,7 +297,7 @@ impl PythonTrainBatch {
 
     pub fn create_gradient_batch(&mut self) -> PythonGradientBatch {
         PythonGradientBatch::new(
-            self.inner.forward_id,
+            self.inner.ref_id,
             self.inner.middleware_server_addr.as_str(),
             self.inner.embedding_staleness_permit.take(),
         )
@@ -311,8 +311,22 @@ pub struct PersiaTrainingBatch {
     pub target: Vec<Tensor>,
     pub meta_data: Option<Vec<u8>>,
     pub middleware_server_addr: String,
-    pub forward_id: u64,
+    pub ref_id: u64,
     pub embedding_staleness_permit: Option<OwnedSemaphorePermit>,
+}
+
+impl Default for PersiaTrainingBatch {
+    fn default() -> Self {
+        Self {
+            dense: Vec::new(),
+            embeddings: Vec::new(),
+            target: Vec::new(),
+            meta_data: None,
+            middleware_server_addr: String::new(),
+            ref_id: 0,
+            embedding_staleness_permit: None
+        }
+    }
 }
 
 fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> Embedding {
@@ -603,14 +617,14 @@ impl Forward {
                         .map(|t| t.to(common_ctx.device_id.as_ref()))
                         .collect();
 
-                    let (middleware_addr, forward_id) = batch.sparse_data.to_forward_id();
+                    let (middleware_addr, ref_id) = batch.sparse_data.get_remote_ref_info();
                     let training_batch = PersiaTrainingBatch {
                         dense: dense_tensors,
                         embeddings,
                         target: target_tensors,
                         meta_data: batch.meta_data,
                         middleware_server_addr: middleware_addr.to_string(),
-                        forward_id,
+                        ref_id,
                         embedding_staleness_permit,
                     };
                     if let Err(e) = channel_s.send(training_batch) {
@@ -715,10 +729,11 @@ impl Forward {
                                         ref_id: backward_ref_id,
                                         batcher_idx: 0,
                                     },
-                                    None => SparseBatchRemoteReference::default(),
+                                    None => SparseBatchRemoteReference::default(), // batch without gradient backward
                                 };
                                 batch.sparse_data =
                                     EmbeddingTensor::SparseBatchRemoteReference(sparse_ref);
+
                                 if let Err(e) = channel_s
                                     .send_async((batch, embedding, embedding_staleness_permit))
                                     .await
@@ -766,7 +781,7 @@ impl Forward {
 pub fn forward_directly(
     batch: PersiaBatchData,
     device_id: Option<i32>,
-) -> PyResult<PythonTrainBatch> {
+) -> PyResult<PyTrainBatch> {
     let device_id = device_id.or(PersiaCommonContext::get().device_id.as_ref().clone());
     let rpc_client = PersiaCommonContext::get().rpc_client.clone();
     let async_runtime = PersiaCommonContext::get().async_runtime.clone();
@@ -810,12 +825,10 @@ pub fn forward_directly(
         embeddings,
         target,
         meta_data: batch.meta_data,
-        middleware_server_addr: String::new(),
-        forward_id: 0,
-        embedding_staleness_permit: None,
+        ..PersiaTrainingBatch::default()
     };
 
-    let infer_batch = PythonTrainBatch { inner: infer_batch };
+    let infer_batch = PyTrainBatch { inner: infer_batch };
 
     Ok(infer_batch)
 }
@@ -853,7 +866,7 @@ impl PyForward {
         self.inner.shutdown()
     }
 
-    pub fn get_batch(&self, timeout_ms: u64, py: Python) -> PyResult<PythonTrainBatch> {
+    pub fn get_batch(&self, timeout_ms: u64, py: Python) -> PyResult<PyTrainBatch> {
         let start_time = std::time::Instant::now();
         let receiver = self.inner.gpu_forwarded_channel_r.clone();
         let replica_info = PersiaReplicaInfo::get().expect("not in persia context");
@@ -861,12 +874,12 @@ impl PyForward {
 
         py.allow_threads(move || {
             let batch = match receiver.try_recv() {
-                Ok(x) => Ok(PythonTrainBatch { inner: x }),
+                Ok(x) => Ok(PyTrainBatch { inner: x }),
                 Err(_) => {
                     tracing::warn!("local forwarded queue empty for rank {}!", rank_id);
                     let result = receiver.recv_timeout(Duration::from_millis(timeout_ms));
                     if let Ok(batch) = result {
-                        Ok(PythonTrainBatch { inner: batch })
+                        Ok(PyTrainBatch { inner: batch })
                     } else {
                         Err(pyo3::exceptions::PyTimeoutError::new_err(
                             "get train batch timed out",
@@ -906,6 +919,7 @@ pub fn init_module(super_module: &PyModule, py: Python) -> PyResult<()> {
     let module = PyModule::new(py, "forward")?;
     module.add_class::<PyForward>()?;
     module.add_class::<PyTensor>()?;
+    module.add_class::<PyTrainBatch>()?;
     super_module.add_submodule(module)?;
     Ok(())
 }
