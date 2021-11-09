@@ -194,7 +194,6 @@ pub struct Device {
 }
 
 impl Device {
-
     fn with_device_id(device_id: Option<i32>) -> Self {
         match &device_id {
             Some(device_id) => Device {
