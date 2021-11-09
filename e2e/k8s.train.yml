@@ -13,10 +13,6 @@ spec:
       hostPath:
         path: /data/adult_income/
         type: Directory
-    # - name: resources
-    #   hostPath:
-    #     path: ../resources/
-    #     type: Directory
     - name: workspace
       hostPath:
         path: /home/aip-persia-team/zhuxuefeng/PersiaML/PersiaML/e2e/adult_income/
@@ -32,7 +28,6 @@ spec:
       value: /workspace/result.json
     - name: PERSIA_NATS_IP
       value: nats://persia-nats-service:4222
-
 
   embeddingServer:
     replicas: 1
