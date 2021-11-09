@@ -324,7 +324,7 @@ impl Default for PersiaTrainingBatch {
             meta_data: None,
             middleware_server_addr: String::new(),
             ref_id: 0,
-            embedding_staleness_permit: None
+            embedding_staleness_permit: None,
         }
     }
 }
@@ -778,10 +778,7 @@ impl Forward {
     }
 }
 
-pub fn forward_directly(
-    batch: PersiaBatchData,
-    device_id: Option<i32>,
-) -> PyResult<PyTrainBatch> {
+pub fn forward_directly(batch: PersiaBatchData, device_id: Option<i32>) -> PyResult<PyTrainBatch> {
     let device_id = device_id.or(PersiaCommonContext::get().device_id.as_ref().clone());
     let rpc_client = PersiaCommonContext::get().rpc_client.clone();
     let async_runtime = PersiaCommonContext::get().async_runtime.clone();
