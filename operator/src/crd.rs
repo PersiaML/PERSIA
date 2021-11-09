@@ -91,6 +91,7 @@ impl PersiaJobSpec {
                 ..Container::default()
             }],
             volumes: self.volumes.clone(),
+            restart_policy: Some(String::from("Never")),
             ..PodSpec::default()
         };
 
