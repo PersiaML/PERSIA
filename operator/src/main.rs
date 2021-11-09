@@ -6,6 +6,7 @@ mod utils;
 use crate::crd::PersiaJob;
 use futures::stream::StreamExt;
 use k8s_openapi::api::core::v1::Pod;
+use k8s_openapi::api::core::v1::Service;
 use kube::CustomResourceExt;
 use kube::Resource;
 use kube::ResourceExt;
@@ -92,7 +93,10 @@ async fn reconcile(
             finalizer::add(client.clone(), &name, &namespace).await?;
 
             let pods: Vec<Pod> = job.spec.gen_pods(&name, &namespace);
-            op::deploy(client, &pods, &namespace).await?;
+            op::deploy_pods(client.clone(), &pods, &namespace).await?;
+
+            let services: Vec<Service> = job.spec.gen_services(&name, &namespace);
+            op::deploy_services(client, &services, &namespace).await?;
 
             let mut jobs = context.get_ref().jobs.lock();
             jobs.insert(name, pods);
@@ -105,9 +109,25 @@ async fn reconcile(
             let name = job.name();
             eprintln!("Deletding PersiaJob: {}", name);
 
-            let pods_name: Vec<String> = job.spec.gen_pods_name(name.as_str());
+            let services: Vec<Service> = job.spec.gen_services(&name, &namespace);
+            let mut services_name = Vec::new();
+            services.into_iter().for_each(|s| {
+                if let Some(service_name) = s.metadata.name {
+                    services_name.push(service_name);
+                }
+            });
 
-            op::delete(client.clone(), &pods_name, &namespace).await?;
+            op::delete_services(client.clone(), &services_name, &namespace).await?;
+
+            let pods: Vec<Pod> = job.spec.gen_pods(&name, &namespace);
+            let mut pods_name = Vec::new();
+            pods.into_iter().for_each(|p| {
+                if let Some(pod_name) = p.metadata.name {
+                    pods_name.push(pod_name);
+                }
+            });
+
+            op::delete_pods(client.clone(), &pods_name, &namespace).await?;
 
             finalizer::delete(client, &name, &namespace).await?;
 

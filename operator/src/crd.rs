@@ -1,5 +1,6 @@
 use k8s_openapi::api::core::v1::{
-    Container, EnvVar, Pod, PodSpec, ResourceRequirements, Volume, VolumeMount,
+    Container, EnvVar, Pod, PodSpec, ResourceRequirements, Service, ServicePort, ServiceSpec,
+    Volume, VolumeMount,
 };
 use kube::api::ObjectMeta;
 use kube::CustomResource;
@@ -8,7 +9,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use crate::utils::{
-    get_dataloader_pod_name, get_emb_server_pod_name, get_mid_server_pod_name, get_trainer_pod_name, DEFAULT_CUDA_IMAGE,
+    get_dataloader_pod_name, get_emb_server_pod_name, get_metrics_gateway_pod_name,
+    get_metrics_gateway_service_name, get_mid_server_pod_name, get_trainer_pod_name,
+    DEFAULT_CUDA_IMAGE,
 };
 
 #[derive(CustomResource, Serialize, Deserialize, Debug, PartialEq, Clone, JsonSchema)]
@@ -24,8 +27,9 @@ use crate::utils::{
 pub struct PersiaJobSpec {
     pub globalConfigPath: String,
     pub embeddingConfigPath: String,
-    pub trainerPyEntryPath: String,
+    pub trainerPyEntryPath: Option<String>,
     pub dataLoaderPyEntryPath: Option<String>,
+    pub enableMetrics: Option<bool>,
     pub volumes: Option<Vec<Volume>>,
     pub env: Option<Vec<EnvVar>>,
     pub logLevel: Option<String>,
@@ -36,8 +40,11 @@ pub struct PersiaJobSpec {
 }
 
 impl PersiaJobSpec {
-    fn gen_podspec_template(&self) -> PodSpec {
+    fn gen_pod_template(&self, job_name: &str, namespace: &str) -> Pod {
         let log_level = self.logLevel.clone().unwrap_or(String::from("info"));
+
+        let mut labels: BTreeMap<String, String> = BTreeMap::new();
+        labels.insert("app".to_owned(), job_name.to_owned());
 
         let mut env = vec![
             EnvVar {
@@ -51,11 +58,6 @@ impl PersiaJobSpec {
                 ..EnvVar::default()
             },
             EnvVar {
-                name: String::from("TRAINER_PY_ENTRY_PATH"),
-                value: Some(self.trainerPyEntryPath.clone()),
-                ..EnvVar::default()
-            },
-            EnvVar {
                 name: String::from("LOG_LEVEL"),
                 value: Some(log_level),
                 ..EnvVar::default()
@@ -63,6 +65,14 @@ impl PersiaJobSpec {
             EnvVar {
                 name: String::from("RUST_BACKTRACE"),
                 value: Some(String::from("full")),
+                ..EnvVar::default()
+            },
+            EnvVar {
+                name: String::from("PERSIA_METRICS_GATEWAY_ADDR"),
+                value: Some(format!(
+                    "{}:9091",
+                    get_metrics_gateway_service_name(job_name)
+                )),
                 ..EnvVar::default()
             },
         ];
@@ -73,7 +83,7 @@ impl PersiaJobSpec {
             });
         }
 
-        PodSpec {
+        let pod_spec = PodSpec {
             containers: vec![Container {
                 command: Some(vec!["persia_launcher".to_string()]),
                 env: Some(env),
@@ -82,46 +92,50 @@ impl PersiaJobSpec {
             }],
             volumes: self.volumes.clone(),
             ..PodSpec::default()
+        };
+
+        Pod {
+            metadata: ObjectMeta {
+                namespace: Some(namespace.to_owned()),
+                labels: Some(labels.clone()),
+                ..ObjectMeta::default()
+            },
+            spec: Some(pod_spec),
+            ..Pod::default()
         }
     }
 
-    pub fn gen_pods_name(&self, job_name: &str) -> Vec<String> {
+    pub fn gen_services(&self, job_name: &str, namespace: &str) -> Vec<Service> {
         let mut results = Vec::new();
 
-        if let Some(embedding_server) = &self.embeddingServer {
-            let mut emb_server_pod_name: Vec<String> = (0..embedding_server.replicas)
-                .into_iter()
-                .map(|replica_idx| get_emb_server_pod_name(job_name, replica_idx))
-                .collect();
+        let mut labels: BTreeMap<String, String> = BTreeMap::new();
+        labels.insert("app".to_owned(), job_name.to_owned());
 
-            results.append(&mut emb_server_pod_name);
-        }
+        if self.enableMetrics.unwrap_or(true) {
+            let service_name = get_metrics_gateway_service_name(job_name);
 
-        if let Some(middleware_server) = &self.middlewareServer {
-            let mut middleware_server_pod_name: Vec<String> = (0..middleware_server.replicas)
-                .into_iter()
-                .map(|replica_idx| get_mid_server_pod_name(job_name, replica_idx))
-                .collect();
+            let mut selector: BTreeMap<String, String> = BTreeMap::new();
+            selector.insert("service".to_owned(), service_name.clone());
 
-            results.append(&mut middleware_server_pod_name);
-        }
+            let metrics_gateway_service = Service {
+                metadata: ObjectMeta {
+                    name: Some(service_name.clone()),
+                    namespace: Some(namespace.to_owned()),
+                    labels: Some(labels.clone()),
+                    ..ObjectMeta::default()
+                },
+                spec: Some(ServiceSpec {
+                    ports: Some(vec![ServicePort {
+                        port: 9091,
+                        ..ServicePort::default()
+                    }]),
+                    selector: Some(selector),
+                    ..ServiceSpec::default()
+                }),
+                ..Service::default()
+            };
 
-        if let Some(trainer) = &self.trainer {
-            let mut trainer_pod_name: Vec<String> = (0..trainer.replicas)
-                .into_iter()
-                .map(|replica_idx| get_trainer_pod_name(job_name, replica_idx))
-                .collect();
-
-            results.append(&mut trainer_pod_name);
-        }
-
-        if let Some(dataloader) = &self.dataloader {
-            let mut dataloader_pod_name: Vec<String> = (0..dataloader.replicas)
-                .into_iter()
-                .map(|replica_idx| get_dataloader_pod_name(job_name, replica_idx))
-                .collect();
-
-            results.append(&mut dataloader_pod_name);
+            results.push(metrics_gateway_service);
         }
 
         results
@@ -130,18 +144,14 @@ impl PersiaJobSpec {
     pub fn gen_pods(&self, job_name: &str, namespace: &str) -> Vec<Pod> {
         let mut results = Vec::new();
 
-        let mut labels: BTreeMap<String, String> = BTreeMap::new();
-        labels.insert("app".to_owned(), job_name.to_owned());
-
         if let Some(embedding_server) = &self.embeddingServer {
             let mut emb_server_spec: Vec<Pod> = (0..embedding_server.replicas)
                 .into_iter()
                 .map(|replica_idx| {
-                    let mut podspec = self.gen_podspec_template();
-                    let container = podspec
-                        .containers
-                        .first_mut()
-                        .expect("no containers in a persia podspec template");
+                    let mut pod = self.gen_pod_template(job_name, namespace);
+
+                    let podspec = pod.spec.as_mut().unwrap();
+                    let container = podspec.containers.first_mut().unwrap();
 
                     container.name = "emb-server".to_string();
                     container.args = Some(
@@ -166,7 +176,7 @@ impl PersiaJobSpec {
 
                     container.image = embedding_server.image.clone();
                     if container.image.is_none() {
-                        container.image = Some(DEFAULT_CUDA_IMAGE.clone());
+                        container.image = Some(String::from(DEFAULT_CUDA_IMAGE));
                     }
 
                     let env = container
@@ -191,16 +201,8 @@ impl PersiaJobSpec {
                         });
                     }
 
-                    Pod {
-                        metadata: ObjectMeta {
-                            name: Some(get_emb_server_pod_name(job_name, replica_idx)),
-                            namespace: Some(namespace.to_owned()),
-                            labels: Some(labels.clone()),
-                            ..ObjectMeta::default()
-                        },
-                        spec: Some(podspec),
-                        ..Pod::default()
-                    }
+                    pod.metadata.name = Some(get_emb_server_pod_name(job_name, replica_idx));
+                    pod
                 })
                 .collect();
 
@@ -211,11 +213,9 @@ impl PersiaJobSpec {
             let mut middleware_server_spec: Vec<Pod> = (0..middleware_server.replicas)
                 .into_iter()
                 .map(|replica_idx| {
-                    let mut podspec = self.gen_podspec_template();
-                    let container = &mut podspec
-                        .containers
-                        .first_mut()
-                        .expect("no containers in a persia podspec template");
+                    let mut pod = self.gen_pod_template(job_name, namespace);
+                    let podspec = pod.spec.as_mut().unwrap();
+                    let container = podspec.containers.first_mut().unwrap();
 
                     container.name = "middleware-server".to_string();
                     container.args = Some(
@@ -240,7 +240,7 @@ impl PersiaJobSpec {
 
                     container.image = middleware_server.image.clone();
                     if container.image.is_none() {
-                        container.image = Some(DEFAULT_CUDA_IMAGE.clone());
+                        container.image = Some(String::from(DEFAULT_CUDA_IMAGE));
                     }
 
                     let env = container
@@ -265,16 +265,8 @@ impl PersiaJobSpec {
                         });
                     }
 
-                    Pod {
-                        metadata: ObjectMeta {
-                            name: Some(get_mid_server_pod_name(job_name, replica_idx)),
-                            namespace: Some(namespace.to_owned()),
-                            labels: Some(labels.clone()),
-                            ..ObjectMeta::default()
-                        },
-                        spec: Some(podspec),
-                        ..Pod::default()
-                    }
+                    pod.metadata.name = Some(get_mid_server_pod_name(job_name, replica_idx));
+                    pod
                 })
                 .collect();
 
@@ -285,11 +277,10 @@ impl PersiaJobSpec {
             let mut trainer_spec: Vec<Pod> = (0..trainer.replicas)
                 .into_iter()
                 .map(|replica_idx| {
-                    let mut podspec = self.gen_podspec_template();
-                    let container = &mut podspec
-                        .containers
-                        .first_mut()
-                        .expect("no containers in a persia podspec template");
+                    let mut pod = self.gen_pod_template(job_name, namespace);
+                    let podspec = pod.spec.as_mut().unwrap();
+
+                    let container = podspec.containers.first_mut().unwrap();
 
                     container.name = "trainer".to_string();
                     container.args = Some(
@@ -313,7 +304,7 @@ impl PersiaJobSpec {
 
                     container.image = trainer.image.clone();
                     if container.image.is_none() {
-                        container.image = Some(DEFAULT_CUDA_IMAGE.clone());
+                        container.image = Some(String::from(DEFAULT_CUDA_IMAGE));
                     }
 
                     let env = container
@@ -335,6 +326,11 @@ impl PersiaJobSpec {
                         value: Some(trainer.nprocPerNode.to_string()),
                         ..EnvVar::default()
                     });
+                    env.push(EnvVar {
+                        name: String::from("TRAINER_PY_ENTRY_PATH"),
+                        value: self.trainerPyEntryPath.clone(),
+                        ..EnvVar::default()
+                    });
 
                     if let Some(e) = &trainer.env {
                         e.iter().for_each(|env_var| {
@@ -342,16 +338,8 @@ impl PersiaJobSpec {
                         });
                     }
 
-                    Pod {
-                        metadata: ObjectMeta {
-                            name: Some(get_trainer_pod_name(job_name, replica_idx)),
-                            namespace: Some(namespace.to_owned()),
-                            labels: Some(labels.clone()),
-                            ..ObjectMeta::default()
-                        },
-                        spec: Some(podspec),
-                        ..Pod::default()
-                    }
+                    pod.metadata.name = Some(get_trainer_pod_name(job_name, replica_idx));
+                    pod
                 })
                 .collect();
 
@@ -362,7 +350,8 @@ impl PersiaJobSpec {
             let mut dataloader_spec: Vec<Pod> = (0..dataloader.replicas)
                 .into_iter()
                 .map(|replica_idx| {
-                    let mut podspec = self.gen_podspec_template();
+                    let mut pod = self.gen_pod_template(job_name, namespace);
+                    let podspec = pod.spec.as_mut().unwrap();
                     let container = &mut podspec
                         .containers
                         .first_mut()
@@ -388,9 +377,8 @@ impl PersiaJobSpec {
 
                     container.image = dataloader.image.clone();
                     if container.image.is_none() {
-                        container.image = Some(DEFAULT_CUDA_IMAGE.clone());
+                        container.image = Some(String::from(DEFAULT_CUDA_IMAGE));
                     }
-
 
                     let env = container
                         .env
@@ -418,20 +406,42 @@ impl PersiaJobSpec {
                         });
                     }
 
-                    Pod {
-                        metadata: ObjectMeta {
-                            name: Some(get_dataloader_pod_name(job_name, replica_idx)),
-                            namespace: Some(namespace.to_owned()),
-                            labels: Some(labels.clone()),
-                            ..ObjectMeta::default()
-                        },
-                        spec: Some(podspec),
-                        ..Pod::default()
-                    }
+                    pod.metadata.name = Some(get_dataloader_pod_name(job_name, replica_idx));
+                    pod
                 })
                 .collect();
 
             results.append(&mut dataloader_spec);
+        }
+
+        if self.enableMetrics.unwrap_or(true) {
+            let service_name = get_metrics_gateway_service_name(job_name);
+
+            let mut metrics_labels: BTreeMap<String, String> = BTreeMap::new();
+            metrics_labels.insert("app".to_owned(), job_name.to_owned());
+            metrics_labels.insert("service".to_owned(), service_name);
+
+            let metrics_pod = Pod {
+                metadata: ObjectMeta {
+                    name: Some(get_metrics_gateway_pod_name(job_name)),
+                    namespace: Some(namespace.to_owned()),
+                    labels: Some(metrics_labels),
+                    ..ObjectMeta::default()
+                },
+                spec: Some(PodSpec {
+                    containers: vec![Container {
+                        name: String::from("pushgateway"),
+                        image: Some(String::from("prom/pushgateway:latest")),
+                        image_pull_policy: Some(String::from("IfNotPresent")),
+                        ..Container::default()
+                    }],
+                    volumes: self.volumes.clone(),
+                    ..PodSpec::default()
+                }),
+                ..Pod::default()
+            };
+
+            results.push(metrics_pod);
         }
 
         results

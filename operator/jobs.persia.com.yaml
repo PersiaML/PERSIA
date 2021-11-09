@@ -103,6 +103,9 @@ spec:
                         type: object
                       nullable: true
                       type: array
+                    image:
+                      nullable: true
+                      type: string
                     replicas:
                       format: uint
                       minimum: 0.0
@@ -236,6 +239,9 @@ spec:
                         type: object
                       nullable: true
                       type: array
+                    image:
+                      nullable: true
+                      type: string
                     replicas:
                       format: uint
                       minimum: 0.0
@@ -288,6 +294,9 @@ spec:
                   required:
                     - replicas
                   type: object
+                enableMetrics:
+                  nullable: true
+                  type: boolean
                 env:
                   items:
                     description: EnvVar represents an environment variable present in a Container.
@@ -448,6 +457,9 @@ spec:
                         type: object
                       nullable: true
                       type: array
+                    image:
+                      nullable: true
+                      type: string
                     replicas:
                       format: uint
                       minimum: 0.0
@@ -500,9 +512,6 @@ spec:
                   required:
                     - replicas
                   type: object
-                persiaVersion:
-                  nullable: true
-                  type: string
                 trainer:
                   nullable: true
                   properties:
@@ -582,6 +591,9 @@ spec:
                         type: object
                       nullable: true
                       type: array
+                    image:
+                      nullable: true
+                      type: string
                     nprocPerNode:
                       format: uint
                       minimum: 0.0
@@ -640,6 +652,7 @@ spec:
                     - replicas
                   type: object
                 trainerPyEntryPath:
+                  nullable: true
                   type: string
                 volumes:
                   items:
@@ -1435,7 +1448,6 @@ spec:
               required:
                 - embeddingConfigPath
                 - globalConfigPath
-                - trainerPyEntryPath
               type: object
           required:
             - spec
