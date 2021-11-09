@@ -89,7 +89,7 @@ async fn reconcile(
             let name = job.name();
             eprintln!("Creating PersiaJob: {}", name);
 
-            finalizer::add(client.clone(), &name, &namespace).await?;
+            // finalizer::add(client.clone(), &name, &namespace).await?;
 
             let pods: Vec<Pod> = job.spec.gen_pods(&name, &namespace);
             op::deploy(client, &pods, &namespace).await?;
@@ -109,7 +109,7 @@ async fn reconcile(
 
             op::delete(client.clone(), &pods_name, &namespace).await?;
 
-            finalizer::delete(client, &name, &namespace).await?;
+            // finalizer::delete(client, &name, &namespace).await?;
 
             let mut jobs = context.get_ref().jobs.lock();
             jobs.remove(&name);

@@ -21,12 +21,88 @@ spec:
           properties:
             spec:
               properties:
-                data_loader_py_entry_path:
+                dataLoaderPyEntryPath:
                   nullable: true
                   type: string
                 dataloader:
                   nullable: true
                   properties:
+                    env:
+                      items:
+                        description: EnvVar represents an environment variable present in a Container.
+                        properties:
+                          name:
+                            description: Name of the environment variable. Must be a C_IDENTIFIER.
+                            type: string
+                          value:
+                            description: "Variable references $(VAR_NAME) are expanded using the previous defined environment variables in the container and any service environment variables. If a variable cannot be resolved, the reference in the input string will be unchanged. The $(VAR_NAME) syntax can be escaped with a double $$, ie: $$(VAR_NAME). Escaped references will never be expanded, regardless of whether the variable exists or not. Defaults to \"\"."
+                            type: string
+                          valueFrom:
+                            description: "Source for the environment variable's value. Cannot be used if value is not empty."
+                            properties:
+                              configMapKeyRef:
+                                description: Selects a key of a ConfigMap.
+                                properties:
+                                  key:
+                                    description: The key to select.
+                                    type: string
+                                  name:
+                                    description: "Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names"
+                                    type: string
+                                  optional:
+                                    description: Specify whether the ConfigMap or its key must be defined
+                                    type: boolean
+                                required:
+                                  - key
+                                type: object
+                              fieldRef:
+                                description: "Selects a field of the pod: supports metadata.name, metadata.namespace, metadata.labels, metadata.annotations, spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs."
+                                properties:
+                                  apiVersion:
+                                    description: "Version of the schema the FieldPath is written in terms of, defaults to \"v1\"."
+                                    type: string
+                                  fieldPath:
+                                    description: Path of the field to select in the specified API version.
+                                    type: string
+                                required:
+                                  - fieldPath
+                                type: object
+                              resourceFieldRef:
+                                description: "Selects a resource of the container: only resources limits and requests (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported."
+                                properties:
+                                  containerName:
+                                    description: "Container name: required for volumes, optional for env vars"
+                                    type: string
+                                  divisor:
+                                    description: "Specifies the output format of the exposed resources, defaults to \"1\""
+                                    type: string
+                                  resource:
+                                    description: "Required: resource to select"
+                                    type: string
+                                required:
+                                  - resource
+                                type: object
+                              secretKeyRef:
+                                description: "Selects a key of a secret in the pod's namespace"
+                                properties:
+                                  key:
+                                    description: The key of the secret to select from.  Must be a valid secret key.
+                                    type: string
+                                  name:
+                                    description: "Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names"
+                                    type: string
+                                  optional:
+                                    description: Specify whether the Secret or its key must be defined
+                                    type: boolean
+                                required:
+                                  - key
+                                type: object
+                            type: object
+                        required:
+                          - name
+                        type: object
+                      nullable: true
+                      type: array
                     replicas:
                       format: uint
                       minimum: 0.0
@@ -48,7 +124,7 @@ spec:
                           description: "Requests describes the minimum amount of compute resources required. If Requests is omitted for a container, it defaults to Limits if that is explicitly specified, otherwise to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/"
                           type: object
                       type: object
-                    volume_mounts:
+                    volumeMounts:
                       items:
                         description: VolumeMount describes a mounting of a Volume within a container.
                         properties:
@@ -79,11 +155,87 @@ spec:
                   required:
                     - replicas
                   type: object
-                embedding_config_path:
+                embeddingConfigPath:
                   type: string
-                embedding_server:
+                embeddingServer:
                   nullable: true
                   properties:
+                    env:
+                      items:
+                        description: EnvVar represents an environment variable present in a Container.
+                        properties:
+                          name:
+                            description: Name of the environment variable. Must be a C_IDENTIFIER.
+                            type: string
+                          value:
+                            description: "Variable references $(VAR_NAME) are expanded using the previous defined environment variables in the container and any service environment variables. If a variable cannot be resolved, the reference in the input string will be unchanged. The $(VAR_NAME) syntax can be escaped with a double $$, ie: $$(VAR_NAME). Escaped references will never be expanded, regardless of whether the variable exists or not. Defaults to \"\"."
+                            type: string
+                          valueFrom:
+                            description: "Source for the environment variable's value. Cannot be used if value is not empty."
+                            properties:
+                              configMapKeyRef:
+                                description: Selects a key of a ConfigMap.
+                                properties:
+                                  key:
+                                    description: The key to select.
+                                    type: string
+                                  name:
+                                    description: "Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names"
+                                    type: string
+                                  optional:
+                                    description: Specify whether the ConfigMap or its key must be defined
+                                    type: boolean
+                                required:
+                                  - key
+                                type: object
+                              fieldRef:
+                                description: "Selects a field of the pod: supports metadata.name, metadata.namespace, metadata.labels, metadata.annotations, spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs."
+                                properties:
+                                  apiVersion:
+                                    description: "Version of the schema the FieldPath is written in terms of, defaults to \"v1\"."
+                                    type: string
+                                  fieldPath:
+                                    description: Path of the field to select in the specified API version.
+                                    type: string
+                                required:
+                                  - fieldPath
+                                type: object
+                              resourceFieldRef:
+                                description: "Selects a resource of the container: only resources limits and requests (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported."
+                                properties:
+                                  containerName:
+                                    description: "Container name: required for volumes, optional for env vars"
+                                    type: string
+                                  divisor:
+                                    description: "Specifies the output format of the exposed resources, defaults to \"1\""
+                                    type: string
+                                  resource:
+                                    description: "Required: resource to select"
+                                    type: string
+                                required:
+                                  - resource
+                                type: object
+                              secretKeyRef:
+                                description: "Selects a key of a secret in the pod's namespace"
+                                properties:
+                                  key:
+                                    description: The key of the secret to select from.  Must be a valid secret key.
+                                    type: string
+                                  name:
+                                    description: "Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names"
+                                    type: string
+                                  optional:
+                                    description: Specify whether the Secret or its key must be defined
+                                    type: boolean
+                                required:
+                                  - key
+                                type: object
+                            type: object
+                        required:
+                          - name
+                        type: object
+                      nullable: true
+                      type: array
                     replicas:
                       format: uint
                       minimum: 0.0
@@ -105,7 +257,7 @@ spec:
                           description: "Requests describes the minimum amount of compute resources required. If Requests is omitted for a container, it defaults to Limits if that is explicitly specified, otherwise to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/"
                           type: object
                       type: object
-                    volume_mounts:
+                    volumeMounts:
                       items:
                         description: VolumeMount describes a mounting of a Volume within a container.
                         properties:
@@ -136,11 +288,166 @@ spec:
                   required:
                     - replicas
                   type: object
-                global_config_path:
+                env:
+                  items:
+                    description: EnvVar represents an environment variable present in a Container.
+                    properties:
+                      name:
+                        description: Name of the environment variable. Must be a C_IDENTIFIER.
+                        type: string
+                      value:
+                        description: "Variable references $(VAR_NAME) are expanded using the previous defined environment variables in the container and any service environment variables. If a variable cannot be resolved, the reference in the input string will be unchanged. The $(VAR_NAME) syntax can be escaped with a double $$, ie: $$(VAR_NAME). Escaped references will never be expanded, regardless of whether the variable exists or not. Defaults to \"\"."
+                        type: string
+                      valueFrom:
+                        description: "Source for the environment variable's value. Cannot be used if value is not empty."
+                        properties:
+                          configMapKeyRef:
+                            description: Selects a key of a ConfigMap.
+                            properties:
+                              key:
+                                description: The key to select.
+                                type: string
+                              name:
+                                description: "Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names"
+                                type: string
+                              optional:
+                                description: Specify whether the ConfigMap or its key must be defined
+                                type: boolean
+                            required:
+                              - key
+                            type: object
+                          fieldRef:
+                            description: "Selects a field of the pod: supports metadata.name, metadata.namespace, metadata.labels, metadata.annotations, spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs."
+                            properties:
+                              apiVersion:
+                                description: "Version of the schema the FieldPath is written in terms of, defaults to \"v1\"."
+                                type: string
+                              fieldPath:
+                                description: Path of the field to select in the specified API version.
+                                type: string
+                            required:
+                              - fieldPath
+                            type: object
+                          resourceFieldRef:
+                            description: "Selects a resource of the container: only resources limits and requests (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported."
+                            properties:
+                              containerName:
+                                description: "Container name: required for volumes, optional for env vars"
+                                type: string
+                              divisor:
+                                description: "Specifies the output format of the exposed resources, defaults to \"1\""
+                                type: string
+                              resource:
+                                description: "Required: resource to select"
+                                type: string
+                            required:
+                              - resource
+                            type: object
+                          secretKeyRef:
+                            description: "Selects a key of a secret in the pod's namespace"
+                            properties:
+                              key:
+                                description: The key of the secret to select from.  Must be a valid secret key.
+                                type: string
+                              name:
+                                description: "Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names"
+                                type: string
+                              optional:
+                                description: Specify whether the Secret or its key must be defined
+                                type: boolean
+                            required:
+                              - key
+                            type: object
+                        type: object
+                    required:
+                      - name
+                    type: object
+                  nullable: true
+                  type: array
+                globalConfigPath:
                   type: string
-                middleware_server:
+                logLevel:
+                  nullable: true
+                  type: string
+                middlewareServer:
                   nullable: true
                   properties:
+                    env:
+                      items:
+                        description: EnvVar represents an environment variable present in a Container.
+                        properties:
+                          name:
+                            description: Name of the environment variable. Must be a C_IDENTIFIER.
+                            type: string
+                          value:
+                            description: "Variable references $(VAR_NAME) are expanded using the previous defined environment variables in the container and any service environment variables. If a variable cannot be resolved, the reference in the input string will be unchanged. The $(VAR_NAME) syntax can be escaped with a double $$, ie: $$(VAR_NAME). Escaped references will never be expanded, regardless of whether the variable exists or not. Defaults to \"\"."
+                            type: string
+                          valueFrom:
+                            description: "Source for the environment variable's value. Cannot be used if value is not empty."
+                            properties:
+                              configMapKeyRef:
+                                description: Selects a key of a ConfigMap.
+                                properties:
+                                  key:
+                                    description: The key to select.
+                                    type: string
+                                  name:
+                                    description: "Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names"
+                                    type: string
+                                  optional:
+                                    description: Specify whether the ConfigMap or its key must be defined
+                                    type: boolean
+                                required:
+                                  - key
+                                type: object
+                              fieldRef:
+                                description: "Selects a field of the pod: supports metadata.name, metadata.namespace, metadata.labels, metadata.annotations, spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs."
+                                properties:
+                                  apiVersion:
+                                    description: "Version of the schema the FieldPath is written in terms of, defaults to \"v1\"."
+                                    type: string
+                                  fieldPath:
+                                    description: Path of the field to select in the specified API version.
+                                    type: string
+                                required:
+                                  - fieldPath
+                                type: object
+                              resourceFieldRef:
+                                description: "Selects a resource of the container: only resources limits and requests (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported."
+                                properties:
+                                  containerName:
+                                    description: "Container name: required for volumes, optional for env vars"
+                                    type: string
+                                  divisor:
+                                    description: "Specifies the output format of the exposed resources, defaults to \"1\""
+                                    type: string
+                                  resource:
+                                    description: "Required: resource to select"
+                                    type: string
+                                required:
+                                  - resource
+                                type: object
+                              secretKeyRef:
+                                description: "Selects a key of a secret in the pod's namespace"
+                                properties:
+                                  key:
+                                    description: The key of the secret to select from.  Must be a valid secret key.
+                                    type: string
+                                  name:
+                                    description: "Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names"
+                                    type: string
+                                  optional:
+                                    description: Specify whether the Secret or its key must be defined
+                                    type: boolean
+                                required:
+                                  - key
+                                type: object
+                            type: object
+                        required:
+                          - name
+                        type: object
+                      nullable: true
+                      type: array
                     replicas:
                       format: uint
                       minimum: 0.0
@@ -162,7 +469,7 @@ spec:
                           description: "Requests describes the minimum amount of compute resources required. If Requests is omitted for a container, it defaults to Limits if that is explicitly specified, otherwise to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/"
                           type: object
                       type: object
-                    volume_mounts:
+                    volumeMounts:
                       items:
                         description: VolumeMount describes a mounting of a Volume within a container.
                         properties:
@@ -193,13 +500,89 @@ spec:
                   required:
                     - replicas
                   type: object
-                persia_version:
+                persiaVersion:
                   nullable: true
                   type: string
                 trainer:
                   nullable: true
                   properties:
-                    nproc_per_node:
+                    env:
+                      items:
+                        description: EnvVar represents an environment variable present in a Container.
+                        properties:
+                          name:
+                            description: Name of the environment variable. Must be a C_IDENTIFIER.
+                            type: string
+                          value:
+                            description: "Variable references $(VAR_NAME) are expanded using the previous defined environment variables in the container and any service environment variables. If a variable cannot be resolved, the reference in the input string will be unchanged. The $(VAR_NAME) syntax can be escaped with a double $$, ie: $$(VAR_NAME). Escaped references will never be expanded, regardless of whether the variable exists or not. Defaults to \"\"."
+                            type: string
+                          valueFrom:
+                            description: "Source for the environment variable's value. Cannot be used if value is not empty."
+                            properties:
+                              configMapKeyRef:
+                                description: Selects a key of a ConfigMap.
+                                properties:
+                                  key:
+                                    description: The key to select.
+                                    type: string
+                                  name:
+                                    description: "Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names"
+                                    type: string
+                                  optional:
+                                    description: Specify whether the ConfigMap or its key must be defined
+                                    type: boolean
+                                required:
+                                  - key
+                                type: object
+                              fieldRef:
+                                description: "Selects a field of the pod: supports metadata.name, metadata.namespace, metadata.labels, metadata.annotations, spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs."
+                                properties:
+                                  apiVersion:
+                                    description: "Version of the schema the FieldPath is written in terms of, defaults to \"v1\"."
+                                    type: string
+                                  fieldPath:
+                                    description: Path of the field to select in the specified API version.
+                                    type: string
+                                required:
+                                  - fieldPath
+                                type: object
+                              resourceFieldRef:
+                                description: "Selects a resource of the container: only resources limits and requests (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported."
+                                properties:
+                                  containerName:
+                                    description: "Container name: required for volumes, optional for env vars"
+                                    type: string
+                                  divisor:
+                                    description: "Specifies the output format of the exposed resources, defaults to \"1\""
+                                    type: string
+                                  resource:
+                                    description: "Required: resource to select"
+                                    type: string
+                                required:
+                                  - resource
+                                type: object
+                              secretKeyRef:
+                                description: "Selects a key of a secret in the pod's namespace"
+                                properties:
+                                  key:
+                                    description: The key of the secret to select from.  Must be a valid secret key.
+                                    type: string
+                                  name:
+                                    description: "Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names"
+                                    type: string
+                                  optional:
+                                    description: Specify whether the Secret or its key must be defined
+                                    type: boolean
+                                required:
+                                  - key
+                                type: object
+                            type: object
+                        required:
+                          - name
+                        type: object
+                      nullable: true
+                      type: array
+                    nprocPerNode:
                       format: uint
                       minimum: 0.0
                       type: integer
@@ -224,7 +607,7 @@ spec:
                           description: "Requests describes the minimum amount of compute resources required. If Requests is omitted for a container, it defaults to Limits if that is explicitly specified, otherwise to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/"
                           type: object
                       type: object
-                    volume_mounts:
+                    volumeMounts:
                       items:
                         description: VolumeMount describes a mounting of a Volume within a container.
                         properties:
@@ -253,10 +636,10 @@ spec:
                       nullable: true
                       type: array
                   required:
-                    - nproc_per_node
+                    - nprocPerNode
                     - replicas
                   type: object
-                trainer_py_entry_path:
+                trainerPyEntryPath:
                   type: string
                 volumes:
                   items:
@@ -1050,9 +1433,9 @@ spec:
                   nullable: true
                   type: array
               required:
-                - embedding_config_path
-                - global_config_path
-                - trainer_py_entry_path
+                - embeddingConfigPath
+                - globalConfigPath
+                - trainerPyEntryPath
               type: object
           required:
             - spec

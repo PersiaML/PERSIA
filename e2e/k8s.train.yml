@@ -4,10 +4,10 @@ metadata:
   name: test
   namespace: default
 spec:
-  global_config_path: /workspace/config/global_config_train.yml
-  embedding_config_path: /workspace/config/embedding_config.yml
-  trainer_py_entry_path: /workspace/train.py
-  data_loader_py_entry_path: /workspace/data_compose.py
+  globalConfigPath: /workspace/config/global_config_train.yml
+  embeddingConfigPath: /workspace/config/embedding_config.yml
+  trainerPyEntryPath: /workspace/train.py
+  dataLoaderPyEntryPath: /workspace/data_compose.py
   volumes:
     - name: data
       hostPath:
@@ -19,38 +19,38 @@ spec:
     #     type: Directory
     - name: workspace
       hostPath:
-        path: ./adult_income/
+        path: /home/aip-persia-team/zhuxuefeng/PersiaML/PersiaML/e2e/adult_income/
         type: Directory
 
-  embedding_server:
+  embeddingServer:
     replicas: 1
     resources:
       limits:
         memory: "24Gi"
         cpu: "4"
-    volume_mounts:
+    volumeMounts:
       - name: workspace
         mountPath: /workspace/
 
-  middleware_server:
+  middlewareServer:
     replicas: 1
     resources:
       limits:
         memory: "24Gi"
         cpu: "4"
-    volume_mounts:
+    volumeMounts:
       - name: workspace
         mountPath: /workspace/
 
   trainer:
     replicas: 1
-    nproc_per_node: 1
+    nprocPerNode: 1
     resources:
       limits:
         memory: "24Gi"
         cpu: "12"
         nvidia.com/gpu: "1"
-    volume_mounts:
+    volumeMounts:
       - name: workspace
         mountPath: /workspace/
 
@@ -60,7 +60,7 @@ spec:
       limits:
         memory: "8Gi"
         cpu: "1"
-    volume_mounts:
+    volumeMounts:
       - name: workspace
         mountPath: /workspace/
       - name: data

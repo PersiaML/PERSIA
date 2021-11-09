@@ -20,46 +20,66 @@ use crate::utils::{
     derive = "PartialEq",
     namespaced
 )]
+#[allow(non_snake_case)]
 pub struct PersiaJobSpec {
-    pub persia_version: Option<String>,
-    pub global_config_path: String,
-    pub embedding_config_path: String,
-    pub trainer_py_entry_path: String,
-    pub data_loader_py_entry_path: Option<String>,
+    pub persiaVersion: Option<String>,
+    pub globalConfigPath: String,
+    pub embeddingConfigPath: String,
+    pub trainerPyEntryPath: String,
+    pub dataLoaderPyEntryPath: Option<String>,
     pub volumes: Option<Vec<Volume>>,
-    pub embedding_server: Option<EmbeddingSpec>,
-    pub middleware_server: Option<MiddlewareSpec>,
+    pub env: Option<Vec<EnvVar>>,
+    pub logLevel: Option<String>,
+    pub embeddingServer: Option<EmbeddingSpec>,
+    pub middlewareServer: Option<MiddlewareSpec>,
     pub trainer: Option<TrainerSpec>,
     pub dataloader: Option<DataLoaderSpec>,
 }
 
 impl PersiaJobSpec {
     fn gen_podspec_template(&self) -> PodSpec {
-        let persia_version = self
-            .persia_version
-            .clone()
-            .unwrap_or(String::from("latest"));
+        let persia_version = self.persiaVersion.clone().unwrap_or(String::from("latest"));
+        let log_level = self.logLevel.clone().unwrap_or(String::from("info"));
+
+        let mut env = vec![
+            EnvVar {
+                name: String::from("EMBEDDING_CONFIG_PATH"),
+                value: Some(self.embeddingConfigPath.clone()),
+                ..EnvVar::default()
+            },
+            EnvVar {
+                name: String::from("GLOBAL_CONFIG_PATH"),
+                value: Some(self.globalConfigPath.clone()),
+                ..EnvVar::default()
+            },
+            EnvVar {
+                name: String::from("TRAINER_PY_ENTRY_PATH"),
+                value: Some(self.trainerPyEntryPath.clone()),
+                ..EnvVar::default()
+            },
+            EnvVar {
+                name: String::from("LOG_LEVEL"),
+                value: Some(log_level),
+                ..EnvVar::default()
+            },
+            EnvVar {
+                name: String::from("RUST_BACKTRACE"),
+                value: Some(String::from("full")),
+                ..EnvVar::default()
+            },
+        ];
+
+        if let Some(e) = &self.env {
+            e.iter().for_each(|env_var| {
+                env.push(env_var.clone());
+            });
+        }
+
         PodSpec {
             containers: vec![Container {
                 command: Some(vec!["persia_launcher".to_string()]),
                 image: Some(format!("persiaml/persia-cuda-runtime:{}", persia_version)),
-                env: Some(vec![
-                    EnvVar {
-                        name: String::from("EMBEDDING_CONFIG_PATH"),
-                        value: Some(self.embedding_config_path.clone()),
-                        ..EnvVar::default()
-                    },
-                    EnvVar {
-                        name: String::from("GLOBAL_CONFIG_PATH"),
-                        value: Some(self.global_config_path.clone()),
-                        ..EnvVar::default()
-                    },
-                    EnvVar {
-                        name: String::from("TRAINER_PY_ENTRY_PATH"),
-                        value: Some(self.trainer_py_entry_path.clone()),
-                        ..EnvVar::default()
-                    },
-                ]),
+                env: Some(env),
                 ..Container::default()
             }],
             volumes: self.volumes.clone(),
@@ -70,7 +90,7 @@ impl PersiaJobSpec {
     pub fn gen_pods_name(&self, job_name: &str) -> Vec<String> {
         let mut results = Vec::new();
 
-        if let Some(embedding_server) = &self.embedding_server {
+        if let Some(embedding_server) = &self.embeddingServer {
             let mut emb_server_pod_name: Vec<String> = (0..embedding_server.replicas)
                 .into_iter()
                 .map(|replica_idx| get_emb_server_pod_name(job_name, replica_idx))
@@ -79,7 +99,7 @@ impl PersiaJobSpec {
             results.append(&mut emb_server_pod_name);
         }
 
-        if let Some(middleware_server) = &self.middleware_server {
+        if let Some(middleware_server) = &self.middlewareServer {
             let mut middleware_server_pod_name: Vec<String> = (0..middleware_server.replicas)
                 .into_iter()
                 .map(|replica_idx| get_mid_server_pod_name(job_name, replica_idx))
@@ -115,7 +135,7 @@ impl PersiaJobSpec {
         let mut labels: BTreeMap<String, String> = BTreeMap::new();
         labels.insert("app".to_owned(), job_name.to_owned());
 
-        if let Some(embedding_server) = &self.embedding_server {
+        if let Some(embedding_server) = &self.embeddingServer {
             let mut emb_server_spec: Vec<Pod> = (0..embedding_server.replicas)
                 .into_iter()
                 .map(|replica_idx| {
@@ -144,7 +164,7 @@ impl PersiaJobSpec {
                     );
 
                     container.resources = embedding_server.resources.clone();
-                    container.volume_mounts = embedding_server.volume_mounts.clone();
+                    container.volume_mounts = embedding_server.volumeMounts.clone();
 
                     let env = container
                         .env
@@ -162,6 +182,12 @@ impl PersiaJobSpec {
                         ..EnvVar::default()
                     });
 
+                    if let Some(e) = &embedding_server.env {
+                        e.iter().for_each(|env_var| {
+                            env.push(env_var.clone());
+                        });
+                    }
+
                     Pod {
                         metadata: ObjectMeta {
                             name: Some(get_emb_server_pod_name(job_name, replica_idx)),
@@ -178,7 +204,7 @@ impl PersiaJobSpec {
             results.append(&mut emb_server_spec);
         }
 
-        if let Some(middleware_server) = &self.middleware_server {
+        if let Some(middleware_server) = &self.middlewareServer {
             let mut middleware_server_spec: Vec<Pod> = (0..middleware_server.replicas)
                 .into_iter()
                 .map(|replica_idx| {
@@ -207,7 +233,7 @@ impl PersiaJobSpec {
                     );
 
                     container.resources = middleware_server.resources.clone();
-                    container.volume_mounts = middleware_server.volume_mounts.clone();
+                    container.volume_mounts = middleware_server.volumeMounts.clone();
 
                     let env = container
                         .env
@@ -224,6 +250,12 @@ impl PersiaJobSpec {
                         value: Some(middleware_server.replicas.to_string()),
                         ..EnvVar::default()
                     });
+
+                    if let Some(e) = &middleware_server.env {
+                        e.iter().for_each(|env_var| {
+                            env.push(env_var.clone());
+                        });
+                    }
 
                     Pod {
                         metadata: ObjectMeta {
@@ -260,7 +292,7 @@ impl PersiaJobSpec {
                             "$(NPROC_PER_NODE)",
                             "--nnodes",
                             "$(REPLICA_SIZE)",
-                            "--node_rank",
+                            "--node-rank",
                             "$(REPLICA_INDEX)",
                         ]
                         .into_iter()
@@ -269,7 +301,7 @@ impl PersiaJobSpec {
                     );
 
                     container.resources = trainer.resources.clone();
-                    container.volume_mounts = trainer.volume_mounts.clone();
+                    container.volume_mounts = trainer.volumeMounts.clone();
 
                     let env = container
                         .env
@@ -287,9 +319,15 @@ impl PersiaJobSpec {
                     });
                     env.push(EnvVar {
                         name: String::from("NPROC_PER_NODE"),
-                        value: Some(trainer.nproc_per_node.to_string()),
+                        value: Some(trainer.nprocPerNode.to_string()),
                         ..EnvVar::default()
                     });
+
+                    if let Some(e) = &trainer.env {
+                        e.iter().for_each(|env_var| {
+                            env.push(env_var.clone());
+                        });
+                    }
 
                     Pod {
                         metadata: ObjectMeta {
@@ -333,7 +371,7 @@ impl PersiaJobSpec {
                     );
 
                     container.resources = dataloader.resources.clone();
-                    container.volume_mounts = dataloader.volume_mounts.clone();
+                    container.volume_mounts = dataloader.volumeMounts.clone();
 
                     let env = container
                         .env
@@ -351,9 +389,15 @@ impl PersiaJobSpec {
                     });
                     env.push(EnvVar {
                         name: String::from("DATALOADER_PY_ENTRY_PATH"),
-                        value: self.data_loader_py_entry_path.clone(),
+                        value: self.dataLoaderPyEntryPath.clone(),
                         ..EnvVar::default()
                     });
+
+                    if let Some(e) = &dataloader.env {
+                        e.iter().for_each(|env_var| {
+                            env.push(env_var.clone());
+                        });
+                    }
 
                     Pod {
                         metadata: ObjectMeta {
@@ -376,30 +420,38 @@ impl PersiaJobSpec {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, JsonSchema)]
+#[allow(non_snake_case)]
 pub struct EmbeddingSpec {
     pub replicas: usize,
     pub resources: Option<ResourceRequirements>,
-    pub volume_mounts: Option<Vec<VolumeMount>>,
+    pub volumeMounts: Option<Vec<VolumeMount>>,
+    pub env: Option<Vec<EnvVar>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, JsonSchema)]
+#[allow(non_snake_case)]
 pub struct MiddlewareSpec {
     pub replicas: usize,
     pub resources: Option<ResourceRequirements>,
-    pub volume_mounts: Option<Vec<VolumeMount>>,
+    pub volumeMounts: Option<Vec<VolumeMount>>,
+    pub env: Option<Vec<EnvVar>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, JsonSchema)]
+#[allow(non_snake_case)]
 pub struct TrainerSpec {
     pub replicas: usize,
-    pub nproc_per_node: usize,
+    pub nprocPerNode: usize,
     pub resources: Option<ResourceRequirements>,
-    pub volume_mounts: Option<Vec<VolumeMount>>,
+    pub volumeMounts: Option<Vec<VolumeMount>>,
+    pub env: Option<Vec<EnvVar>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, JsonSchema)]
+#[allow(non_snake_case)]
 pub struct DataLoaderSpec {
     pub replicas: usize,
     pub resources: Option<ResourceRequirements>,
-    pub volume_mounts: Option<Vec<VolumeMount>>,
+    pub volumeMounts: Option<Vec<VolumeMount>>,
+    pub env: Option<Vec<EnvVar>>,
 }
