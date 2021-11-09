@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use crate::utils::{
-    get_dataloader_pod_name, get_emb_server_pod_name, get_mid_server_pod_name, get_trainer_pod_name,
+    get_dataloader_pod_name, get_emb_server_pod_name, get_mid_server_pod_name, get_trainer_pod_name, DEFAULT_CUDA_IMAGE,
 };
 
 #[derive(CustomResource, Serialize, Deserialize, Debug, PartialEq, Clone, JsonSchema)]
@@ -22,7 +22,6 @@ use crate::utils::{
 )]
 #[allow(non_snake_case)]
 pub struct PersiaJobSpec {
-    pub persiaVersion: Option<String>,
     pub globalConfigPath: String,
     pub embeddingConfigPath: String,
     pub trainerPyEntryPath: String,
@@ -38,7 +37,6 @@ pub struct PersiaJobSpec {
 
 impl PersiaJobSpec {
     fn gen_podspec_template(&self) -> PodSpec {
-        let persia_version = self.persiaVersion.clone().unwrap_or(String::from("latest"));
         let log_level = self.logLevel.clone().unwrap_or(String::from("info"));
 
         let mut env = vec![
@@ -78,7 +76,6 @@ impl PersiaJobSpec {
         PodSpec {
             containers: vec![Container {
                 command: Some(vec!["persia_launcher".to_string()]),
-                image: Some(format!("persiaml/persia-cuda-runtime:{}", persia_version)),
                 env: Some(env),
                 image_pull_policy: Some(String::from("IfNotPresent")),
                 ..Container::default()
@@ -167,6 +164,11 @@ impl PersiaJobSpec {
                     container.resources = embedding_server.resources.clone();
                     container.volume_mounts = embedding_server.volumeMounts.clone();
 
+                    container.image = embedding_server.image.clone();
+                    if container.image.is_none() {
+                        container.image = Some(DEFAULT_CUDA_IMAGE.clone());
+                    }
+
                     let env = container
                         .env
                         .as_mut()
@@ -236,6 +238,11 @@ impl PersiaJobSpec {
                     container.resources = middleware_server.resources.clone();
                     container.volume_mounts = middleware_server.volumeMounts.clone();
 
+                    container.image = middleware_server.image.clone();
+                    if container.image.is_none() {
+                        container.image = Some(DEFAULT_CUDA_IMAGE.clone());
+                    }
+
                     let env = container
                         .env
                         .as_mut()
@@ -303,6 +310,11 @@ impl PersiaJobSpec {
 
                     container.resources = trainer.resources.clone();
                     container.volume_mounts = trainer.volumeMounts.clone();
+
+                    container.image = trainer.image.clone();
+                    if container.image.is_none() {
+                        container.image = Some(DEFAULT_CUDA_IMAGE.clone());
+                    }
 
                     let env = container
                         .env
@@ -374,6 +386,12 @@ impl PersiaJobSpec {
                     container.resources = dataloader.resources.clone();
                     container.volume_mounts = dataloader.volumeMounts.clone();
 
+                    container.image = dataloader.image.clone();
+                    if container.image.is_none() {
+                        container.image = Some(DEFAULT_CUDA_IMAGE.clone());
+                    }
+
+
                     let env = container
                         .env
                         .as_mut()
@@ -427,6 +445,7 @@ pub struct EmbeddingSpec {
     pub resources: Option<ResourceRequirements>,
     pub volumeMounts: Option<Vec<VolumeMount>>,
     pub env: Option<Vec<EnvVar>>,
+    pub image: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, JsonSchema)]
@@ -436,6 +455,7 @@ pub struct MiddlewareSpec {
     pub resources: Option<ResourceRequirements>,
     pub volumeMounts: Option<Vec<VolumeMount>>,
     pub env: Option<Vec<EnvVar>>,
+    pub image: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, JsonSchema)]
@@ -446,6 +466,7 @@ pub struct TrainerSpec {
     pub resources: Option<ResourceRequirements>,
     pub volumeMounts: Option<Vec<VolumeMount>>,
     pub env: Option<Vec<EnvVar>>,
+    pub image: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, JsonSchema)]
@@ -455,4 +476,5 @@ pub struct DataLoaderSpec {
     pub resources: Option<ResourceRequirements>,
     pub volumeMounts: Option<Vec<VolumeMount>>,
     pub env: Option<Vec<EnvVar>>,
+    pub image: Option<String>,
 }
