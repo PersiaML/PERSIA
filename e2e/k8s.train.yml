@@ -21,6 +21,18 @@ spec:
       hostPath:
         path: /home/aip-persia-team/zhuxuefeng/PersiaML/PersiaML/e2e/adult_income/
         type: Directory
+  env:
+    - name: EVAL_CHECKPOINT_DIR
+      value: /workspace/eval_checkpoint/
+    - name: INFER_CHECKPOINT_DIR
+      value: /workspace/infer_checkpoint/
+    - name: HDFS_CHECKPOINT_DIR
+      value: hdfs://hdfsserver:9000//workspace/hdfs_checkpoint/
+    - name: RESULT_FILE_PATH
+      value: /workspace/result.json
+    - name: PERSIA_NATS_IP
+      value: nats://persia-nats-service:4222
+
 
   embeddingServer:
     replicas: 1
@@ -53,6 +65,9 @@ spec:
     volumeMounts:
       - name: workspace
         mountPath: /workspace/
+      - name: data
+        mountPath: /data/
+        read_only: true
 
   dataloader:
     replicas: 1
@@ -66,3 +81,18 @@ spec:
       - name: data
         mountPath: /data/
         read_only: true
+
+---
+
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "persia-nats-service"
+spec:
+  size: 1
+  natsConfig:
+    maxPayload: 52428800
+  resources:
+    limits:
+      memory: "8Gi"
+      cpu: "2" 

@@ -80,6 +80,7 @@ impl PersiaJobSpec {
                 command: Some(vec!["persia_launcher".to_string()]),
                 image: Some(format!("persiaml/persia-cuda-runtime:{}", persia_version)),
                 env: Some(env),
+                image_pull_policy: Some(String::from("IfNotPresent")),
                 ..Container::default()
             }],
             volumes: self.volumes.clone(),
