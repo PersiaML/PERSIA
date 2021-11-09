@@ -37,15 +37,15 @@ def _check_finite(tensors: List[torch.Tensor]) -> bool:
 def _cast_dlpack2torch_tensor(
     pytensor: PyTensor, requires_grad: bool = False
 ) -> torch.Tensor:
-    import torch.utils.dlpack as dlpack
-
-    """Convert the dlpack tensor to torch tensor
+    """Convert the DLPack PythonCapsule to torch tensor
 
     Arguments:
         pytensor (PyTensor): PersiaTensor wrapper that contains dlpack information.
         requires_grad (bool, optional): Whether current tensor requires grad or not.
     Returns: pytorch tensor
     """
+
+    import torch.utils.dlpack as dlpack
 
     tensor = dlpack.from_dlpack(pytensor.dlpack)
     tensor.requires_grad = requires_grad

@@ -47,7 +47,7 @@ from persia_core.utils import (
 )
 from persia_core.nats import init_responder  # noqa
 
-from persia_core.backward import PyBackward # noqa
-from persia_core.forward import PyForward, PyTensor  # noqa
+from persia_core.backward import PyBackward  # noqa
+from persia_core.forward import PyForward, PyTensor, PyTrainBatch  # noqa
 
 # pytype: enable=import-error
