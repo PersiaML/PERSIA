@@ -1,7 +1,7 @@
 apiVersion: persia.com/v1
 kind: PersiaJob
 metadata:
-  name: test
+  name: adult-income
   namespace: default
 spec:
   globalConfigPath: /workspace/config/global_config_train.yml
