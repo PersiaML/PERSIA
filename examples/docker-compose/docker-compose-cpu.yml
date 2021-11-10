@@ -1,86 +1,86 @@
 version: "3.3"
 services:
-        persia_nats_service:
-            image: nats:latest
-            deploy:
-                replicas: 1
-                
-        data_compose:
-            env_file:
-                - .env
-            environment:
-                JOB_ID: "{{.Task.Slot}}"
-                PERSIA_DEV_PATH: /persia-dev-path
-                PERSIA_DEV_PYTHONPATH: /persia-dev-pythonpath
-                PYTHONPATH: /persia-dev-pythonpath
-            depends_on:
-                - trainer
-                - middleware
-                - persia_nats_service
-            image: persiaml/persia-cuda-runtime:latest
-            command: persia_launcher compose /workspace/data_compose.py
-            volumes:
-                - ${CODE_BASE}:/workspace
-                - ${DATA_DIR}:/data
-            deploy:
-                replicas: 1
-                restart_policy:
-                    condition: on-failure
+    persia_nats_service:
+        image: nats:latest
+        deploy:
+            replicas: 1
+            
+    data_compose:
+        env_file:
+            - .env
+        environment:
+            JOB_ID: "{{.Task.Slot}}"
+            PERSIA_DEV_PATH: /persia-dev-path
+            PERSIA_DEV_PYTHONPATH: /persia-dev-pythonpath
+            PYTHONPATH: /persia-dev-pythonpath
+        depends_on:
+            - trainer
+            - middleware
+            - persia_nats_service
+        image: persia-cpu-runtime:latest
+        command: persia_launcher compose /workspace/data_compose.py
+        volumes:
+            - ${CODE_BASE}:/workspace
+            - ${DATA_DIR}:/data
+        deploy:
+            replicas: 1
+            restart_policy:
+                condition: on-failure
 
-        trainer:
-            env_file:
-                - .env
-            environment:
-                JOB_ID: "{{.Task.Slot}}"
-                NCCL_SOCKET_IFNAME: eth0
-                GPU_NUM: 1
-                PERSIA_DEV_PATH: /persia-dev-path
-                PERSIA_DEV_PYTHONPATH: /persia-dev-pythonpath
-                PYTHONPATH: /persia-dev-pythonpath
-            image: persiaml/persia-cuda-runtime:latest
-            command:  persia_launcher trainer /workspace/train.py
-            volumes:
-                - ${CODE_BASE}:/workspace
-                - ${DATA_DIR}:/data
-            deploy:
-                replicas: 1
-                restart_policy:
-                    condition: on-failure
+    trainer:
+        env_file:
+            - .env
+        environment:
+            JOB_ID: "{{.Task.Slot}}"
+            NCCL_SOCKET_IFNAME: eth0
+            GPU_NUM: 1
+            PERSIA_DEV_PATH: /persia-dev-path
+            PERSIA_DEV_PYTHONPATH: /persia-dev-pythonpath
+            PYTHONPATH: /persia-dev-pythonpath
+        image: persia-cpu-runtime:latest
+        command: persia_launcher trainer /workspace/train.py
+        volumes:
+            - ${CODE_BASE}:/workspace
+            - ${DATA_DIR}:/data
+        deploy:
+            replicas: 1
+            restart_policy:
+                condition: on-failure
 
-        middleware:
-            env_file:
-                - .env
-            environment:
-                JOB_ID: "{{.Task.Slot}}" 
-                PERSIA_DEV_PATH: /persia-dev-path
-                PERSIA_DEV_PYTHONPATH: /persia-dev-pythonpath
-                PYTHONPATH: /persia-dev-pythonpath
-                DEBUG: 1
-            depends_on:
-                - server
-            image: persiaml/persia-cuda-runtime:latest
-            command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config.yml
-            deploy:
-                replicas: 1
-                restart_policy:
-                    condition: on-failure
-            volumes:
-                - ${CODE_BASE}:/workspace
+    middleware:
+        env_file:
+            - .env
+        environment:
+            JOB_ID: "{{.Task.Slot}}" 
+            PERSIA_DEV_PATH: /persia-dev-path
+            PERSIA_DEV_PYTHONPATH: /persia-dev-pythonpath
+            PYTHONPATH: /persia-dev-pythonpath
+            DEBUG: 1
+        depends_on:
+            - server
+        image: persia-cpu-runtime:latest
+        command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config.yml
+        deploy:
+            replicas: 1
+            restart_policy:
+                condition: on-failure
+        volumes:
+            - ${CODE_BASE}:/workspace
 
-        server:
-            env_file:
-                - .env
-            environment:
-                JOB_ID: "{{.Task.Slot}}"
-                PERSIA_DEV_PATH: /persia-dev-path
-                PERSIA_DEV_PYTHONPATH: /persia-dev-pythonpath
-                PYTHONPATH: /persia-dev-pythonpath
-                DEBUG: 1
-            image: persiaml/persia-cuda-runtime:latest
-            command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config.yml
-            deploy:
-                replicas: 1
-                restart_policy:
-                    condition: on-failure
-            volumes:
-                - ${CODE_BASE}:/workspace
+    server:
+        env_file:
+            - .env
+        environment:
+            JOB_ID: "{{.Task.Slot}}"
+            PERSIA_DEV_PATH: /persia-dev-path
+            PERSIA_DEV_PYTHONPATH: /persia-dev-pythonpath
+            PYTHONPATH: /persia-dev-pythonpath
+            DEBUG: 1
+        image: persia-cpu-runtime:latest
+        command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config.yml
+        deploy:
+            replicas: 1
+            restart_policy:
+                condition: on-failure
+        volumes:
+            - ${CODE_BASE}:/workspace
