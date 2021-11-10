@@ -11,19 +11,17 @@ spec:
   volumes:
     - name: data
       hostPath:
-        path: /data/adult_income/
+        path: /nfs/general/data/adult_income/
         type: Directory
     - name: workspace
       hostPath:
-        path: /home/aip-persia-team/zhuxuefeng/PersiaML/PersiaML/e2e/adult_income/
+        path: /nfs/general/PersiaML/e2e/adult_income/
         type: Directory
   env:
     - name: EVAL_CHECKPOINT_DIR
       value: /workspace/eval_checkpoint/
     - name: INFER_CHECKPOINT_DIR
       value: /workspace/infer_checkpoint/
-    - name: HDFS_CHECKPOINT_DIR
-      value: hdfs://hdfsserver:9000//workspace/hdfs_checkpoint/
     - name: RESULT_FILE_PATH
       value: /workspace/result.json
     - name: PERSIA_NATS_IP
@@ -63,6 +61,9 @@ spec:
       - name: data
         mountPath: /data/
         read_only: true
+    env:
+      - name: CUBLAS_WORKSPACE_CONFIG
+        value: :4096:8
 
   dataloader:
     replicas: 1

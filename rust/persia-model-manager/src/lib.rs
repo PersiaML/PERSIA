@@ -25,7 +25,7 @@ use persia_storage::{PersiaPath, PersiaPathImpl};
 
 #[derive(Clone, Readable, Writable, thiserror::Error, Debug)]
 pub enum SparseModelManagerError {
-    #[error("storage error")]
+    #[error("storage error {0}")]
     StorageError(String),
     #[error("embedding holder error: {0}")]
     PersiaEmbeddingHolderError(#[from] PersiaEmbeddingHolderError),
