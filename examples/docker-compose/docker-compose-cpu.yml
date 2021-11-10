@@ -20,10 +20,8 @@ services:
             image: persiaml/persia-cuda-runtime:latest
             command: persia_launcher compose /workspace/data_compose.py
             volumes:
-                - ${CUR_DIR}:/workspace
+                - ${CODE_BASE}:/workspace
                 - ${DATA_DIR}:/data
-                - ${DEV_PATH}/bin:/persia-dev-path
-                - ${DEV_PATH}:/persia-dev-pythonpath
             deploy:
                 replicas: 1
                 restart_policy:
@@ -42,10 +40,8 @@ services:
             image: persiaml/persia-cuda-runtime:latest
             command:  persia_launcher trainer /workspace/train.py
             volumes:
-                - ${CUR_DIR}:/workspace
+                - ${CODE_BASE}:/workspace
                 - ${DATA_DIR}:/data
-                - ${DEV_PATH}/bin:/persia-dev-path
-                - ${DEV_PATH}:/persia-dev-pythonpath
             deploy:
                 replicas: 1
                 restart_policy:
@@ -69,9 +65,7 @@ services:
                 restart_policy:
                     condition: on-failure
             volumes:
-                - ${CUR_DIR}:/workspace
-                - ${DEV_PATH}/bin:/persia-dev-path
-                - ${DEV_PATH}:/persia-dev-pythonpath
+                - ${CODE_BASE}:/workspace
 
         server:
             env_file:
@@ -89,6 +83,4 @@ services:
                 restart_policy:
                     condition: on-failure
             volumes:
-                - ${CUR_DIR}:/workspace
-                - ${DEV_PATH}/bin:/persia-dev-path
-                - ${DEV_PATH}:/persia-dev-pythonpath
+                - ${CODE_BASE}:/workspace
