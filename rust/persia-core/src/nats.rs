@@ -175,7 +175,7 @@ impl PersiaDataFlowComponent {
                 .await
             }
         }?;
-        
+
         tracing::info!("Get world_size {}", world_size);
 
         let preforward_sparse_publish_service = MiddlewareNatsServicePublisher::new().await;
