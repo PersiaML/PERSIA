@@ -11,6 +11,14 @@ pub struct CudaStreamPtr {
     pub inner: cuda::cudaStream_t,
 }
 
+impl Default for CudaStreamPtr {
+    fn default() -> Self {
+        CudaStreamPtr {
+            inner: std::ptr::null_mut(),
+        }
+    }
+}
+
 unsafe impl Send for CudaStreamPtr {}
 
 impl Allocatable for CudaStreamPtr {

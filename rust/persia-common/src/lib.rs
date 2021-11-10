@@ -3,13 +3,9 @@
 pub mod grad;
 pub mod message_queue;
 pub mod optim;
-pub mod tensor;
 pub mod utils;
 
-use std::cmp::Ordering;
 use std::u64;
-
-use tensor::{DenseTensor, Tensor};
 
 use persia_libs::{
     half,
@@ -164,70 +160,6 @@ impl Default for SparseBatchRemoteReference {
             ref_id: 0,
             batcher_idx: 0,
         }
-    }
-}
-
-#[derive(Readable, Writable, Debug)]
-pub enum EmbeddingTensor {
-    Null,
-    SparseBatch(SparseBatch),
-    SparseBatchRemoteReference(SparseBatchRemoteReference),
-}
-
-impl EmbeddingTensor {
-    pub fn to_forward_id(&self) -> (&str, u64) {
-        match &self {
-            EmbeddingTensor::SparseBatchRemoteReference(sparse_ref) => {
-                (&sparse_ref.middleware_addr, sparse_ref.ref_id)
-            }
-            EmbeddingTensor::SparseBatch(_) => ("", 0u64),
-            _ => panic!("forward id not found on embedding tensor"),
-        }
-    }
-}
-#[derive(Readable, Writable, Debug)]
-pub struct PersiaBatchData {
-    pub dense_data: Vec<DenseTensor>,
-    pub sparse_data: EmbeddingTensor,
-    pub target_data: Vec<DenseTensor>,
-    pub map_data: HashMap<String, Tensor>,
-    pub meta_data: Option<Vec<u8>>,
-    pub batch_id: Option<usize>,
-}
-
-impl Default for PersiaBatchData {
-    fn default() -> Self {
-        PersiaBatchData {
-            dense_data: Vec::new(),
-            sparse_data: EmbeddingTensor::Null,
-            target_data: Vec::new(),
-            map_data: HashMap::new(),
-            meta_data: None,
-            batch_id: None,
-        }
-    }
-}
-
-impl PartialEq for PersiaBatchData {
-    fn eq(&self, other: &Self) -> bool {
-        self.batch_id.unwrap_or(usize::MIN) == other.batch_id.unwrap_or(usize::MIN)
-    }
-}
-
-impl Eq for PersiaBatchData {}
-
-impl PartialOrd for PersiaBatchData {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for PersiaBatchData {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.batch_id
-            .unwrap_or(usize::MIN)
-            .cmp(&other.batch_id.unwrap_or(usize::MIN))
-            .reverse()
     }
 }
 

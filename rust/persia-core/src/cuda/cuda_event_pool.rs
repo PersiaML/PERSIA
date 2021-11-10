@@ -13,6 +13,14 @@ pub struct CudaEventPtr {
     pub inner: cuda::cudaEvent_t,
 }
 
+impl Default for CudaEventPtr {
+    fn default() -> Self {
+        CudaEventPtr {
+            inner: std::ptr::null_mut(),
+        }
+    }
+}
+
 unsafe impl Send for CudaEventPtr {}
 
 impl CudaEventPtr {

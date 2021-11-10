@@ -66,7 +66,7 @@ class DistributedBaseOption(ABC):
         ...
 
 
-_ddp_backend_support_list = ["nccl"]
+_ddp_backend_support_list = ["nccl", "gloo"]
 _ddp_init_method_list = ["tcp", "file"]
 
 
@@ -140,11 +140,14 @@ class DDPOption(DistributedBaseOption):
             rank=rank_id,
             world_size=world_size,
         )
-        _logger.info("Pytorch ddp init process group done")
+        _logger.info(
+            f"Pytorch ddp init process group done, corresponding backend is {self.backend}, init method is {self.init_method}"
+        )
 
+        device_ids = [device_id] if self.backend != "gloo" else None
         parallel_model = torch.nn.parallel.DistributedDataParallel(
             model,
-            device_ids=[device_id],
+            device_ids=device_ids,
             output_device=device_id,
             find_unused_parameters=True,
         )
@@ -167,7 +170,7 @@ def _select_bagua_algorithm(
 ):
     """Select corresponding bagua algorithm for current training
     Arguments:
-        algorithm (str): Name of bagua algorithm.
+        algorithm (str): Name of Bagua algorithm.
         model (torch.nn.Model): The pytorch model that need to converted to dataparallel model which is needed when apply bagua QAdam algorithm.
         options (dict): Options for bagua algorithm.
     Returns:
@@ -225,6 +228,9 @@ class BaguaDistributedOption(DistributedBaseOption):
             options.pop("master_port", 23456), options.pop("master_addr", None)
         )
 
+        assert (
+            torch.cuda.is_available()
+        ), "BaguaDistributedOption only support on cuda device."
         self.algorithm = algorithm
         self.options = options
 
@@ -261,10 +267,6 @@ class BaguaDistributedOption(DistributedBaseOption):
             raise e
 
         current_env = os.environ
-        # current_env["WORLD_SIZE"] = str(world_size)
-        # current_env["LOCAL_WORLD_SIZE"] = str(local_world_size)
-        # current_env["RANK"] = str(rank_id)
-        # current_env["LOCAL_RANK"] = str(device_id)
         current_env["MASTER_ADDR"] = self.master_addr or master_addr
         current_env["MASTER_PORT"] = str(self.master_port)
         current_env["BAGUA_DEFAULT_BUCKET_SIZE"] = str(

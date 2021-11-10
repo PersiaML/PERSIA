@@ -1,4 +1,5 @@
 import os
+import json
 
 from typing import Optional
 
@@ -7,9 +8,9 @@ import numpy as np
 
 from tqdm import tqdm
 from sklearn import metrics
-import json
 
 from persia.ctx import TrainCtx, eval_ctx, EmbeddingConfig
+from persia.distributed import DDPOption
 from persia.sparse.optim import Adagrad
 from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
@@ -26,6 +27,9 @@ logger = get_default_logger("trainer")
 device_id = get_local_rank()
 
 setup_seed(3)
+
+CPU_TEST_AUC = 0.8936692224423999
+GPU_TEST_AUC = 0.8934601372796367
 
 
 class TestDataset(PersiaDataset):
@@ -56,6 +60,7 @@ def test(
     model: torch.nn.Module,
     clear_embeddings: bool = False,
     checkpoint_dir: Optional[str] = None,
+    cuda: bool = True,
 ):
     logger.info("start to test...")
     model.eval()
@@ -71,11 +76,17 @@ def test(
         accuracies, losses = [], []
         all_pred, all_target = [], []
         for (batch_idx, batch_data) in enumerate(tqdm(test_loader, desc="test...")):
-            (output, target) = ctx.forward(batch_data)
-            loss = loss_fn(output, target)
-            all_pred.append(output.cpu().detach().numpy())
-            all_target.append(target.cpu().detach().numpy())
-            accuracy = (torch.round(output) == target).sum() / target.shape[0]
+            (pred, target) = ctx.forward(batch_data)
+            loss = loss_fn(pred, target)
+            if cuda:
+                pred = pred.cpu()
+                target = target.cpu()
+            else:
+                # cpu mode need copy the target data to avoid use the invalid data.
+                target = target.clone()
+            all_pred.append(pred.detach().numpy())
+            all_target.append(target.detach().numpy())
+            accuracy = (torch.round(pred) == target).sum() / target.shape[0]
             accuracies.append(accuracy)
             losses.append(float(loss))
 
@@ -104,14 +115,22 @@ if __name__ == "__main__":
     model = DNN()
     logger.info("init Simple DNN model...")
     rank, device_id, world_size = get_rank(), get_local_rank(), get_world_size()
+    mixed_precision = True
 
-    torch.cuda.set_device(device_id)
-    model.cuda(device_id)
+    if torch.cuda.is_available():
+        torch.cuda.set_device(device_id)
+        model.cuda(device_id)
+        backend = "nccl"
+        cuda = True
+    else:
+        mixed_precision = False
+        device_id = None
+        backend = "gloo"
+        cuda = False
 
     dense_optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     sparse_optimizer = Adagrad(lr=1e-2)
     loss_fn = torch.nn.BCELoss(reduction="mean")
-    logger.info("finish genreate dense ctx")
 
     eval_checkpoint_dir = os.environ["EVAL_CHECKPOINT_DIR"]
     infer_checkpoint_dir = os.environ["INFER_CHECKPOINT_DIR"]
@@ -125,7 +144,9 @@ if __name__ == "__main__":
         sparse_optimizer=sparse_optimizer,
         dense_optimizer=dense_optimizer,
         device_id=device_id,
+        mixed_precision=mixed_precision,
         embedding_config=embedding_config,
+        distributed_option=DDPOption(backend=backend),
     ) as ctx:
         train_dataloader = Dataloder(
             StreamingDataset(buffer_size), reproducible=True, embedding_staleness=1
@@ -140,9 +161,10 @@ if __name__ == "__main__":
             )
 
             if batch_idx % test_interval == 0 and batch_idx != 0:
-                test_auc, test_acc = test(model)
+                test_auc, test_acc = test(model, cuda=cuda)
                 np.testing.assert_equal(
-                    np.array([test_auc]), np.array([0.8934601372796367])
+                    np.array([test_auc]),
+                    np.array([GPU_TEST_AUC if cuda else CPU_TEST_AUC]),
                 )
                 break
 
@@ -160,12 +182,12 @@ if __name__ == "__main__":
         assert num_ids == 0, f"clear embedding failed"
 
     eval_auc, eval_acc = test(
-        model, clear_embeddings=True, checkpoint_dir=eval_checkpoint_dir
+        model, clear_embeddings=True, checkpoint_dir=eval_checkpoint_dir, cuda=cuda
     )
     np.testing.assert_equal(np.array([test_auc]), np.array([eval_auc]))
 
     eval_auc, eval_acc = test(
-        model, clear_embeddings=True, checkpoint_dir=hdfs_checkpoint_dir
+        model, clear_embeddings=True, checkpoint_dir=hdfs_checkpoint_dir, cuda=cuda
     )
     np.testing.assert_equal(np.array([test_auc]), np.array([eval_auc]))
 
@@ -178,3 +200,4 @@ if __name__ == "__main__":
 
     with open(result_filepath, "w") as f:
         f.write(result)
+        

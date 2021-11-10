@@ -12,6 +12,15 @@ pub struct PinnedMemoryPtr {
     pub num_bytes: usize,
 }
 
+impl Default for PinnedMemoryPtr {
+    fn default() -> Self {
+        PinnedMemoryPtr {
+            inner: std::ptr::null_mut(),
+            num_bytes: 0,
+        }
+    }
+}
+
 impl Drop for PinnedMemoryPtr {
     fn drop(&mut self) {
         PINNED_MEMORY_POOL.recycle(PinnedMemoryPtr {

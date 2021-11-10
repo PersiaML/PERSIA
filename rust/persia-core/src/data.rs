@@ -1,14 +1,76 @@
+use std::cmp::Ordering;
+
+use crate::tensor::{CPUStorage, Storage, Tensor};
+
 use paste::paste;
+use persia_libs::numpy::{PyArray1, PyArray2};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use persia_libs::numpy::{PyArray1, PyArray2};
+use persia_common::{SparseBatch, SparseBatchRemoteReference};
+use persia_speedy::{Readable, Writable};
 
-use persia_common::{
-    tensor::{BaseTensor, DenseTensor, SparseTensor, Tensor},
-    EmbeddingTensor, PersiaBatchData, SparseBatch,
-};
-use persia_speedy::Writable;
+#[derive(Readable, Writable, Debug)]
+pub enum EmbeddingTensor {
+    Null,
+    SparseBatch(SparseBatch),
+    SparseBatchRemoteReference(SparseBatchRemoteReference),
+}
+
+impl EmbeddingTensor {
+    pub fn get_remote_ref_info(&self) -> (&str, u64) {
+        match &self {
+            EmbeddingTensor::SparseBatchRemoteReference(sparse_ref) => {
+                (&sparse_ref.middleware_addr, sparse_ref.ref_id)
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(Readable, Writable, Debug)]
+pub struct PersiaBatchData {
+    pub dense_data: Vec<Tensor>,
+    pub sparse_data: EmbeddingTensor,
+    pub target_data: Vec<Tensor>,
+    pub meta_data: Option<Vec<u8>>,
+    pub batch_id: Option<usize>,
+}
+
+impl Default for PersiaBatchData {
+    fn default() -> Self {
+        PersiaBatchData {
+            dense_data: Vec::new(),
+            sparse_data: EmbeddingTensor::Null,
+            target_data: Vec::new(),
+            meta_data: None,
+            batch_id: None,
+        }
+    }
+}
+
+impl PartialEq for PersiaBatchData {
+    fn eq(&self, other: &Self) -> bool {
+        self.batch_id.unwrap_or(usize::MIN) == other.batch_id.unwrap_or(usize::MIN)
+    }
+}
+
+impl Eq for PersiaBatchData {}
+
+impl PartialOrd for PersiaBatchData {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for PersiaBatchData {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.batch_id
+            .unwrap_or(usize::MIN)
+            .cmp(&other.batch_id.unwrap_or(usize::MIN))
+            .reverse()
+    }
+}
 
 #[pyclass]
 pub struct PyPersiaBatchData {
@@ -26,10 +88,14 @@ impl PyPersiaBatchData {
 
     pub fn add_dense(&mut self, data: Vec<&PyArray2<f32>>) {
         data.iter().for_each(|x| {
-            self.inner.dense_data.push(DenseTensor {
-                data: BaseTensor::F32(x.to_vec().expect("convert ndarray to vec failed")),
-                shape: x.shape().to_vec(),
-            });
+            self.inner.dense_data.push(Tensor::new(
+                Storage::CPU(CPUStorage::from_f32(
+                    x.to_vec().expect("convert ndarray to vec failed"),
+                )),
+                x.shape().to_vec(),
+                None,
+                None,
+            ));
         });
     }
 
@@ -43,30 +109,14 @@ impl PyPersiaBatchData {
     }
 
     pub fn add_target(&mut self, target_data: &PyArray2<f32>) {
-        self.inner.target_data.push(DenseTensor {
-            data: BaseTensor::F32(target_data.to_vec().expect("convert ndarray to vec failed")),
-            shape: target_data.shape().to_vec(),
-        });
-    }
-
-    pub fn add_map_dense(&mut self, name: &str, data: &PyArray2<f32>) {
-        self.inner.map_data.insert(
-            name.to_string(),
-            Tensor::Dense(DenseTensor {
-                data: BaseTensor::F32(data.to_vec().expect("convert ndarray to vec failed")),
-                shape: data.shape().to_vec(),
-            }),
-        );
-    }
-
-    pub fn add_map_sparse(&mut self, name: &str, data: Vec<f32>, offset: Vec<u64>) {
-        self.inner.map_data.insert(
-            name.to_string(),
-            Tensor::Sparse(SparseTensor {
-                data: BaseTensor::F32(data),
-                offset,
-            }),
-        );
+        self.inner.target_data.push(Tensor::new(
+            Storage::CPU(CPUStorage::from_f32(
+                target_data.to_vec().expect("convert ndarray to vec failed"),
+            )),
+            target_data.shape().to_vec(),
+            None,
+            None,
+        ));
     }
 
     pub fn add_meta(&mut self, data: &PyBytes) {
@@ -91,10 +141,12 @@ macro_rules! add_dense_func2batch_data {
             impl PyPersiaBatchData {
                     $(
                         pub fn [<add_dense_ $typ:lower>](&mut self, data: &PyArray2<$typ>) {
-                            self.inner.dense_data.push(DenseTensor {
-                                data: BaseTensor::$attr(data.to_vec().expect("convert ndarray to vec failed")),
-                                shape: data.shape().to_vec(),
-                            });
+                            self.inner.dense_data.push(Tensor::new(
+                                Storage::CPU(CPUStorage::[<from_ $typ:lower>] (data.to_vec().expect("convert ndarray to vec failed"))),
+                                data.shape().to_vec(),
+                                None,
+                                None
+                            ));
                         }
                     )*
             }

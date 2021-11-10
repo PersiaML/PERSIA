@@ -2014,9 +2014,9 @@ dependencies = [
 name = "persia-rpc-macro"
 version = "0.1.0"
 dependencies = [
+ "openssl",
  "proc-macro2",
  "quote",
- "reqwest",
  "syn",
 ]
 

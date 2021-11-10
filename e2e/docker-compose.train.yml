@@ -10,10 +10,11 @@ services:
             - adult_income/.test_env
         environment:
             JOB_ID: 1
-        image: persiaml-test:latest
+        image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
         command: persia_launcher compose /workspace/data_compose.py
         volumes:
             - ./adult_income:/workspace
+            - ./cache:/cache
             - /data/adult_income:/data/
 
     trainer:
@@ -22,7 +23,8 @@ services:
         environment:
             JOB_ID: 1
             GPU_NUM: 1
-        image: persiaml-test:latest
+            CUBLAS_WORKSPACE_CONFIG: :4096:8 # Adapt to pytorch deterministic feature
+        image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
         command: persia_launcher trainer /workspace/train.py
         depends_on:
             - data_compose
@@ -31,6 +33,7 @@ services:
             - persia_nats_service
             - hdfsserver
         volumes:
+            - ./cache/:/cache
             - ./adult_income:/workspace
             - /data/adult_income:/data/
 
@@ -39,20 +42,31 @@ services:
             - adult_income/.test_env
         environment:
             JOB_ID: 1
-        image: persiaml-test:latest
+        image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
         command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
         volumes:
             - ./adult_income:/workspace
+            - ./cache:/cache
 
     server:
         env_file:
             - adult_income/.test_env
         environment:
             JOB_ID: 1
-        image: persiaml-test:latest
+        image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
         command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
         volumes:
             - ./adult_income:/workspace
+            - ./cache:/cache
+
+    hdfsserver:
+        image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
+        command: bash -c "/workspace/hadoop/launch_hdfs.sh"
+        volumes:
+            - ./adult_income:/workspace
+            - ./cache:/cache
+        hostname:
+            hdfsserver
 
     metrics_gateway:
         image: prom/pushgateway:latest
@@ -77,11 +91,3 @@ services:
             - ../resources/:/workspace
         environment:
             GF_PATHS_PROVISIONING: /workspace/grafana/provisioning/
-
-    hdfsserver:
-        image: persiaml-test:latest
-        command: bash -c "hadoop/launch_hdfs.sh"
-        volumes:
-            - ./adult_income:/workspace
-        hostname:
-            hdfsserver

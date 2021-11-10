@@ -1,7 +1,6 @@
 from threading import Thread
 from typing import Optional
 
-import torch
 from torch.utils.data.dataset import IterableDataset as TorchIterableDataset
 
 import persia.env as env
@@ -18,9 +17,7 @@ from persia.prelude import (
 _logger = get_default_logger()
 
 
-class IterableDataset(
-    TorchIterableDataset
-):  # TODO: cannot understand the whole doc string
+class IterableDataset(TorchIterableDataset):
     r"""IterableChannelBase wrap the PyPersiaBatchDataChannel that provide the channel sender and
     receiver.
 
@@ -98,11 +95,6 @@ class PersiaDataset(IterableDataset):
         raise NotImplementedError("implement this function to fetch data")
 
     def __iter__(self):
-        # TODO: provide process worker to handler the data with high performance calculating
-        # class WorkerType(Enum):
-        #     THREAD = 1
-        #     PROCESS = 2
-
         if self.async_iterator:
             handler = Thread(target=self.fetch_data, args=(self.sender,), daemon=True)
             handler.start()
@@ -155,10 +147,7 @@ class Dataloder(object):
             embedding_staleness,
         )
         self.forward_engine.set_input_channel(dataset.receiver)
-        self.forward_engine.launch(
-            torch.cuda.current_device(),
-            self.num_workers,
-        )
+        self.forward_engine.launch(self.num_workers)
 
     def __iter__(self):
 
