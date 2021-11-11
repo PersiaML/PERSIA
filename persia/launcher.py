@@ -51,7 +51,7 @@ def run_command(cmd: List[str], verb: bool = True):
     cmd = list(map(str, cmd))
     if verb:
         cmd_str = " ".join(cmd)
-        print(f"execute command: {cmd_str}")
+        _logger.info(f"execute command: {cmd_str}")
 
     subprocess.check_call(cmd, env=_ENV)
 

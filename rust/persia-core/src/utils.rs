@@ -1,12 +1,9 @@
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use crate::data::PyPersiaBatchData;
+use crate::data::{PersiaBatchData, PyPersiaBatchData};
 
-use persia_common::{
-    message_queue::{PersiaMessageQueueClient, PersiaMessageQueueServer},
-    PersiaBatchData,
-};
+use persia_common::message_queue::{PersiaMessageQueueClient, PersiaMessageQueueServer};
 use persia_libs::{flume, tokio::runtime::Runtime};
 
 #[pyclass]

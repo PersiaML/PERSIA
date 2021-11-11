@@ -1,7 +1,8 @@
 use std::sync::atomic::Ordering;
 
-use persia_common::utils::ChannelPair;
 use persia_libs::tracing;
+
+use persia_common::utils::ChannelPair;
 
 pub trait Allocatable {
     fn new(size: usize) -> Self;
