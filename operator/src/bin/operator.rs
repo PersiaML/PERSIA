@@ -1,9 +1,3 @@
-mod crd;
-mod finalizer;
-mod op;
-mod utils;
-
-use crate::crd::PersiaJob;
 use futures::stream::StreamExt;
 use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::api::core::v1::Service;
@@ -14,6 +8,8 @@ use kube::{api::ListParams, client::Client, Api};
 use kube_runtime::controller::{Context, ReconcilerAction};
 use kube_runtime::Controller;
 use parking_lot::Mutex;
+use persia_operator::crd::PersiaJob;
+use persia_operator::{finalizer, utils};
 use std::collections::HashMap;
 use tokio::time::Duration;
 
@@ -93,10 +89,10 @@ async fn reconcile(
             finalizer::add(client.clone(), &name, &namespace).await?;
 
             let pods: Vec<Pod> = job.spec.gen_pods(&name, &namespace);
-            op::deploy_pods(client.clone(), &pods, &namespace).await?;
+            utils::deploy_pods(client.clone(), &pods, &namespace).await?;
 
             let services: Vec<Service> = job.spec.gen_services(&name, &namespace);
-            op::deploy_services(client, &services, &namespace).await?;
+            utils::deploy_services(client, &services, &namespace).await?;
 
             let mut jobs = context.get_ref().jobs.lock();
             jobs.insert(name, pods);
@@ -117,7 +113,7 @@ async fn reconcile(
                 }
             });
 
-            op::delete_services(client.clone(), &services_name, &namespace).await?;
+            utils::delete_services(client.clone(), &services_name, &namespace).await?;
 
             let pods: Vec<Pod> = job.spec.gen_pods(&name, &namespace);
             let mut pods_name = Vec::new();
@@ -127,7 +123,7 @@ async fn reconcile(
                 }
             });
 
-            op::delete_pods(client.clone(), &pods_name, &namespace).await?;
+            utils::delete_pods(client.clone(), &pods_name, &namespace).await?;
 
             finalizer::delete(client, &name, &namespace).await?;
 

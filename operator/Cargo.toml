@@ -19,3 +19,11 @@ schemars = "~0.8"
 thiserror = "~1.0"
 serde_yaml = "0.8.21"
 parking_lot = {version = "0.11", features = ["deadlock_detection"]}
+
+[[bin]]
+name = "persia-operator"
+path = "src/bin/operator.rs"
+
+[[bin]]
+name = "gencrd"
+path = "src/bin/gencrd.rs"
