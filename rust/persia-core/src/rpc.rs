@@ -242,7 +242,7 @@ impl PersiaRpcClient {
             .for_each(|(replica_index, s)| match s {
                 SparseModelManagerStatus::Failed(e) => {
                     let err_msg = format!(
-                        "emb dump FAILED for server {}, due to {}.",
+                        "emb dump FAILED for server {}, due to {:?}.",
                         replica_index, e
                     );
                     errors.push(err_msg);
