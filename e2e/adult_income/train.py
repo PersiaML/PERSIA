@@ -134,7 +134,7 @@ if __name__ == "__main__":
 
     eval_checkpoint_dir = os.environ["EVAL_CHECKPOINT_DIR"]
     infer_checkpoint_dir = os.environ["INFER_CHECKPOINT_DIR"]
-    hdfs_checkpoint_dir = os.environ['HDFS_CHECKPOINT_DIR']
+    hdfs_checkpoint_dir = os.environ["HDFS_CHECKPOINT_DIR"]
     test_interval = 254
     buffer_size = 10
 
@@ -170,6 +170,9 @@ if __name__ == "__main__":
 
         ctx.dump_checkpoint(eval_checkpoint_dir)
         logger.info(f"dump checkpoint to {eval_checkpoint_dir}")
+
+        ctx.dump_checkpoint(hdfs_checkpoint_dir)
+        logger.info(f"dump checkpoint to {hdfs_checkpoint_dir}")
 
         ctx.dump_checkpoint(infer_checkpoint_dir, with_jit_model=True)
         logger.info(f"dump checkpoint to {infer_checkpoint_dir}")
