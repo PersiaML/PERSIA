@@ -1,28 +1,17 @@
 use futures::stream::StreamExt;
 use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::api::core::v1::Service;
-use kube::CustomResourceExt;
 use kube::Resource;
 use kube::ResourceExt;
 use kube::{api::ListParams, client::Client, Api};
 use kube_runtime::controller::{Context, ReconcilerAction};
 use kube_runtime::Controller;
-use parking_lot::Mutex;
 use persia_operator::crd::PersiaJob;
 use persia_operator::{finalizer, utils};
-use std::collections::HashMap;
 use tokio::time::Duration;
 
 #[tokio::main]
 async fn main() {
-    if std::env::var("GEN_CRD")
-        .unwrap_or(String::from("false"))
-        .parse::<bool>()
-        .expect("GEN_CRD should be true or false")
-    {
-        print!("{}", serde_yaml::to_string(&PersiaJob::crd()).unwrap());
-    }
-
     let kubernetes_client: Client = Client::try_default()
         .await
         .expect("Expected a valid KUBECONFIG environment variable.");
@@ -47,15 +36,11 @@ async fn main() {
 
 struct ContextData {
     client: Client,
-    jobs: Mutex<HashMap<String, Vec<Pod>>>,
 }
 
 impl ContextData {
     pub fn new(client: Client) -> Self {
-        ContextData {
-            client,
-            jobs: Mutex::new(HashMap::new()),
-        }
+        ContextData { client }
     }
 }
 
@@ -94,9 +79,6 @@ async fn reconcile(
             let services: Vec<Service> = job.spec.gen_services(&name, &namespace);
             utils::deploy_services(client, &services, &namespace).await?;
 
-            let mut jobs = context.get_ref().jobs.lock();
-            jobs.insert(name, pods);
-
             Ok(ReconcilerAction {
                 requeue_after: Some(Duration::from_secs(10)),
             })
@@ -126,9 +108,6 @@ async fn reconcile(
             utils::delete_pods(client.clone(), &pods_name, &namespace).await?;
 
             finalizer::delete(client, &name, &namespace).await?;
-
-            let mut jobs = context.get_ref().jobs.lock();
-            jobs.remove(&name);
 
             Ok(ReconcilerAction {
                 requeue_after: None,
