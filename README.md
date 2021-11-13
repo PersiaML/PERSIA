@@ -18,7 +18,7 @@
 
 **PERSIA** (**P**arallel r**E**commendation t**R**aining **S**ystem with hybr**I**d **A**cceleration) is a PyTorch-based system for training deep learning recommendation models on commodity hardware. It supports models containing more than 100 trillion parameters, and is by far the fastest open source deep learning recommendation model training system. PERSIA is developed by [AI platform@Kuaishou Technology](https://www.kuaishou.com/en).
 
-*Disclaimer: The program is usable and has served several important businesses. However, the official documentation and tutorials are still under heavy construction (there are some materials on [tutorials website](https://persiaml-tutorials.pages.dev), but they are pretty raw). We encourage adventurers to try out PERSIA and contribute!*
+*Disclaimer: The program is usable and has served several important businesses. However, the official English documentation and tutorials are still under heavy construction (there are some materials on [tutorials website](https://persiaml-tutorials.pages.dev), but they are pretty raw). We encourage adventurers to try out PERSIA and contribute!*
 
 ## News
 
