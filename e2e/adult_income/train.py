@@ -200,4 +200,3 @@ if __name__ == "__main__":
 
     with open(result_filepath, "w") as f:
         f.write(result)
-        
