@@ -20,6 +20,13 @@
 
 *Disclaimer: The program is usable and has served several important businesses. However, the official documentation and tutorials are still under heavy construction (there are some materials on [tutorials website](https://persiaml-tutorials.pages.dev), but they are pretty raw). We encourage adventurers to try out PERSIA and contribute!*
 
+## News
+
+* 单机训练速度提升 640 倍！独家解读快手商业广告模型 GPU 训练平台 PERSIA (In Chinese. Title: 640x Faster GPU Based Learning System for Ad Recommendation)
+   * [[AI Front]](https://archive.is/2ii2L) [[中国日报]](https://archive.is/N8fK2) [[InfoQ]](https://archive.is/JESDU) [[CSDN]](https://archive.is/tpvkN) [[Tencent Cloud News]](https://archive.is/kLuaT)
+* 创新、平衡与大格局：快手商业化的慢与快 (In Chinese. Title: Innovation, Balance, and Big Picture: The Speed of Kwai Commercialization)
+   * [[TechSir]](https://archive.is/EOQ18) [[China Daily]](https://archive.is/L2VJE) [[Sohu]](https://archive.is/aY66U)
+
 ## Links
 
 * [GitHub Repository](https://github.com/PersiaML/PERSIA)
