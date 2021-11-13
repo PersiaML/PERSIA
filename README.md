@@ -1,5 +1,8 @@
-PERSIA
-======
+<p align="center">
+<img width="150px" src="https://user-images.githubusercontent.com/18649508/141604792-b256023d-c751-46d8-bab5-29a207d714ba.png"/>
+</p>
+
+<hr/>
 
 [![tutorials](https://img.shields.io/badge/tutorials-passing-green)](https://persiaml-tutorials.pages.dev) 
 [![Documentation Status](https://img.shields.io/badge/documentation-passing-green)](https://persiaml.pages.dev)
