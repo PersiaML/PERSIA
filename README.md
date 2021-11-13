@@ -20,6 +20,12 @@
 
 *Disclaimer: The program is usable and has served several important businesses. However, the official documentation and tutorials are still under heavy construction (there are some materials on [tutorials website](https://persiaml-tutorials.pages.dev), but they are pretty raw). We encourage adventurers to try out PERSIA and contribute!*
 
+## Links
+
+* [GitHub Repository](https://github.com/PersiaML/PERSIA)
+* [Tutorials](https://persiaml-tutorials.pages.dev/) (Under Construction)
+* [API documentation](https://persiaml.pages.dev/) (Under Construction)
+
 ## Publications
 
 1. Xiangru Lian, Binhang Yuan, Xuefeng Zhu, Yulong Wang, Yongjun He, Honghuan Wu, Lei Sun, Haodong Lyu, Chengjun Liu, Xing Dong, Yiqiao Liao, Mingnan Luo, Congfei Zhang, Jingru Xie, Haonan Li, Lei Chen, Renjie Huang, Jianying Lin, Chengchun Shu, Xuezhong Qiu, Zhishan Liu, Dongying Kong, Lei Yuan, Hai Yu, Sen Yang, Ce Zhang, & Ji Liu. (2021). [Persia: A Hybrid System Scaling Deep Learning Based Recommenders up to 100 Trillion Parameters.](https://arxiv.org/abs/2111.05897)
