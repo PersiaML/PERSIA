@@ -16,12 +16,12 @@
 <a href="https://github.com/PersiaML/Persia/stargazers"><img src="https://reporoster.com/stars/PersiaML/Persia" /><a/>
 </div>
 
-**PERSIA** (**P**arallel r**E**commendation t**R**aining **S**ystem with hybr**I**d **A**cceleration) is a PyTorch-based system for training deep learning recommendation models on commodity hardware. It supports models containing more than 100 trillion parameters, and is by far the fastest open source deep learning recommendation model training system. PERSIA is developed by [AI platform@Kuaishou Technology](https://www.kuaishou.com/en).
+**PERSIA** (**P**arallel r**E**commendation t**R**aining **S**ystem with hybr**I**d **A**cceleration)  is developed by [AI platform@Kuaishou Technology](https://www.kuaishou.com/en), collaborating with ETH. It is a PyTorch-based system for training deep learning recommendation models on commodity hardwares. This is the first Pytorch based training engine for recommendation. It is capable of training the recommendation models up to 100 trillion parameters. To the best of our knowledge, this is the largest model size in recommendation systems so far. Its efficiency and robustness have been validated by multiple applications with 100 million level DAU at Kuaishou. Empirical study on public datasets indicate Perisa's significant advantage over several other existing training systems in recommendation [1].
 
 *Disclaimer: The program is usable and has served several important businesses. However, the official English documentation and tutorials are still under heavy construction (there are some materials on the [tutorials website](https://persiaml-tutorials.pages.dev), but they are pretty raw). We encourage adventurers to try out PERSIA and contribute!*
 
 ## News
-
+* AI Engines in the "Short-video" Era: Eating 100 Trillion Parameters, Invited talk, Facebook, 2021.
 * 单机训练速度提升 640 倍！独家解读快手商业广告模型 GPU 训练平台 PERSIA (In Chinese. Title: 640x Faster GPU Based Learning System for Ad Recommendation)
    * [[AI Front]](https://archive.is/2ii2L) [[中国日报]](https://archive.is/N8fK2) [[InfoQ]](https://archive.is/JESDU) [[CSDN]](https://archive.is/tpvkN) [[Tencent Cloud News]](https://archive.is/kLuaT) [[AcFun]](https://archive.md/vuPmb)
 * 创新、平衡与大格局：快手商业化的慢与快 (In Chinese. Title: Innovation, Balance, and Big Picture: The Speed of Kwai Commercialization)
@@ -36,6 +36,8 @@
 ## Publications
 
 1. Xiangru Lian, Binhang Yuan, Xuefeng Zhu, Yulong Wang, Yongjun He, Honghuan Wu, Lei Sun, Haodong Lyu, Chengjun Liu, Xing Dong, Yiqiao Liao, Mingnan Luo, Congfei Zhang, Jingru Xie, Haonan Li, Lei Chen, Renjie Huang, Jianying Lin, Chengchun Shu, Xuezhong Qiu, Zhishan Liu, Dongying Kong, Lei Yuan, Hai Yu, Sen Yang, Ce Zhang, & Ji Liu. (2021). [Persia: A Hybrid System Scaling Deep Learning Based Recommenders up to 100 Trillion Parameters.](https://arxiv.org/abs/2111.05897)
+
+2. Ji Liu & Ce Zhang. (2021). [Persia: A Hybrid System Scaling Deep Learning Based Recommenders up to 100 Trillion Parameters.](https://arxiv.org/pdf/2104.05245)
 
 ## License
 
