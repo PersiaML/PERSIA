@@ -106,7 +106,7 @@ impl PyPersiaBatchData {
     ) {
         self.inner.sparse_data = EmbeddingTensor::SparseBatch(SparseBatch {
             requires_grad: requires_grad.unwrap_or(true),
-            batches: batches
+            batches: sparse_data
                 .into_iter()
                 .map(|(feature_name, batch)| {
                     let indices = batch
