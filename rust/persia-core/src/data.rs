@@ -121,7 +121,7 @@ impl PyPersiaBatchData {
                     FeatureBatch::new(feature_name, indices)
                 })
                 .collect(),
-            ..SparseBatch::default(),
+            ..SparseBatch::default()
         });
     }
 
