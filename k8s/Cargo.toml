@@ -32,5 +32,5 @@ name = "gencrd"
 path = "src/bin/gencrd.rs"
 
 [[bin]]
-name = "web"
-path = "src/bin/web.rs"
+name = "server"
+path = "src/bin/server.rs"
