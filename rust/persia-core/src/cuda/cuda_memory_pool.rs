@@ -13,6 +13,15 @@ pub struct CudaMallocPtr {
     pub num_bytes: usize,
 }
 
+impl Default for CudaMallocPtr {
+    fn default() -> Self {
+        Self {
+            inner: std::ptr::null_mut::<std::os::raw::c_void>(),
+            num_bytes: 0,
+        }
+    }
+}
+
 impl Drop for CudaMallocPtr {
     fn drop(&mut self) {
         tracing::debug!("cuda pinned memory recycled, size {}", self.num_bytes);

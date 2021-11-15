@@ -21,14 +21,33 @@ class ENV:
 
     def env_check(self) -> bool:
         """Check current environment is valid or not."""
-        assert (
+
+        rank_env = (
             self.WORLD_SIZE is not None
             and self.RANK_ID is not None
             and self.LOCAL_RANK is not None
-        ), f"launcher: {self.ENV_LAUNCHER} world_size: {self.WORLD_SIZE}, rank_id: {self.RANK_ID} local_rank: {self.LOCAL_RANK}"
-        assert (
-            self.REPLICA_INDEX is not None and self.REPLICA_SIZE is not None
-        ), f"launcher: {self.ENV_LAUNCHER} replica_size: {self.REPLICA_SIZE}, replica_index: {self.REPLICA_INDEX}"
+        )
+        replica_env = self.REPLICA_INDEX is not None and self.REPLICA_SIZE is not None
+
+        if not (rank_env or replica_env):
+            raise Exception(
+                f"""PersiaEnv check failed, aleast pass rank or replica info to run the persia task,
+                    launcher: {self.ENV_LAUNCHER} world_size: {self.WORLD_SIZE},
+                    rank_id: {self.RANK_ID}, local_rank: {self.LOCAL_RANK}, replica_size: {self.REPLICA_SIZE},
+                    replica_index: {self.REPLICA_INDEX}"""
+            )
+
+    @cached_property
+    def rank(self):
+        return self.RANK_ID
+
+    @cached_property
+    def local_rank(self):
+        return self.LOCAL_RANK
+
+    @cached_property
+    def world_size(self):
+        return self.WORLD_SIZE
 
     @cached_property
     def replica_index(self):
@@ -54,23 +73,27 @@ class HonchoENV(ENV):
         if os.environ.get("RANK", None):
             self.RANK_ID = int(os.environ["RANK"])
             self.LOCAL_RANK = int(os.environ["LOCAL_RANK"])
+            self.WORLD_SIZE = int(os.environ.get("WORLD_SIZE"))
         else:
             _, process_idx = honcho_process_name.split(".")
             process_idx = int(process_idx) - 1
 
-            self.RANK_ID = process_idx
-            self.LOCAL_RANK = process_idx
+            self.REPLICA_INDEX = int(os.environ.get("REPLICA_INDEX"))
+            self.REPLICA_SIZE = int(os.environ.get("REPLICA_SIZE"))
 
-        self.WORLD_SIZE = int(os.environ.get("WORLD_SIZE"))
-        self.REPLICA_INDEX = int(os.environ.get("REPLICA_INDEX"))
-        self.REPLICA_SIZE = int(os.environ.get("REPLICA_SIZE"))
 
 class DockerENV(ENV):
 
     ENV_LAUNCHER = "docker"
 
     def __init__(self):
-        ...
+        if os.environ.get("RANK", None):
+            self.RANK_ID = int(os.environ["RANK"])
+            self.LOCAL_RANK = int(os.environ["LOCAL_RANK"])
+            self.WORLD_SIZE = int(os.environ.get("WORLD_SIZE"))
+        else:
+            self.REPLICA_INDEX = int(os.environ.get("TASK_SLOT_ID")) - 1
+            self.REPLICA_SIZE = int(os.environ.get("REPLICAS"))
 
 
 class DefaultENV(ENV):
@@ -80,7 +103,10 @@ class DefaultENV(ENV):
     def __init__(self):
         self.WORLD_SIZE = int(os.environ.get("WORLD_SIZE", 0))
         self.REPLICA_SIZE = int(os.environ.get("REPLICA_SIZE", 0))
-        _REPLICA_INDEX = int(os.environ.get("REPLICA_INDEX", 0))
+
+        self.REPLICA_INDEX = int(os.environ.get("REPLICA_INDEX", 0))
+        self.LOCAL_RANK = int(os.environ.get("LOCAL_RANK", 0))
+        self.RANK_ID = int(os.environ.get("RANK", 0))
 
 
 def parse_env() -> ENV:

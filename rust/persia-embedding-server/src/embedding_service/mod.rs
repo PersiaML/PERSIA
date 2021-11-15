@@ -14,9 +14,7 @@ use persia_embedding_config::{
 use persia_embedding_holder::{emb_entry::HashMapEmbeddingEntry, PersiaEmbeddingHolder};
 use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
 
-use persia_metrics::{
-    Gauge, Histogram, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError,
-};
+use persia_metrics::{Gauge, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError};
 use persia_model_manager::{SparseModelManager, SparseModelManagerError, SparseModelManagerStatus};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::{Readable, Writable};
@@ -26,11 +24,11 @@ static METRICS_HOLDER: once_cell::sync::OnceCell<MetricsHolder> = once_cell::syn
 struct MetricsHolder {
     pub index_miss_count: IntCounter,
     pub index_miss_ratio: Gauge,
-    pub set_embedding_time_cost: Histogram,
-    pub decode_indices_time_cost: Histogram,
-    pub encode_embedding_time_cost: Histogram,
-    pub lookup_inference_batch_time_cost: Histogram,
-    pub lookup_mixed_batch_time_cost: Histogram,
+    pub set_embedding_time_cost_sec: Gauge,
+    pub decode_indices_time_cost_sec: Gauge,
+    pub encode_embedding_time_cost_sec: Gauge,
+    pub lookup_inference_batch_time_cost_sec: Gauge,
+    pub lookup_mixed_batch_time_cost_sec: Gauge,
     pub gradient_id_miss_count: IntCounter,
 }
 
@@ -39,19 +37,38 @@ impl MetricsHolder {
         METRICS_HOLDER.get_or_try_init(|| {
             let m = PersiaMetricsManager::get()?;
             let holder = Self {
-                index_miss_count: m
-                    .create_counter("index_miss_count", "miss count of index when lookup")?,
-                index_miss_ratio: m
-                    .create_gauge("index_miss_ratio", "miss ratio of index when lookup")?,
-                set_embedding_time_cost: m.create_histogram("set_embedding_time_cost", "ATT")?,
-                decode_indices_time_cost: m.create_histogram("decode_indices_time_cost", "ATT")?,
-                encode_embedding_time_cost: m
-                    .create_histogram("encode_embedding_time_cost", "ATT")?,
-                lookup_inference_batch_time_cost: m
-                    .create_histogram("lookup_inference_batch_time_cost", "ATT")?,
-                lookup_mixed_batch_time_cost: m
-                    .create_histogram("lookup_mixed_batch_time_cost", "ATT")?,
-                gradient_id_miss_count: m.create_counter("gradient_id_miss_count", "ATT")?,
+                index_miss_count: m.create_counter(
+                    "index_miss_count",
+                    "miss count of index when lookup on embedding server",
+                )?,
+                index_miss_ratio: m.create_gauge(
+                    "index_miss_ratio",
+                    "miss ratio of index when lookup on embedding server",
+                )?,
+                set_embedding_time_cost_sec: m.create_gauge(
+                    "set_embedding_time_cost_sec",
+                    "set embedding time cost on embedding server",
+                )?,
+                decode_indices_time_cost_sec: m.create_gauge(
+                    "decode_indices_time_cost_sec",
+                    "decode time cost for a inference bytes request on embedding server",
+                )?,
+                encode_embedding_time_cost_sec: m.create_gauge(
+                    "encode_embedding_time_cost_sec",
+                    "encode time cost for a inference bytes response on embedding server",
+                )?,
+                lookup_inference_batch_time_cost_sec: m.create_gauge(
+                    "lookup_inference_batch_time_cost_sec",
+                    "lookup time cost for a inference request",
+                )?,
+                lookup_mixed_batch_time_cost_sec: m.create_gauge(
+                    "lookup_mixed_batch_time_cost_sec",
+                    "batched lookup time cost on embedding server when training",
+                )?,
+                gradient_id_miss_count: m.create_counter(
+                    "gradient_id_miss_count",
+                    "num of embedding not found when update corresponding gradient in a batch",
+                )?,
             };
             Ok(holder)
         })
@@ -147,7 +164,7 @@ impl EmbeddingServiceInner {
         let num_elements: usize = req.iter().map(|x| x.1).sum();
         let mut embeddings = Vec::with_capacity(num_elements);
 
-        let mut index_miss_count: usize = 0;
+        let mut index_miss_count: u64 = 0;
 
         let conf = match is_training {
             true => Some(self.get_configuration().await?),
@@ -233,7 +250,7 @@ impl EmbeddingServiceInner {
         })?;
 
         if let Ok(m) = MetricsHolder::get() {
-            m.index_miss_count.inc();
+            m.index_miss_count.inc_by(index_miss_count);
             let index_miss_ratio = index_miss_count as f32 / req.len() as f32;
             m.index_miss_ratio.set(index_miss_ratio.into());
         }
@@ -279,8 +296,8 @@ impl EmbeddingServiceInner {
         });
 
         if let Ok(m) = MetricsHolder::get() {
-            m.set_embedding_time_cost
-                .observe(start_time.elapsed().as_secs_f64());
+            m.set_embedding_time_cost_sec
+                .set(start_time.elapsed().as_secs_f64());
         }
         Ok(())
     }
@@ -296,8 +313,8 @@ impl EmbeddingServiceInner {
         }
         let indices = indices.unwrap();
         if let Ok(m) = MetricsHolder::get() {
-            m.decode_indices_time_cost
-                .observe(start_time.elapsed().as_secs_f64());
+            m.decode_indices_time_cost_sec
+                .set(start_time.elapsed().as_secs_f64());
         }
 
         let embedding = self.batched_lookup(indices, false).await;
@@ -305,10 +322,10 @@ impl EmbeddingServiceInner {
             let encode_start_time = std::time::Instant::now();
             let buffer = tokio::task::block_in_place(|| emb.write_to_vec().unwrap());
             if let Ok(m) = MetricsHolder::get() {
-                m.encode_embedding_time_cost
-                    .observe(encode_start_time.elapsed().as_secs_f64());
-                m.lookup_inference_batch_time_cost
-                    .observe(start_time.elapsed().as_secs_f64());
+                m.encode_embedding_time_cost_sec
+                    .set(encode_start_time.elapsed().as_secs_f64());
+                m.lookup_inference_batch_time_cost_sec
+                    .set(start_time.elapsed().as_secs_f64());
             }
             Ok(Bytes::from(buffer))
         } else {
@@ -326,8 +343,8 @@ impl EmbeddingServiceInner {
         let start_time = std::time::Instant::now();
         let embedding = self.batched_lookup(indices, is_training).await;
         if let Ok(m) = MetricsHolder::get() {
-            m.lookup_mixed_batch_time_cost
-                .observe(start_time.elapsed().as_secs_f64());
+            m.lookup_mixed_batch_time_cost_sec
+                .set(start_time.elapsed().as_secs_f64());
         }
 
         embedding

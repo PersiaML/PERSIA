@@ -3,22 +3,22 @@
 #[macro_use]
 extern crate shadow_rs;
 
-#[cfg(feature = "cuda")]
 mod backward;
-#[cfg(feature = "cuda")]
-mod cuda;
 mod data;
-#[cfg(feature = "cuda")]
+mod dlpack;
 mod forward;
 mod metrics;
 mod nats;
 mod optim;
 mod rpc;
+mod tensor;
 mod utils;
 
-use crate::data::PyPersiaBatchData;
 #[cfg(feature = "cuda")]
-use crate::forward::{forward_directly, PythonTrainBatch};
+mod cuda;
+
+use crate::data::{PersiaBatchData, PyPersiaBatchData};
+use crate::forward::{forward_directly, PyTrainBatch};
 use crate::optim::PyOptimizerBase;
 use crate::rpc::PersiaRpcClient;
 
@@ -42,7 +42,6 @@ use pyo3::types::PyBytes;
 use pyo3::wrap_pyfunction;
 
 use persia_common::utils::start_deadlock_detection_thread;
-use persia_common::PersiaBatchData;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaReplicaInfo};
 use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
 use persia_embedding_server::middleware_service::MiddlewareServerError;
@@ -106,6 +105,7 @@ struct PersiaCommonContext {
     pub nats_publisher: RwLock<Option<nats::PersiaDataFlowComponent>>,
     pub master_discovery_service: RwLock<Option<nats::MasterDiscoveryComponent>>,
     pub async_runtime: Arc<Runtime>,
+    pub device_id: Arc<Option<i32>>,
 }
 
 impl PersiaCommonContext {
@@ -120,6 +120,7 @@ impl PersiaCommonContext {
         num_coroutines_worker: usize,
         replica_index: usize,
         replica_size: usize,
+        device_id: Option<i32>,
     ) -> Result<Arc<Self>, PersiaError> {
         if let Some(instance) = PERSIA_COMMON_CONTEXT.get() {
             return Ok(instance.clone());
@@ -135,11 +136,23 @@ impl PersiaCommonContext {
 
         let rpc_client = Arc::new(PersiaRpcClient::new());
 
+        #[cfg(feature = "cuda")]
+        {
+            if let Some(device_id) = device_id.as_ref() {
+                {
+                    use crate::cuda::set_device;
+
+                    set_device(*device_id);
+                }
+            }
+        }
+
         let common_context = Self {
             rpc_client,
             nats_publisher: RwLock::new(None),
             master_discovery_service: RwLock::new(None),
             async_runtime: runtime,
+            device_id: Arc::new(device_id),
         };
 
         let instance = Arc::new(common_context);
@@ -187,9 +200,15 @@ impl PyPersiaCommonContext {
         num_coroutines_worker: usize,
         replica_index: usize,
         replica_size: usize,
+        device_id: Option<i32>,
     ) -> PyResult<Self> {
-        let inner = PersiaCommonContext::new(num_coroutines_worker, replica_index, replica_size)
-            .map_err(|e| PyErr::from(e))?;
+        let inner = PersiaCommonContext::new(
+            num_coroutines_worker,
+            replica_index,
+            replica_size,
+            device_id,
+        )
+        .map_err(|e| PyErr::from(e))?;
         Ok(Self { inner })
     }
 
@@ -367,22 +386,20 @@ impl PyPersiaCommonContext {
             .map_err(|e| e.into())
     }
 
-    #[cfg(feature = "cuda")]
     pub fn get_embedding_from_data(
         &self,
         batch: &mut PyPersiaBatchData,
-        device_id: i32,
-    ) -> PyResult<PythonTrainBatch> {
+        device_id: Option<i32>,
+    ) -> PyResult<PyTrainBatch> {
         let batch = std::mem::take(&mut batch.inner);
         forward_directly(batch, device_id)
     }
 
-    #[cfg(feature = "cuda")]
     pub fn get_embedding_from_bytes(
         &self,
         batch: &PyBytes,
-        device_id: i32,
-    ) -> PyResult<PythonTrainBatch> {
+        device_id: Option<i32>,
+    ) -> PyResult<PyTrainBatch> {
         let batch: PersiaBatchData = PersiaBatchData::read_from_buffer(batch.as_bytes()).unwrap();
         forward_directly(batch, device_id)
     }
@@ -452,17 +469,14 @@ fn persia_core(py: Python, m: &PyModule) -> PyResult<()> {
 
     m.add_class::<PyPersiaCommonContext>()?;
 
+    forward::init_module(m, py)?;
+    backward::init_module(m, py)?;
     data::init_module(m, py)?;
     utils::init_module(m, py)?;
     optim::init_module(m, py)?;
     nats::init_module(m, py)?;
-    m.add_function(wrap_pyfunction!(is_cuda_feature_available, m)?)?;
 
-    #[cfg(feature = "cuda")]
-    {
-        forward::init_module(m, py)?;
-        backward::init_module(m, py)?;
-    }
+    m.add_function(wrap_pyfunction!(is_cuda_feature_available, m)?)?;
 
     shadow!(build);
     eprintln!("project_name: {}", build::PROJECT_NAME);

@@ -8,6 +8,7 @@ We provided several examples and multiple laucnher to help you quick start a *Pe
 *launch example below*
 ```bash
 cd Persia/examples/honcho
+pip3 install honcho
 CODE_BASE=../src/getting_started/ honcho start
 ```
 
@@ -16,4 +17,10 @@ TBD
 
 ## Docker Compose Launcher
 
-TBD
+Docker [compose](https://docs.docker.com/compose/) can launch the multiple service under the swarm mode.Follow the [swarm mode](https://docs.docker.com/engine/swarm/) to adding multiple machines to swarm cluster to apply the distributed PersiaML training task.
+
+*launcher example below*
+```bash
+cd Persia/examples/docker-compose
+make run
+```

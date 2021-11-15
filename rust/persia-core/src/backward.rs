@@ -1,9 +1,7 @@
-use crate::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
-use crate::cuda::set_device;
-use crate::cuda::utils::cuda_d2h;
 use crate::metrics::MetricsHolder;
 use crate::PersiaCommonContext;
 
+use core::slice;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -125,6 +123,82 @@ struct Backward {
     pub running: Arc<AtomicBool>,
 }
 
+fn ptr2vec<T: Clone>(ptr: *mut std::os::raw::c_void, element_num: usize) -> Vec<T> {
+    unsafe {
+        // NOTE: Current vector construct from ffi C++ pointer the ownership is at the C++ side
+        // use vector from_raw_part will occur double-free issue.
+        // TODO: Optimization points try to construct vector with zero copy
+        slice::from_raw_parts(ptr as *mut T, element_num).to_vec()
+    }
+}
+
+fn convert_data_ptr2gradient(
+    ptr: *mut std::os::raw::c_void,
+    shape: [usize; 2],
+    num_elements: usize,
+    is_f16: bool,
+) -> Gradients {
+    if is_f16 {
+        Gradients::F16(
+            ndarray::Array2::from_shape_vec(shape, ptr2vec::<half::f16>(ptr, num_elements))
+                .unwrap(),
+        )
+    } else {
+        Gradients::F32(
+            ndarray::Array2::from_shape_vec(shape, ptr2vec::<f32>(ptr, num_elements)).unwrap(),
+        )
+    }
+}
+
+#[cfg(feature = "cuda")]
+#[inline]
+fn copy_gradients(
+    x: &SingleSlotGradient,
+    num_bytes: usize,
+    num_elements: usize,
+    device_id: Arc<Option<i32>>,
+) -> Gradients {
+    use crate::cuda::pinned_memory_pool::PINNED_MEMORY_POOL;
+    use crate::cuda::utils::cuda_d2h;
+
+    // Discriminate the tensor device type by device_id
+    if device_id.as_ref().is_some() {
+        let host_ptr = PINNED_MEMORY_POOL.allocate(num_bytes);
+        let event = cuda_d2h(
+            num_bytes,
+            x.data_ptr as *mut std::os::raw::c_void,
+            host_ptr.inner,
+        )
+        .expect("cannot move tensor to host");
+
+        event.synchronize();
+        convert_data_ptr2gradient(host_ptr.inner, x.shape, num_elements, x.is_f16_gradient)
+    } else {
+        convert_data_ptr2gradient(
+            x.data_ptr as *mut std::os::raw::c_void,
+            x.shape,
+            num_elements,
+            x.is_f16_gradient,
+        )
+    }
+}
+
+#[cfg(not(feature = "cuda"))]
+#[inline]
+fn copy_gradients(
+    x: &SingleSlotGradient,
+    _num_bytes: usize,
+    num_elements: usize,
+    _device_id: Arc<Option<i32>>,
+) -> Gradients {
+    convert_data_ptr2gradient(
+        x.data_ptr as *mut std::os::raw::c_void,
+        x.shape,
+        num_elements,
+        x.is_f16_gradient,
+    )
+}
+
 impl Backward {
     fn new(queue_size: usize) -> Self {
         let (backward_channel_s, backward_channel_r) = flume::bounded(queue_size);
@@ -141,10 +215,10 @@ impl Backward {
         }
     }
 
-    fn launch(&mut self, device_id: i32, num_backward_worker: usize) {
+    fn launch(&mut self, num_backward_worker: usize) {
         if !self.launch {
             self.running.store(true, Ordering::Relaxed);
-            self.spawn_backward_to_cpu_worker(device_id);
+            self.spawn_backward_to_cpu_worker();
             self.spawn_backward_worker(num_backward_worker);
             self.launch = true;
         }
@@ -155,13 +229,18 @@ impl Backward {
         self.running.store(false, Ordering::Relaxed);
     }
 
-    fn spawn_backward_to_cpu_worker(&mut self, device_id: i32) {
+    fn spawn_backward_to_cpu_worker(&mut self) {
         let channel_r = self.backward_channel_r.clone();
         let channel_s = self.cpu_backward_channel_s.clone();
 
         let running = self.running.clone();
+        let device_id = PersiaCommonContext::get().device_id.clone();
         let handler = std::thread::spawn(move || {
-            set_device(device_id as i32);
+            #[cfg(feature = "cuda")]
+            if let Some(device_id) = device_id.as_ref() {
+                use crate::cuda::set_device;
+                set_device(*device_id as i32);
+            }
             loop {
                 if !running.load(Ordering::Acquire) {
                     break;
@@ -185,33 +264,10 @@ impl Backward {
                                 } else {
                                     num_elements * std::mem::size_of::<f32>()
                                 };
-                                let host_ptr = PINNED_MEMORY_POOL.allocate(num_bytes);
-                                let event = cuda_d2h(
-                                    num_bytes,
-                                    x.data_ptr as *mut std::os::raw::c_void,
-                                    host_ptr.inner,
-                                )
-                                .expect("cannot move tensor to host");
-                                // TODO: collect the event and invoke the synchronize after
-                                // start d2h to improve the bandwidth
-                                event.synchronize();
-                                let gradients = if x.is_f16_gradient {
-                                    Gradients::F16(
-                                        ndarray::Array2::from_shape_vec(
-                                            x.shape,
-                                            host_ptr.as_slice::<half::f16>(num_elements).to_vec(),
-                                        )
-                                        .unwrap(),
-                                    )
-                                } else {
-                                    Gradients::F32(
-                                        ndarray::Array2::from_shape_vec(
-                                            x.shape,
-                                            host_ptr.as_slice::<f32>(num_elements).to_vec(),
-                                        )
-                                        .unwrap(),
-                                    )
-                                };
+
+                                let gradients =
+                                    copy_gradients(&x, num_bytes, num_elements, device_id.clone());
+
                                 SkippableFeatureEmbeddingGradientBatch::GradientBatch(
                                     FeatureEmbeddingGradientBatch {
                                         feature_name: x.slot_name,
@@ -287,8 +343,8 @@ impl Backward {
                         }
 
                         if let Ok(m) = MetricsHolder::get() {
-                            m.backward_client_time_cost
-                                .observe(start_time.elapsed().as_secs_f64());
+                            m.backward_client_time_cost_sec
+                                .set(start_time.elapsed().as_secs_f64());
                         }
                     }
                 }
@@ -312,8 +368,8 @@ impl PyBackward {
         }
     }
 
-    pub fn launch(&mut self, device_id: i32, num_backward_worker: usize) {
-        self.inner.launch(device_id, num_backward_worker);
+    pub fn launch(&mut self, num_backward_worker: usize) {
+        self.inner.launch(num_backward_worker);
     }
 
     pub fn shutdown(&mut self) {
@@ -340,8 +396,8 @@ impl PyBackward {
                 took_time = tracing::field::debug(&elapsed)
             );
             if let Ok(m) = MetricsHolder::get() {
-                m.long_update_gradient_batched_time_cost
-                    .observe(start_time.elapsed().as_secs_f64());
+                m.update_gradient_batched_time_cost_more_than_1ms_sec
+                    .set(start_time.elapsed().as_secs_f64());
             }
         }
         Ok(())

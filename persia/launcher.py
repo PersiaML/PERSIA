@@ -51,7 +51,7 @@ def run_command(cmd: List[str], verb: bool = True):
     cmd = list(map(str, cmd))
     if verb:
         cmd_str = " ".join(cmd)
-        print(f"execute command: {cmd_str}")
+        _logger.info(f"execute command: {cmd_str}")
 
     subprocess.check_call(cmd, env=_ENV)
 
@@ -63,18 +63,17 @@ def cli():
 
 @cli.command()
 @click.argument("filepath", type=str)
-@click.option(
-    "--gpu-num", type=int, default=1, help="Number of gpu at current replica node"
-)
+@click.option("--nproc-per-node", type=int, default=1, help="Process num of per node")
 @click.option("--node-rank", type=int, default=0, help="Replica index of trainer")
 @click.option("--nnodes", type=int, default=1, help="Replica num of trainer")
-def trainer(filepath, gpu_num: int, node_rank: int, nnodes: int):
+def trainer(filepath, nproc_per_node: int, node_rank: int, nnodes: int):
+
     cmd = [
         "python3",
         "-m",
         "torch.distributed.launch",
         "--nproc_per_node",
-        gpu_num,
+        nproc_per_node,
         "--nnodes",
         nnodes,
         "--node_rank",
@@ -170,13 +169,6 @@ def server(
         replica_size,
     ]
     run_command(cmd)
-
-
-@cli.command()
-def trainer_local():
-    # TODO: launch the trainer, middleware server, embedding server
-    cmd = "launch the trainer locally with middleware and embedding server"
-    print(cmd)
 
 
 if __name__ == "__main__":

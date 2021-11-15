@@ -12,8 +12,8 @@ import persia.env as env
 
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
+from persia.prelude import PyPersiaCommonContext, PyPersiaBatchData, PyTensor
 from persia.distributed import DistributedBaseOption, get_default_distributed_option
-from persia.prelude import PyPersiaCommonContext, PyPersiaBatchData
 
 _CURRENT_CXT = None
 
@@ -32,6 +32,24 @@ def _check_finite(tensors: List[torch.Tensor]) -> bool:
         bool: ``True`` if all elements in ``tensors`` are finite or None.
     """
     return all([torch.isfinite(t).all() if t is not None else True for t in tensors])
+
+
+def _cast_dlpack2torch_tensor(
+    pytensor: PyTensor, requires_grad: bool = False
+) -> torch.Tensor:
+    """Convert the DLPack PythonCapsule to torch tensor
+
+    Arguments:
+        pytensor (PyTensor): PersiaTensor wrapper that contains dlpack information.
+        requires_grad (bool, optional): Whether current tensor requires grad or not.
+    Returns: pytorch tensor
+    """
+
+    import torch.utils.dlpack as dlpack
+
+    tensor = dlpack.from_dlpack(pytensor.dlpack)
+    tensor.requires_grad = requires_grad
+    return tensor
 
 
 class PreprocessMode(Enum):
@@ -54,26 +72,37 @@ class BaseCtx:
     """
 
     def __init__(
-        self,
-        threadpool_worker_size: int = 10,
+        self, threadpool_worker_size: int = 10, device_id: Optional[int] = None
     ):
         """
         Arguments:
             threadpool_worker_size (int): Rpc threadpool worker size.
+            device_id (int, optional): The CUDA device to use for this process.
         """
         self.origin_context = None
 
-        replica_index = (
-            env.get_rank() if env.get_rank() != -1 else env.get_replica_index()
-        )
-        replica_size = (
-            env.get_world_size()
-            if env.get_world_size() != -1
-            else env.get_replica_size()
-        )
+        if device_id is not None and device_id >= 0:
+            assert torch.cuda.is_available() and (
+                0 <= device_id < torch.cuda.device_count()
+            ), f"device_id: {device_id} invalid!"
+
+            torch.cuda.set_device(device_id)
+        else:
+            device_id = None
+
+        self.device_id = device_id
+
+        # PyPersiaCommonContext initialize with the rank and world size if 
+        # it can retrive corresponding information
+        if env.get_rank() is not None:
+            replica_index = env.get_rank()
+            replica_size = env.get_world_size()
+        else:
+            replica_index = env.get_replica_index()
+            replica_size = env.get_replica_size()
 
         self.common_context = PyPersiaCommonContext(
-            threadpool_worker_size, replica_index, replica_size
+            threadpool_worker_size, replica_index, replica_size, device_id
         )
         _logger.info(
             f"init persia context, replica_size: {replica_size} replica_index: {replica_index}"
@@ -279,8 +308,6 @@ class EmbeddingCtx(BaseCtx):
         Returns:
             the tuple of dense data, list of sparse data and target data.
         """
-        import persia_torch_ext as pte  # pytype: disable=import-error
-
         if self.preprocess_mode == PreprocessMode.INFERENCE:
             batch.target_tensor = None
         else:
@@ -289,10 +316,7 @@ class EmbeddingCtx(BaseCtx):
             # pytype: enable=attribute-error
             assert len(batch.target) == 1
             batch.target = batch.target[0]
-
-            batch.target_tensor = pte.ptr_to_tensor_f32(
-                batch.target.data_ptr(), batch.target.shape(), False
-            )
+            batch.target_tensor = _cast_dlpack2torch_tensor(batch.target)
 
         is_training = self.preprocess_mode == PreprocessMode.TRAIN  # cache property
 
@@ -300,9 +324,7 @@ class EmbeddingCtx(BaseCtx):
         batch.dense = batch.consume_all_dense_features()
         # pytype: enable=attribute-error
         batch.dense = batch.dense[0]
-        batch.dense_tensor = pte.ptr_to_tensor_f32(
-            batch.dense.data_ptr(), batch.dense.shape(), False
-        )
+        batch.dense_tensor = _cast_dlpack2torch_tensor(batch.dense)
 
         # pytype: disable=attribute-error
         batch.emb = batch.consume_all_sparse_features()
@@ -323,23 +345,19 @@ class EmbeddingCtx(BaseCtx):
                 ) = emb.get_raw_embedding()
 
                 batch.emb_slot.append([raw_embedding, index, non_empty_index])
-
-                distinct_id_tensor = pte.ptr_to_tensor_f16(
-                    raw_embedding.data_ptr(), raw_embedding.shape(), False
-                )
-                index_tensor = pte.ptr_to_tensor_long(
-                    index.data_ptr(),
-                    index.shape(),
+                distinct_id_tensor = _cast_dlpack2torch_tensor(raw_embedding)
+                index_tensor = _cast_dlpack2torch_tensor(
+                    index
                 )  # tensor shape (1, batch_size * sample_fixed_size)
                 max_index = index_tensor.max()
                 size_of_distinct_id_tensor = distinct_id_tensor.shape[0]
-                torch.cuda.synchronize()
 
                 assert (
                     max_index < size_of_distinct_id_tensor
                 ), "raw embedding select index larger than tensor"
-                non_empty_index_tensor = pte.ptr_to_tensor_long(
-                    non_empty_index.data_ptr(), non_empty_index.shape()
+
+                non_empty_index_tensor = _cast_dlpack2torch_tensor(
+                    non_empty_index
                 )  # tensor shape (-1), variable length
 
                 batch_size = len(sample_id_num)
@@ -361,7 +379,7 @@ class EmbeddingCtx(BaseCtx):
                 )
                 emb_tensors.append(
                     (
-                        raw_embedding.name(),
+                        raw_embedding.name,
                         distinct_id_tensor,
                         index_tensor,
                         non_empty_index_tensor,
@@ -372,12 +390,9 @@ class EmbeddingCtx(BaseCtx):
             else:
                 emb = emb.get_sum_embedding()
                 batch.emb_slot.append([emb])
-
-                sum_tensor = pte.ptr_to_tensor_f16(
-                    emb.data_ptr(), emb.shape(), is_training
-                )
+                sum_tensor = _cast_dlpack2torch_tensor(emb, requires_grad=is_training)
                 forward_tensors.append(sum_tensor)
-                emb_tensors.append((emb.name(), None, None, None, sum_tensor))
+                emb_tensors.append((emb.name, None, None, None, sum_tensor))
 
         batch.forward_tensors = forward_tensors
         batch.emb_tensors = emb_tensors
@@ -520,7 +535,7 @@ class EmbeddingCtx(BaseCtx):
         self.common_context.clear_embeddings()
 
     def get_embedding_from_data(
-        self, data: PyPersiaBatchData, device_id: int = 0
+        self, data: PyPersiaBatchData, device_id: Optional[int] = None
     ) -> PythonTrainBatch:
         """Get embeddings of the input batch data.
 
@@ -534,7 +549,7 @@ class EmbeddingCtx(BaseCtx):
         return self.common_context.get_embedding_from_data(data, device_id)
 
     def get_embedding_from_bytes(
-        self, data: bytes, device_id: int = 0
+        self, data: bytes, device_id: Optional[int] = None
     ) -> PythonTrainBatch:
         """Get embeddings of the serialized input batch data.
 
@@ -573,12 +588,12 @@ class TrainCtx(EmbeddingCtx):
         self,
         sparse_optimizer: Optimizer,
         dense_optimizer: torch.optim.Optimizer,
-        device_id: int = 0,
         grad_scalar_update_factor: float = 4,
         backward_buffer_size: int = 10,
         backward_workers_size: int = 8,
         grad_update_buffer_size: int = 60,
         lookup_emb_directly: bool = True,
+        mixed_precision: bool = True,
         distributed_option: Optional[DistributedBaseOption] = None,
         *args,
         **kwargs,
@@ -587,13 +602,13 @@ class TrainCtx(EmbeddingCtx):
         Arguments:
             sparse_optimizer (persia.sparse.optim.Optimizer): Optimizer for the embeddings.
             dense_optimizer (torch.optim.Optimizer): Optimizer for dense parameters.
-            device_id (int, optional): The CUDA device to use for training.
             grad_scalar_update_factor (float, optional): Update factor of ``Gradscalar`` to ensure loss scale finitely if set ``mixed_precision=True``.
             backward_buffer_size (int, optional): Max number of not updated gradients queued.
             backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
             grad_update_buffer_size (int, optional): Number of reference cache , hold the gradient tensor reference to avoid
                 meet dangle data in gradient backward phase.
             lookup_emb_directly (bool, optional): Lookup embedding directly without isolation data compose.
+            mixed_precision (bool): Enable mixed_precision or not.
             distributed_option (DistributedBaseOption, optional): DistributedOption to converted model to dataparallel model.
         """
         super(TrainCtx, self).__init__(PreprocessMode.TRAIN, *args, **kwargs)
@@ -601,15 +616,12 @@ class TrainCtx(EmbeddingCtx):
         assert (
             sparse_optimizer is not None
         ), "Sparse_optimizer should not be none in train context"
-        assert (
-            0 <= device_id < torch.cuda.device_count()
-        ), f"Device_id: {device_id} invalid!"
         assert grad_scalar_update_factor > 0, "grad scalar should greater than zero"
         assert (
             self.model is not None
         ), "Model not found, please init context with pytorch model"
 
-        torch.cuda.set_device(device_id)
+        assert grad_scalar_update_factor > 0, "grad scalar should greater than zero"
 
         world_size = env.get_world_size()
         assert world_size != -1, "WORLD_SIZE not set"
@@ -618,6 +630,16 @@ class TrainCtx(EmbeddingCtx):
 
         self.world_size = world_size
         self.rank_id = rank_id
+
+        assert not mixed_precision or (
+            mixed_precision and torch.cuda.is_available()
+        ), "Mixed precision training only support on cuda device."
+        self.mixed_precision = mixed_precision
+
+        if self.mixed_precision:
+            self.grad_scalar_update_factor = grad_scalar_update_factor
+            self.grad_scaler = torch.cuda.amp.GradScaler()
+            self.update_times = 0
 
         if world_size > 1:
             distributed_option = distributed_option or get_default_distributed_option()
@@ -632,7 +654,7 @@ class TrainCtx(EmbeddingCtx):
                 self.model,
                 world_size,
                 rank_id,
-                device_id,
+                self.device_id,
                 master_addr=master_addr,
                 optimizer=dense_optimizer,
             )
@@ -650,11 +672,6 @@ class TrainCtx(EmbeddingCtx):
             init_rpc_client_num = self._init_middlewrae_rpc_client()
             _logger.info(f"Successfully init {init_rpc_client_num} rpc client")
 
-        self.device_id = device_id
-
-        self.update_times = 0
-        self.grad_scalar_update_factor = grad_scalar_update_factor
-        self.grad_scaler = torch.cuda.amp.GradScaler()
         self.backward_workers_size = backward_workers_size
 
         from persia.prelude import PyBackward
@@ -666,7 +683,7 @@ class TrainCtx(EmbeddingCtx):
         super()._enter()
 
         self.sparse_optimizer.apply()
-        self.backward_engine.launch(self.device_id, self.backward_workers_size)
+        self.backward_engine.launch(self.backward_workers_size)
 
     def _exit(self):
         super()._exit()
@@ -710,37 +727,45 @@ class TrainCtx(EmbeddingCtx):
             loss (torch.Tensor): Loss of current batch.
             embedding_gradient_check_frequency (int, optional): The frequency to check gradient finite or not for current embedding.
         """
-
-        loss = self.grad_scaler.scale(loss)
-        scale = self.grad_scaler.get_scale()
+        if self.mixed_precision:
+            loss = self.grad_scaler.scale(loss)
+            scale = self.grad_scaler.get_scale()
+        else:
+            scale = 1  # Always equal to 1 when disable mixed_precision training
 
         loss.backward()
 
         finite = self._on_backward(scale, embedding_gradient_check_frequency)
 
-        self.grad_scaler.step(self.dense_optimizer)
+        if self.mixed_precision:
+            self.grad_scaler.step(self.dense_optimizer)
 
-        if finite:
-            self.grad_scaler.update()
+            if finite:
+                self.grad_scaler.update()
+            else:
+                self.grad_scaler.update(scale / self.grad_scalar_update_factor)
         else:
-            self.grad_scaler.update(scale / self.grad_scalar_update_factor)
+            self.dense_optimizer.step()
 
         self.dense_optimizer.zero_grad()
-
         return loss
 
     def _on_backward(self, loss_scale: float, embedding_gradient_check_frequency: int):
         """Update the embeddings' gradients
 
         Arguments:
-            loss_scale (float): The loss that scaled by GradScalar.
+            loss_scale (float): The loss that scaled by GradScalar, loss_scale always equal to 1 for cpu training scenes.
             embedding_gradient_check_frequency (int): The frequency to check gradient finite or not for current embedding.
         """
         if self.grad_queue.full():
             self.grad_queue.get()
 
         finite = True
-        if self.update_times % embedding_gradient_check_frequency == 0:
+
+        if (
+            self.mixed_precision
+            and self.update_times % embedding_gradient_check_frequency == 0
+        ):
             finite = _check_finite(
                 [emb[-1].grad for emb in self.current_batch.emb_tensors]
             )
@@ -777,6 +802,7 @@ class TrainCtx(EmbeddingCtx):
                     is_f16_gradient = True
 
                 if grad is not None:
+
                     grad_slots.append(grad)
                     gradient_batch.add_gradient(
                         emb_name,
@@ -786,7 +812,9 @@ class TrainCtx(EmbeddingCtx):
                         loss_scale,
                     )
 
-        torch.cuda.synchronize()
+        if self.device_id is not None:
+            torch.cuda.synchronize()
+
         self.backward_engine.update_sparse_gradient_batched(gradient_batch)
         self.grad_queue.put(grad_slots)
 
