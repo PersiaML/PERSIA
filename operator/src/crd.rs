@@ -8,11 +8,35 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use crate::utils::{
-    get_dataloader_pod_name, get_emb_server_pod_name, get_metrics_gateway_pod_name,
-    get_metrics_gateway_service_name, get_mid_server_pod_name, get_trainer_pod_name,
-    DEFAULT_CUDA_IMAGE,
-};
+pub const DEFAULT_CUDA_IMAGE: &str = "persiaml/persia-cuda-runtime:latest";
+
+pub fn get_emb_server_pod_name(job_name: &str, replica_index: usize) -> String {
+    format!("{}-embedding-server-{}", job_name, replica_index)
+}
+
+pub fn get_mid_server_pod_name(job_name: &str, replica_index: usize) -> String {
+    format!("{}-middware-server-{}", job_name, replica_index)
+}
+
+pub fn get_trainer_pod_name(job_name: &str, replica_index: usize) -> String {
+    format!("{}-trainer-{}", job_name, replica_index)
+}
+
+pub fn get_dataloader_pod_name(job_name: &str, replica_index: usize) -> String {
+    format!("{}-dataloader-{}", job_name, replica_index)
+}
+
+pub fn get_metrics_gateway_pod_name(job_name: &str) -> String {
+    format!("{}-metrics-gateway", job_name)
+}
+
+pub fn get_metrics_gateway_service_name(job_name: &str) -> String {
+    format!("{}-metrics-gateway-service", job_name)
+}
+
+pub fn get_label_selector(job_name: &str) -> String {
+    format!("persia_job={}", job_name)
+}
 
 #[derive(CustomResource, Serialize, Deserialize, Debug, PartialEq, Clone, JsonSchema)]
 #[kube(
@@ -44,7 +68,7 @@ impl PersiaJobSpec {
         let log_level = self.logLevel.clone().unwrap_or(String::from("info"));
 
         let mut labels: BTreeMap<String, String> = BTreeMap::new();
-        labels.insert("app".to_owned(), job_name.to_owned());
+        labels.insert("persia_job".to_owned(), job_name.to_owned());
 
         let mut env = vec![
             EnvVar {
@@ -110,7 +134,7 @@ impl PersiaJobSpec {
         let mut results = Vec::new();
 
         let mut labels: BTreeMap<String, String> = BTreeMap::new();
-        labels.insert("app".to_owned(), job_name.to_owned());
+        labels.insert("persia_job".to_owned(), job_name.to_owned());
 
         if self.enableMetrics.unwrap_or(true) {
             let service_name = get_metrics_gateway_service_name(job_name);
@@ -419,7 +443,7 @@ impl PersiaJobSpec {
             let service_name = get_metrics_gateway_service_name(job_name);
 
             let mut metrics_labels: BTreeMap<String, String> = BTreeMap::new();
-            metrics_labels.insert("app".to_owned(), job_name.to_owned());
+            metrics_labels.insert("persia_job".to_owned(), job_name.to_owned());
             metrics_labels.insert("service".to_owned(), service_name);
 
             let metrics_pod = Pod {

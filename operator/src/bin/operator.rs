@@ -1,14 +1,15 @@
 use futures::stream::StreamExt;
-use k8s_openapi::api::core::v1::Pod;
-use k8s_openapi::api::core::v1::Service;
 use kube::Resource;
 use kube::ResourceExt;
 use kube::{api::ListParams, client::Client, Api};
 use kube_runtime::controller::{Context, ReconcilerAction};
 use kube_runtime::Controller;
-use persia_operator::crd::PersiaJob;
-use persia_operator::{finalizer, utils};
 use tokio::time::Duration;
+
+use persia_operator::crd::PersiaJob;
+use persia_operator::error::Error;
+use persia_operator::finalizer;
+use persia_operator::PersiaJobResources;
 
 #[tokio::main]
 async fn main() {
@@ -66,48 +67,27 @@ async fn reconcile(
         Some(namespace) => namespace,
     };
 
+    let job_resources = PersiaJobResources::new(&job.spec, &job.name(), &namespace, client.clone());
+
     return match determine_action(&job) {
         Action::Create => {
-            let name = job.name();
-            eprintln!("Creating PersiaJob: {}", name);
+            let job_name = job.name();
+            eprintln!("Creating PersiaJob: {}", job_name);
 
-            finalizer::add(client.clone(), &name, &namespace).await?;
+            finalizer::add(client.clone(), &job_name, &namespace).await?;
 
-            let pods: Vec<Pod> = job.spec.gen_pods(&name, &namespace);
-            utils::deploy_pods(client.clone(), &pods, &namespace).await?;
-
-            let services: Vec<Service> = job.spec.gen_services(&name, &namespace);
-            utils::deploy_services(client, &services, &namespace).await?;
+            job_resources.apply().await?;
 
             Ok(ReconcilerAction {
                 requeue_after: Some(Duration::from_secs(10)),
             })
         }
         Action::Delete => {
-            let name = job.name();
-            eprintln!("Deletding PersiaJob: {}", name);
+            let job_name = job.name();
+            eprintln!("Deletding PersiaJob: {}", job_name);
 
-            let services: Vec<Service> = job.spec.gen_services(&name, &namespace);
-            let mut services_name = Vec::new();
-            services.into_iter().for_each(|s| {
-                if let Some(service_name) = s.metadata.name {
-                    services_name.push(service_name);
-                }
-            });
-
-            utils::delete_services(client.clone(), &services_name, &namespace).await?;
-
-            let pods: Vec<Pod> = job.spec.gen_pods(&name, &namespace);
-            let mut pods_name = Vec::new();
-            pods.into_iter().for_each(|p| {
-                if let Some(pod_name) = p.metadata.name {
-                    pods_name.push(pod_name);
-                }
-            });
-
-            utils::delete_pods(client.clone(), &pods_name, &namespace).await?;
-
-            finalizer::delete(client, &name, &namespace).await?;
+            job_resources.delete().await?;
+            finalizer::delete(client, &job_name, &namespace).await?;
 
             Ok(ReconcilerAction {
                 requeue_after: None,
@@ -139,15 +119,4 @@ fn on_error(error: &Error, _context: Context<ContextData>) -> ReconcilerAction {
     ReconcilerAction {
         requeue_after: Some(Duration::from_secs(5)),
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("Kubernetes reported error: {source}")]
-    KubeError {
-        #[from]
-        source: kube::Error,
-    },
-    #[error("Invalid PersiaJob CRD: {0}")]
-    UserInputError(String),
 }
