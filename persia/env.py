@@ -46,10 +46,6 @@ class ENV:
         return self.LOCAL_RANK
 
     @cached_property
-    def world_size(self):
-        return self.WORLD_SIZE
-
-    @cached_property
     def replica_index(self):
         return self.REPLICA_INDEX
 
@@ -68,7 +64,7 @@ class HonchoENV(ENV):
 
     def __init__(self):
         """"Honcho environment have the basic ability to support local training, typically used at single node training."""
-        honcho_process_name = os.environ.get("HONCHO_PROCESS_NAME")
+        honcho_process_name = os.environ["HONCHO_PROCESS_NAME"]
 
         if os.environ.get("RANK", None):
             self.RANK_ID = int(os.environ["RANK"])

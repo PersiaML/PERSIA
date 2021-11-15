@@ -92,7 +92,7 @@ class BaseCtx:
 
         self.device_id = device_id
 
-        # PyPersiaCommonContext initialize with the rank and world size if 
+        # PyPersiaCommonContext initialize with the rank and world size if
         # it can retrive corresponding information
         if env.get_rank() is not None:
             replica_index = env.get_rank()
