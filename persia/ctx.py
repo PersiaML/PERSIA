@@ -367,7 +367,7 @@ class EmbeddingCtx(BaseCtx):
 
                 batch_size = len(sample_id_num)
                 dim = distinct_id_tensor.shape[-1]
-                sample_fixed_size = index_tensor.shape[1] // batch_size
+                sample_fixed_size = index_tensor.shape[-1] // batch_size
                 index_select_raw_tensor = distinct_id_tensor.index_select(
                     0, index_tensor.view(-1)
                 )
