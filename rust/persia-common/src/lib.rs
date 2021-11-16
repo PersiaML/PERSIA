@@ -13,7 +13,6 @@ use persia_libs::{
     hashbrown::HashMap,
     itertools::Itertools,
     ndarray::Array2,
-    numpy::PyArray1,
     serde::{self, Deserialize, Serialize},
 };
 
