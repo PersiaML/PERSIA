@@ -79,10 +79,10 @@ impl DType {
             DType::I32 => (*&DLDataTypeCode::DLInt, 32),
             DType::I64 => (*&DLDataTypeCode::DLInt, 64),
             DType::U8 => (*&DLDataTypeCode::DLUInt, 8),
-            DType::U16 => (*&DLDataTypeCode::DLUInt, 16),
-            DType::U32 => (*&DLDataTypeCode::DLUInt, 32),
-            DType::U64 => (*&DLDataTypeCode::DLUInt, 64),
-            DType::USIZE => (*&DLDataTypeCode::DLUInt, 64),
+            DType::U16 => (*&DLDataTypeCode::DLInt, 16),
+            DType::U32 => (*&DLDataTypeCode::DLInt, 32),
+            DType::U64 => (*&DLDataTypeCode::DLInt, 64),
+            DType::USIZE => (*&DLDataTypeCode::DLInt, 64),
         };
         let code = code as u8;
 
