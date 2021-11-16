@@ -50,6 +50,16 @@ impl PersiaJobResources {
         Ok(())
     }
 
+    pub async fn delete_resources(
+        kubernetes_client: Client,
+        namespace: &str,
+        job_name: &str,
+    ) -> Result<(), Error> {
+        Self::delete_services(kubernetes_client.clone(), namespace, job_name).await?;
+        Self::delete_pods(kubernetes_client.clone(), namespace, job_name).await?;
+        Ok(())
+    }
+
     pub async fn apply(self) -> Result<(), Error> {
         self.deploy_pods().await?;
         self.deploy_services().await?;

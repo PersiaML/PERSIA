@@ -1413,6 +1413,7 @@ dependencies = [
  "kube 0.60.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "kube-derive 0.60.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "kube-runtime 0.60.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "once_cell 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.11.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "schemars 0.8.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.130 (registry+https://github.com/rust-lang/crates.io-index)",
