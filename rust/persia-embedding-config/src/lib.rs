@@ -331,9 +331,7 @@ pub struct CheckpointingConfig {
 
 impl Default for CheckpointingConfig {
     fn default() -> Self {
-        Self {
-            num_workers: 4,
-        }
+        Self { num_workers: 4 }
     }
 }
 
