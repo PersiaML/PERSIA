@@ -33,10 +33,10 @@ serde_yaml = "0.8"
 smol = "1.0"
 smol-timeout = "0.6"
 thiserror = "1"
-tokio = {version = "1.12", features = ["full"]}
+tokio = {version = "1.13", features = ["full"]}
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-hyper = { version = "0.14.2", features = ["full"] }
+hyper = { version = "0.14.14", features = ["full"] }
 hyperloglogplus = "0.4"
 lz4 = "1.23"
 url = "2.1"

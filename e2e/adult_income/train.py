@@ -9,7 +9,7 @@ import numpy as np
 from tqdm import tqdm
 from sklearn import metrics
 
-from persia.ctx import TrainCtx, eval_ctx, EmbeddingConfig
+from persia.ctx import TrainCtx, eval_ctx
 from persia.distributed import DDPOption
 from persia.sparse.optim import Adagrad
 from persia.env import get_rank, get_local_rank, get_world_size
@@ -43,7 +43,7 @@ class TestDataset(PersiaDataset):
 
     def fetch_data(self, persia_sender_channel: PyPersiaBatchDataSender):
         logger.info("test loader start to generate data...")
-        for idx, (dense, batch_sparse_ids, target) in enumerate(
+        for _idx, (dense, batch_sparse_ids, target) in enumerate(
             tqdm(self.loader, desc="gen batch data")
         ):
             batch_data = PyPersiaBatchData()
@@ -138,14 +138,12 @@ if __name__ == "__main__":
     test_interval = 254
     buffer_size = 10
 
-    embedding_config = EmbeddingConfig()
     with TrainCtx(
         model=model,
         sparse_optimizer=sparse_optimizer,
         dense_optimizer=dense_optimizer,
         device_id=device_id,
         mixed_precision=mixed_precision,
-        embedding_config=embedding_config,
         distributed_option=DDPOption(backend=backend),
     ) as ctx:
         train_dataloader = Dataloder(
@@ -200,4 +198,3 @@ if __name__ == "__main__":
 
     with open(result_filepath, "w") as f:
         f.write(result)
-        
