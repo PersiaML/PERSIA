@@ -31,7 +31,7 @@ def operator():
 
 
 @cli.command()
-@click.option("--port", type=int, default="2333", help="Persia k8s schedule server port")
+@click.option("--port", type=int, default="8080", help="Persia k8s schedule server port")
 def server(
     port: int,
 ):

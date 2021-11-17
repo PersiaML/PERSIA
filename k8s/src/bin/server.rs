@@ -171,6 +171,7 @@ struct Cli {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    openssl_sys::init();
     let args: Cli = Cli::from_args();
 
     tracing_subscriber::fmt()
