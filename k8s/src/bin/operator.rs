@@ -13,6 +13,8 @@ use persia_operator::PersiaJobResources;
 
 #[tokio::main]
 async fn main() {
+    openssl_sys::init();
+
     let kubernetes_client: Client = Client::try_default()
         .await
         .expect("Expected a valid KUBECONFIG environment variable.");
