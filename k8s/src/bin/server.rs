@@ -4,6 +4,7 @@ use persia_operator::PersiaJobResources;
 use actix_web::{get, post, web, App, HttpServer, Responder};
 use kube::client::Client;
 use serde::{Deserialize, Serialize};
+use structopt::StructOpt;
 
 static KUBERNETES_CLIENT: once_cell::sync::OnceCell<Client> = once_cell::sync::OnceCell::new();
 
@@ -161,8 +162,17 @@ async fn podstatus(req: web::Json<PodIdentifier>) -> impl Responder {
     serde_json::to_string(&resp)
 }
 
+#[derive(Debug, StructOpt, Clone)]
+#[structopt()]
+struct Cli {
+    #[structopt(long)]
+    port: u16,
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let args: Cli = Cli::from_args();
+
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_env("LOG_LEVEL"))
         .init();
@@ -182,7 +192,7 @@ async fn main() -> std::io::Result<()> {
             .service(listpods)
             .service(podstatus)
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("127.0.0.1", args.port))?
     .run()
     .await
 }
