@@ -221,6 +221,7 @@ async fn main() -> std::io::Result<()> {
             .service(delete)
             .service(listpods)
             .service(podstatus)
+            .service(listjobs)
     })
     .bind(("127.0.0.1", args.port))?
     .run()
