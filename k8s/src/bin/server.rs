@@ -1,7 +1,7 @@
 use persia_operator::crd::PersiaJobSpec;
 use persia_operator::PersiaJobResources;
 
-use actix_web::{get, post, web, App, HttpServer, Responder};
+use actix_web::{get, post, web, App, HttpRequest, HttpServer, Responder};
 use kube::client::Client;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
@@ -33,9 +33,9 @@ struct ExecutionResults {
 }
 
 #[derive(Deserialize, Serialize)]
-struct ListPodsResponse {
+struct ListResponse {
     pub execution_results: ExecutionResults,
-    pub pods: Option<Vec<String>>,
+    pub resources: Option<Vec<String>>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -107,21 +107,50 @@ async fn listpods(req: web::Json<JobIdentifier>) -> impl Responder {
         match PersiaJobResources::get_pods_name(kubernetes_client, &req.namespace, &req.job_name)
             .await
         {
-            Ok(pods) => ListPodsResponse {
+            Ok(pods) => ListResponse {
                 execution_results: ExecutionResults {
                     success: true,
                     err_msg: None,
                 },
-                pods: Some(pods),
+                resources: Some(pods),
             },
-            Err(e) => ListPodsResponse {
+            Err(e) => ListResponse {
                 execution_results: ExecutionResults {
                     success: false,
                     err_msg: Some(format!("{:?}", e)),
                 },
-                pods: None,
+                resources: None,
             },
         };
+
+    serde_json::to_string(&resp)
+}
+
+#[get("/listjobs")]
+async fn listjobs(req: HttpRequest) -> impl Responder {
+    let kubernetes_client = KUBERNETES_CLIENT
+        .get()
+        .expect("KUBERNETES_CLIENT not set")
+        .clone();
+
+    let namespace = req.match_info().get("namespace").unwrap_or("default");
+
+    let resp = match PersiaJobResources::get_jobs_name(kubernetes_client, namespace).await {
+        Ok(jobs) => ListResponse {
+            execution_results: ExecutionResults {
+                success: true,
+                err_msg: None,
+            },
+            resources: Some(jobs),
+        },
+        Err(e) => ListResponse {
+            execution_results: ExecutionResults {
+                success: false,
+                err_msg: Some(format!("{:?}", e)),
+            },
+            resources: None,
+        },
+    };
 
     serde_json::to_string(&resp)
 }

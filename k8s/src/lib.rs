@@ -120,6 +120,24 @@ impl PersiaJobResources {
         result
     }
 
+    pub async fn get_jobs_name(
+        kubernetes_client: Client,
+        namespace: &str,
+    ) -> Result<Vec<String>, Error> {
+        let job_api: Api<PersiaJob> = Api::namespaced(kubernetes_client, namespace);
+        let lp = ListParams::default();
+        let jobs = job_api.list(&lp).await?;
+
+        let mut jobs_name: Vec<String> = Vec::new();
+        jobs.iter().for_each(|j| {
+            if let Some(job_name) = &j.metadata.name {
+                jobs_name.push(job_name.clone());
+            }
+        });
+
+        Ok(jobs_name)
+    }
+
     pub async fn get_pods_name(
         kubernetes_client: Client,
         namespace: &str,

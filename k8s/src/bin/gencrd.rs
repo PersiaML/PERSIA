@@ -1,8 +1,8 @@
 use kube::CustomResourceExt;
 use persia_operator::crd::PersiaJob;
 use std::fs::File;
-use structopt::StructOpt;
 use std::io::Write;
+use structopt::StructOpt;
 
 #[derive(Debug, StructOpt, Clone)]
 #[structopt()]
@@ -21,7 +21,7 @@ fn main() {
             if let Err(e) = write!(output, "{}", crd) {
                 panic!("failed to write file due to {:?}", e);
             }
-        },
+        }
         Err(e) => {
             panic!("failed to create file due to {:?}", e);
         }
