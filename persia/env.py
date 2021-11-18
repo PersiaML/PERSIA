@@ -64,7 +64,7 @@ class HonchoENV(ENV):
     ENV_LAUNCHER = "honcho"
 
     def __init__(self):
-        """"Honcho environment have the basic ability to support local training, typically used at single machine training."""
+        """Honcho environment have the basic ability to support local training, typically used at single machine training."""
         honcho_process_name = os.environ["HONCHO_PROCESS_NAME"]
 
         if os.environ.get("RANK", None):
@@ -107,7 +107,7 @@ class DefaultENV(ENV):
         self.LOCAL_RANK = int(os.environ.get("LOCAL_RANK", -1))
         self.RANK_ID = int(os.environ.get("RANK", -1))
 
-        
+
 def parse_env() -> ENV:
     """Parse the environment by specific environment keyword"""
     if os.environ.get("HONCHO", None):
