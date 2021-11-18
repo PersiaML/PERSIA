@@ -10,6 +10,7 @@ def cli():
     ...
 
 
+
 @cli.command()
 @click.option(
     "--output",
