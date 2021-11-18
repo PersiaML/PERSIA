@@ -39,6 +39,7 @@ class ENV:
 
     @cached_property
     def rank(self):
+        # TODO: Check the environment and cache the value.
         return self.RANK_ID
 
     @cached_property
@@ -63,7 +64,7 @@ class HonchoENV(ENV):
     ENV_LAUNCHER = "honcho"
 
     def __init__(self):
-        """"Honcho environment have the basic ability to support local training, typically used at single node training."""
+        """"Honcho environment have the basic ability to support local training, typically used at single machine training."""
         honcho_process_name = os.environ["HONCHO_PROCESS_NAME"]
 
         if os.environ.get("RANK", None):
@@ -83,6 +84,7 @@ class DockerENV(ENV):
     ENV_LAUNCHER = "docker"
 
     def __init__(self):
+        """Docker environment that launch the PersiaML task by docker-compose."""
         if os.environ.get("RANK", None):
             self.RANK_ID = int(os.environ["RANK"])
             self.LOCAL_RANK = int(os.environ["LOCAL_RANK"])
@@ -97,15 +99,17 @@ class DefaultENV(ENV):
     ENV_LAUNCHER = "default"
 
     def __init__(self):
-        self.WORLD_SIZE = int(os.environ.get("WORLD_SIZE", 0))
-        self.REPLICA_SIZE = int(os.environ.get("REPLICA_SIZE", 0))
+        """Default environment that receive the environment by user manually expose to env."""
+        self.WORLD_SIZE = int(os.environ.get("WORLD_SIZE", -1))
+        self.REPLICA_SIZE = int(os.environ.get("REPLICA_SIZE", -1))
 
-        self.REPLICA_INDEX = int(os.environ.get("REPLICA_INDEX", 0))
-        self.LOCAL_RANK = int(os.environ.get("LOCAL_RANK", 0))
-        self.RANK_ID = int(os.environ.get("RANK", 0))
+        self.REPLICA_INDEX = int(os.environ.get("REPLICA_INDEX", -1))
+        self.LOCAL_RANK = int(os.environ.get("LOCAL_RANK", -1))
+        self.RANK_ID = int(os.environ.get("RANK", -1))
 
-
+        
 def parse_env() -> ENV:
+    """Parse the environment by specific environment keyword"""
     if os.environ.get("HONCHO", None):
         env = HonchoENV()
     elif os.environ.get("DOCKER_COMPOSE", None):
