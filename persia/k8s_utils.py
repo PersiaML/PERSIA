@@ -9,8 +9,14 @@ from typing import List
 def cli():
     ...
 
+
 @cli.command()
-@click.option("--output", type=str, default="./jobs.persia.com.yaml", help="Persia k8s custom resource definition description file")
+@click.option(
+    "--output",
+    type=str,
+    default="./jobs.persia.com.yaml",
+    help="Persia k8s custom resource definition description file",
+)
 def gencrd(
     output: str,
 ):
@@ -31,7 +37,9 @@ def operator():
 
 
 @cli.command()
-@click.option("--port", type=int, default="8080", help="Persia k8s schedule server port")
+@click.option(
+    "--port", type=int, default="8080", help="Persia k8s schedule server port"
+)
 def server(
     port: int,
 ):
