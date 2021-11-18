@@ -146,8 +146,8 @@ jobs:
       - name: Install minimal latest stable rust
         uses: actions-rs/toolchain@v1
         with:
-            profile: minimal
             toolchain: stable
+            override: true
 
       - name: Install cibuildwheel
         run: python -m pip install cibuildwheel==2.2.2
