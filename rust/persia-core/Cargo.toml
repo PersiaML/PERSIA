@@ -28,7 +28,7 @@ persia-storage = {path = "../persia-storage"}
 persia-rpc = {path = "../others/persia-rpc"}
 persia-rpc-macro = {path = "../others/persia-rpc-macro"}
 persia-speedy = "0.9"
-shadow-rs = "0.7"
+shadow-rs = "0.8"
 
 [features]
 default = []
@@ -41,4 +41,4 @@ features = ["macros"]
 version = "0.13"
 
 [build-dependencies]
-shadow-rs = "0.7"
+shadow-rs = "0.8"

@@ -21,10 +21,10 @@ persia-rpc = {path = "../others/persia-rpc"}
 persia-rpc-macro = {path = "../others/persia-rpc-macro"}
 persia-speedy = "0.9"
 persia-simd = {path = "../persia-simd"}
-shadow-rs = "0.7"
+shadow-rs = "0.8"
 snafu = "0.6"
 structopt = "0.3"
-tokio = {version = "1.12", features = ["full"]}
+tokio = {version = "1.13", features = ["full"]}
 tracing = "0.1"
 
 [dev-dependencies]
@@ -39,4 +39,4 @@ name = "persia-middleware-server"
 path = "src/bin/persia-middleware-server.rs"
 
 [build-dependencies]
-shadow-rs = "0.7"
+shadow-rs = "0.8"

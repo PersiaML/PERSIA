@@ -85,7 +85,7 @@ impl SparseModelManager {
             let replica_info = PersiaReplicaInfo::get()?;
 
             let singleton = Arc::new(Self::new(
-                common_config.num_embedding_io_workers,
+                common_config.checkpointing_config.num_workers,
                 replica_info.replica_index,
                 replica_info.replica_size,
             ));

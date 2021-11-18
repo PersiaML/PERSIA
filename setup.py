@@ -56,7 +56,7 @@ if __name__ == "__main__":
         )
     )
 
-    install_requires = ["retrying", "colorlog", "pyyaml", "click"]
+    install_requires = ["colorlog", "pyyaml", "click"]
 
     setup(
         name="persia",
@@ -71,7 +71,7 @@ if __name__ == "__main__":
         rust_extensions=rust_extensions,
         entry_points={
             "console_scripts": [
-                "persia-launcher= persia.launcher:cli",
+                "persia-launcher=persia.launcher:cli",
                 "persia-k8s-uitls=persia.k8s_utils:cli",
             ]
         },
