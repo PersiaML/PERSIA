@@ -214,6 +214,11 @@ class EmbeddingConfig:
         self.weight_bound = weight_bound
 
 
+def _get_default_embedding_config():
+    """Get default embedding configuration"""
+    return EmbeddingConfig()
+
+
 class EmbeddingCtx(BaseCtx):
     r"""Provides the embedding-related functionality. EmbeddingCtx can run offline test or online inference
     depending on different preprocess_mode. The simplest way to get this context is by using ``persia.ctx.eval_ctx()`` or
@@ -255,7 +260,7 @@ class EmbeddingCtx(BaseCtx):
         super(EmbeddingCtx, self).__init__(*args, **kwargs)
         self.preprocess_mode = preprocess_mode
         self.model = model
-        self.embedding_config = embedding_config
+        self.embedding_config = embedding_config or _get_default_embedding_config()
 
         self.current_batch = None
 
