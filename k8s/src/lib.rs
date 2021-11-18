@@ -3,7 +3,7 @@ pub mod error;
 pub mod finalizer;
 pub mod service;
 
-use crate::crd::PersiaJobSpec;
+use crate::crd::{PersiaJob, PersiaJobSpec};
 use k8s_openapi::api::core::v1::{Pod, PodStatus, Service};
 use kube::api::{DeleteParams, ListParams, LogParams, PostParams};
 use kube::{Api, Client, Error};
