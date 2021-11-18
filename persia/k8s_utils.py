@@ -2,8 +2,6 @@ import os
 import click
 import subprocess
 
-from typing import List
-
 
 @click.group()
 def cli():
