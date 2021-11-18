@@ -101,5 +101,5 @@ spec:
         image: persiaml/persia-cpu-runtime:latest
         imagePullPolicy: IfNotPresent
         args:
-        - persia_k8s_uitls
+        - persia-k8s-uitls
         - operator

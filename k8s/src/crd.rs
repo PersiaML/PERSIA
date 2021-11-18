@@ -109,7 +109,7 @@ impl PersiaJobSpec {
 
         let pod_spec = PodSpec {
             containers: vec![Container {
-                command: Some(vec!["persia_launcher".to_string()]),
+                command: Some(vec!["persia-launcher".to_string()]),
                 env: Some(env),
                 image_pull_policy: Some(String::from("IfNotPresent")),
                 ..Container::default()

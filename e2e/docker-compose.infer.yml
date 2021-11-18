@@ -23,7 +23,7 @@ services:
         environment:
             JOB_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
+        command: persia-launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
         volumes:
             - ./adult_income:/workspace
             - ./cache:/cache
@@ -38,7 +38,7 @@ services:
         environment:
             JOB_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
+        command: persia-launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
         volumes:
             - ./adult_income:/workspace
             - ./cache:/cache

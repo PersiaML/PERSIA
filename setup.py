@@ -71,8 +71,8 @@ if __name__ == "__main__":
         rust_extensions=rust_extensions,
         entry_points={
             "console_scripts": [
-                "persia_launcher= persia.launcher:cli",
-                "persia_k8s_uitls=persia.k8s_utils:cli",
+                "persia-launcher= persia.launcher:cli",
+                "persia-k8s-uitls=persia.k8s_utils:cli",
             ]
         },
         python_requires=">=3.6",
