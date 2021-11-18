@@ -17,10 +17,6 @@ spec:
       hostPath:
         path: /nfs/general/PersiaML/e2e/adult_income/
         type: Directory
-    - name: persia-dev
-      hostPath:
-        path: /nfs/general/zhuxuefeng/persia-dev/
-        type: Directory
   env:
     - name: EVAL_CHECKPOINT_DIR
       value: /workspace/eval_checkpoint/
@@ -30,12 +26,6 @@ spec:
       value: /workspace/result.json
     - name: PERSIA_NATS_IP
       value: nats://persia-nats-service:4222
-    - name: PERSIA_DEV_PATH
-      value: /persia-dev/
-    - name: PERSIA_DEV_PYTHONPATH
-      value: /persia-dev/
-    - name: DEBUG
-      value: "1"
 
   embeddingServer:
     replicas: 1
@@ -46,8 +36,6 @@ spec:
     volumeMounts:
       - name: workspace
         mountPath: /workspace/
-      - name: persia-dev
-        mountPath: /persia-dev/
 
   middlewareServer:
     replicas: 1
@@ -58,8 +46,6 @@ spec:
     volumeMounts:
       - name: workspace
         mountPath: /workspace/
-      - name: persia-dev
-        mountPath: /persia-dev/
 
   trainer:
     replicas: 1
@@ -75,8 +61,6 @@ spec:
       - name: data
         mountPath: /data/
         read_only: true
-      - name: persia-dev
-        mountPath: /persia-dev/
     env:
       - name: CUBLAS_WORKSPACE_CONFIG
         value: :4096:8
@@ -93,8 +77,6 @@ spec:
       - name: data
         mountPath: /data/
         read_only: true
-      - name: persia-dev
-        mountPath: /persia-dev/
 
 ---
 
