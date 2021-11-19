@@ -312,7 +312,7 @@ impl PersiaJobSpec {
                         vec![
                             "trainer",
                             "$(TRAINER_PY_ENTRY_PATH)",
-                            "--gpu-num",
+                            "--nproc-per-node",
                             "$(NPROC_PER_NODE)",
                             "--nnodes",
                             "$(REPLICA_SIZE)",
