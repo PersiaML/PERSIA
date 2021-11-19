@@ -16,7 +16,7 @@ services:
       - middleware
       - persia_nats_service
     image: persia-cuda-runtime:dev
-    command: persia_launcher compose /workspace/data_compose.py
+    command: persia-launcher compose /workspace/data_compose.py
     volumes:
       - type: bind
         source: ${CODE_BASE}
@@ -34,7 +34,7 @@ services:
       NCCL_SOCKET_IFNAME: eth0
       REPLICAS: 1
     image: persia-cuda-runtime:dev
-    command: bash -c "persia_launcher trainer /workspace/train.py --nproc-per-node $$NPROC_PER_NODE --node-rank $$(($$TASK_SLOT_ID - 1)) --nnodes $$TRAINER_REPLICA"
+    command: bash -c "persia-launcher trainer /workspace/train.py --nproc-per-node $$NPROC_PER_NODE --node-rank $$(($$TASK_SLOT_ID - 1)) --nnodes $$TRAINER_REPLICA"
     volumes:
       - type: bind
         source: ${CODE_BASE}
@@ -53,7 +53,7 @@ services:
     depends_on:
       - server
     image: persia-cuda-runtime:dev
-    command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config.yml
+    command: persia-launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config.yml
     deploy:
       replicas: 1
       restart_policy:
@@ -70,7 +70,7 @@ services:
       TASK_SLOT_ID: "{{.Task.Slot}}"
       REPLICAS: 1
     image: persia-cuda-runtime:dev
-    command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config.yml
+    command: persia-launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config.yml
     deploy:
       replicas: 1
       restart_policy:
