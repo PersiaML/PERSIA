@@ -4,7 +4,7 @@ services:
         env_file:
             - adult_income/.test_env
         environment:
-            JOB_ID: 1
+            TASK_SLOT_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
         command: bash -c "/workspace/launch_ts.sh"
         volumes:
@@ -21,7 +21,7 @@ services:
         env_file:
             - adult_income/.test_env
         environment:
-            JOB_ID: 1
+            TASK_SLOT_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
         command: persia-launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
         volumes:
@@ -36,7 +36,7 @@ services:
         env_file:
             - adult_income/.test_env
         environment:
-            JOB_ID: 1
+            TASK_SLOT_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
         command: persia-launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
         volumes:
