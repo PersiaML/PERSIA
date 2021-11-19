@@ -9,7 +9,7 @@ services:
         env_file:
             - adult_income/.test_env
         environment:
-            JOB_ID: 1
+            TASK_SLOT_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
         command: persia_launcher compose /workspace/data_compose.py
         volumes:
@@ -21,7 +21,7 @@ services:
         env_file:
             - adult_income/.test_env
         environment:
-            JOB_ID: 1
+            TASK_SLOT_ID: 1
             GPU_NUM: 1
             CUBLAS_WORKSPACE_CONFIG: :4096:8 # Adapt to pytorch deterministic feature
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
@@ -41,7 +41,7 @@ services:
         env_file:
             - adult_income/.test_env
         environment:
-            JOB_ID: 1
+            TASK_SLOT_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
         command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
         volumes:
@@ -52,7 +52,7 @@ services:
         env_file:
             - adult_income/.test_env
         environment:
-            JOB_ID: 1
+            TASK_SLOT_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
         command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
         volumes:

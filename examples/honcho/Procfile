@@ -1,0 +1,5 @@
+trainer: persia_launcher trainer $CODE_BASE/train.py --gpu-num=$GPU_NUM --node-rank=0 --nnodes=1
+data_compose: python3.6 $CODE_BASE/data_compose.py && sleep infinity
+embedding_server: persia_launcher server --embedding-config $CODE_BASE/config/embedding_config.yml --global-config $CODE_BASE/config/global_config.yml --replica-index $REPLICA_INDEX --replica-size $REPLICA_SIZE
+middleware_server: persia_launcher middleware --embedding-config $CODE_BASE/config/embedding_config.yml --global-config $CODE_BASE/config/global_config.yml --replica-index $REPLICA_INDEX --replica-size $REPLICA_SIZE
+nats_server: nats-server 

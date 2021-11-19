@@ -92,14 +92,14 @@ class BaseCtx:
 
         self.device_id = device_id
 
-        replica_index = (
-            env.get_rank() if env.get_rank() != -1 else env.get_replica_index()
-        )
-        replica_size = (
-            env.get_world_size()
-            if env.get_world_size() != -1
-            else env.get_replica_size()
-        )
+        # PyPersiaCommonContext initialize with the rank and world size if
+        # it can retrive corresponding information
+        if env.get_rank() is not None:
+            replica_index = env.get_rank()
+            replica_size = env.get_world_size()
+        else:
+            replica_index = env.get_replica_index()
+            replica_size = env.get_replica_size()
 
         self.common_context = PyPersiaCommonContext(
             threadpool_worker_size, replica_index, replica_size, device_id
