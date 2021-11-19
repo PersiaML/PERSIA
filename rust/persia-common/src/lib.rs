@@ -33,13 +33,13 @@ pub struct FeatureBatch {
     pub index_batch: Vec<SingleSignInFeatureBatch>,
     /// how many signs in each sample of the batch
     pub sample_num_signs: Vec<u32>,
-    /// mapping of id to batch index 
-    /// hashed2index_batch_idx is the mapping from emb_id to raw_embedding_result idx. 
+    /// mapping of id to batch index
+    /// hashed2index_batch_idx is the mapping from emb_id to raw_embedding_result idx.
     /// Place each emb result in correct idx and processed the raw emb gradient update
-    /// TODO: use i32 to represent the index 
+    /// TODO: use i32 to represent the index
     /// Current solution is due to pytorch index_select function not support int32 index
     /// when installed pytorch version below 1.8.
-    pub hashed2index_batch_idx: HashMap<u64, i64>, 
+    pub hashed2index_batch_idx: HashMap<u64, i64>,
     pub batch_size: u16,
 }
 
