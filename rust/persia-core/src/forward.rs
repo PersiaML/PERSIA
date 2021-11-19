@@ -340,7 +340,7 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
                 .enumerate()
                 .for_each(|(idx, id2idx)| {
                     if *id2idx != 0 {
-                        non_empty_index_list.push(idx as u64);
+                        non_empty_index_list.push(idx as i64);
                     }
                 });
 
@@ -359,14 +359,14 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
             );
 
             let index = Tensor::new(
-                Storage::CPU(CPUStorage::from_usize(raw_embedding.index)),
+                Storage::CPU(CPUStorage::from_i64(raw_embedding.index)),
                 vec![index_len],
                 Some(format!("{}_index", &feature_name)),
                 None,
             );
 
             let non_empty_index = Tensor::new(
-                Storage::CPU(CPUStorage::from_u64(non_empty_index_list)),
+                Storage::CPU(CPUStorage::from_i64(non_empty_index_list)),
                 vec![no_empty_index_list_len],
                 Some(format!("{}_non_empty_index", &feature_name)),
                 None,

@@ -340,7 +340,7 @@ pub fn indices_to_hashstack_indices(indices: &mut SparseBatch, config: &Embeddin
         if slot_conf.hash_stack_config.hash_stack_rounds > 0 {
             let mut hash_stack_indices: Vec<HashMap<u64, Vec<(u16, u16)>>> =
                 vec![HashMap::new(); slot_conf.hash_stack_config.hash_stack_rounds];
-            let mut hashed2index_batch_idx: HashMap<u64, usize> = HashMap::with_capacity(
+            let mut hashed2index_batch_idx: HashMap<u64, i64> = HashMap::with_capacity(
                 feature_batch.index_batch.len() * slot_conf.hash_stack_config.hash_stack_rounds,
             );
             feature_batch.index_batch.iter().enumerate().for_each(
@@ -352,7 +352,7 @@ pub fn indices_to_hashstack_indices(indices: &mut SparseBatch, config: &Embeddin
                             % slot_conf.hash_stack_config.embedding_size as u64
                             + (round * slot_conf.hash_stack_config.embedding_size) as u64;
                         // TODO: to avoid hash conflict, try replace hashed2index_batch_idx to key2list
-                        hashed2index_batch_idx.insert(hashed_sign_bucket, distinct_tensor_idx);
+                        hashed2index_batch_idx.insert(hashed_sign_bucket, distinct_tensor_idx as i64);
                         map.entry(hashed_sign_bucket)
                             .or_insert_with(|| {
                                 Vec::with_capacity(single_sign.in_which_batch_samples.len())
@@ -398,7 +398,7 @@ pub fn indices_add_prefix(indices: &mut SparseBatch, config: &EmbeddingConfig) -
                 single_sign.sign %= feature_spacing;
                 single_sign.sign += slot_conf.index_prefix;
             }
-            let mut index_prefix_mapping: HashMap<u64, usize> =
+            let mut index_prefix_mapping: HashMap<u64, i64> =
                 HashMap::with_capacity(feature_batch.hashed2index_batch_idx.len());
 
             feature_batch
@@ -476,7 +476,7 @@ pub fn lookup_batched_all_slots_postprocess<'a>(
     struct LookupResultWithSlotConfig<'a> {
         result: ndarray::Array2<f32>,
         config: &'a SlotConfig,
-        sign2idx: HashMap<u64, usize>,
+        sign2idx: HashMap<u64, i64>,
     }
 
     let mut results: Vec<LookupResultWithSlotConfig<'a>> = indices
@@ -525,7 +525,7 @@ pub fn lookup_batched_all_slots_postprocess<'a>(
             if !result.config.embedding_summation {
                 let mut row = result
                     .result
-                    .row_mut(result.sign2idx.get(&single_sign.sign).unwrap() + 1);
+                    .row_mut(*result.sign2idx.get(&single_sign.sign).unwrap() as usize + 1);
                 let row = row.as_slice_mut().unwrap();
                 row.clone_from_slice(emb);
             } else {
@@ -576,7 +576,7 @@ pub fn lookup_batched_all_slots_postprocess<'a>(
                     )
                 }
                 // transform distinct_id tensor to origin batch format
-                let mut index: Vec<usize> =
+                let mut index: Vec<i64> =
                     vec![0; indices.batch_size as usize * x.config.sample_fixed_size];
                 let mut sample_id_num: Vec<usize> = vec![0; indices.batch_size as usize];
                 let mut transform_id_set =
