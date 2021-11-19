@@ -4,26 +4,11 @@ metadata:
   name: adult-income
   namespace: default
 spec:
-  globalConfigPath: /workspace/config/global_config_train.yml
-  embeddingConfigPath: /workspace/config/embedding_config.yml
-  trainerPyEntryPath: /workspace/train.py
-  dataLoaderPyEntryPath: /workspace/data_compose.py
-  volumes:
-    - name: data
-      hostPath:
-        path: /nfs/general/data/adult_income/
-        type: Directory
-    - name: workspace
-      hostPath:
-        path: /nfs/general/PersiaML/e2e/adult_income/
-        type: Directory
+  globalConfigPath: /home/PersiaML/examples/src/getting_started/config/global_config.yml
+  embeddingConfigPath: /home/PersiaML/examples/src/getting_started/config/embedding_config.yml
+  trainerPyEntryPath: /home/PersiaML/examples/src/getting_started/train.py
+  dataLoaderPyEntryPath: /home/PersiaML/examples/src/getting_started/data_compose.py
   env:
-    - name: EVAL_CHECKPOINT_DIR
-      value: /workspace/eval_checkpoint/
-    - name: INFER_CHECKPOINT_DIR
-      value: /workspace/infer_checkpoint/
-    - name: RESULT_FILE_PATH
-      value: /workspace/result.json
     - name: PERSIA_NATS_IP
       value: nats://persia-nats-service:4222
 
@@ -33,9 +18,6 @@ spec:
       limits:
         memory: "24Gi"
         cpu: "4"
-    volumeMounts:
-      - name: workspace
-        mountPath: /workspace/
 
   middlewareServer:
     replicas: 1
@@ -43,9 +25,6 @@ spec:
       limits:
         memory: "24Gi"
         cpu: "4"
-    volumeMounts:
-      - name: workspace
-        mountPath: /workspace/
 
   trainer:
     replicas: 1
@@ -55,12 +34,6 @@ spec:
         memory: "24Gi"
         cpu: "12"
         nvidia.com/gpu: "1"
-    volumeMounts:
-      - name: workspace
-        mountPath: /workspace/
-      - name: data
-        mountPath: /data/
-        read_only: true
     env:
       - name: CUBLAS_WORKSPACE_CONFIG
         value: :4096:8
@@ -71,15 +44,8 @@ spec:
       limits:
         memory: "8Gi"
         cpu: "1"
-    volumeMounts:
-      - name: workspace
-        mountPath: /workspace/
-      - name: data
-        mountPath: /data/
-        read_only: true
 
 ---
-
 apiVersion: "nats.io/v1alpha2"
 kind: "NatsCluster"
 metadata:

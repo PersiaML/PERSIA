@@ -94,7 +94,7 @@ class BaseCtx:
 
         # PyPersiaCommonContext initialize with the rank and world size if
         # it can retrive corresponding information
-        if env.get_rank() is not None:
+        if env.get_rank() is not None and env.get_rank() > 0:
             replica_index = env.get_rank()
             replica_size = env.get_world_size()
         else:

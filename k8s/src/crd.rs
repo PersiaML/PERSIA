@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub const DEFAULT_CUDA_IMAGE: &str = "persiaml/persia-cuda-runtime:latest";
+pub const DEFAULT_CPU_IMAGE: &str = "persiaml/persia-cpu-runtime:latest";
 
 pub fn get_emb_server_pod_name(job_name: &str, replica_index: usize) -> String {
     format!("{}-embedding-server-{}", job_name, replica_index)
@@ -111,7 +112,6 @@ impl PersiaJobSpec {
             containers: vec![Container {
                 command: Some(vec!["persia-launcher".to_string()]),
                 env: Some(env),
-                image_pull_policy: Some(String::from("IfNotPresent")),
                 ..Container::default()
             }],
             volumes: self.volumes.clone(),
@@ -201,7 +201,7 @@ impl PersiaJobSpec {
 
                     container.image = embedding_server.image.clone();
                     if container.image.is_none() {
-                        container.image = Some(String::from(DEFAULT_CUDA_IMAGE));
+                        container.image = Some(String::from(DEFAULT_CPU_IMAGE));
                     }
 
                     let env = container
@@ -265,7 +265,7 @@ impl PersiaJobSpec {
 
                     container.image = middleware_server.image.clone();
                     if container.image.is_none() {
-                        container.image = Some(String::from(DEFAULT_CUDA_IMAGE));
+                        container.image = Some(String::from(DEFAULT_CPU_IMAGE));
                     }
 
                     let env = container
@@ -402,7 +402,7 @@ impl PersiaJobSpec {
 
                     container.image = dataloader.image.clone();
                     if container.image.is_none() {
-                        container.image = Some(String::from(DEFAULT_CUDA_IMAGE));
+                        container.image = Some(String::from(DEFAULT_CPU_IMAGE));
                     }
 
                     let env = container
@@ -445,6 +445,7 @@ impl PersiaJobSpec {
             let mut metrics_labels: BTreeMap<String, String> = BTreeMap::new();
             metrics_labels.insert("persia_job".to_owned(), job_name.to_owned());
             metrics_labels.insert("service".to_owned(), service_name);
+            metrics_labels.insert("prom".to_owned(), job_name.to_owned());
 
             let metrics_pod = Pod {
                 metadata: ObjectMeta {

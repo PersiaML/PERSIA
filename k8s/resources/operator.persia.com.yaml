@@ -99,7 +99,7 @@ spec:
       containers:
       - name: persia-operator
         image: persiaml/persia-cpu-runtime:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         args:
-        - persia-k8s-uitls
+        - persia-k8s-utils
         - operator

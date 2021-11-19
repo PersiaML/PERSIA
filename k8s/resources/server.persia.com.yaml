@@ -99,9 +99,9 @@ spec:
       containers:
       - name: persia-server
         image: persiaml/persia-cpu-runtime:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         args:
-        - persia-k8s-uitls
+        - persia-k8s-utils
         - server
         ports:
         - name: http

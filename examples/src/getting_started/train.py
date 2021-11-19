@@ -127,7 +127,7 @@ if __name__ == "__main__":
     loss_fn = torch.nn.BCELoss(reduction="mean")
     logger.info("finish genreate dense ctx")
 
-    test_dir = os.path.abspath(os.path.join(__file__, "../data_source/test.npz"))
+    test_dir = os.path.abspath(os.path.join(__file__, "data/test.npz"))
     test_dataset = TestDataset(test_dir, batch_size=128)
     test_interval = 254
     buffer_size = 10

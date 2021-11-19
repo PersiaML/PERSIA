@@ -72,7 +72,7 @@ if __name__ == "__main__":
         entry_points={
             "console_scripts": [
                 "persia-launcher=persia.launcher:cli",
-                "persia-k8s-uitls=persia.k8s_utils:cli",
+                "persia-k8s-utils=persia.k8s_utils:cli",
             ]
         },
         python_requires=">=3.6",

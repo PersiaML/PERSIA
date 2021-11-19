@@ -115,3 +115,7 @@ COPY --from=persia-builder /root/dist .
 RUN pip3 install *.whl && rm -rf *.whl
 
 
+# Copy examples
+RUN mkdir -p /home/PersiaML/examples
+COPY examples /home/PersiaML/examples
+RUN cd /home/PersiaML/examples/src/getting_started/data/ && ./prepare_data.sh

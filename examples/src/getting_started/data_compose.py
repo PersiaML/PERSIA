@@ -15,7 +15,7 @@ logger = get_logger("data_compose")
 
 setup_seed(3)
 
-train_filepath = os.path.abspath(os.path.join(__file__, "../data_source/train.npz"))
+train_filepath = os.path.abspath(os.path.join(__file__, "data/train.npz"))
 
 logger.info("init py client done...")
 if __name__ == "__main__":
