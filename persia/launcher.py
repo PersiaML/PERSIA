@@ -110,7 +110,9 @@ def data_loader(filepath: str, replica_index: int, replica_size: int):
 @click.option(
     "--replica-index", type=str, default=0, help="Replica index of embedding worker"
 )
-@click.option("--replica-size", type=str, default=1, help="Replica num of embedding worker")
+@click.option(
+    "--replica-size", type=str, default=1, help="Replica num of embedding worker"
+)
 def embedding_worker(
     port: int,
     embedding_config: str,

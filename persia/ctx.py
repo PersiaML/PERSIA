@@ -708,7 +708,9 @@ class TrainCtx(EmbeddingCtx):
         return master_addr
 
     def _init_middlewrae_rpc_client(self) -> int:
-        embedding_worker_addr_list = self.common_context.get_embedding_worker_addr_list()
+        embedding_worker_addr_list = (
+            self.common_context.get_embedding_worker_addr_list()
+        )
         assert len(embedding_worker_addr_list) > 0, "Not available embedding worker."
         for embedding_worker_addr in embedding_worker_addr_list:
             self.common_context.init_rpc_client_with_addr(embedding_worker_addr)

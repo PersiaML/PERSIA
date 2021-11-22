@@ -113,7 +113,7 @@ if __name__ == "__main__":
     logger.info("init Simple DNN model...")
     rank, device_id, world_size = get_rank(), get_local_rank(), get_world_size()
 
-    cuda = bool(int(os.environ.get("ENABLE_CUDA",1)))
+    cuda = bool(int(os.environ.get("ENABLE_CUDA", 1)))
     mixed_precision = True
 
     if cuda:
