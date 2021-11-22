@@ -13,7 +13,7 @@ jobs:
             components: rustfmt
             override: true
       - name: rust-rustfmt-check
-        uses: mbrobbel/rustfmt-check@0.3.0
+        uses: mbrobbel/rustfmt-check@master
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --manifest-path rust/Cargo.toml --all
