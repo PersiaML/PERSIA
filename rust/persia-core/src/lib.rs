@@ -362,7 +362,7 @@ impl PyPersiaCommonContext {
             .map_err(|e| e.into())
     }
 
-    pub fn configure_embedding_servers(
+    pub fn configure_embedding_parameter_servers(
         &self,
         initialize_lower: f32,
         initialize_upper: f32,
@@ -375,7 +375,7 @@ impl PyPersiaCommonContext {
             .block_on(
                 self.inner
                     .get_nats_publish_service()?
-                    .configure_embedding_servers(
+                    .configure_embedding_parameter_servers(
                         initialize_lower,
                         initialize_upper,
                         admit_probability,

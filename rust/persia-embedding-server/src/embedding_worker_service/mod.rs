@@ -1247,7 +1247,7 @@ impl EmbeddingWorkerInner {
         futures::future::try_join_all(futs).await.map(|_| ())
     }
 
-    pub async fn configure_embedding_servers(
+    pub async fn configure_embedding_parameter_servers(
         &self,
         req: PersiaSparseModelHyperparameters,
     ) -> Result<(), EmbeddingWorkerError> {
@@ -1464,11 +1464,11 @@ impl EmbeddingWorker {
         self.inner.load(req).await
     }
 
-    pub async fn configure_embedding_servers(
+    pub async fn configure_embedding_parameter_servers(
         &self,
         req: PersiaSparseModelHyperparameters,
     ) -> Result<(), EmbeddingWorkerError> {
-        self.inner.configure_embedding_servers(req).await
+        self.inner.configure_embedding_parameter_servers(req).await
     }
 
     pub async fn register_optimizer(
@@ -1526,11 +1526,11 @@ impl EmbeddingWorkerNatsService {
         self.inner.load(req).await
     }
 
-    pub async fn configure_embedding_servers(
+    pub async fn configure_embedding_parameter_servers(
         &self,
         req: PersiaSparseModelHyperparameters,
     ) -> Result<(), EmbeddingWorkerError> {
-        self.inner.configure_embedding_servers(req).await
+        self.inner.configure_embedding_parameter_servers(req).await
     }
 
     pub async fn register_optimizer(

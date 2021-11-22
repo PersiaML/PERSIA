@@ -4,7 +4,7 @@ common_config:
     enable_metrics: false
     push_interval_sec: 10
   job_type: Train
-embedding_server_config:
+embedding_parameter_server_config:
   capacity: 1000000
   num_hashmap_internal_shards: 1
   num_embedding_io_workers: 4

@@ -266,9 +266,9 @@ class EmbeddingCtx(BaseCtx):
 
     def _enter(self):
         if self.embedding_config is not None:
-            self.configure_embedding_servers(self.embedding_config)
+            self.configure_embedding_parameter_servers(self.embedding_config)
 
-    def configure_embedding_servers(
+    def configure_embedding_parameter_servers(
         self,
         embedding_config: EmbeddingConfig,
     ):
@@ -276,7 +276,7 @@ class EmbeddingCtx(BaseCtx):
         Arguments:
             embedding_config (EmbeddingConfig): The embedding configuration that will be sent to the embedding server.
         """
-        self.common_context.configure_embedding_servers(
+        self.common_context.configure_embedding_parameter_servers(
             embedding_config.emb_initialization[0],
             embedding_config.emb_initialization[1],
             embedding_config.admit_probability,

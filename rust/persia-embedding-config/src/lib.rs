@@ -271,7 +271,7 @@ fn get_default_embedding_worker_config() -> EmbeddingWorkerConfig {
     EmbeddingWorkerConfig::default()
 }
 
-fn get_default_embedding_server_config() -> EmbeddingParameterServerConfig {
+fn get_default_embedding_parameter_server_config() -> EmbeddingParameterServerConfig {
     EmbeddingParameterServerConfig::default()
 }
 
@@ -447,8 +447,8 @@ pub struct PersiaGlobalConfig {
     pub common_config: PersiaCommonConfig,
     #[serde(default = "get_default_embedding_worker_config")]
     pub embedding_worker_config: EmbeddingWorkerConfig,
-    #[serde(default = "get_default_embedding_server_config")]
-    pub embedding_server_config: EmbeddingParameterServerConfig,
+    #[serde(default = "get_default_embedding_parameter_server_config")]
+    pub embedding_parameter_server_config: EmbeddingParameterServerConfig,
 }
 
 impl PersiaGlobalConfig {
@@ -470,11 +470,11 @@ impl PersiaGlobalConfig {
         .expect("cannot parse config file");
 
         tracing::info!(
-            "setting embedding_server_config {:?}",
-            global_config.embedding_server_config
+            "setting embedding_parameter_server_config {:?}",
+            global_config.embedding_parameter_server_config
         );
         PERSIA_EMBEDDING_SEVER_CONFIG
-            .set(Arc::new(global_config.embedding_server_config))
+            .set(Arc::new(global_config.embedding_parameter_server_config))
             .map_err(|_| PersiaGlobalConfigError::SetError)?;
 
         tracing::info!(

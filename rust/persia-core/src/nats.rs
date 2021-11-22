@@ -334,7 +334,7 @@ impl PersiaDataFlowComponent {
         Ok(())
     }
 
-    pub async fn configure_embedding_servers(
+    pub async fn configure_embedding_parameter_servers(
         &self,
         initialize_lower: f32,
         initialize_upper: f32,
@@ -359,7 +359,7 @@ impl PersiaDataFlowComponent {
         };
 
         self.embedding_worker_publish_service
-            .publish_configure_embedding_servers(&config, None)
+            .publish_configure_embedding_parameter_servers(&config, None)
             .await??;
 
         Ok(())
