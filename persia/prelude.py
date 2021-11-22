@@ -32,22 +32,22 @@ register_submodule(
 )
 
 # pytype: disable=import-error
-from persia_core import PyPersiaCommonContext, is_cuda_feature_available  # noqa
+from persia_core import PersiaCommonContext, is_cuda_feature_available  # noqa
 
-from persia_core.optim import PyOptimizerBase
+from persia_core.optim import OptimizerBase
 from persia_core.data import (
-    PyPersiaBatchData,
+    PersiaBatchData,
 )
 from persia_core.utils import (
-    PyPersiaMessageQueueServer,
-    PyPersiaMessageQueueClient,
-    PyPersiaBatchDataChannel,
-    PyPersiaBatchDataSender,
-    PyPersiaBatchDataReceiver,
+    PersiaMessageQueueServer,
+    PersiaMessageQueueClient,
+    PersiaBatchDataChannel,
+    PersiaBatchDataSender,
+    PersiaBatchDataReceiver,
 )
 from persia_core.nats import init_responder  # noqa
 
-from persia_core.backward import PyBackward  # noqa
-from persia_core.forward import PyForward, PyTensor, PyTrainBatch  # noqa
+from persia_core.backward import Backward  # noqa
+from persia_core.forward import Forward, Tensor, PersiaTrainingBatch  # noqa
 
 # pytype: enable=import-error

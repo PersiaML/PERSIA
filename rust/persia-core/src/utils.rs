@@ -1,19 +1,19 @@
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use crate::data::{PersiaBatchData, PyPersiaBatchData};
+use crate::data::{PersiaBatchImpl, PersiaBatch};
 
-use persia_common::message_queue::{PersiaMessageQueueClient, PersiaMessageQueueServer};
+use persia_common::message_queue::{PersiaMessageQueueClientImpl, PersiaMessageQueueServerImpl};
 use persia_libs::{flume, tokio::runtime::Runtime};
 
 #[pyclass]
-pub struct PyPersiaMessageQueueClient {
-    pub inner: PersiaMessageQueueClient,
+pub struct PersiaMessageQueueClient {
+    pub inner: PersiaMessageQueueClientImpl,
     pub runtime: Runtime,
 }
 
 #[pymethods]
-impl PyPersiaMessageQueueClient {
+impl PersiaMessageQueueClient {
     #[new]
     fn new(server_addr: &str) -> Self {
         let runtime = persia_libs::tokio::runtime::Builder::new_multi_thread()
@@ -25,7 +25,7 @@ impl PyPersiaMessageQueueClient {
         let _guard = runtime.enter();
 
         Self {
-            inner: PersiaMessageQueueClient::new(server_addr),
+            inner: PersiaMessageQueueClientImpl::new(server_addr),
             runtime,
         }
     }
@@ -43,13 +43,13 @@ impl PyPersiaMessageQueueClient {
 }
 
 #[pyclass]
-pub struct PyPersiaMessageQueueServer {
-    inner: PersiaMessageQueueServer,
+pub struct PersiaMessageQueueServer {
+    inner: PersiaMessageQueueServerImpl,
     runtime: Runtime, // thread unsafe
 }
 
 #[pymethods]
-impl PyPersiaMessageQueueServer {
+impl PersiaMessageQueueServer {
     #[new]
     fn new(port: u16, cap: usize) -> Self {
         let runtime = persia_libs::tokio::runtime::Builder::new_multi_thread()
@@ -61,7 +61,7 @@ impl PyPersiaMessageQueueServer {
         let _guard = runtime.enter();
 
         Self {
-            inner: PersiaMessageQueueServer::new(port, cap),
+            inner: PersiaMessageQueueServerImpl::new(port, cap),
             runtime,
         }
     }
@@ -79,13 +79,13 @@ impl PyPersiaMessageQueueServer {
 }
 
 #[pyclass]
-pub struct PyPersiaBatchDataSender {
-    pub inner: flume::Sender<PersiaBatchData>,
+pub struct PersiaBatchDataSender {
+    pub inner: flume::Sender<PersiaBatchImpl>,
 }
 
 #[pymethods]
-impl PyPersiaBatchDataSender {
-    pub fn send(&self, batch_data: &mut PyPersiaBatchData, py: Python) -> PyResult<()> {
+impl PersiaBatchDataSender {
+    pub fn send(&self, batch_data: &mut PersiaBatch, py: Python) -> PyResult<()> {
         let batch_data = std::mem::take(&mut batch_data.inner);
         py.allow_threads(move || {
             self.inner.send(batch_data).unwrap();
@@ -95,31 +95,31 @@ impl PyPersiaBatchDataSender {
 }
 
 #[pyclass]
-pub struct PyPersiaBatchDataReceiver {
-    pub inner: flume::Receiver<PersiaBatchData>,
+pub struct PersiaBatchDataReceiver {
+    pub inner: flume::Receiver<PersiaBatchImpl>,
 }
 #[pyclass]
-pub struct PyPersiaBatchDataChannel {
-    pub sender: flume::Sender<PersiaBatchData>,
-    pub receiver: flume::Receiver<PersiaBatchData>,
+pub struct PersiaBatchDataChannel {
+    pub sender: flume::Sender<PersiaBatchImpl>,
+    pub receiver: flume::Receiver<PersiaBatchImpl>,
 }
 
 #[pymethods]
-impl PyPersiaBatchDataChannel {
+impl PersiaBatchDataChannel {
     #[new]
     pub fn new(capacity: usize) -> Self {
         let (sender, receiver) = flume::bounded(capacity);
         Self { sender, receiver }
     }
 
-    pub fn get_sender(&self) -> PyPersiaBatchDataSender {
-        PyPersiaBatchDataSender {
+    pub fn get_sender(&self) -> PersiaBatchDataSender {
+        PersiaBatchDataSender {
             inner: self.sender.clone(),
         }
     }
 
-    pub fn get_receiver(&self) -> PyPersiaBatchDataReceiver {
-        PyPersiaBatchDataReceiver {
+    pub fn get_receiver(&self) -> PersiaBatchDataReceiver {
+        PersiaBatchDataReceiver {
             inner: self.receiver.clone(),
         }
     }
@@ -127,11 +127,11 @@ impl PyPersiaBatchDataChannel {
 
 pub fn init_module(super_module: &PyModule, py: Python) -> PyResult<()> {
     let module = PyModule::new(py, "utils")?;
-    module.add_class::<PyPersiaMessageQueueClient>()?;
-    module.add_class::<PyPersiaMessageQueueServer>()?;
-    module.add_class::<PyPersiaBatchDataChannel>()?;
-    module.add_class::<PyPersiaBatchDataReceiver>()?;
-    module.add_class::<PyPersiaBatchDataSender>()?;
+    module.add_class::<PersiaMessageQueueClient>()?;
+    module.add_class::<PersiaMessageQueueServer>()?;
+    module.add_class::<PersiaBatchDataChannel>()?;
+    module.add_class::<PersiaBatchDataReceiver>()?;
+    module.add_class::<PersiaBatchDataSender>()?;
     super_module.add_submodule(module)?;
     Ok(())
 }

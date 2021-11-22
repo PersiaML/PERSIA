@@ -8,9 +8,9 @@ import persia.env as env
 from persia.ctx import cnt_ctx
 from persia.logger import get_default_logger
 from persia.prelude import (
-    PyPersiaBatchDataChannel,
-    PyPersiaBatchDataReceiver,
-    PyPersiaBatchDataSender,
+    PersiaBatchDataChannel,
+    PersiaBatchDataReceiver,
+    PersiaBatchDataSender,
     init_responder,
 )
 
@@ -18,24 +18,24 @@ _logger = get_default_logger()
 
 
 class IterableDataset(TorchIterableDataset):
-    r"""IterableChannelBase wrap the PyPersiaBatchDataChannel that provide the channel sender and
+    r"""IterableChannelBase wrap the PersiaBatchDataChannel that provide the channel sender and
     receiver.
 
     Arguments:
-        buffer_size (int): PyPersiaBatchDataChannel buffer size
+        buffer_size (int): PersiaBatchDataChannel buffer size
     """
 
     def __init__(self, buffer_size: int):
-        self.persia_batch_channel = PyPersiaBatchDataChannel(buffer_size)
+        self.persia_batch_channel = PersiaBatchDataChannel(buffer_size)
 
     @property
-    def receiver(self) -> PyPersiaBatchDataReceiver:
-        """Get PyPersiaBatchDataReceiver python wrapper"""
+    def receiver(self) -> PersiaBatchDataReceiver:
+        """Get PersiaBatchDataReceiver python wrapper"""
         return self.persia_batch_channel.get_receiver()
 
     @property
-    def sender(self) -> PyPersiaBatchDataSender:
-        """Get PyPersiaBatchDataSender python wrapper"""
+    def sender(self) -> PersiaBatchDataSender:
+        """Get PersiaBatchDataSender python wrapper"""
         return self.persia_batch_channel.get_sender()
 
 
@@ -43,7 +43,7 @@ class StreamingDataset(IterableDataset):
     r"""NatsStreamingChannel receive data from nats publisher
 
     Arguments:
-        buffer_size (int): PyPersiaBatchDataChannel buffer size
+        buffer_size (int): PersiaBatchDataChannel buffer size
     """
 
     def __init__(
@@ -71,7 +71,7 @@ class PersiaDataset(IterableDataset):
     Not support synchronous data handler temporary.
 
     Arguments:
-        buffer_size (int): PyPersiaBatchDataChannel buffer size
+        buffer_size (int): PersiaBatchDataChannel buffer size
         async_iterator (bool, optional): launch the thread to generate the data asynchronous
     """
 
@@ -85,11 +85,11 @@ class PersiaDataset(IterableDataset):
         )
         self.async_iterator = async_iterator
 
-    def fetch_data(self, sender: PyPersiaBatchDataSender):
-        """Callback function to put the data into PyPersiaBatchDataSender
+    def fetch_data(self, sender: PersiaBatchDataSender):
+        """Callback function to put the data into PersiaBatchDataSender
 
         Arguments:
-            sender (PyPersiaBatchDataSender): PersiaBatchData sender channel to send the generate data
+            sender (PersiaBatchDataSender): PersiaBatchData sender channel to send the generate data
                 to the PersiaBatchData receive channel
         """
         raise NotImplementedError("implement this function to fetch data")

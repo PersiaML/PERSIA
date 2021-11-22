@@ -29,41 +29,41 @@ impl EmbeddingTensor {
 }
 
 #[derive(Readable, Writable, Debug)]
-pub struct PersiaBatchData {
-    pub dense_data: Vec<Tensor>,
-    pub sparse_data: EmbeddingTensor,
-    pub target_data: Vec<Tensor>,
+pub struct PersiaBatchImpl {
+    pub not_id_type_features: Vec<Tensor>,
+    pub id_type_featuers: EmbeddingTensor,
+    pub labels: Vec<Tensor>,
     pub meta_data: Option<Vec<u8>>,
     pub batch_id: Option<usize>,
 }
 
-impl Default for PersiaBatchData {
+impl Default for PersiaBatchImpl {
     fn default() -> Self {
-        PersiaBatchData {
-            dense_data: Vec::new(),
-            sparse_data: EmbeddingTensor::Null,
-            target_data: Vec::new(),
+        PersiaBatchImpl {
+            not_id_type_features: Vec::new(),
+            id_type_featuers: EmbeddingTensor::Null,
+            labels: Vec::new(),
             meta_data: None,
             batch_id: None,
         }
     }
 }
 
-impl PartialEq for PersiaBatchData {
+impl PartialEq for PersiaBatchImpl {
     fn eq(&self, other: &Self) -> bool {
         self.batch_id.unwrap_or(usize::MIN) == other.batch_id.unwrap_or(usize::MIN)
     }
 }
 
-impl Eq for PersiaBatchData {}
+impl Eq for PersiaBatchImpl {}
 
-impl PartialOrd for PersiaBatchData {
+impl PartialOrd for PersiaBatchImpl {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for PersiaBatchData {
+impl Ord for PersiaBatchImpl {
     fn cmp(&self, other: &Self) -> Ordering {
         self.batch_id
             .unwrap_or(usize::MIN)
@@ -73,21 +73,21 @@ impl Ord for PersiaBatchData {
 }
 
 #[pyclass]
-pub struct PyPersiaBatchData {
-    pub inner: PersiaBatchData,
+pub struct PersiaBatch {
+    pub inner: PersiaBatchImpl,
 }
 
 #[pymethods]
-impl PyPersiaBatchData {
+impl PersiaBatch {
     #[new]
     pub fn new() -> Self {
-        PyPersiaBatchData {
-            inner: PersiaBatchData::default(),
+        PersiaBatch {
+            inner: PersiaBatchImpl::default(),
         }
     }
 
-    pub fn add_dense(&mut self, data: Vec<&PyArray2<f32>>) {
-        data.iter().for_each(|x| {
+    pub fn add_not_id_type_feature(&mut self, not_id_type_feature: Vec<&PyArray2<f32>>) {
+        not_id_type_feature.iter().for_each(|x| {
             self.inner.dense_data.push(Tensor::new(
                 Storage::CPU(CPUStorage::from_f32(
                     x.to_vec().expect("convert ndarray to vec failed"),
@@ -99,14 +99,14 @@ impl PyPersiaBatchData {
         });
     }
 
-    pub fn add_sparse(
+    pub fn add_id_type_feature(
         &mut self,
-        sparse_data: Vec<(String, Vec<&PyArray1<u64>>)>,
+        id_type_feature: Vec<(String, Vec<&PyArray1<u64>>)>,
         requires_grad: Option<bool>,
     ) {
         self.inner.sparse_data = EmbeddingTensor::SparseBatch(SparseBatch {
             requires_grad: requires_grad.unwrap_or(true),
-            batches: sparse_data
+            batches: id_type_feature
                 .into_iter()
                 .map(|(feature_name, batch)| {
                     let indices = batch
@@ -125,12 +125,12 @@ impl PyPersiaBatchData {
         });
     }
 
-    pub fn add_target(&mut self, target_data: &PyArray2<f32>) {
+    pub fn add_label(&mut self, label_data: &PyArray2<f32>) {
         self.inner.target_data.push(Tensor::new(
             Storage::CPU(CPUStorage::from_f32(
                 target_data.to_vec().expect("convert ndarray to vec failed"),
             )),
-            target_data.shape().to_vec(),
+            label_data.shape().to_vec(),
             None,
             None,
         ));
@@ -155,7 +155,7 @@ macro_rules! add_dense_func2batch_data {
     ($(($typ:ty, $attr:ident)),*) => {
         paste! {
             #[pymethods]
-            impl PyPersiaBatchData {
+            impl PersiaBatch {
                     $(
                         pub fn [<add_dense_ $typ:lower>](&mut self, data: &PyArray2<$typ>) {
                             self.inner.dense_data.push(Tensor::new(
@@ -175,7 +175,7 @@ add_dense_func2batch_data!((f32, F32), (f64, F64), (i32, I32), (i64, I64));
 
 pub fn init_module(super_module: &PyModule, py: Python) -> PyResult<()> {
     let module = PyModule::new(py, "data")?;
-    module.add_class::<PyPersiaBatchData>()?;
+    module.add_class::<PersiaBatch>()?;
     super_module.add_submodule(module)?;
     Ok(())
 }

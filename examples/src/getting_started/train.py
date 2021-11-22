@@ -12,7 +12,7 @@ from persia.sparse.optim import Adagrad
 from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
 from persia.data import Dataloder, PersiaDataset, StreamingDataset
-from persia.prelude import PyPersiaBatchData, PyPersiaBatchDataSender
+from persia.prelude import PyPersiaBatchData, PersiaBatchDataSender
 from persia.utils import setup_seed
 
 from model import DNN
@@ -34,7 +34,7 @@ class TestDataset(PersiaDataset):
 
         logger.info(f"test dataset size is {size}")
 
-    def fetch_data(self, persia_sender_channel: PyPersiaBatchDataSender):
+    def fetch_data(self, persia_sender_channel: PersiaBatchDataSender):
         logger.info("test loader start to generate data...")
         for idx, (dense, batch_sparse_ids, target) in enumerate(
             tqdm(self.loader, desc="gen batch data")
@@ -58,7 +58,7 @@ class TrainDataset(PersiaDataset):
 
         logger.info(f"test dataset size is {size}")
 
-    def fetch_data(self, persia_sender_channel: PyPersiaBatchDataSender):
+    def fetch_data(self, persia_sender_channel: PersiaBatchDataSender):
         logger.info("test loader start to generate data...")
         for idx, (dense, batch_sparse_ids, target) in enumerate(
             tqdm(self.loader, desc="gen batch data")

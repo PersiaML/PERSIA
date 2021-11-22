@@ -1,6 +1,6 @@
-use crate::data::{EmbeddingTensor, PyPersiaBatchData};
+use crate::data::{EmbeddingTensor, PersiaBatch};
 use crate::optim::PyOptimizerBase;
-use crate::utils::PyPersiaBatchDataSender;
+use crate::utils::PersiaBatchDataSender;
 use crate::{PersiaCommonContext, PersiaError};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -99,7 +99,7 @@ impl MasterDiscoveryComponent {
 }
 
 pub mod persia_dataflow_service {
-    use crate::data::PersiaBatchData;
+    use crate::data::PersiaBatchImpl;
     use persia_embedding_config::PersiaReplicaInfo;
     use persia_libs::{flume, thiserror, tokio, tracing};
 
@@ -114,13 +114,13 @@ pub mod persia_dataflow_service {
 
     #[derive(Clone)]
     pub struct DataflowService {
-        pub output_channel: flume::Sender<PersiaBatchData>,
+        pub output_channel: flume::Sender<PersiaBatchImpl>,
         pub world_size: usize,
     }
 
     #[persia_nats_marcos::service]
     impl DataflowService {
-        pub async fn batch(&self, batch: PersiaBatchData) -> Result<(), Error> {
+        pub async fn batch(&self, batch: PersiaBatchImpl) -> Result<(), Error> {
             tracing::debug!("nats get batch");
             let result = self
                 .output_channel
@@ -242,7 +242,7 @@ impl PersiaDataFlowComponent {
 
     pub async fn send_sparse_to_middleware(
         &self,
-        batch: &mut PyPersiaBatchData,
+        batch: &mut PersiaBatch,
     ) -> Result<(), PersiaError> {
         let start = std::time::Instant::now();
         match &mut batch.inner.sparse_data {
@@ -298,7 +298,7 @@ impl PersiaDataFlowComponent {
 
     pub async fn send_dense_to_trainer(
         &self,
-        batch: &PyPersiaBatchData,
+        batch: &PersiaBatch,
     ) -> Result<(), PersiaError> {
         let start = std::time::Instant::now();
         if batch.inner.batch_id.is_none() {
@@ -388,7 +388,7 @@ impl PersiaDataFlowComponent {
 }
 
 #[pyfunction]
-pub fn init_responder(world_size: usize, channel: &PyPersiaBatchDataSender) -> PyResult<()> {
+pub fn init_responder(world_size: usize, channel: &PersiaBatchDataSender) -> PyResult<()> {
     let common_context = PersiaCommonContext::get();
     RESPONDER.get_or_init(|| {
         let nats_service = persia_dataflow_service::DataflowService {

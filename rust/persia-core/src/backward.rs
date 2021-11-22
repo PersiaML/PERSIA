@@ -42,7 +42,7 @@ pub enum SkippableSingleSlotGradient {
 }
 
 #[derive(Debug)]
-pub struct GradientBatch {
+pub struct GradientBatchImpl {
     pub gradients: Vec<SkippableSingleSlotGradient>,
     pub forward_id: u64,
     pub middleware_addr: String,
@@ -50,18 +50,18 @@ pub struct GradientBatch {
 }
 
 #[pyclass]
-pub struct PythonGradientBatch {
-    pub inner: Option<GradientBatch>,
+pub struct GradientBatch {
+    pub inner: Option<GradientBatchImpl>,
 }
 
-impl PythonGradientBatch {
+impl GradientBatch {
     pub fn new(
         forward_id: u64,
         middleware_addr: &str,
         embedding_staleness_permit: Option<OwnedSemaphorePermit>,
     ) -> Self {
         Self {
-            inner: Some(GradientBatch {
+            inner: Some(GradientBatchImpl {
                 gradients: vec![],
                 forward_id,
                 middleware_addr: middleware_addr.to_string(),
@@ -72,7 +72,7 @@ impl PythonGradientBatch {
 }
 
 #[pymethods]
-impl PythonGradientBatch {
+impl GradientBatch {
     pub fn add_skipped_gradient(&mut self, slot_name: String) {
         self.inner
             .as_mut()
@@ -112,9 +112,9 @@ struct EmbeddingBackwardPacket {
     pub embedding_gradient_batch: EmbeddingGradientBatch,
 }
 
-struct Backward {
-    pub backward_channel_s: flume::Sender<GradientBatch>,
-    pub backward_channel_r: flume::Receiver<GradientBatch>,
+struct BackwardImpl {
+    pub backward_channel_s: flume::Sender<GradientBatchImpl>,
+    pub backward_channel_r: flume::Receiver<GradientBatchImpl>,
     pub cpu_backward_channel_s: flume::Sender<EmbeddingBackwardPacket>,
     pub cpu_backward_channel_r: flume::Receiver<EmbeddingBackwardPacket>,
     pub launch: bool,
@@ -199,7 +199,7 @@ fn copy_gradients(
     )
 }
 
-impl Backward {
+impl BackwardImpl {
     fn new(queue_size: usize) -> Self {
         let (backward_channel_s, backward_channel_r) = flume::bounded(queue_size);
         let (cpu_backward_channel_s, cpu_backward_channel_r) = flume::bounded(queue_size);
@@ -355,16 +355,16 @@ impl Backward {
 }
 
 #[pyclass]
-struct PyBackward {
-    inner: Backward,
+struct Backward {
+    inner: BackwardImpl,
 }
 
 #[pymethods]
-impl PyBackward {
+impl Backward {
     #[new]
-    pub fn new(queue_size: usize) -> PyBackward {
-        PyBackward {
-            inner: Backward::new(queue_size),
+    pub fn new(queue_size: usize) -> Backward {
+        Backward {
+            inner: BackwardImpl::new(queue_size),
         }
     }
 
@@ -378,7 +378,7 @@ impl PyBackward {
 
     pub fn update_sparse_gradient_batched(
         &self,
-        gradients: &mut PythonGradientBatch,
+        gradients: &mut GradientBatch,
     ) -> PyResult<()> {
         let start_time = std::time::Instant::now();
         if let Err(err) = self
@@ -406,7 +406,7 @@ impl PyBackward {
 
 pub fn init_module(super_module: &PyModule, py: Python) -> PyResult<()> {
     let module = PyModule::new(py, "backward")?;
-    module.add_class::<PyBackward>()?;
+    module.add_class::<Backward>()?;
     super_module.add_submodule(module)?;
     Ok(())
 }

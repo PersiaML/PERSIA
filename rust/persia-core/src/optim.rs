@@ -6,18 +6,18 @@ use pyo3::prelude::*;
 use persia_common::optim::{AdagradConfig, AdamConfig, NaiveSGDConfig, OptimizerConfig};
 
 #[pyclass]
-pub struct PyOptimizerBase {
+pub struct OptimizerBase {
     inner: Option<OptimizerConfig>,
 }
 
-impl PyOptimizerBase {
+impl OptimizerBase {
     pub fn get_inner(&self) -> Option<OptimizerConfig> {
         self.inner.clone()
     }
 }
 
 #[pymethods]
-impl PyOptimizerBase {
+impl OptimizerBase {
     #[new]
     pub fn new() -> Self {
         Self { inner: None }
@@ -68,7 +68,7 @@ impl PyOptimizerBase {
 
 pub fn init_module(super_module: &PyModule, py: Python) -> PyResult<()> {
     let module = PyModule::new(py, "optim")?;
-    module.add_class::<PyOptimizerBase>()?;
+    module.add_class::<OptimizerBase>()?;
     super_module.add_submodule(module)?;
     Ok(())
 }

@@ -12,7 +12,7 @@ import persia.env as env
 
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
-from persia.prelude import PyPersiaCommonContext, PyPersiaBatchData, PyTensor
+from persia.prelude import PersiaCommonContext, PersiaBatchData, Tensor
 from persia.distributed import DistributedBaseOption, get_default_distributed_option
 
 _CURRENT_CXT = None
@@ -35,19 +35,19 @@ def _check_finite(tensors: List[torch.Tensor]) -> bool:
 
 
 def _cast_dlpack2torch_tensor(
-    pytensor: PyTensor, requires_grad: bool = False
+    tensor: Tensor, requires_grad: bool = False
 ) -> torch.Tensor:
     """Convert the DLPack PythonCapsule to torch tensor
 
     Arguments:
-        pytensor (PyTensor): PersiaTensor wrapper that contains dlpack information.
+        Tensor (Tensor): Tensor wrapper that contains dlpack information.
         requires_grad (bool, optional): Whether current tensor requires grad or not.
     Returns: pytorch tensor
     """
 
     import torch.utils.dlpack as dlpack
 
-    tensor = dlpack.from_dlpack(pytensor.dlpack)
+    tensor = dlpack.from_dlpack(tensor.dlpack)
     tensor.requires_grad = requires_grad
     return tensor
 
@@ -92,7 +92,7 @@ class BaseCtx:
 
         self.device_id = device_id
 
-        # PyPersiaCommonContext initialize with the rank and world size if
+        # PersiaCommonContext initialize with the rank and world size if
         # it can retrive corresponding information
         if env.get_rank() is not None:
             replica_index = env.get_rank()
@@ -101,7 +101,7 @@ class BaseCtx:
             replica_index = env.get_replica_index()
             replica_size = env.get_replica_size()
 
-        self.common_context = PyPersiaCommonContext(
+        self.common_context = PersiaCommonContext(
             threadpool_worker_size, replica_index, replica_size, device_id
         )
         _logger.info(
@@ -168,7 +168,7 @@ class DataCtx(BaseCtx):
         self.common_context.init_nats_publisher(None)
         self.common_context.wait_servers_ready()
 
-    def send_sparse_to_middleware(self, data: PyPersiaBatchData):
+    def send_sparse_to_middleware(self, data: PersiaBatchData):
         """Send PersiaBatchData from data compose to middleware side.
 
         Arguments:
@@ -176,7 +176,7 @@ class DataCtx(BaseCtx):
         """
         self.common_context.send_sparse_to_middleware(data)
 
-    def send_dense_to_trainer(self, data: PyPersiaBatchData):
+    def send_dense_to_trainer(self, data: PersiaBatchData):
         """Send PersiaBatchData from data compose to trainer side.
 
         Arguments:
@@ -184,7 +184,7 @@ class DataCtx(BaseCtx):
         """
         self.common_context.send_dense_to_trainer(data)
 
-    def send_data(self, data: PyPersiaBatchData):
+    def send_data(self, data: PersiaBatchData):
         """Send PersiaBatchData from data compose to trainer and middleware side.
 
         Arguments:
