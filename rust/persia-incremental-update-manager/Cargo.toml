@@ -14,4 +14,4 @@ persia-embedding-holder = {path = "../persia-embedding-holder"}
 persia-libs = {path = "../persia-libs"}
 persia-metrics = {path = "../persia-metrics"}
 persia-storage = {path = "../persia-storage"}
-persia-speedy = "0.9"
+persia-speedy = { path = "../persia-speedy" }
