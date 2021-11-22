@@ -80,7 +80,7 @@ impl DType {
             DType::I64 => (*&DLDataTypeCode::DLInt, 64),
             DType::U8 => (*&DLDataTypeCode::DLUInt, 8),
             _ => panic!(
-                "Unsupported convert {} to dldtype, unsigned datatype only support uint8",
+                "converting {} to DLDataType failed, uint8 is the only supported unsigned integer type in PyTorch",
                 self
             ),
         };
