@@ -169,7 +169,7 @@ class DataCtx(BaseCtx):
         self.common_context.wait_servers_ready()
 
     def send_sparse_to_embedding_worker(self, data: PyPersiaBatchData):
-        """Send PersiaBatchData from data laoder to embedding worker side.
+        """Send PersiaBatchData from data loader to embedding worker side.
 
         Arguments:
             data (PyPersiaBatchData): PersiaBatchData that haven't been process.
@@ -177,7 +177,7 @@ class DataCtx(BaseCtx):
         self.common_context.send_sparse_to_embedding_worker(data)
 
     def send_dense_to_nn_worker(self, data: PyPersiaBatchData):
-        """Send PersiaBatchData from data laoder to nn worker side.
+        """Send PersiaBatchData from data loader to nn worker side.
 
         Arguments:
             data (PyPersiaBatchData): PersiaBatchData that have been sent to embedding worker.
@@ -185,7 +185,7 @@ class DataCtx(BaseCtx):
         self.common_context.send_dense_to_nn_worker(data)
 
     def send_data(self, data: PyPersiaBatchData):
-        """Send PersiaBatchData from data laoder to nn worker and embedding worker side.
+        """Send PersiaBatchData from data loader to nn worker and embedding worker side.
 
         Arguments:
             data (PyPersiaBatchData): PersiaBatchData that haven't been process.

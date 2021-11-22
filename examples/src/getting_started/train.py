@@ -73,14 +73,14 @@ class TrainDataset(PersiaDataset):
         return self.loader_size
 
 
-def test(model: torch.nn.Module, data_laoder: Dataloder, cuda: bool = True):
+def test(model: torch.nn.Module, data_loader: Dataloder, cuda: bool = True):
     logger.info("start to test...")
     model.eval()
 
     with eval_ctx(model=model) as ctx:
         accuracies, losses = [], []
         all_pred, all_target = [], []
-        for (batch_idx, batch_data) in enumerate(tqdm(data_laoder, desc="test...")):
+        for (batch_idx, batch_data) in enumerate(tqdm(data_loader, desc="test...")):
             (pred, target) = ctx.forward(batch_data)
             loss = loss_fn(pred, target)
             if cuda:

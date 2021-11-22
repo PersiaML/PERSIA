@@ -89,7 +89,7 @@ def nn_worker(filepath, nproc_per_node: int, node_rank: int, nnodes: int):
     "--replica-index", type=str, default=0, help="Replica index of data loader"
 )
 @click.option("--replica-size", type=str, default=1, help="Replica num of data loader")
-def data_laoder(filepath: str, replica_index: int, replica_size: int):
+def data_loader(filepath: str, replica_index: int, replica_size: int):
     cmd = [
         "python3",
         filepath,

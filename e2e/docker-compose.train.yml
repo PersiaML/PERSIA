@@ -11,7 +11,7 @@ services:
         environment:
             TASK_SLOT_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia_launcher compose /workspace/data_loader.py
+        command: persia_launcher data_loader /workspace/data_loader.py
         volumes:
             - ./adult_income:/workspace
             - ./cache:/cache
