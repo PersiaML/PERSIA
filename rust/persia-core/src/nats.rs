@@ -278,7 +278,8 @@ impl PersiaDataFlowComponent {
                     })
                     .await?;
 
-                batch.inner.id_type_features = EmbeddingTensor::SparseBatchRemoteReference(sparse_ref);
+                batch.inner.id_type_features =
+                    EmbeddingTensor::SparseBatchRemoteReference(sparse_ref);
                 let local_batch_id = self.cur_batch_id.fetch_add(1, Ordering::AcqRel);
                 let batch_id = local_batch_id * self.replica_info.replica_size
                     + self.replica_info.replica_index;
