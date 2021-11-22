@@ -352,7 +352,8 @@ pub fn indices_to_hashstack_indices(indices: &mut SparseBatch, config: &Embeddin
                             % slot_conf.hash_stack_config.embedding_size as u64
                             + (round * slot_conf.hash_stack_config.embedding_size) as u64;
                         // TODO: to avoid hash conflict, try replace hashed2index_batch_idx to key2list
-                        hashed2index_batch_idx.insert(hashed_sign_bucket, distinct_tensor_idx as i64);
+                        hashed2index_batch_idx
+                            .insert(hashed_sign_bucket, distinct_tensor_idx as i64);
                         map.entry(hashed_sign_bucket)
                             .or_insert_with(|| {
                                 Vec::with_capacity(single_sign.in_which_batch_samples.len())
