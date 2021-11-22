@@ -38,7 +38,7 @@ services:
         environment:
             TASK_SLOT_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia_launcher embedding_parameter_server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
+        command: persia_launcher embedding-parameter-server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
         volumes:
             - ./adult_income:/workspace
             - ./cache:/cache
