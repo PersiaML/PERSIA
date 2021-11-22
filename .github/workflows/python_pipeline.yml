@@ -24,6 +24,8 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
+        with:
+          submodules: recursive
       - name: Run flake8 with reviewdog
         # You may pin to the exact commit or the version.
         # uses: reviewdog/action-flake8@6146a50d029068dbd40bf1c6ce75f5fd8970a1b1
@@ -36,6 +38,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: recursive
       - uses: psf/black@stable
   pytype:
     # The type of runner that the job will run on
@@ -45,6 +49,8 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
+        with:
+          submodules: recursive
 
       - name: Pytype Python Checker
         # You may pin to the exact commit or the version.
@@ -82,6 +88,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
+          submodules: recursive
           fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v2
