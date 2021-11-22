@@ -79,10 +79,10 @@ impl DType {
             DType::I32 => (*&DLDataTypeCode::DLInt, 32),
             DType::I64 => (*&DLDataTypeCode::DLInt, 64),
             DType::U8 => (*&DLDataTypeCode::DLUInt, 8),
-            DType::U16 => (*&DLDataTypeCode::DLInt, 16),
-            DType::U32 => (*&DLDataTypeCode::DLInt, 32),
-            DType::U64 => (*&DLDataTypeCode::DLInt, 64),
-            DType::USIZE => (*&DLDataTypeCode::DLInt, 64),
+            _ => panic!(
+                "Unsupported convert {} to dldtype, unsigned datatype only support uint8",
+                self
+            ),
         };
         let code = code as u8;
 
