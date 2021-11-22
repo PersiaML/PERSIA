@@ -1,0 +1,3 @@
+[submodule "rust/persia-speedy"]
+	path = rust/persia-speedy
+	url = git@github.com:PersiaML/persia-speedy.git

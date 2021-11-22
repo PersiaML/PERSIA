@@ -27,7 +27,7 @@ persia-nats-marcos = {path = "../others/persia-nats-marcos"}
 persia-storage = {path = "../persia-storage"}
 persia-rpc = {path = "../others/persia-rpc"}
 persia-rpc-macro = {path = "../others/persia-rpc-macro"}
-persia-speedy = "0.9"
+persia-speedy = { path = "../persia-speedy" }
 shadow-rs = "0.8"
 
 [features]
