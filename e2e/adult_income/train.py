@@ -16,7 +16,7 @@ from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
 from persia.utils import setup_seed
 from persia.data import Dataloder, PersiaDataset, StreamingDataset
-from persia.prelude import PersiaBatchData, PersiaBatchDataSender
+from persia.prelude import PersiaBatch, PersiaBatchDataSender
 
 from model import DNN
 from data_generator import make_dataloader
@@ -46,9 +46,9 @@ class TestDataset(PersiaDataset):
         for _idx, (dense, batch_sparse_ids, target) in enumerate(
             tqdm(self.loader, desc="gen batch data")
         ):
-            batch_data = PersiaBatchData()
+            batch_data = PersiaBatch()
             batch_data.add_not_id_type_feature([dense])
-            batch_data.add_id_type_feature(batch_sparse_ids)
+            batch_data.add_id_type_features(batch_sparse_ids)
             batch_data.add_label(target)
             persia_sender_channel.send(batch_data)
 
@@ -75,7 +75,7 @@ def test(
             ctx.load_checkpoint(checkpoint_dir)
         accuracies, losses = [], []
         all_pred, all_target = [], []
-        for (batch_idx, batch_data) in enumerate(tqdm(test_loader, desc="test...")):
+        for (_batch_idx, batch_data) in enumerate(tqdm(test_loader, desc="test...")):
             (pred, target) = ctx.forward(batch_data)
             loss = loss_fn(pred, target)
             if cuda:

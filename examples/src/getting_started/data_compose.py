@@ -27,4 +27,3 @@ if __name__ == "__main__":
             batch_data.add_id_type_features(batch_sparse_ids)
             batch_data.add_label(target)
             ctx.send_data(batch_data)
-
