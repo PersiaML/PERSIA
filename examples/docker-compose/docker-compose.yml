@@ -1,0 +1,81 @@
+version: "3.2"
+services:
+  persia_nats_service:
+    image: nats:latest
+    deploy:
+      replicas: 1
+          
+  data_compose:
+    env_file:
+      - .env
+    environment:
+        TASK_SLOT_ID: "{{.Task.Slot}}"
+        REPLICAS: 1
+    depends_on:
+      - trainer
+      - middleware
+      - persia_nats_service
+    image: persia-cuda-runtime:dev
+    command: persia_launcher compose /workspace/data_compose.py
+    volumes:
+      - type: bind
+        source: ${CODE_BASE}
+        target: /workspace
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  trainer:
+    env_file:
+      - .env
+    environment:
+      TASK_SLOT_ID: "{{.Task.Slot}}"
+      NCCL_SOCKET_IFNAME: eth0
+      REPLICAS: 1
+    image: persia-cuda-runtime:dev
+    command: bash -c "persia_launcher trainer /workspace/train.py --nproc-per-node $$NPROC_PER_NODE --node-rank $$(($$TASK_SLOT_ID - 1)) --nnodes $$TRAINER_REPLICA"
+    volumes:
+      - type: bind
+        source: ${CODE_BASE}
+        target: /workspace
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  middleware:
+    env_file:
+      - .env
+    environment:
+      TASK_SLOT_ID: "{{.Task.Slot}}" 
+      REPLICAS: 1
+    depends_on:
+      - server
+    image: persia-cuda-runtime:dev
+    command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config.yml
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - type: bind
+        source: ${CODE_BASE}
+        target: /workspace
+
+  server:
+    env_file:
+      - .env
+    environment:
+      TASK_SLOT_ID: "{{.Task.Slot}}"
+      REPLICAS: 1
+    image: persia-cuda-runtime:dev
+    command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config.yml
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - type: bind
+        source: ${CODE_BASE}
+        target: /workspace

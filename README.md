@@ -16,7 +16,7 @@
 <a href="https://github.com/PersiaML/Persia/stargazers"><img src="https://reporoster.com/stars/PersiaML/Persia" /><a/>
 </div>
 
-**PERSIA** (**P**arallel r**E**commendation t**R**aining **S**ystem with hybr**I**d **A**cceleration)  is developed by [AI platform@Kuaishou Technology](https://www.kuaishou.com/en), collaborating with ETH. It is a PyTorch-based (the first public one to our best knowledge) system for training deep learning recommendation models on commodity hardwares. It is capable of training the recommendation models up to 100 trillion parameters. To the best of our knowledge, this is the largest model size in recommendation systems so far. Empirical study on public datasets indicate Perisa's significant advantage over several other existing training systems in recommendation [1]. Its efficiency and robustness have also been validated by multiple applications with 100 million level DAU at Kuaishou. 
+**PERSIA** (**P**arallel r**E**commendation t**R**aining **S**ystem with hybr**I**d **A**cceleration)  is developed by [AI platform@Kuaishou Technology](https://www.kuaishou.com/en), collaborating with ETH. It is a PyTorch-based (the first public one to our best knowledge) system for training large scale deep learning recommendation models on commodity hardwares. It is capable of training recommendation models with up to 100 trillion parameters. To the best of our knowledge, this is the largest model size in recommendation systems so far. Empirical study on public datasets indicate PERSIA's significant advantage over several other existing training systems in recommendation [1]. Its efficiency and robustness have also been validated by multiple applications with 100 million level DAU at Kuaishou. 
 
 *Disclaimer: The program is usable and has served several important businesses. However, the official English documentation and tutorials are still under heavy construction (there are some materials on the [tutorials website](https://persiaml-tutorials.pages.dev), but they are pretty raw). We encourage adventurers to try out PERSIA and contribute!*
 
@@ -33,11 +33,15 @@
 * [Tutorials](https://persiaml-tutorials.pages.dev/) (Under Construction)
 * [API documentation](https://persiaml.pages.dev/) (Under Construction)
 
+## Discussion
+
+Feel free to join our [Telegram Group](https://t.me/joinchat/fLlD66VX8PQxMmJh) for discussion!  
+
 ## References
 
 1. Xiangru Lian, Binhang Yuan, Xuefeng Zhu, Yulong Wang, Yongjun He, Honghuan Wu, Lei Sun, Haodong Lyu, Chengjun Liu, Xing Dong, Yiqiao Liao, Mingnan Luo, Congfei Zhang, Jingru Xie, Haonan Li, Lei Chen, Renjie Huang, Jianying Lin, Chengchun Shu, Xuezhong Qiu, Zhishan Liu, Dongying Kong, Lei Yuan, Hai Yu, Sen Yang, Ce Zhang, & Ji Liu. (2021). [Persia: A Hybrid System Scaling Deep Learning Based Recommenders up to 100 Trillion Parameters.](https://arxiv.org/abs/2111.05897)
 
-2. Ji Liu & Ce Zhang. (2021). [Distributed Learning Systems with First-order Methods](https://arxiv.org/pdf/2104.05245)
+2. Ji Liu & Ce Zhang. (2021). [Distributed Learning Systems with First-order Methods](https://arxiv.org/pdf/2104.05245).
 
 ## License
 

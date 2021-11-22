@@ -1,12 +1,15 @@
-PersiaEmbeddingServerConfig:
-  job_type: train
-  capacity: 100000000
-  num_hashmap_internal_shards: 128
-  num_embedding_io_workers: 4
+common_config:
+  metrics_config:
+    enable_metrics: true
+    push_interval_sec: 10
+  job_type: Train
+  checkpointing_config:
+    num_workers: 8
+embedding_server_config:
+  capacity: 1000000
+  num_hashmap_internal_shards: 1
   enable_incremental_update: false
   incremental_buffer_size: 5000000
-  incremental_dir: /tmp/persia_inc/
   incremental_channel_capacity: 1000
-PersiaMetricsConfig:
-  enable_metrics: true
-  push_interval_seconds: 10
+middleware_config:
+  forward_buffer_size: 1000

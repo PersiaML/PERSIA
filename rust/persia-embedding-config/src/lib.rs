@@ -297,6 +297,10 @@ fn get_default_feature_groups() -> indexmap::IndexMap<String, Vec<String>> {
     indexmap::IndexMap::new()
 }
 
+fn get_default_checkpointing_config() -> CheckpointingConfig {
+    CheckpointingConfig::default()
+}
+
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
 #[serde(crate = "self::serde")]
 pub struct PersiaMetricsConfig {
@@ -320,6 +324,19 @@ impl Default for PersiaMetricsConfig {
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
 #[serde(crate = "self::serde")]
+pub struct CheckpointingConfig {
+    #[serde(default = "get_four")]
+    pub num_workers: usize,
+}
+
+impl Default for CheckpointingConfig {
+    fn default() -> Self {
+        Self { num_workers: 4 }
+    }
+}
+
+#[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[serde(crate = "self::serde")]
 pub struct PersiaCommonConfig {
     #[serde(default = "get_default_metrics_config")]
     pub metrics_config: PersiaMetricsConfig,
@@ -327,8 +344,8 @@ pub struct PersiaCommonConfig {
     pub job_type: PerisaJobType,
     #[serde(default = "get_default_infer_config")]
     pub infer_config: InferConfig,
-    #[serde(default = "get_four")]
-    pub num_embedding_io_workers: usize,
+    #[serde(default = "get_default_checkpointing_config")]
+    pub checkpointing_config: CheckpointingConfig,
 }
 
 impl Default for PersiaCommonConfig {
@@ -337,7 +354,7 @@ impl Default for PersiaCommonConfig {
             metrics_config: PersiaMetricsConfig::default(),
             job_type: PerisaJobType::Train,
             infer_config: InferConfig::default(),
-            num_embedding_io_workers: 4,
+            checkpointing_config: CheckpointingConfig::default(),
         }
     }
 }

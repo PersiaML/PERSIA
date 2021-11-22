@@ -1203,8 +1203,8 @@ impl MiddlewareServerInner {
             return Ok(());
         }
 
-        let num_embedding_io_workers = PersiaCommonConfig::get()?.num_embedding_io_workers;
-        let num_file_per_worker = emb_file_list.len() / num_embedding_io_workers;
+        let num_checkpointing_workers = PersiaCommonConfig::get()?.checkpointing_config.num_workers;
+        let num_file_per_worker = emb_file_list.len() / num_checkpointing_workers;
 
         let num_files = emb_file_list.len();
         let loaded = Arc::new(AtomicUsize::new(0));

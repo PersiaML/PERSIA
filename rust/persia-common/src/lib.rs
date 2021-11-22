@@ -13,7 +13,6 @@ use persia_libs::{
     hashbrown::HashMap,
     itertools::Itertools,
     ndarray::Array2,
-    numpy::PyArray1,
     serde::{self, Deserialize, Serialize},
 };
 
@@ -126,25 +125,11 @@ pub struct SparseBatch {
     pub batcher_idx: Option<usize>,
 }
 
-impl SparseBatch {
-    pub fn new(batches: Vec<(String, Vec<&PyArray1<u64>>)>, requires_grad: Option<bool>) -> Self {
+impl Default for SparseBatch {
+    fn default() -> Self {
         SparseBatch {
-            requires_grad: requires_grad.unwrap_or(true),
-            batches: batches
-                .into_iter()
-                .map(|(feature_name, batch)| {
-                    let indices = batch
-                        .iter()
-                        .map(|x| {
-                            x.readonly()
-                                .as_slice()
-                                .expect("cannot read np array")
-                                .to_vec()
-                        })
-                        .collect();
-                    FeatureBatch::new(feature_name, indices)
-                })
-                .collect(),
+            requires_grad: false,
+            batches: Vec::new(),
             enter_forward_id_buffer_time: None,
             enter_post_forward_buffer_time: None,
             batcher_idx: None,
