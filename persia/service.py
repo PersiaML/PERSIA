@@ -3,10 +3,10 @@ import os
 from typing import List
 
 
-def get_middleware_services() -> List[str]:
-    """Get a list of current middleware services"""
+def get_embedding_worker_services() -> List[str]:
+    """Get a list of current embedding worker services"""
     return (
-        [os.environ["MIDDLEWARE_SERVICE"]]
-        if os.environ.get("MIDDLEWARE_SERVICE", None)
-        else ["middleware:8887"]
+        [os.environ["embedding_worker_service"]]
+        if os.environ.get("embedding_worker_service", None)
+        else ["embedding_worker:8887"]
     )

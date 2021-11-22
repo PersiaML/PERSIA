@@ -139,7 +139,7 @@ class BaseCtx:
 
 class DataCtx(BaseCtx):
     r"""Provides the communicate ability for data generator component to send the PersiaBatchData
-    to the trainer and embedding middleware.
+    to the trainer and embedding worker.
 
     Example:
         >>> from persia.prelude import PyPersiaBatchData
@@ -168,29 +168,29 @@ class DataCtx(BaseCtx):
         self.common_context.init_nats_publisher(None)
         self.common_context.wait_servers_ready()
 
-    def send_sparse_to_middleware(self, data: PyPersiaBatchData):
-        """Send PersiaBatchData from data compose to middleware side.
+    def send_sparse_to_embedding_worker(self, data: PyPersiaBatchData):
+        """Send PersiaBatchData from data compose to embedding worker side.
 
         Arguments:
             data (PyPersiaBatchData): PersiaBatchData that haven't been process.
         """
-        self.common_context.send_sparse_to_middleware(data)
+        self.common_context.send_sparse_to_embedding_worker(data)
 
     def send_dense_to_trainer(self, data: PyPersiaBatchData):
         """Send PersiaBatchData from data compose to trainer side.
 
         Arguments:
-            data (PyPersiaBatchData): PersiaBatchData that have been sent to middleware.
+            data (PyPersiaBatchData): PersiaBatchData that have been sent to embedding worker.
         """
         self.common_context.send_dense_to_trainer(data)
 
     def send_data(self, data: PyPersiaBatchData):
-        """Send PersiaBatchData from data compose to trainer and middleware side.
+        """Send PersiaBatchData from data compose to trainer and embedding worker side.
 
         Arguments:
             data (PyPersiaBatchData): PersiaBatchData that haven't been process.
         """
-        self.send_sparse_to_middleware(data)
+        self.send_sparse_to_embedding_worker(data)
         self.send_dense_to_trainer(data)
 
 
@@ -708,11 +708,11 @@ class TrainCtx(EmbeddingCtx):
         return master_addr
 
     def _init_middlewrae_rpc_client(self) -> int:
-        middleware_addr_list = self.common_context.get_middleware_addr_list()
-        assert len(middleware_addr_list) > 0, "Not available middleware."
-        for middleware_addr in middleware_addr_list:
-            self.common_context.init_rpc_client_with_addr(middleware_addr)
-        return len(middleware_addr_list)
+        embedding_worker_addr_list = self.common_context.get_embedding_worker_addr_list()
+        assert len(embedding_worker_addr_list) > 0, "Not available embedding worker."
+        for embedding_worker_addr in embedding_worker_addr_list:
+            self.common_context.init_rpc_client_with_addr(embedding_worker_addr)
+        return len(embedding_worker_addr_list)
 
     def wait_servers_ready(self):
         """query embedding server to check if servers are ready"""
@@ -909,20 +909,20 @@ class InferCtx(EmbeddingCtx):
 
     def __init__(
         self,
-        middleware_addrs: List[str],
+        embedding_worker_addrs: List[str],
         *args,
         **kwargs,
     ):
         """
         Arguments:
-            middleware_addrs (List[str]): middleware address(ip:port) list.
+            embedding_worker_addrs (List[str]): embedding worker address(ip:port) list.
         """
         super(InferCtx, self).__init__(PreprocessMode.INFERENCE, *args, **kwargs)
 
-        for addr in middleware_addrs:
+        for addr in embedding_worker_addrs:
             self.common_context.init_rpc_client_with_addr(addr)
 
-    r"""Wait for middleware and embedding server ready for serving."""
+    r"""Wait for embedding worker and embedding server ready for serving."""
 
     def wait_for_serving(self):
         self.common_context.wait_for_serving()

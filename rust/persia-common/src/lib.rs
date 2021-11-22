@@ -133,7 +133,7 @@ impl Default for SparseBatch {
 
 #[derive(Readable, Writable, Debug, Clone)]
 pub struct SparseBatchRemoteReference {
-    pub middleware_addr: String,
+    pub embedding_worker_addr: String,
     pub ref_id: u64,
     pub batcher_idx: usize,
 }
@@ -141,7 +141,7 @@ pub struct SparseBatchRemoteReference {
 impl Default for SparseBatchRemoteReference {
     fn default() -> Self {
         Self {
-            middleware_addr: String::from(""),
+            embedding_worker_addr: String::from(""),
             ref_id: 0,
             batcher_idx: 0,
         }

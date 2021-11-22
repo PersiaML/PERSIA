@@ -18,8 +18,8 @@ trainer:
 server:
 	docker service logs -f `docker stack ps $(SERVICE) | grep server|head -n 1|awk '{print $$1}'`
 
-middleware:
-	docker service logs -f `docker stack ps $(SERVICE) | grep middleware|head -n 1|awk '{print $$1}'`
+embedding_worker:
+	docker service logs -f `docker stack ps $(SERVICE) | grep embedding_worker|head -n 1|awk '{print $$1}'`
 
 nats:
 	docker service logs -f `docker stack ps $(SERVICE) | grep persia_nats_service|head -n 1|awk '{print $$1}'`
