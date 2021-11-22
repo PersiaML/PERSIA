@@ -376,10 +376,7 @@ impl Backward {
         self.inner.shutdown()
     }
 
-    pub fn update_sparse_gradient_batched(
-        &self,
-        gradients: &mut GradientBatch,
-    ) -> PyResult<()> {
+    pub fn update_sparse_gradient_batched(&self, gradients: &mut GradientBatch) -> PyResult<()> {
         let start_time = std::time::Instant::now();
         if let Err(err) = self
             .inner

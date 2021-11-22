@@ -776,7 +776,10 @@ impl ForwardImpl {
     }
 }
 
-pub fn forward_directly(batch: PersiaBatchImpl, device_id: Option<i32>) -> PyResult<PersiaTrainingBatch> {
+pub fn forward_directly(
+    batch: PersiaBatchImpl,
+    device_id: Option<i32>,
+) -> PyResult<PersiaTrainingBatch> {
     let device_id = device_id.or(PersiaCommonContextImpl::get().device_id.as_ref().clone());
     let rpc_client = PersiaCommonContextImpl::get().rpc_client.clone();
     let async_runtime = PersiaCommonContextImpl::get().async_runtime.clone();

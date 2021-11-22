@@ -296,10 +296,7 @@ impl PersiaDataFlowComponent {
         }
     }
 
-    pub async fn send_dense_to_trainer(
-        &self,
-        batch: &PersiaBatch,
-    ) -> Result<(), PersiaError> {
+    pub async fn send_dense_to_trainer(&self, batch: &PersiaBatch) -> Result<(), PersiaError> {
         let start = std::time::Instant::now();
         if batch.inner.batch_id.is_none() {
             tracing::warn!("batch id is null, please call send_sparse_to_middleware first");
