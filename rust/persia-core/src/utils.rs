@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use crate::data::{PersiaBatchImpl, PersiaBatch};
+use crate::data::{PersiaBatch, PersiaBatchImpl};
 
 use persia_common::message_queue::{PersiaMessageQueueClientImpl, PersiaMessageQueueServerImpl};
 use persia_libs::{flume, tokio::runtime::Runtime};

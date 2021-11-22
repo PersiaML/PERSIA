@@ -17,7 +17,7 @@ mod utils;
 #[cfg(feature = "cuda")]
 mod cuda;
 
-use crate::data::{PersiaBatchImpl, PersiaBatch};
+use crate::data::{PersiaBatch, PersiaBatchImpl};
 use crate::forward::{forward_directly, PersiaTrainingBatch};
 use crate::optim::OptimizerBase;
 use crate::rpc::PersiaRpcClient;
