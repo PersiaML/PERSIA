@@ -15,7 +15,9 @@ logger = get_logger("data_compose")
 
 setup_seed(3)
 
-train_filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data/train.npz")
+train_filepath = os.path.join(
+    os.path.dirname(os.path.realpath(__file__)), "data/train.npz"
+)
 
 logger.info("init py client done...")
 if __name__ == "__main__":
@@ -27,4 +29,3 @@ if __name__ == "__main__":
             batch_data.add_sparse(batch_sparse_ids)
             batch_data.add_target(target)
             ctx.send_data(batch_data)
-
