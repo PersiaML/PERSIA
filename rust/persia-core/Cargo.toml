@@ -37,7 +37,7 @@ cuda = ["cuda-runtime-sys"]
 
 [dependencies.pyo3]
 default-features = false
-features = ["macros"]
+features = ["macros", "multiple-pymethods"]
 version = "0.15.1"
 
 [build-dependencies]
