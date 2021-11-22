@@ -351,13 +351,13 @@ impl PyPersiaCommonContext {
             .map_err(|e| e.into())
     }
 
-    pub fn send_dense_to_trainer(&self, batch: &PyPersiaBatchData) -> PyResult<()> {
+    pub fn send_dense_to_nn_worker(&self, batch: &PyPersiaBatchData) -> PyResult<()> {
         self.inner
             .async_runtime
             .block_on(
                 self.inner
                     .get_nats_publish_service()?
-                    .send_dense_to_trainer(batch),
+                    .send_dense_to_nn_worker(batch),
             )
             .map_err(|e| e.into())
     }

@@ -108,8 +108,8 @@ pub mod persia_dataflow_service {
 
     #[derive(thiserror::Error, Debug, Readable, Writable)]
     pub enum Error {
-        #[error("trainer buffer full error")]
-        TrainerBufferFullError,
+        #[error("nn worker buffer full error")]
+        NNWorkerBufferFullError,
     }
 
     #[derive(Clone)]
@@ -126,7 +126,7 @@ pub mod persia_dataflow_service {
                 .output_channel
                 .send_timeout(batch, std::time::Duration::from_millis(500));
             if !result.is_ok() {
-                Err(Error::TrainerBufferFullError)
+                Err(Error::NNWorkerBufferFullError)
             } else {
                 Ok(())
             }
@@ -297,7 +297,7 @@ impl PersiaDataFlowComponent {
         }
     }
 
-    pub async fn send_dense_to_trainer(
+    pub async fn send_dense_to_nn_worker(
         &self,
         batch: &PyPersiaBatchData,
     ) -> Result<(), PersiaError> {
@@ -318,7 +318,7 @@ impl PersiaDataFlowComponent {
                 .map_err(|e| PersiaError::from(e));
             if resp.is_err() {
                 tracing::warn!(
-                    "failed to send data to trainer due to {:?}, retrying...",
+                    "failed to send data to nn worker due to {:?}, retrying...",
                     resp
                 );
             }
@@ -327,7 +327,7 @@ impl PersiaDataFlowComponent {
         .await?;
 
         tracing::debug!(
-            "send_dense_to_trainer {} time cost {} ms",
+            "send_dense_to_nn_worker {} time cost {} ms",
             rank_id,
             start.elapsed().as_millis()
         );

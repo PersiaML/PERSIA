@@ -66,7 +66,7 @@ impl MetricsHolder {
                     .create_gauge_vec("batch_unique_indices_rate", "unique indices rate in a batch for different features")?,
                 num_pending_batches: m.create_gauge(
                     "num_pending_batches", 
-                    "num batches already sent to embedding worker but still waiting for trainer to trigger lookup.
+                    "num batches already sent to embedding worker but still waiting for nn worker to trigger lookup.
                     The pending batches will stored in forward buffer, which capacity is configurable by global_config.yaml. 
                     Once the buffer full, embedding worker may not accept new batches."
                 )?,

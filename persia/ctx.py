@@ -139,7 +139,7 @@ class BaseCtx:
 
 class DataCtx(BaseCtx):
     r"""Provides the communicate ability for data generator component to send the PersiaBatchData
-    to the trainer and embedding worker.
+    to the nn worker and embedding worker.
 
     Example:
         >>> from persia.prelude import PyPersiaBatchData
@@ -176,22 +176,22 @@ class DataCtx(BaseCtx):
         """
         self.common_context.send_sparse_to_embedding_worker(data)
 
-    def send_dense_to_trainer(self, data: PyPersiaBatchData):
-        """Send PersiaBatchData from data compose to trainer side.
+    def send_dense_to_nn_worker(self, data: PyPersiaBatchData):
+        """Send PersiaBatchData from data compose to nn worker side.
 
         Arguments:
             data (PyPersiaBatchData): PersiaBatchData that have been sent to embedding worker.
         """
-        self.common_context.send_dense_to_trainer(data)
+        self.common_context.send_dense_to_nn_worker(data)
 
     def send_data(self, data: PyPersiaBatchData):
-        """Send PersiaBatchData from data compose to trainer and embedding worker side.
+        """Send PersiaBatchData from data compose to nn worker and embedding worker side.
 
         Arguments:
             data (PyPersiaBatchData): PersiaBatchData that haven't been process.
         """
         self.send_sparse_to_embedding_worker(data)
-        self.send_dense_to_trainer(data)
+        self.send_dense_to_nn_worker(data)
 
 
 class EmbeddingConfig:

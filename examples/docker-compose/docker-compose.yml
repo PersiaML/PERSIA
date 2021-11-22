@@ -12,7 +12,7 @@ services:
         TASK_SLOT_ID: "{{.Task.Slot}}"
         REPLICAS: 1
     depends_on:
-      - trainer
+      - nn_worker
       - embedding_worker
       - persia_nats_service
     image: persia-cuda-runtime:dev
@@ -26,7 +26,7 @@ services:
       restart_policy:
         condition: on-failure
 
-  trainer:
+  nn_worker:
     env_file:
       - .env
     environment:
@@ -34,7 +34,7 @@ services:
       NCCL_SOCKET_IFNAME: eth0
       REPLICAS: 1
     image: persia-cuda-runtime:dev
-    command: bash -c "persia_launcher trainer /workspace/train.py --nproc-per-node $$NPROC_PER_NODE --node-rank $$(($$TASK_SLOT_ID - 1)) --nnodes $$TRAINER_REPLICA"
+    command: bash -c "persia_launcher nn_worker /workspace/train.py --nproc-per-node $$NPROC_PER_NODE --node-rank $$(($$TASK_SLOT_ID - 1)) --nnodes $$NN_WORKER_REPLICA"
     volumes:
       - type: bind
         source: ${CODE_BASE}

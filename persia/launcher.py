@@ -64,9 +64,9 @@ def cli():
 @cli.command()
 @click.argument("filepath", type=str)
 @click.option("--nproc-per-node", type=int, default=1, help="Process num of per node")
-@click.option("--node-rank", type=int, default=0, help="Replica index of trainer")
-@click.option("--nnodes", type=int, default=1, help="Replica num of trainer")
-def trainer(filepath, nproc_per_node: int, node_rank: int, nnodes: int):
+@click.option("--node-rank", type=int, default=0, help="Replica index of nn worker")
+@click.option("--nnodes", type=int, default=1, help="Replica num of nn owrker")
+def nn_worker(filepath, nproc_per_node: int, node_rank: int, nnodes: int):
 
     cmd = [
         "python3",

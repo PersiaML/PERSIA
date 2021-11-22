@@ -17,7 +17,7 @@ services:
             - ./cache:/cache
             - /data/adult_income:/data/
 
-    trainer:
+    nn_worker:
         env_file:
             - adult_income/.test_env
         environment:
@@ -25,7 +25,7 @@ services:
             GPU_NUM: 1
             CUBLAS_WORKSPACE_CONFIG: :4096:8 # Adapt to pytorch deterministic feature
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia_launcher trainer /workspace/train.py
+        command: persia_launcher nn_worker /workspace/train.py
         depends_on:
             - data_compose
             - embedding_worker
