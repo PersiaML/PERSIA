@@ -12,14 +12,12 @@ import persia.env as env
 
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
-from persia.prelude import PersiaCommonContext, PersiaBatchData, Tensor
+from persia.prelude import PersiaCommonContext, PersiaBatchData, PersiaTrainingBatch, Tensor
 from persia.distributed import DistributedBaseOption, get_default_distributed_option
 
 _CURRENT_CXT = None
 
 _logger = get_default_logger()
-
-PythonTrainBatch = NewType("PythonTrainBatch", object)
 
 
 def _check_finite(tensors: List[torch.Tensor]) -> bool:
@@ -302,7 +300,7 @@ class EmbeddingCtx(BaseCtx):
         return (output, target)
 
     def prepare_features(
-        self, batch: PythonTrainBatch
+        self, batch: PersiaTrainingBatch
     ) -> Tuple[torch.Tensor, List[torch.Tensor], Optional[torch.Tensor]]:
         """Converts the dense, sparse and target raw data in``PythonTrainBatch`` to `torch.Tensor``.
 

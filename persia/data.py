@@ -12,6 +12,7 @@ from persia.prelude import (
     PersiaBatchDataReceiver,
     PersiaBatchDataSender,
     init_responder,
+    Forward,
 )
 
 _logger = get_default_logger()
@@ -130,9 +131,6 @@ class Dataloder(object):
         reproducible: bool = False,
         embedding_staleness: Optional[int] = None,
     ):
-        # dynamic import the PyForward due to conditional compilation
-        from persia.prelude import PyForward
-
         self.dataset = dataset
         self.timeout_ms = timeout_ms
         self.num_workers = num_workers
@@ -140,7 +138,7 @@ class Dataloder(object):
         current_ctx = cnt_ctx()
         assert current_ctx is not None, "Current conext is None!"
 
-        self.forward_engine = PyForward(
+        self.forward_engine = Forward(
             forward_buffer_size,
             is_training,
             reproducible,

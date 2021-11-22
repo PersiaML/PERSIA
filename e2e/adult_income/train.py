@@ -16,7 +16,7 @@ from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
 from persia.utils import setup_seed
 from persia.data import Dataloder, PersiaDataset, StreamingDataset
-from persia.prelude import PyPersiaBatchData, PersiaBatchDataSender
+from persia.prelude import PersiaBatchData, PersiaBatchDataSender
 
 from model import DNN
 from data_generator import make_dataloader
@@ -46,7 +46,7 @@ class TestDataset(PersiaDataset):
         for _idx, (dense, batch_sparse_ids, target) in enumerate(
             tqdm(self.loader, desc="gen batch data")
         ):
-            batch_data = PyPersiaBatchData()
+            batch_data = PersiaBatchData()
             batch_data.add_dense([dense])
             batch_data.add_sparse(batch_sparse_ids)
             batch_data.add_target(target)
