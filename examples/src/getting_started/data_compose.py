@@ -27,4 +27,3 @@ if __name__ == "__main__":
             batch_data.add_sparse(batch_sparse_ids)
             batch_data.add_target(target)
             ctx.send_data(batch_data)
-
