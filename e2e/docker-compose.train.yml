@@ -29,7 +29,7 @@ services:
         depends_on:
             - data_loader
             - embedding_worker
-            - server
+            - embedding_parameter_server
             - persia_nats_service
             - hdfsserver
         volumes:
@@ -48,7 +48,7 @@ services:
             - ./adult_income:/workspace
             - ./cache:/cache
 
-    server:
+    embedding_parameter_server:
         env_file:
             - adult_income/.test_env
         environment:
