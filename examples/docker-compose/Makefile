@@ -9,8 +9,8 @@ run:
 stop:
 	docker stack rm $(SERVICE)
 
-compose:
-	docker service logs -f `docker stack ps $(SERVICE) | grep compose|head -n 1|awk '{print $$1}'`
+data_loader:
+	docker service logs -f `docker stack ps $(SERVICE) | grep data_loader|head -n 1|awk '{print $$1}'`
 
 nn_worker:
 	docker service logs -f `docker stack ps $(SERVICE) | grep nn_worker|head -n 1|awk '{print $$1}'`

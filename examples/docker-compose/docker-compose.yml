@@ -5,7 +5,7 @@ services:
     deploy:
       replicas: 1
           
-  data_compose:
+  data_loader:
     env_file:
       - .env
     environment:
@@ -16,7 +16,7 @@ services:
       - embedding_worker
       - persia_nats_service
     image: persia-cuda-runtime:dev
-    command: persia_launcher compose /workspace/data_compose.py
+    command: persia_launcher data_loader /workspace/data_loader.py
     volumes:
       - type: bind
         source: ${CODE_BASE}

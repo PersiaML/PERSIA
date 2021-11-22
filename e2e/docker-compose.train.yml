@@ -5,13 +5,13 @@ services:
         deploy:
             replicas: 1
                 
-    data_compose:
+    data_loader:
         env_file:
             - adult_income/.test_env
         environment:
             TASK_SLOT_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia_launcher compose /workspace/data_compose.py
+        command: persia_launcher compose /workspace/data_loader.py
         volumes:
             - ./adult_income:/workspace
             - ./cache:/cache
@@ -27,7 +27,7 @@ services:
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
         command: persia_launcher nn_worker /workspace/train.py
         depends_on:
-            - data_compose
+            - data_loader
             - embedding_worker
             - server
             - persia_nats_service

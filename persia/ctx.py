@@ -169,7 +169,7 @@ class DataCtx(BaseCtx):
         self.common_context.wait_servers_ready()
 
     def send_sparse_to_embedding_worker(self, data: PyPersiaBatchData):
-        """Send PersiaBatchData from data compose to embedding worker side.
+        """Send PersiaBatchData from data laoder to embedding worker side.
 
         Arguments:
             data (PyPersiaBatchData): PersiaBatchData that haven't been process.
@@ -177,7 +177,7 @@ class DataCtx(BaseCtx):
         self.common_context.send_sparse_to_embedding_worker(data)
 
     def send_dense_to_nn_worker(self, data: PyPersiaBatchData):
-        """Send PersiaBatchData from data compose to nn worker side.
+        """Send PersiaBatchData from data laoder to nn worker side.
 
         Arguments:
             data (PyPersiaBatchData): PersiaBatchData that have been sent to embedding worker.
@@ -185,7 +185,7 @@ class DataCtx(BaseCtx):
         self.common_context.send_dense_to_nn_worker(data)
 
     def send_data(self, data: PyPersiaBatchData):
-        """Send PersiaBatchData from data compose to nn worker and embedding worker side.
+        """Send PersiaBatchData from data laoder to nn worker and embedding worker side.
 
         Arguments:
             data (PyPersiaBatchData): PersiaBatchData that haven't been process.
@@ -612,7 +612,7 @@ class TrainCtx(EmbeddingCtx):
             backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
             grad_update_buffer_size (int, optional): Number of reference cache , hold the gradient tensor reference to avoid
                 meet dangle data in gradient backward phase.
-            lookup_emb_directly (bool, optional): Lookup embedding directly without isolation data compose.
+            lookup_emb_directly (bool, optional): Lookup embedding directly without isolation data loader.
             mixed_precision (bool): Enable mixed_precision or not.
             distributed_option (DistributedBaseOption, optional): DistributedOption to converted model to dataparallel model.
         """
