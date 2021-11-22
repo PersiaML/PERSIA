@@ -4,7 +4,7 @@ import socket
 
 from enum import Enum
 from queue import Queue
-from typing import List, Tuple, Optional, NewType, Union
+from typing import List, Tuple, Optional, Union
 
 import torch
 
@@ -12,7 +12,12 @@ import persia.env as env
 
 from persia.logger import get_default_logger
 from persia.sparse.optim import Optimizer
-from persia.prelude import PersiaCommonContext, PersiaBatchData, PersiaTrainingBatch, Tensor
+from persia.prelude import (
+    PersiaCommonContext,
+    PersiaBatch,
+    PersiaTrainingBatch,
+    Tensor,
+)
 from persia.distributed import DistributedBaseOption, get_default_distributed_option
 
 _CURRENT_CXT = None
@@ -166,7 +171,7 @@ class DataCtx(BaseCtx):
         self.common_context.init_nats_publisher(None)
         self.common_context.wait_servers_ready()
 
-    def send_sparse_to_middleware(self, data: PersiaBatchData):
+    def send_sparse_to_middleware(self, data: PersiaBatch):
         """Send PersiaBatchData from data compose to middleware side.
 
         Arguments:
@@ -174,7 +179,7 @@ class DataCtx(BaseCtx):
         """
         self.common_context.send_sparse_to_middleware(data)
 
-    def send_dense_to_trainer(self, data: PersiaBatchData):
+    def send_dense_to_trainer(self, data: PersiaBatch):
         """Send PersiaBatchData from data compose to trainer side.
 
         Arguments:
@@ -182,7 +187,7 @@ class DataCtx(BaseCtx):
         """
         self.common_context.send_dense_to_trainer(data)
 
-    def send_data(self, data: PersiaBatchData):
+    def send_data(self, data: PersiaBatch):
         """Send PersiaBatchData from data compose to trainer and middleware side.
 
         Arguments:
@@ -283,7 +288,7 @@ class EmbeddingCtx(BaseCtx):
         )
 
     def forward(
-        self, batch: PythonTrainBatch
+        self, batch: PersiaTrainingBatch
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """Call `prepare_features` and then do a forward step of the model in context.
 
@@ -538,8 +543,8 @@ class EmbeddingCtx(BaseCtx):
         self.common_context.clear_embeddings()
 
     def get_embedding_from_data(
-        self, data: PyPersiaBatchData, device_id: Optional[int] = None
-    ) -> PythonTrainBatch:
+        self, data: PersiaBatch, device_id: Optional[int] = None
+    ) -> PersiaTrainingBatch:
         """Get embeddings of the input batch data.
 
         Arguments:
@@ -553,7 +558,7 @@ class EmbeddingCtx(BaseCtx):
 
     def get_embedding_from_bytes(
         self, data: bytes, device_id: Optional[int] = None
-    ) -> PythonTrainBatch:
+    ) -> PersiaTrainingBatch:
         """Get embeddings of the serialized input batch data.
 
         Arguments:
@@ -677,10 +682,10 @@ class TrainCtx(EmbeddingCtx):
 
         self.backward_workers_size = backward_workers_size
 
-        from persia.prelude import PyBackward
+        from persia.prelude import Backward
 
         self.grad_queue = Queue(grad_update_buffer_size)
-        self.backward_engine = PyBackward(backward_buffer_size)
+        self.backward_engine = Backward(backward_buffer_size)
 
     def _enter(self):
         super()._enter()

@@ -1,5 +1,5 @@
 use crate::metrics::MetricsHolder;
-use crate::PersiaCommonContext;
+use crate::PersiaCommonContextImpl;
 
 use core::slice;
 use std::sync::{
@@ -234,7 +234,7 @@ impl BackwardImpl {
         let channel_s = self.cpu_backward_channel_s.clone();
 
         let running = self.running.clone();
-        let device_id = PersiaCommonContext::get().device_id.clone();
+        let device_id = PersiaCommonContextImpl::get().device_id.clone();
         let handler = std::thread::spawn(move || {
             #[cfg(feature = "cuda")]
             if let Some(device_id) = device_id.as_ref() {
@@ -301,7 +301,7 @@ impl BackwardImpl {
     }
 
     fn spawn_backward_worker(&mut self, num_backward_worker: usize) {
-        let context = PersiaCommonContext::get();
+        let context = PersiaCommonContextImpl::get();
         let _guard = context.async_runtime.enter();
 
         for _ in 0..num_backward_worker {

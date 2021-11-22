@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use crate::tensor::{CPUStorage, Storage, Tensor};
+use crate::tensor::{CPUStorage, Storage, TensorImpl};
 
 use paste::paste;
 use persia_libs::numpy::{PyArray1, PyArray2};
@@ -30,9 +30,9 @@ impl EmbeddingTensor {
 
 #[derive(Readable, Writable, Debug)]
 pub struct PersiaBatchImpl {
-    pub not_id_type_features: Vec<Tensor>,
-    pub id_type_featuers: EmbeddingTensor,
-    pub labels: Vec<Tensor>,
+    pub not_id_type_features: Vec<TensorImpl>,
+    pub id_type_features: EmbeddingTensor,
+    pub labels: Vec<TensorImpl>,
     pub meta_data: Option<Vec<u8>>,
     pub batch_id: Option<usize>,
 }
@@ -41,7 +41,7 @@ impl Default for PersiaBatchImpl {
     fn default() -> Self {
         PersiaBatchImpl {
             not_id_type_features: Vec::new(),
-            id_type_featuers: EmbeddingTensor::Null,
+            id_type_features: EmbeddingTensor::Null,
             labels: Vec::new(),
             meta_data: None,
             batch_id: None,
@@ -88,7 +88,7 @@ impl PersiaBatch {
 
     pub fn add_not_id_type_feature(&mut self, not_id_type_feature: Vec<&PyArray2<f32>>) {
         not_id_type_feature.iter().for_each(|x| {
-            self.inner.dense_data.push(Tensor::new(
+            self.inner.not_id_type_features.push(TensorImpl::new(
                 Storage::CPU(CPUStorage::from_f32(
                     x.to_vec().expect("convert ndarray to vec failed"),
                 )),
@@ -99,14 +99,14 @@ impl PersiaBatch {
         });
     }
 
-    pub fn add_id_type_feature(
+    pub fn add_id_type_features(
         &mut self,
-        id_type_feature: Vec<(String, Vec<&PyArray1<u64>>)>,
+        id_type_features: Vec<(String, Vec<&PyArray1<u64>>)>,
         requires_grad: Option<bool>,
     ) {
-        self.inner.sparse_data = EmbeddingTensor::SparseBatch(SparseBatch {
+        self.inner.id_type_features = EmbeddingTensor::SparseBatch(SparseBatch {
             requires_grad: requires_grad.unwrap_or(true),
-            batches: id_type_feature
+            batches: id_type_features
                 .into_iter()
                 .map(|(feature_name, batch)| {
                     let indices = batch
@@ -126,9 +126,9 @@ impl PersiaBatch {
     }
 
     pub fn add_label(&mut self, label_data: &PyArray2<f32>) {
-        self.inner.target_data.push(Tensor::new(
+        self.inner.labels.push(TensorImpl::new(
             Storage::CPU(CPUStorage::from_f32(
-                target_data.to_vec().expect("convert ndarray to vec failed"),
+                label_data.to_vec().expect("convert ndarray to vec failed"),
             )),
             label_data.shape().to_vec(),
             None,
@@ -157,8 +157,8 @@ macro_rules! add_dense_func2batch_data {
             #[pymethods]
             impl PersiaBatch {
                     $(
-                        pub fn [<add_dense_ $typ:lower>](&mut self, data: &PyArray2<$typ>) {
-                            self.inner.dense_data.push(Tensor::new(
+                        pub fn [<add_not_id_type_features_ $typ:lower>](&mut self, data: &PyArray2<$typ>) {
+                            self.inner.not_id_type_features.push(TensorImpl::new(
                                 Storage::CPU(CPUStorage::[<from_ $typ:lower>] (data.to_vec().expect("convert ndarray to vec failed"))),
                                 data.shape().to_vec(),
                                 None,

@@ -1,4 +1,4 @@
-use crate::PersiaCommonContext;
+use crate::PersiaCommonContextImpl;
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -59,7 +59,7 @@ impl OptimizerBase {
     }
 
     pub fn apply(&self) -> PyResult<()> {
-        let context = PersiaCommonContext::get();
+        let context = PersiaCommonContextImpl::get();
         context
             .register_optimizer(self)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))

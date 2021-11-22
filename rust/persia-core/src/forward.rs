@@ -262,7 +262,7 @@ impl PersiaTrainingBatch {
     }
 
     pub fn consume_all_dense_features(&mut self) -> Vec<Tensor> {
-        std::mem::replace(&mut self.inner.dense, vec![])
+        std::mem::replace(&mut self.inner.not_id_type_tensors, vec![])
             .into_iter()
             .map(|x| Tensor { inner: x })
             .collect()
@@ -276,7 +276,7 @@ impl PersiaTrainingBatch {
     }
 
     pub fn consume_all_targets(&mut self) -> Vec<Tensor> {
-        std::mem::replace(&mut self.inner.target, vec![])
+        std::mem::replace(&mut self.inner.label_tensors, vec![])
             .into_iter()
             .map(|x| Tensor { inner: x })
             .collect()
@@ -304,9 +304,9 @@ impl PersiaTrainingBatch {
 
 #[derive(Debug)]
 pub struct PersiaTrainingBatchImpl {
-    pub dense: Vec<TensorImpl>,
+    pub not_id_type_tensors: Vec<TensorImpl>,
     pub embeddings: Vec<EmbeddingImpl>,
-    pub target: Vec<TensorImpl>,
+    pub label_tensors: Vec<TensorImpl>,
     pub meta_data: Option<Vec<u8>>,
     pub middleware_server_addr: String,
     pub ref_id: u64,
@@ -316,9 +316,9 @@ pub struct PersiaTrainingBatchImpl {
 impl Default for PersiaTrainingBatchImpl {
     fn default() -> Self {
         Self {
-            dense: Vec::new(),
+            not_id_type_tensors: Vec::new(),
             embeddings: Vec::new(),
-            target: Vec::new(),
+            label_tensors: Vec::new(),
             meta_data: None,
             middleware_server_addr: String::new(),
             ref_id: 0,
@@ -603,23 +603,23 @@ impl ForwardImpl {
                         })
                         .collect();
 
-                    let dense_tensors: Vec<TensorImpl> = batch
-                        .dense_data
+                    let not_id_type_tensors: Vec<TensorImpl> = batch
+                        .not_id_type_features
                         .into_iter()
                         .map(|d| d.to(common_ctx.device_id.as_ref()))
                         .collect();
 
-                    let target_tensors: Vec<TensorImpl> = batch
-                        .target_data
+                    let label_tensors: Vec<TensorImpl> = batch
+                        .labels
                         .into_iter()
                         .map(|t| t.to(common_ctx.device_id.as_ref()))
                         .collect();
 
-                    let (middleware_addr, ref_id) = batch.sparse_data.get_remote_ref_info();
+                    let (middleware_addr, ref_id) = batch.id_type_features.get_remote_ref_info();
                     let training_batch = PersiaTrainingBatchImpl {
-                        dense: dense_tensors,
+                        not_id_type_tensors,
                         embeddings,
-                        target: target_tensors,
+                        label_tensors,
                         meta_data: batch.meta_data,
                         middleware_server_addr: middleware_addr.to_string(),
                         ref_id,
@@ -675,28 +675,35 @@ impl ForwardImpl {
 
                         let mut batch = batch;
                         let (embeddings_rpc_result, middleware_addr, embedding_staleness_permit) =
-                            match batch.sparse_data {
-                                EmbeddingTensor::SparseBatch(mut sparse_data) => {
+                            match batch.id_type_features {
+                                EmbeddingTensor::SparseBatch(mut id_type_features) => {
                                     let (middleware_addr, client) =
                                         rpc_client.get_random_client_with_addr();
 
-                                    sparse_data.requires_grad = is_training;
-                                    let result = client.forward_batched_direct(&sparse_data).await;
+                                    id_type_features.requires_grad = is_training;
+                                    let result =
+                                        client.forward_batched_direct(&id_type_features).await;
 
                                     (result, middleware_addr, None)
                                 }
-                                EmbeddingTensor::SparseBatchRemoteReference(sparse_ref) => {
+                                EmbeddingTensor::SparseBatchRemoteReference(
+                                    id_type_features_ref,
+                                ) => {
                                     let permit = match &embedding_staleness_semaphore {
                                         Some(s) => Some(s.clone().acquire_owned().await.unwrap()),
                                         None => None,
                                     };
 
-                                    let client = rpc_client
-                                        .get_client_by_addr(sparse_ref.middleware_addr.as_str());
+                                    let client = rpc_client.get_client_by_addr(
+                                        id_type_features_ref.middleware_addr.as_str(),
+                                    );
                                     let result = client
-                                        .forward_batch_id(&(sparse_ref.clone(), is_training))
+                                        .forward_batch_id(&(
+                                            id_type_features_ref.clone(),
+                                            is_training,
+                                        ))
                                         .await;
-                                    (result, sparse_ref.middleware_addr.clone(), permit)
+                                    (result, id_type_features_ref.middleware_addr.clone(), permit)
                                 }
                                 EmbeddingTensor::Null => {
                                     panic!("current sparse data not support null data",)
@@ -729,7 +736,7 @@ impl ForwardImpl {
                                     },
                                     None => SparseBatchRemoteReference::default(), // batch without gradient backward
                                 };
-                                batch.sparse_data =
+                                batch.id_type_features =
                                     EmbeddingTensor::SparseBatchRemoteReference(sparse_ref);
 
                                 if let Err(e) = channel_s
@@ -776,23 +783,26 @@ impl ForwardImpl {
     }
 }
 
-pub fn forward_directly(batch: PersiaBatchImpl, device_id: Option<i32>) -> PyResult<PersiaTrainingBatch> {
+pub fn forward_directly(
+    batch: PersiaBatchImpl,
+    device_id: Option<i32>,
+) -> PyResult<PersiaTrainingBatch> {
     let device_id = device_id.or(PersiaCommonContextImpl::get().device_id.as_ref().clone());
     let rpc_client = PersiaCommonContextImpl::get().rpc_client.clone();
     let async_runtime = PersiaCommonContextImpl::get().async_runtime.clone();
 
-    let dense: Vec<TensorImpl> = batch
-        .dense_data
+    let not_id_type_tensors: Vec<TensorImpl> = batch
+        .not_id_type_features
         .into_iter()
         .map(|d| d.to(&device_id))
         .collect();
 
-    let embeddings = match &batch.sparse_data {
-        EmbeddingTensor::SparseBatch(sparse_batch) => {
+    let embeddings = match &batch.id_type_features {
+        EmbeddingTensor::SparseBatch(id_type_features) => {
             let _guard = async_runtime.enter();
             let (_middleware_addr, client) = rpc_client.get_random_client_with_addr();
             let embeddings: EmbeddingBatch = async_runtime
-                .block_on(client.forward_batched_direct(sparse_batch))
+                .block_on(client.forward_batched_direct(id_type_features))
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -809,16 +819,12 @@ pub fn forward_directly(batch: PersiaBatchImpl, device_id: Option<i32>) -> PyRes
         _ => Vec::new(),
     };
 
-    let target = batch
-        .target_data
-        .into_iter()
-        .map(|t| t.to(&device_id))
-        .collect();
+    let label_tensors = batch.labels.into_iter().map(|t| t.to(&device_id)).collect();
 
     let infer_batch = PersiaTrainingBatchImpl {
-        dense,
+        not_id_type_tensors,
         embeddings,
-        target,
+        label_tensors,
         meta_data: batch.meta_data,
         ..PersiaTrainingBatchImpl::default()
     };

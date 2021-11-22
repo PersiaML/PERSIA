@@ -47,9 +47,9 @@ class TestDataset(PersiaDataset):
             tqdm(self.loader, desc="gen batch data")
         ):
             batch_data = PersiaBatchData()
-            batch_data.add_dense([dense])
-            batch_data.add_sparse(batch_sparse_ids)
-            batch_data.add_target(target)
+            batch_data.add_not_id_type_feature([dense])
+            batch_data.add_id_type_feature(batch_sparse_ids)
+            batch_data.add_label(target)
             persia_sender_channel.send(batch_data)
 
     def __len__(self):

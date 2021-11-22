@@ -12,7 +12,7 @@ from persia.sparse.optim import Adagrad
 from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
 from persia.data import Dataloder, PersiaDataset, StreamingDataset
-from persia.prelude import PyPersiaBatchData, PersiaBatchDataSender
+from persia.prelude import PersiaBatch, PersiaBatchDataSender
 from persia.utils import setup_seed
 
 from model import DNN
@@ -39,41 +39,17 @@ class TestDataset(PersiaDataset):
         for idx, (dense, batch_sparse_ids, target) in enumerate(
             tqdm(self.loader, desc="gen batch data")
         ):
-            batch_data = PyPersiaBatchData()
-            batch_data.add_dense([dense])
-            batch_data.add_sparse(batch_sparse_ids)
-            batch_data.add_target(target)
+            batch_data = PersiaBatch()
+            batch_data.add_not_id_type_feature([dense])
+            batch_data.add_id_type_features(batch_sparse_ids)
+            batch_data.add_label(target)
             persia_sender_channel.send(batch_data)
 
     def __len__(self):
         return self.loader_size
 
 
-class TrainDataset(PersiaDataset):
-    def __init__(self, train_dir: str, batch_size: int = 128):
-        super(TestDataset, self).__init__(buffer_size=10)
-        size, loader = make_dataloader(test_dir, batch_size)
-        self.loader = loader
-        self.loader_size = size
-
-        logger.info(f"test dataset size is {size}")
-
-    def fetch_data(self, persia_sender_channel: PersiaBatchDataSender):
-        logger.info("test loader start to generate data...")
-        for idx, (dense, batch_sparse_ids, target) in enumerate(
-            tqdm(self.loader, desc="gen batch data")
-        ):
-            batch_data = PyPersiaBatchData()
-            batch_data.add_dense([dense])
-            batch_data.add_sparse(batch_sparse_ids)
-            batch_data.add_target(target)
-            persia_sender_channel.send(batch_data)
-
-    def __len__(self):
-        return self.loader_size
-
-
-def test(model: torch.nn.Module, data_laoder: Dataloder, cuda: bool = True):
+def test(model: torch.nn.Module, data_laoder: Dataloder, cuda: bool):
     logger.info("start to test...")
     model.eval()
 
@@ -113,7 +89,7 @@ if __name__ == "__main__":
     logger.info("init Simple DNN model...")
     rank, device_id, world_size = get_rank(), get_local_rank(), get_world_size()
 
-    cuda = bool(int(os.environ.get("ENABLE_CUDA",1)))
+    cuda = bool(int(os.environ.get("ENABLE_CUDA", 0)))
     mixed_precision = True
 
     if cuda:
@@ -122,6 +98,8 @@ if __name__ == "__main__":
     else:
         mixed_precision = False
         device_id = None
+    logger.info(f"device_id is {device_id}")
+
     dense_optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     sparse_optimizer = Adagrad(lr=1e-2)
     loss_fn = torch.nn.BCELoss(reduction="mean")
@@ -132,15 +110,12 @@ if __name__ == "__main__":
     test_interval = 254
     buffer_size = 10
 
-    embedding_config = EmbeddingConfig()
-
     with TrainCtx(
         model=model,
         sparse_optimizer=sparse_optimizer,
         dense_optimizer=dense_optimizer,
         mixed_precision=mixed_precision,
         device_id=device_id,
-        embedding_config=embedding_config,
     ) as ctx:
         train_dataloader = Dataloder(StreamingDataset(buffer_size))
         test_loader = Dataloder(test_dataset, is_training=False)

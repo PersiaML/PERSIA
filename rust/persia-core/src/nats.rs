@@ -1,7 +1,7 @@
 use crate::data::{EmbeddingTensor, PersiaBatch};
-use crate::optim::PyOptimizerBase;
+use crate::optim::OptimizerBase;
 use crate::utils::PersiaBatchDataSender;
-use crate::{PersiaCommonContext, PersiaError};
+use crate::{PersiaCommonContextImpl, PersiaError};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -245,14 +245,14 @@ impl PersiaDataFlowComponent {
         batch: &mut PersiaBatch,
     ) -> Result<(), PersiaError> {
         let start = std::time::Instant::now();
-        match &mut batch.inner.sparse_data {
+        match &mut batch.inner.id_type_features {
             EmbeddingTensor::SparseBatchRemoteReference(_) => {
                 tracing::error!("sparse data has already sent to middleware, you are calling send_sparse_to_middleware muti times");
                 return Err(PersiaError::MultipleSendError);
             }
-            EmbeddingTensor::SparseBatch(sparse_batch) => {
+            EmbeddingTensor::SparseBatch(id_type_features) => {
                 let replica_index = self.replica_info.replica_index;
-                sparse_batch.batcher_idx = Some(replica_index);
+                id_type_features.batcher_idx = Some(replica_index);
 
                 let cur_middleware_id = self.cur_middleware_id.fetch_add(1, Ordering::AcqRel);
 
@@ -262,7 +262,7 @@ impl PersiaDataFlowComponent {
                         let sparse_ref = self
                             .middleware_publish_service
                             .publish_forward_batched(
-                                sparse_batch,
+                                id_type_features,
                                 Some(cur_middleware_id % self.num_middlewares),
                             )
                             .await
@@ -278,7 +278,7 @@ impl PersiaDataFlowComponent {
                     })
                     .await?;
 
-                batch.inner.sparse_data = EmbeddingTensor::SparseBatchRemoteReference(sparse_ref);
+                batch.inner.id_type_features = EmbeddingTensor::SparseBatchRemoteReference(sparse_ref);
                 let local_batch_id = self.cur_batch_id.fetch_add(1, Ordering::AcqRel);
                 let batch_id = local_batch_id * self.replica_info.replica_size
                     + self.replica_info.replica_index;
@@ -364,7 +364,7 @@ impl PersiaDataFlowComponent {
         Ok(())
     }
 
-    pub async fn register_optimizer(&self, opt: &PyOptimizerBase) -> Result<(), PersiaError> {
+    pub async fn register_optimizer(&self, opt: &OptimizerBase) -> Result<(), PersiaError> {
         let optimizer = opt.get_inner();
         if optimizer.is_none() {
             return Err(PersiaError::NullOptimizerError);
@@ -389,7 +389,7 @@ impl PersiaDataFlowComponent {
 
 #[pyfunction]
 pub fn init_responder(world_size: usize, channel: &PersiaBatchDataSender) -> PyResult<()> {
-    let common_context = PersiaCommonContext::get();
+    let common_context = PersiaCommonContextImpl::get();
     RESPONDER.get_or_init(|| {
         let nats_service = persia_dataflow_service::DataflowService {
             output_channel: channel.inner.clone(),
