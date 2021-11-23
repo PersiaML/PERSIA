@@ -204,10 +204,7 @@ impl PersiaJobSpec {
                         container.image = Some(String::from(DEFAULT_CPU_IMAGE));
                     }
 
-                    let env = container
-                        .env
-                        .as_mut()
-                        .expect("no env in a persia podspec template");
+                    let env = container.env.as_mut().unwrap();
                     env.push(EnvVar {
                         name: String::from("REPLICA_INDEX"),
                         value: Some(replica_idx.to_string()),
@@ -268,10 +265,7 @@ impl PersiaJobSpec {
                         container.image = Some(String::from(DEFAULT_CPU_IMAGE));
                     }
 
-                    let env = container
-                        .env
-                        .as_mut()
-                        .expect("no env in a persia podspec template");
+                    let env = container.env.as_mut().unwrap();
                     env.push(EnvVar {
                         name: String::from("REPLICA_INDEX"),
                         value: Some(replica_idx.to_string()),
@@ -332,10 +326,7 @@ impl PersiaJobSpec {
                         container.image = Some(String::from(DEFAULT_CUDA_IMAGE));
                     }
 
-                    let env = container
-                        .env
-                        .as_mut()
-                        .expect("no env in a persia podspec template");
+                    let env = container.env.as_mut().unwrap();
                     env.push(EnvVar {
                         name: String::from("REPLICA_INDEX"),
                         value: Some(replica_idx.to_string()),
@@ -405,10 +396,7 @@ impl PersiaJobSpec {
                         container.image = Some(String::from(DEFAULT_CPU_IMAGE));
                     }
 
-                    let env = container
-                        .env
-                        .as_mut()
-                        .expect("no env in a persia podspec template");
+                    let env = container.env.as_mut().unwrap();
                     env.push(EnvVar {
                         name: String::from("REPLICA_INDEX"),
                         value: Some(replica_idx.to_string()),

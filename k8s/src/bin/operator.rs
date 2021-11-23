@@ -86,7 +86,7 @@ async fn reconcile(
         }
         Action::Delete => {
             let job_name = job.name();
-            eprintln!("Deletding PersiaJob: {}", job_name);
+            eprintln!("Deleting PersiaJob: {}", job_name);
 
             job_resources.delete().await?;
             finalizer::delete(client, &job_name, &namespace).await?;

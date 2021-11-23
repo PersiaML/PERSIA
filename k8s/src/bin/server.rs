@@ -63,7 +63,7 @@ async fn apply(req: web::Json<ApplyRequest>) -> impl Responder {
         },
         Err(e) => ExecutionResults {
             success: false,
-            err_msg: Some(format!("{:?}", e)),
+            err_msg: Some(e.to_string()),
         },
     };
     serde_json::to_string(&resp)
@@ -89,7 +89,7 @@ async fn delete(req: web::Json<JobIdentifier>) -> impl Responder {
         },
         Err(e) => ExecutionResults {
             success: false,
-            err_msg: Some(format!("{:?}", e)),
+            err_msg: Some(e.to_string()),
         },
     };
 
@@ -117,7 +117,7 @@ async fn listpods(req: web::Json<JobIdentifier>) -> impl Responder {
             Err(e) => ListResponse {
                 execution_results: ExecutionResults {
                     success: false,
-                    err_msg: Some(format!("{:?}", e)),
+                    err_msg: Some(e.to_string()),
                 },
                 resources: None,
             },
@@ -146,7 +146,7 @@ async fn listjobs(req: HttpRequest) -> impl Responder {
         Err(e) => ListResponse {
             execution_results: ExecutionResults {
                 success: false,
-                err_msg: Some(format!("{:?}", e)),
+                err_msg: Some(e.to_string()),
             },
             resources: None,
         },
@@ -182,7 +182,7 @@ async fn podstatus(req: web::Json<PodIdentifier>) -> impl Responder {
             Err(e) => PodsResponse {
                 execution_results: ExecutionResults {
                     success: false,
-                    err_msg: Some(format!("{:?}", e)),
+                    err_msg: Some(e.to_string()),
                 },
                 body: None,
             },
