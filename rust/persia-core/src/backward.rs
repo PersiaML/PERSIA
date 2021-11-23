@@ -324,7 +324,9 @@ impl BackwardImpl {
                         tracing::debug!("get backward packet time cost {:?}", start_time.elapsed());
 
                         let client = rpc_client.get_client_by_addr(embedding_worker_addr.as_str());
-                        let result = client.update_gradient_batched(&(backward_ref_id, req)).await;
+                        let result = client
+                            .update_gradient_batched(&(backward_ref_id, req))
+                            .await;
 
                         if result.is_err() {
                             tracing::error!("backward error {:?}", result.unwrap_err());
@@ -373,7 +375,10 @@ impl Backward {
         self.inner.shutdown()
     }
 
-    pub fn update_id_type_feature_gradient_batched(&self, gradients: &mut GradientBatch) -> PyResult<()> {
+    pub fn update_id_type_feature_gradient_batched(
+        &self,
+        gradients: &mut GradientBatch,
+    ) -> PyResult<()> {
         let start_time = std::time::Instant::now();
         if let Err(err) = self
             .inner
