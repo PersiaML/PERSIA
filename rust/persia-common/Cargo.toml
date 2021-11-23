@@ -12,4 +12,4 @@ paste = "1.0"
 persia-embedding-config = {path = "../persia-embedding-config"}
 persia-libs = {path = "../persia-libs"}
 persia-simd = {path = "../persia-simd"}
-persia-speedy = "0.9"
+persia-speedy = { path = "../persia-speedy" }

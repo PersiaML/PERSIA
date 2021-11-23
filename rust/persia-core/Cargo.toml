@@ -27,8 +27,8 @@ persia-nats-marcos = {path = "../others/persia-nats-marcos"}
 persia-storage = {path = "../persia-storage"}
 persia-rpc = {path = "../others/persia-rpc"}
 persia-rpc-macro = {path = "../others/persia-rpc-macro"}
-persia-speedy = "0.9"
-shadow-rs = "0.8"
+persia-speedy = { path = "../persia-speedy" }
+shadow-rs = "0.8.1"
 
 [features]
 default = []
@@ -37,8 +37,8 @@ cuda = ["cuda-runtime-sys"]
 
 [dependencies.pyo3]
 default-features = false
-features = ["macros"]
-version = "0.13"
+features = ["macros", "multiple-pymethods"]
+version = "0.15.1"
 
 [build-dependencies]
-shadow-rs = "0.8"
+shadow-rs = "0.8.1"
