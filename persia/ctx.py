@@ -674,7 +674,7 @@ class TrainCtx(EmbeddingCtx):
         self.wait_servers_ready()
 
         if lookup_emb_directly:
-            init_rpc_client_num = self._init_middlewrae_rpc_client()
+            init_rpc_client_num = self._init_embedding_worker_rpc_client()
             _logger.info(f"Successfully init {init_rpc_client_num} rpc client")
 
         self.backward_workers_size = backward_workers_size
@@ -707,7 +707,7 @@ class TrainCtx(EmbeddingCtx):
             _logger.info(f"master addr is {master_addr}")
         return master_addr
 
-    def _init_middlewrae_rpc_client(self) -> int:
+    def _init_embedding_worker_rpc_client(self) -> int:
         embedding_worker_addr_list = (
             self.common_context.get_embedding_worker_addr_list()
         )
