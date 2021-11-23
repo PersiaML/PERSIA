@@ -307,7 +307,7 @@ impl Optimizable for Adagrad {
 }
 
 #[cfg(test)]
-mod sparse_optimizer_tests {
+mod embedding_optimizer_tests {
     // importing names from outer (for mod tests) scope.
     use super::*;
 

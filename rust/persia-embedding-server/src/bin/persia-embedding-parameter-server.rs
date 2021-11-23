@@ -19,7 +19,7 @@ use persia_embedding_server::embedding_parameter_service::{
     EmbeddingParameterService, EmbeddingParameterServiceInner,
 };
 use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
-use persia_model_manager::SparseModelManager;
+use persia_model_manager::EmbeddingModelManager;
 
 #[derive(Debug, StructOpt, Clone)]
 #[structopt()]
@@ -71,7 +71,7 @@ async fn main() -> Result<()> {
     let server_config = EmbeddingParameterServerConfig::get()?;
     let embedding_holder = PersiaEmbeddingHolder::get()?;
     let inc_update_manager = PerisaIncrementalUpdateManager::get()?;
-    let sparse_model_manager = SparseModelManager::get()?;
+    let embedding_model_manager = EmbeddingModelManager::get()?;
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
 
     let inner = Arc::new(EmbeddingParameterServiceInner::new(
@@ -80,7 +80,7 @@ async fn main() -> Result<()> {
         common_config,
         embedding_config,
         inc_update_manager,
-        sparse_model_manager,
+        embedding_model_manager,
         args.replica_index,
     ));
 
@@ -111,8 +111,8 @@ async fn main() -> Result<()> {
     match job_type {
         PerisaJobType::Infer => {
             let common_config = PersiaCommonConfig::get()?;
-            let sparse_ckpt = common_config.infer_config.embedding_checkpoint.clone();
-            inner.load(sparse_ckpt).await?;
+            let embedding_cpk = common_config.infer_config.embedding_checkpoint.clone();
+            inner.load(embedding_cpk).await?;
         }
         _ => {}
     }

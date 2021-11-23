@@ -66,13 +66,13 @@ pub enum PersiaError {
     RpcError(#[from] persia_rpc::PersiaRpcError),
     #[error("Nats error: {0}")]
     NatsError(#[from] persia_nats_client::NatsError),
-    #[error("Send sparse data to embedding worker multi times")]
+    #[error("Send ID type features to embedding worker multiple times")]
     MultipleSendError,
-    #[error("Sparse data is null, please call batch.add_sparse first")]
-    NullSparseDataError,
-    #[error("Batch id is null, please call send_sparse_to_embedding_worker first")]
+    #[error("Id type features is null, please call batch.add_id_type_features before sending PersiaBatch")]
+    NullIDTypeFeaturesError,
+    #[error("Batch id is null, please call send_id_type_features_to_embedding_worker first")]
     NullBatchIdError,
-    #[error("Sparse optimizer not set yet")]
+    #[error("Embedding optimizer not set yet")]
     NullOptimizerError,
     #[error("Data send failed")]
     SendDataError,
@@ -340,32 +340,27 @@ impl PersiaCommonContext {
             .map_err(|e| e.into())
     }
 
-<<<<<<< HEAD
-    pub fn send_sparse_to_middleware(&self, batch: &mut PersiaBatch) -> PyResult<()> {
-=======
-    pub fn send_sparse_to_embedding_worker(&self, batch: &mut PyPersiaBatchData) -> PyResult<()> {
->>>>>>> main
+    pub fn send_id_type_features_to_embedding_worker(
+        &self,
+        batch: &mut PersiaBatch,
+    ) -> PyResult<()> {
         self.inner
             .async_runtime
             .block_on(
                 self.inner
                     .get_nats_publish_service()?
-                    .send_sparse_to_embedding_worker(batch),
+                    .send_id_type_features_to_embedding_worker(batch),
             )
             .map_err(|e| e.into())
     }
 
-<<<<<<< HEAD
-    pub fn send_dense_to_trainer(&self, batch: &PersiaBatch) -> PyResult<()> {
-=======
-    pub fn send_dense_to_nn_worker(&self, batch: &PyPersiaBatchData) -> PyResult<()> {
->>>>>>> main
+    pub fn send_not_id_type_features_to_nn_worker(&self, batch: &PersiaBatch) -> PyResult<()> {
         self.inner
             .async_runtime
             .block_on(
                 self.inner
                     .get_nats_publish_service()?
-                    .send_dense_to_nn_worker(batch),
+                    .send_not_id_type_features_to_nn_worker(batch),
             )
             .map_err(|e| e.into())
     }

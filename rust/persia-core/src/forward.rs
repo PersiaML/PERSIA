@@ -702,13 +702,13 @@ impl ForwardImpl {
                                 (result, id_type_features_ref.embedding_worker_addr.clone(), permit)
                             }
                             EmbeddingTensor::Null => {
-                                panic!("current sparse data not support null data",)
+                                panic!("current id type feature not support null data",)
                             }
                         };
 
                         if let Err(err) = embeddings_rpc_result {
                             tracing::error!(
-                                "forward data failed {:?}, embedding worker: {:?}, wait embedding server recovery service",
+                                "forward data failed {:?}, embedding worker: {:?}, wait embedding parameter server recovery service",
                                 err,
                                 embedding_worker_addr
                             );

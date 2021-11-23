@@ -145,14 +145,14 @@ class DataCtx(BaseCtx):
     to the nn worker and embedding worker.
 
     Example:
-        >>> from persia.prelude import PyPersiaBatchData
+        >>> from persia.prelude import PersiaBatch
         >>> loader = make_simple_loader()
         >>> with DataCtx() as ctx:
-        >>>     for (dense, batch_sparse_ids, target) in loader:
-        >>>         batch_data = PyPersiaBatchData()
-        >>>         batch_data.add_dense([dense])
-        >>>         batch_data.add_sparse(batch_sparse_ids)
-        >>>         batch_data.add_target(target)
+        >>>     for (not_id_type_features, id_type_features, label) in loader:
+        >>>         batch_data = PersiaBatch()
+        >>>         batch_data.add_not_id_type_features(not_id_type_features)
+        >>>         batch_data.add_id_type_features(id_type_features)
+        >>>         batch_data.add_label(label)
         >>>         ctx.send_data(batch_data)
     """
 
@@ -188,13 +188,13 @@ class DataCtx(BaseCtx):
         self.common_context.send_dense_to_nn_worker(data)
 
     def send_data(self, data: PersiaBatch):
-        """Send PersiaBatchData from data loader to nn worker and embedding worker side.
+        """Send PersiaBatch from data loader to nn worker and embedding worker side.
 
         Arguments:
             data (PersiaBatch): PersiaBatch that haven't been process.
         """
-        self.send_sparse_to_embedding_worker(data)
-        self.send_dense_to_nn_worker(data)
+        self.send_id_type_features_to_embedding_worker(data)
+        self.send_not_id_type_features_to_nn_worker(data)
 
 
 class EmbeddingConfig:

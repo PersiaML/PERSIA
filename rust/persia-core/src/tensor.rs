@@ -348,10 +348,3 @@ impl TensorImpl {
         }
     }
 }
-
-#[derive(Readable, Writable, Debug)]
-pub struct SparseTensor {
-    pub data: Storage,
-    pub offset: Vec<u64>,
-    pub name: Option<String>,
-}

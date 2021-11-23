@@ -10,7 +10,7 @@ use persia_libs::{
 
 use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
 use persia_embedding_server::embedding_worker_service::EmbeddingWorkerClient;
-use persia_model_manager::SparseModelManagerStatus;
+use persia_model_manager::EmbeddingModelManagerStatus;
 
 pub struct PersiaRpcClient {
     pub clients: RwLock<IndexMap<String, Arc<EmbeddingWorkerClient>>>,
@@ -145,7 +145,7 @@ impl PersiaRpcClient {
                     return Ok(());
                 }
             } else {
-                tracing::warn!("failed to get sparse model status, retry later");
+                tracing::warn!("failed to get embedding model status, retry later");
                 std::thread::sleep(Duration::from_secs(5));
             }
         }
@@ -160,7 +160,7 @@ impl PersiaRpcClient {
                     return Ok(());
                 }
                 std::thread::sleep(Duration::from_secs(5));
-                let status: Vec<SparseModelManagerStatus> =
+                let status: Vec<EmbeddingModelManagerStatus> =
                     client.model_manager_status(&()).await.unwrap();
 
                 match self.process_status(status) {
@@ -170,7 +170,7 @@ impl PersiaRpcClient {
                     }
                 }
             } else {
-                tracing::warn!("failed to get sparse model status, retry later");
+                tracing::warn!("failed to get embedding model status, retry later");
             }
         }
     }
@@ -213,11 +213,11 @@ impl PersiaRpcClient {
 
         loop {
             std::thread::sleep(Duration::from_secs(5));
-            let status: Result<Vec<SparseModelManagerStatus>, _> =
+            let status: Result<Vec<EmbeddingModelManagerStatus>, _> =
                 client.model_manager_status(&()).await;
             if let Ok(status) = status {
                 if status.iter().any(|s| match s {
-                    SparseModelManagerStatus::Loading(_) => true,
+                    EmbeddingModelManagerStatus::Loading(_) => true,
                     _ => false,
                 }) {
                     let err_msg = String::from("emb status is loading but waiting for dump.");
@@ -235,36 +235,36 @@ impl PersiaRpcClient {
                     }
                 }
             } else {
-                tracing::warn!("failed to get sparse model status, retry later");
+                tracing::warn!("failed to get embedding model status, retry later");
             }
         }
     }
 
-    fn process_status(&self, status: Vec<SparseModelManagerStatus>) -> Result<usize, String> {
+    fn process_status(&self, status: Vec<EmbeddingModelManagerStatus>) -> Result<usize, String> {
         let mut num_compeleted: usize = 0;
         let mut errors = Vec::new();
         status
             .into_iter()
             .enumerate()
             .for_each(|(replica_index, s)| match s {
-                SparseModelManagerStatus::Failed(e) => {
+                EmbeddingModelManagerStatus::Failed(e) => {
                     let err_msg = format!(
                         "emb dump FAILED for server {}, due to {}.",
                         replica_index, e
                     );
                     errors.push(err_msg);
                 }
-                SparseModelManagerStatus::Loading(p) => {
+                EmbeddingModelManagerStatus::Loading(p) => {
                     tracing::info!(
                         "loading emb for server {}, pregress: {:?}%",
                         replica_index,
                         p * 100.0
                     );
                 }
-                SparseModelManagerStatus::Idle => {
+                EmbeddingModelManagerStatus::Idle => {
                     num_compeleted = num_compeleted + 1;
                 }
-                SparseModelManagerStatus::Dumping(p) => {
+                EmbeddingModelManagerStatus::Dumping(p) => {
                     tracing::info!(
                         "dumping emb for server {}, pregress: {:?}%",
                         replica_index,
