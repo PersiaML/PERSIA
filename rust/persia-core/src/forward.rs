@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use persia_common::{EmbeddingBatch, FeatureEmbeddingBatch, SparseBatchRemoteReference};
+use persia_common::{EmbeddingBatch, FeatureEmbeddingBatch, IDTypeFeatureRemoteRef};
 
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_server::middleware_service::MiddlewareServerError;
@@ -261,21 +261,21 @@ impl PersiaTrainingBatch {
         self.inner.middleware_server_addr.as_str()
     }
 
-    pub fn consume_all_dense_features(&mut self) -> Vec<Tensor> {
+    pub fn consume_all_not_id_type_features(&mut self) -> Vec<Tensor> {
         std::mem::replace(&mut self.inner.not_id_type_tensors, vec![])
             .into_iter()
             .map(|x| Tensor { inner: x })
             .collect()
     }
 
-    pub fn consume_all_sparse_features(&mut self) -> Vec<Embedding> {
+    pub fn consume_all_id_type_features(&mut self) -> Vec<Embedding> {
         std::mem::replace(&mut self.inner.embeddings, vec![])
             .into_iter()
             .map(|x| Embedding { inner: Some(x) })
             .collect()
     }
 
-    pub fn consume_all_targets(&mut self) -> Vec<Tensor> {
+    pub fn consume_all_labels(&mut self) -> Vec<Tensor> {
         std::mem::replace(&mut self.inner.label_tensors, vec![])
             .into_iter()
             .map(|x| Tensor { inner: x })
@@ -676,7 +676,7 @@ impl ForwardImpl {
                         let mut batch = batch;
                         let (embeddings_rpc_result, middleware_addr, embedding_staleness_permit) =
                             match batch.id_type_features {
-                                EmbeddingTensor::SparseBatch(mut id_type_features) => {
+                                EmbeddingTensor::IDTypeFeature(mut id_type_features) => {
                                     let (middleware_addr, client) =
                                         rpc_client.get_random_client_with_addr();
 
@@ -686,7 +686,7 @@ impl ForwardImpl {
 
                                     (result, middleware_addr, None)
                                 }
-                                EmbeddingTensor::SparseBatchRemoteReference(
+                                EmbeddingTensor::IDTypeFeatureRemoteRef(
                                     id_type_features_ref,
                                 ) => {
                                     let permit = match &embedding_staleness_semaphore {
@@ -706,7 +706,7 @@ impl ForwardImpl {
                                     (result, id_type_features_ref.middleware_addr.clone(), permit)
                                 }
                                 EmbeddingTensor::Null => {
-                                    panic!("current sparse data not support null data",)
+                                    panic!("current id type features do not support null data",)
                                 }
                             };
 
@@ -728,16 +728,16 @@ impl ForwardImpl {
                         }
                         match embedding_batch {
                             Ok(embedding) => {
-                                let sparse_ref = match embedding.backward_ref_id {
-                                    Some(backward_ref_id) => SparseBatchRemoteReference {
+                                let id_type_feature_remote_ref = match embedding.backward_ref_id {
+                                    Some(backward_ref_id) => IDTypeFeatureRemoteRef {
                                         middleware_addr,
                                         ref_id: backward_ref_id,
                                         batcher_idx: 0,
                                     },
-                                    None => SparseBatchRemoteReference::default(), // batch without gradient backward
+                                    None => IDTypeFeatureRemoteRef::default(), // batch without gradient backward
                                 };
                                 batch.id_type_features =
-                                    EmbeddingTensor::SparseBatchRemoteReference(sparse_ref);
+                                    EmbeddingTensor::IDTypeFeatureRemoteRef(id_type_feature_remote_ref);
 
                                 if let Err(e) = channel_s
                                     .send_async((batch, embedding, embedding_staleness_permit))
@@ -798,7 +798,7 @@ pub fn forward_directly(
         .collect();
 
     let embeddings = match &batch.id_type_features {
-        EmbeddingTensor::SparseBatch(id_type_features) => {
+        EmbeddingTensor::IDTypeFeature(id_type_features) => {
             let _guard = async_runtime.enter();
             let (_middleware_addr, client) = rpc_client.get_random_client_with_addr();
             let embeddings: EmbeddingBatch = async_runtime

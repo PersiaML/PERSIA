@@ -373,7 +373,7 @@ impl Backward {
         self.inner.shutdown()
     }
 
-    pub fn update_sparse_gradient_batched(&self, gradients: &mut GradientBatch) -> PyResult<()> {
+    pub fn update_id_type_feature_gradient_batched(&self, gradients: &mut GradientBatch) -> PyResult<()> {
         let start_time = std::time::Instant::now();
         if let Err(err) = self
             .inner
@@ -386,7 +386,7 @@ impl Backward {
         let elapsed = start_time.elapsed().as_millis();
         if elapsed > 1 {
             tracing::warn!(
-                message = "update_sparse_gradient_batched takes more than 1 milli seconds",
+                message = "update_id_type_feature_gradient_batched takes more than 1 milli seconds",
                 took_time = tracing::field::debug(&elapsed)
             );
             if let Ok(m) = MetricsHolder::get() {

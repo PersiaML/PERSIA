@@ -11,7 +11,7 @@ use persia_libs::{async_lock::RwLock, backoff, once_cell::sync::OnceCell, tracin
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
-use persia_common::SparseBatchRemoteReference;
+use persia_common::IDTypeFeatureRemoteRef;
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
@@ -246,18 +246,18 @@ impl PersiaDataFlowComponent {
     ) -> Result<(), PersiaError> {
         let start = std::time::Instant::now();
         match &mut batch.inner.id_type_features {
-            EmbeddingTensor::SparseBatchRemoteReference(_) => {
+            EmbeddingTensor::IDTypeFeatureRemoteRef(_) => {
                 tracing::error!("sparse data has already sent to middleware, you are calling send_sparse_to_middleware muti times");
                 return Err(PersiaError::MultipleSendError);
             }
-            EmbeddingTensor::SparseBatch(id_type_features) => {
+            EmbeddingTensor::IDTypeFeature(id_type_features) => {
                 let replica_index = self.replica_info.replica_index;
                 id_type_features.batcher_idx = Some(replica_index);
 
                 let cur_middleware_id = self.cur_middleware_id.fetch_add(1, Ordering::AcqRel);
 
                 let backoff = backoff::ExponentialBackoff::default();
-                let sparse_ref: SparseBatchRemoteReference =
+                let sparse_ref: IDTypeFeatureRemoteRef =
                     backoff::future::retry(backoff, || async {
                         let sparse_ref = self
                             .middleware_publish_service
@@ -279,7 +279,7 @@ impl PersiaDataFlowComponent {
                     .await?;
 
                 batch.inner.id_type_features =
-                    EmbeddingTensor::SparseBatchRemoteReference(sparse_ref);
+                    EmbeddingTensor::IDTypeFeatureRemoteRef(sparse_ref);
                 let local_batch_id = self.cur_batch_id.fetch_add(1, Ordering::AcqRel);
                 let batch_id = local_batch_id * self.replica_info.replica_size
                     + self.replica_info.replica_index;

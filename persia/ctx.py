@@ -307,7 +307,14 @@ class EmbeddingCtx(BaseCtx):
     def prepare_features(
         self, batch: PersiaTrainingBatch
     ) -> Tuple[torch.Tensor, List[torch.Tensor], Optional[torch.Tensor]]:
-        """Converts the dense, sparse and target raw data in``PythonTrainBatch`` to `torch.Tensor``.
+        """Converts the not_id_type_features, sparse and target raw data in``PythonTrainBatch`` to `torch.Tensor``.
+
+        TODO: Add the feature conversion detail
+        For example
+
+        NotIdTypeFeatures -> ...
+        IDTypeFeatures -> ...
+        Labels -> ...
 
         Arguments:
             batch (PythonTrainBatch): Training data provided by PersiaML upstream including
@@ -317,42 +324,44 @@ class EmbeddingCtx(BaseCtx):
             the tuple of dense data, list of sparse data and target data.
         """
         if self.preprocess_mode == PreprocessMode.INFERENCE:
-            batch.target_tensor = None
+            batch.label_tensors = None
         else:
             # pytype: disable=attribute-error
-            batch.target = batch.consume_all_targets()
+            batch.labels = batch.consume_all_labels()
             # pytype: enable=attribute-error
-            assert len(batch.target) == 1
-            batch.target = batch.target[0]
-            batch.target_tensor = _cast_dlpack2torch_tensor(batch.target)
+            batch.label_tensors = [
+                _cast_dlpack2torch_tensor(label) for label in batch.labels
+            ]
 
         is_training = self.preprocess_mode == PreprocessMode.TRAIN  # cache property
 
         # pytype: disable=attribute-error
-        batch.dense = batch.consume_all_dense_features()
+        batch.not_id_type_features = batch.consume_all_not_id_type_features()
         # pytype: enable=attribute-error
-        batch.dense = batch.dense[0]
-        batch.dense_tensor = _cast_dlpack2torch_tensor(batch.dense)
+        batch.not_id_type_tensors = [
+            _cast_dlpack2torch_tensor(not_id_type_feature)
+            for not_id_type_feature in batch.not_id_type_features
+        ]
 
         # pytype: disable=attribute-error
-        batch.emb = batch.consume_all_sparse_features()
+        batch.id_type_features = batch.consume_all_id_type_features()
         # pytype: enable=attribute-error
 
-        batch.emb_slot = []
-        # sparse embedding processing
-        emb_tensors, forward_tensors = [], []
+        batch.emb_slots = [] # cache embedding to prevent tensor expired
+        emb_tensors = []  # cache origin embedding for later backward procedure
+        id_type_tensors = [] # id type tensos for later forward procedure
 
-        for emb in batch.emb:
-            if emb.is_raw_embedding():
+        for id_type_feature in batch.id_type_features:
+            if id_type_feature.is_raw_embedding():
                 # no duplicate id in raw_id_tensor
                 (
                     raw_embedding,
                     index,
                     non_empty_index,
                     sample_id_num,
-                ) = emb.get_raw_embedding()
+                ) = id_type_feature.get_raw_embedding()
 
-                batch.emb_slot.append([raw_embedding, index, non_empty_index])
+                batch.emb_slots.append([raw_embedding, index, non_empty_index])
                 distinct_id_tensor = _cast_dlpack2torch_tensor(raw_embedding)
                 index_tensor = _cast_dlpack2torch_tensor(
                     index
@@ -394,19 +403,19 @@ class EmbeddingCtx(BaseCtx):
                         index_select_raw_tensor,
                     )
                 )
-                forward_tensors.append(raw_fixed_size_tensor_with_mask)
+                id_type_tensors.append(raw_fixed_size_tensor_with_mask)
             else:
-                emb = emb.get_sum_embedding()
-                batch.emb_slot.append([emb])
-                sum_tensor = _cast_dlpack2torch_tensor(emb, requires_grad=is_training)
-                forward_tensors.append(sum_tensor)
-                emb_tensors.append((emb.name, None, None, None, sum_tensor))
+                emb = id_type_feature.get_sum_embedding()
+                batch.emb_slots.append([emb])
+                attention_sum_tensor = _cast_dlpack2torch_tensor(emb, requires_grad=is_training)
+                id_type_tensors.append(attention_sum_tensor)
+                emb_tensors.append((emb.name, None, None, None, attention_sum_tensor))
 
-        batch.forward_tensors = forward_tensors
+        batch.id_type_tensors = id_type_tensors
         batch.emb_tensors = emb_tensors
         self.current_batch = batch
 
-        return batch.dense_tensor, batch.forward_tensors, batch.target_tensor
+        return batch.not_id_type_tensors, batch.id_type_tensors, batch.label_tensors
 
     def dump_checkpoint(
         self,
@@ -779,7 +788,9 @@ class TrainCtx(EmbeddingCtx):
             )
             self.update_times += 1
 
-        grad_slots, empty_grads = [], []
+        grad_slots = [] # cache grad slots 
+        empty_grads = [] # counting empty grads
+
         gradient_batch = self.current_batch.create_gradient_batch()
 
         for (
@@ -823,7 +834,7 @@ class TrainCtx(EmbeddingCtx):
         if self.device_id is not None:
             torch.cuda.synchronize()
 
-        self.backward_engine.update_sparse_gradient_batched(gradient_batch)
+        self.backward_engine.update_id_type_feature_gradient_batched(gradient_batch)
         self.grad_queue.put(grad_slots)
 
         if len(empty_grads) > 0:

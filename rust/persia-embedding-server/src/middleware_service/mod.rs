@@ -27,7 +27,7 @@ use persia_common::{
     ndarray_f16_to_f32, ndarray_f32_to_f16,
     optim::OptimizerConfig,
     EmbeddingBatch, FeatureEmbeddingBatch, FeatureRawEmbeddingBatch, FeatureSumEmbeddingBatch,
-    SingleSignInFeatureBatch, SparseBatch, SparseBatchRemoteReference,
+    SingleSignInFeatureBatch, IDTypeFeatureBatch, IDTypeFeatureRemoteRef,
 };
 use persia_embedding_config::{
     EmbeddingConfig, InstanceInfo, PersiaCommonConfig, PersiaGlobalConfigError,
@@ -334,7 +334,7 @@ pub fn sign_to_shard_modulo(sign: u64, replica_size: u64) -> u64 {
 }
 
 #[inline]
-pub fn indices_to_hashstack_indices(indices: &mut SparseBatch, config: &EmbeddingConfig) -> () {
+pub fn indices_to_hashstack_indices(indices: &mut IDTypeFeatureBatch, config: &EmbeddingConfig) -> () {
     for feature_batch in indices.batches.iter_mut() {
         let slot_conf = config.get_slot_by_feature_name(&feature_batch.feature_name);
         if slot_conf.hash_stack_config.hash_stack_rounds > 0 {
@@ -385,7 +385,7 @@ pub fn indices_to_hashstack_indices(indices: &mut SparseBatch, config: &Embeddin
 }
 
 #[inline]
-pub fn indices_add_prefix(indices: &mut SparseBatch, config: &EmbeddingConfig) -> () {
+pub fn indices_add_prefix(indices: &mut IDTypeFeatureBatch, config: &EmbeddingConfig) -> () {
     let feature_spacing = if config.feature_index_prefix_bit > 0 {
         (1u64 << (u64::BITS - config.feature_index_prefix_bit as u32)) - 1
     } else {
@@ -431,13 +431,13 @@ impl SignWithConfig {
 }
 
 pub fn lookup_batched_all_slots_preprocess(
-    indices: &mut SparseBatch,
+    indices: &mut IDTypeFeatureBatch,
     config: &EmbeddingConfig,
     replica_size: u64,
 ) -> Vec<Vec<SignWithConfig>> {
     #[inline]
     fn indices_to_sharded_indices(
-        indices: &SparseBatch,
+        indices: &IDTypeFeatureBatch,
         config: &EmbeddingConfig,
         replica_size: u64,
     ) -> Vec<Vec<SignWithConfig>> {
@@ -469,7 +469,7 @@ pub fn lookup_batched_all_slots_preprocess(
 }
 
 pub fn lookup_batched_all_slots_postprocess<'a>(
-    indices: &SparseBatch,
+    indices: &IDTypeFeatureBatch,
     forwarded_groups: Vec<(Vec<f32>, Vec<SignWithConfig>)>,
     config: &'a EmbeddingConfig,
 ) -> Vec<FeatureEmbeddingBatch> {
@@ -620,8 +620,8 @@ pub struct MiddlewareServerInner {
     pub forward_id: AtomicU64,
     pub cannot_forward_batched_time: crossbeam::atomic::AtomicCell<SystemTime>, // TODO: use parking_lot::RwLock to replace
     pub forward_id_buffer:
-        persia_libs::async_lock::RwLock<HashMap<usize, HashMap<u64, SparseBatch>>>,
-    pub post_forward_buffer: persia_libs::async_lock::RwLock<HashMap<u64, SparseBatch>>,
+        persia_libs::async_lock::RwLock<HashMap<usize, HashMap<u64, IDTypeFeatureBatch>>>,
+    pub post_forward_buffer: persia_libs::async_lock::RwLock<HashMap<u64, IDTypeFeatureBatch>>,
     pub staleness: AtomicUsize,
     pub embedding_config: Arc<EmbeddingConfig>,
     pub middleware_config: Arc<PersiaMiddlewareConfig>,
@@ -640,7 +640,7 @@ impl MiddlewareServerInner {
 
     async fn forward_batched(
         &self,
-        indices: SparseBatch,
+        indices: IDTypeFeatureBatch,
         batcher_idx: usize,
     ) -> Result<u64, MiddlewareServerError> {
         let id = self.get_id();
@@ -688,7 +688,7 @@ impl MiddlewareServerInner {
     pub async fn update_all_batched_gradients(
         &self,
         embedding_gradient_batch: &mut EmbeddingGradientBatch,
-        indices: SparseBatch,
+        indices: IDTypeFeatureBatch,
     ) -> Result<(), MiddlewareServerError> {
         let start_time = std::time::Instant::now();
 
@@ -858,7 +858,7 @@ impl MiddlewareServerInner {
 
     pub async fn lookup_batched_all_slots(
         &self,
-        indices: &mut SparseBatch,
+        indices: &mut IDTypeFeatureBatch,
         requires_grad: bool,
     ) -> Result<Vec<FeatureEmbeddingBatch>, MiddlewareServerError> {
         let start_time_all = std::time::Instant::now();
@@ -1015,7 +1015,7 @@ impl MiddlewareServerInner {
 
     pub async fn forward_batch_id(
         &self,
-        req: (SparseBatchRemoteReference, bool),
+        req: (IDTypeFeatureRemoteRef, bool),
     ) -> Result<EmbeddingBatch, MiddlewareServerError> {
         let (sparse_ref, requires_grad) = req;
         let ref_id = sparse_ref.ref_id;
@@ -1060,7 +1060,7 @@ impl MiddlewareServerInner {
 
     pub async fn forward_batched_direct(
         &self,
-        indices: SparseBatch,
+        indices: IDTypeFeatureBatch,
     ) -> Result<EmbeddingBatch, MiddlewareServerError> {
         let mut indices = indices;
 
@@ -1422,7 +1422,7 @@ impl MiddlewareServer {
 
     pub async fn forward_batch_id(
         &self,
-        req: (SparseBatchRemoteReference, bool),
+        req: (IDTypeFeatureRemoteRef, bool),
     ) -> Result<EmbeddingBatch, MiddlewareServerError> {
         let resp = self.inner.forward_batch_id(req).await;
         if resp.is_err() {
@@ -1433,7 +1433,7 @@ impl MiddlewareServer {
 
     pub async fn forward_batched_direct(
         &self,
-        indices: SparseBatch,
+        indices: IDTypeFeatureBatch,
     ) -> Result<EmbeddingBatch, MiddlewareServerError> {
         self.inner.forward_batched_direct(indices).await
     }
@@ -1493,8 +1493,8 @@ impl MiddlewareNatsService {
 
     pub async fn forward_batched(
         &self,
-        indices: SparseBatch,
-    ) -> Result<SparseBatchRemoteReference, MiddlewareServerError> {
+        indices: IDTypeFeatureBatch,
+    ) -> Result<IDTypeFeatureRemoteRef, MiddlewareServerError> {
         let batcher_idx = indices
             .batcher_idx
             .ok_or_else(|| MiddlewareServerError::DataSrcIdxNotSet)?;
@@ -1503,7 +1503,7 @@ impl MiddlewareNatsService {
         }
         let ref_id = self.inner.forward_batched(indices, batcher_idx).await?;
         let middleware_addr = self.inner.get_address().await?;
-        let sparse_ref = SparseBatchRemoteReference {
+        let sparse_ref = IDTypeFeatureRemoteRef {
             middleware_addr,
             ref_id,
             batcher_idx,
@@ -1558,7 +1558,7 @@ mod lookup_batched_all_slots_preprocess_tests {
         let raw_batch: Vec<Vec<u64>> = vec![vec![12, 23, 34], vec![56, 78, 90], vec![12, 56]];
         let feature_name = "Test".to_string();
         let feature_batch = FeatureBatch::new(feature_name.clone(), raw_batch);
-        let mut sparse_batch = SparseBatch {
+        let mut sparse_batch = IDTypeFeatureBatch {
             requires_grad: false,
             batches: vec![feature_batch],
             enter_forward_id_buffer_time: None,
@@ -1607,7 +1607,7 @@ mod lookup_batched_all_slots_preprocess_tests {
         ];
         let feature_name = "feature1".to_string();
         let feature_batch = FeatureBatch::new(feature_name.clone(), raw_batch.clone());
-        let mut sparse_batch = SparseBatch {
+        let mut sparse_batch = IDTypeFeatureBatch {
             requires_grad: false,
             batches: vec![feature_batch],
             enter_forward_id_buffer_time: None,

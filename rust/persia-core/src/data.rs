@@ -7,21 +7,21 @@ use persia_libs::numpy::{PyArray1, PyArray2};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use persia_common::{FeatureBatch, SparseBatch, SparseBatchRemoteReference};
+use persia_common::{FeatureBatch, IDTypeFeatureBatch, IDTypeFeatureRemoteRef};
 use persia_speedy::{Readable, Writable};
 
 #[derive(Readable, Writable, Debug)]
 pub enum EmbeddingTensor {
     Null,
-    SparseBatch(SparseBatch),
-    SparseBatchRemoteReference(SparseBatchRemoteReference),
+    IDTypeFeature(IDTypeFeatureBatch),
+    IDTypeFeatureRemoteRef(IDTypeFeatureRemoteRef),
 }
 
 impl EmbeddingTensor {
     pub fn get_remote_ref_info(&self) -> (&str, u64) {
         match &self {
-            EmbeddingTensor::SparseBatchRemoteReference(sparse_ref) => {
-                (&sparse_ref.middleware_addr, sparse_ref.ref_id)
+            EmbeddingTensor::IDTypeFeatureRemoteRef(id_type_feature_ref) => {
+                (&id_type_feature_ref.middleware_addr, id_type_feature_ref.ref_id)
             }
             _ => unreachable!(),
         }
@@ -104,7 +104,7 @@ impl PersiaBatch {
         id_type_features: Vec<(String, Vec<&PyArray1<u64>>)>,
         requires_grad: Option<bool>,
     ) {
-        self.inner.id_type_features = EmbeddingTensor::SparseBatch(SparseBatch {
+        self.inner.id_type_features = EmbeddingTensor::IDTypeFeature(IDTypeFeatureBatch {
             requires_grad: requires_grad.unwrap_or(true),
             batches: id_type_features
                 .into_iter()
@@ -121,7 +121,7 @@ impl PersiaBatch {
                     FeatureBatch::new(feature_name, indices)
                 })
                 .collect(),
-            ..SparseBatch::default()
+            ..IDTypeFeatureBatch::default()
         });
     }
 
