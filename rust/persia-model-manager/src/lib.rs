@@ -68,7 +68,7 @@ pub enum EmbeddingModelManagerStatus {
     Failed(EmbeddingModelManagerError),
 }
 
-static Embedding_MODEL_MANAGER: OnceCell<Arc<EmbeddingModelManager>> = OnceCell::new();
+static EMBEDDING_MODEL_MANAGER: OnceCell<Arc<EmbeddingModelManager>> = OnceCell::new();
 
 #[derive(Clone)]
 pub struct EmbeddingModelManager {
@@ -80,7 +80,7 @@ pub struct EmbeddingModelManager {
 
 impl EmbeddingModelManager {
     pub fn get() -> Result<Arc<Self>, EmbeddingModelManagerError> {
-        let singleton = Embedding_MODEL_MANAGER.get_or_try_init(|| {
+        let singleton = EMBEDDING_MODEL_MANAGER.get_or_try_init(|| {
             let common_config = PersiaCommonConfig::get()?;
             let replica_info = PersiaReplicaInfo::get()?;
 

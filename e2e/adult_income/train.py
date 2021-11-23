@@ -11,7 +11,7 @@ from sklearn import metrics
 
 from persia.ctx import TrainCtx, eval_ctx
 from persia.distributed import DDPOption
-from persia.sparse.optim import Adagrad
+from persia.embedding.optim import Adagrad
 from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
 from persia.utils import setup_seed
@@ -129,7 +129,7 @@ if __name__ == "__main__":
         cuda = False
 
     dense_optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-    sparse_optimizer = Adagrad(lr=1e-2)
+    embedding_optimizer = Adagrad(lr=1e-2)
     loss_fn = torch.nn.BCELoss(reduction="mean")
 
     eval_checkpoint_dir = os.environ["EVAL_CHECKPOINT_DIR"]
@@ -140,7 +140,7 @@ if __name__ == "__main__":
 
     with TrainCtx(
         model=model,
-        sparse_optimizer=sparse_optimizer,
+        embedding_optimizer=embedding_optimizer,
         dense_optimizer=dense_optimizer,
         device_id=device_id,
         mixed_precision=mixed_precision,
@@ -150,7 +150,9 @@ if __name__ == "__main__":
             StreamingDataset(buffer_size), reproducible=True, embedding_staleness=1
         )
         for (batch_idx, data) in enumerate(train_dataloader):
-            (output, target) = ctx.forward(data)
+            (output, targets) = ctx.forward(data)
+            target = targets[0]
+
             loss = loss_fn(output, target)
             scaled_loss = ctx.backward(loss)
             accuracy = (torch.round(output) == target).sum() / target.shape[0]

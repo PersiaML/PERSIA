@@ -1,3 +1,5 @@
+from typing import List
+
 import torch
 import torch.nn as nn
 
@@ -19,8 +21,12 @@ class DNN(nn.Module):
         self.ln3 = nn.Linear(128, 1)
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, dense_x, sparses):
-        sparse_concat = torch.cat(sparses, dim=1)
+    def forward(
+        self, dense_x_list: List[torch.Tensor], sparses_list: List[torch.Tensor]
+    ):
+        dense_x = dense_x_list[0]
+
+        sparse_concat = torch.cat(sparses_list, dim=1)
         sparse = self.sparse_mlp(sparse_concat.float())
         sparse = self.sparse_bn(sparse)
 
