@@ -14,7 +14,7 @@ steps:
     plugins:
       - docker-compose#v3.8.0:
           config: "e2e/docker-compose.train.yml"
-          run: trainer
+          run: nn_worker
           graceful-shutdown: true
       - docker-compose#v3.8.0:
           config: "e2e/docker-compose.infer.yml"
@@ -28,7 +28,7 @@ steps:
     plugins:
       - docker-compose#v3.8.0:
           config: "e2e/docker-compose.train.yml"
-          run: trainer
+          run: nn_worker
           graceful-shutdown: true
       - docker-compose#v3.8.0:
           config: "e2e/docker-compose.infer.yml"

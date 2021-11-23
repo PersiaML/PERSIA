@@ -31,12 +31,12 @@ tracing = "0.1"
 rand = "0.8"
 
 [[bin]]
-name = "persia-embedding-server"
-path = "src/bin/persia-embedding-server.rs"
+name = "persia-embedding-parameter-server"
+path = "src/bin/persia-embedding-parameter-server.rs"
 
 [[bin]]
-name = "persia-middleware-server"
-path = "src/bin/persia-middleware-server.rs"
+name = "persia-embedding-worker"
+path = "src/bin/persia-embedding-worker.rs"
 
 [build-dependencies]
 shadow-rs = "0.8"

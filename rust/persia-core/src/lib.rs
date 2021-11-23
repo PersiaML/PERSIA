@@ -44,7 +44,7 @@ use pyo3::wrap_pyfunction;
 use persia_common::utils::start_deadlock_detection_thread;
 use persia_embedding_config::{PersiaGlobalConfigError, PersiaReplicaInfo};
 use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
-use persia_embedding_server::middleware_service::MiddlewareServerError;
+use persia_embedding_server::embedding_worker_service::EmbeddingWorkerError;
 use persia_speedy::Readable;
 use persia_storage::{PersiaPath, PersiaPathImpl};
 
@@ -61,16 +61,16 @@ pub enum PersiaError {
     #[error("Global config error: {0}")]
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
     #[error("Server side error: {0}")]
-    ServerSideError(#[from] MiddlewareServerError),
+    ServerSideError(#[from] EmbeddingWorkerError),
     #[error("Rpc error: {0}")]
     RpcError(#[from] persia_rpc::PersiaRpcError),
     #[error("Nats error: {0}")]
     NatsError(#[from] persia_nats_client::NatsError),
-    #[error("Send sparse data to middleware server multi times")]
+    #[error("Send sparse data to embedding worker multi times")]
     MultipleSendError,
     #[error("Sparse data is null, please call batch.add_sparse first")]
     NullSparseDataError,
-    #[error("Batch id is null, please call send_sparse_to_middleware first")]
+    #[error("Batch id is null, please call send_sparse_to_embedding_worker first")]
     NullBatchIdError,
     #[error("Sparse optimizer not set yet")]
     NullOptimizerError,
@@ -260,20 +260,20 @@ impl PyPersiaCommonContext {
             .map_err(|e| e.into())
     }
 
-    pub fn get_middleware_addr_list(&self) -> PyResult<Vec<String>> {
+    pub fn get_embedding_worker_addr_list(&self) -> PyResult<Vec<String>> {
         self.inner
             .async_runtime
             .block_on(
                 self.inner
                     .get_nats_publish_service()?
-                    .get_middleware_addr_list(),
+                    .get_embedding_worker_addr_list(),
             )
             .map_err(|e| e.into())
     }
 
-    pub fn init_rpc_client_with_addr(&self, middleware_addr: String) -> PyResult<()> {
+    pub fn init_rpc_client_with_addr(&self, embedding_worker_addr: String) -> PyResult<()> {
         self.inner
-            .init_rpc_client_with_addr(middleware_addr)
+            .init_rpc_client_with_addr(embedding_worker_addr)
             .map_err(|e| e.into())
     }
 
@@ -340,29 +340,29 @@ impl PyPersiaCommonContext {
             .map_err(|e| e.into())
     }
 
-    pub fn send_sparse_to_middleware(&self, batch: &mut PyPersiaBatchData) -> PyResult<()> {
+    pub fn send_sparse_to_embedding_worker(&self, batch: &mut PyPersiaBatchData) -> PyResult<()> {
         self.inner
             .async_runtime
             .block_on(
                 self.inner
                     .get_nats_publish_service()?
-                    .send_sparse_to_middleware(batch),
+                    .send_sparse_to_embedding_worker(batch),
             )
             .map_err(|e| e.into())
     }
 
-    pub fn send_dense_to_trainer(&self, batch: &PyPersiaBatchData) -> PyResult<()> {
+    pub fn send_dense_to_nn_worker(&self, batch: &PyPersiaBatchData) -> PyResult<()> {
         self.inner
             .async_runtime
             .block_on(
                 self.inner
                     .get_nats_publish_service()?
-                    .send_dense_to_trainer(batch),
+                    .send_dense_to_nn_worker(batch),
             )
             .map_err(|e| e.into())
     }
 
-    pub fn configure_embedding_servers(
+    pub fn configure_embedding_parameter_servers(
         &self,
         initialize_lower: f32,
         initialize_upper: f32,
@@ -375,7 +375,7 @@ impl PyPersiaCommonContext {
             .block_on(
                 self.inner
                     .get_nats_publish_service()?
-                    .configure_embedding_servers(
+                    .configure_embedding_parameter_servers(
                         initialize_lower,
                         initialize_upper,
                         admit_probability,
