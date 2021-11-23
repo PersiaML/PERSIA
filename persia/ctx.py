@@ -142,7 +142,7 @@ class BaseCtx:
 
 class DataCtx(BaseCtx):
     r"""Provides the communicate ability for data generator component to send the PersiaBatchData
-    to the trainer and embedding middleware.
+    to the nn worker and embedding worker.
 
     Example:
         >>> from persia.prelude import PyPersiaBatchData
@@ -171,30 +171,30 @@ class DataCtx(BaseCtx):
         self.common_context.init_nats_publisher(None)
         self.common_context.wait_servers_ready()
 
-    def send_sparse_to_middleware(self, data: PersiaBatch):
-        """Send PersiaBatchData from data compose to middleware side.
+    def send_id_type_features_to_embedding_worker(self, data: PersiaBatch):
+        """Send PersiaBatch from data loader to embedding worker side.
 
         Arguments:
-            data (PyPersiaBatchData): PersiaBatchData that haven't been process.
+            data (PersiaBatch): PersiaBatch that haven't been process.
         """
-        self.common_context.send_sparse_to_middleware(data)
+        self.common_context.send_sparse_to_embedding_worker(data)
 
-    def send_dense_to_trainer(self, data: PersiaBatch):
-        """Send PersiaBatchData from data compose to trainer side.
+    def send_not_id_type_features_to_nn_worker(self, data: PersiaBatch):
+        """Send `PersiaBatch` from data loader to nn worker side.
 
         Arguments:
-            data (PyPersiaBatchData): PersiaBatchData that have been sent to middleware.
+            data (PersiaBatch): PersiaBatch that have been sent to embedding worker.
         """
-        self.common_context.send_dense_to_trainer(data)
+        self.common_context.send_dense_to_nn_worker(data)
 
     def send_data(self, data: PersiaBatch):
-        """Send PersiaBatchData from data compose to trainer and middleware side.
+        """Send PersiaBatchData from data loader to nn worker and embedding worker side.
 
         Arguments:
-            data (PyPersiaBatchData): PersiaBatchData that haven't been process.
+            data (PersiaBatch): PersiaBatch that haven't been process.
         """
-        self.send_sparse_to_middleware(data)
-        self.send_dense_to_trainer(data)
+        self.send_sparse_to_embedding_worker(data)
+        self.send_dense_to_nn_worker(data)
 
 
 class EmbeddingConfig:
@@ -269,9 +269,9 @@ class EmbeddingCtx(BaseCtx):
 
     def _enter(self):
         if self.embedding_config is not None:
-            self.configure_embedding_servers(self.embedding_config)
+            self.configure_embedding_parameter_servers(self.embedding_config)
 
-    def configure_embedding_servers(
+    def configure_embedding_parameter_servers(
         self,
         embedding_config: EmbeddingConfig,
     ):
@@ -279,7 +279,7 @@ class EmbeddingCtx(BaseCtx):
         Arguments:
             embedding_config (EmbeddingConfig): The embedding configuration that will be sent to the embedding server.
         """
-        self.common_context.configure_embedding_servers(
+        self.common_context.configure_embedding_parameter_servers(
             embedding_config.emb_initialization[0],
             embedding_config.emb_initialization[1],
             embedding_config.admit_probability,
@@ -379,7 +379,7 @@ class EmbeddingCtx(BaseCtx):
 
                 batch_size = len(sample_id_num)
                 dim = distinct_id_tensor.shape[-1]
-                sample_fixed_size = index_tensor.shape[1] // batch_size
+                sample_fixed_size = index_tensor.shape[-1] // batch_size
                 index_select_raw_tensor = distinct_id_tensor.index_select(
                     0, index_tensor.view(-1)
                 )
@@ -624,7 +624,7 @@ class TrainCtx(EmbeddingCtx):
             backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
             grad_update_buffer_size (int, optional): Number of reference cache , hold the gradient tensor reference to avoid
                 meet dangle data in gradient backward phase.
-            lookup_emb_directly (bool, optional): Lookup embedding directly without isolation data compose.
+            lookup_emb_directly (bool, optional): Lookup embedding directly without isolation data loader.
             mixed_precision (bool): Enable mixed_precision or not.
             distributed_option (DistributedBaseOption, optional): DistributedOption to converted model to dataparallel model.
         """
@@ -686,7 +686,7 @@ class TrainCtx(EmbeddingCtx):
         self.wait_servers_ready()
 
         if lookup_emb_directly:
-            init_rpc_client_num = self._init_middlewrae_rpc_client()
+            init_rpc_client_num = self._init_embedding_worker_rpc_client()
             _logger.info(f"Successfully init {init_rpc_client_num} rpc client")
 
         self.backward_workers_size = backward_workers_size
@@ -719,12 +719,14 @@ class TrainCtx(EmbeddingCtx):
             _logger.info(f"master addr is {master_addr}")
         return master_addr
 
-    def _init_middlewrae_rpc_client(self) -> int:
-        middleware_addr_list = self.common_context.get_middleware_addr_list()
-        assert len(middleware_addr_list) > 0, "Not available middleware."
-        for middleware_addr in middleware_addr_list:
-            self.common_context.init_rpc_client_with_addr(middleware_addr)
-        return len(middleware_addr_list)
+    def _init_embedding_worker_rpc_client(self) -> int:
+        embedding_worker_addr_list = (
+            self.common_context.get_embedding_worker_addr_list()
+        )
+        assert len(embedding_worker_addr_list) > 0, "Not available embedding worker."
+        for embedding_worker_addr in embedding_worker_addr_list:
+            self.common_context.init_rpc_client_with_addr(embedding_worker_addr)
+        return len(embedding_worker_addr_list)
 
     def wait_servers_ready(self):
         """query embedding server to check if servers are ready"""
@@ -923,20 +925,20 @@ class InferCtx(EmbeddingCtx):
 
     def __init__(
         self,
-        middleware_addrs: List[str],
+        embedding_worker_addrs: List[str],
         *args,
         **kwargs,
     ):
         """
         Arguments:
-            middleware_addrs (List[str]): middleware address(ip:port) list.
+            embedding_worker_addrs (List[str]): embedding worker address(ip:port) list.
         """
         super(InferCtx, self).__init__(PreprocessMode.INFERENCE, *args, **kwargs)
 
-        for addr in middleware_addrs:
+        for addr in embedding_worker_addrs:
             self.common_context.init_rpc_client_with_addr(addr)
 
-    r"""Wait for middleware and embedding server ready for serving."""
+    r"""Wait for embedding worker and embedding server ready for serving."""
 
     def wait_for_serving(self):
         self.common_context.wait_for_serving()

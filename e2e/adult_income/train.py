@@ -22,7 +22,7 @@ from model import DNN
 from data_generator import make_dataloader
 
 
-logger = get_default_logger("trainer")
+logger = get_default_logger("nn_worker")
 
 device_id = get_local_rank()
 

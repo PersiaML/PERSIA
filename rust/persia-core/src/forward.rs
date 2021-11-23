@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 use persia_common::{EmbeddingBatch, FeatureEmbeddingBatch, IDTypeFeatureRemoteRef};
 
 use persia_embedding_config::PersiaReplicaInfo;
-use persia_embedding_server::middleware_service::MiddlewareServerError;
+use persia_embedding_server::embedding_worker_service::EmbeddingWorkerError;
 use persia_libs::{
     flume,
     half::prelude::*,
@@ -257,8 +257,8 @@ pub struct PersiaTrainingBatch {
 
 #[pymethods]
 impl PersiaTrainingBatch {
-    pub fn middleware_server_addr(&self) -> &str {
-        self.inner.middleware_server_addr.as_str()
+    pub fn embedding_worker_addr(&self) -> &str {
+        self.inner.embedding_worker_addr.as_str()
     }
 
     pub fn consume_all_not_id_type_features(&mut self) -> Vec<Tensor> {
@@ -296,7 +296,7 @@ impl PersiaTrainingBatch {
     pub fn create_gradient_batch(&mut self) -> GradientBatch {
         GradientBatch::new(
             self.inner.ref_id,
-            self.inner.middleware_server_addr.as_str(),
+            self.inner.embedding_worker_addr.as_str(),
             self.inner.embedding_staleness_permit.take(),
         )
     }
@@ -308,7 +308,7 @@ pub struct PersiaTrainingBatchImpl {
     pub embeddings: Vec<EmbeddingImpl>,
     pub label_tensors: Vec<TensorImpl>,
     pub meta_data: Option<Vec<u8>>,
-    pub middleware_server_addr: String,
+    pub embedding_worker_addr: String,
     pub ref_id: u64,
     pub embedding_staleness_permit: Option<OwnedSemaphorePermit>,
 }
@@ -320,7 +320,7 @@ impl Default for PersiaTrainingBatchImpl {
             embeddings: Vec::new(),
             label_tensors: Vec::new(),
             meta_data: None,
-            middleware_server_addr: String::new(),
+            embedding_worker_addr: String::new(),
             ref_id: 0,
             embedding_staleness_permit: None,
         }
@@ -338,7 +338,7 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
                 .enumerate()
                 .for_each(|(idx, id2idx)| {
                     if *id2idx != 0 {
-                        non_empty_index_list.push(idx as u64);
+                        non_empty_index_list.push(idx as i64);
                     }
                 });
 
@@ -357,14 +357,14 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
             );
 
             let index = TensorImpl::new(
-                Storage::CPU(CPUStorage::from_usize(raw_embedding.index)),
+                Storage::CPU(CPUStorage::from_i64(raw_embedding.index)),
                 vec![index_len],
                 Some(format!("{}_index", &feature_name)),
                 None,
             );
 
             let non_empty_index = TensorImpl::new(
-                Storage::CPU(CPUStorage::from_u64(non_empty_index_list)),
+                Storage::CPU(CPUStorage::from_i64(non_empty_index_list)),
                 vec![no_empty_index_list_len],
                 Some(format!("{}_non_empty_index", &feature_name)),
                 None,
@@ -615,13 +615,13 @@ impl ForwardImpl {
                         .map(|t| t.to(common_ctx.device_id.as_ref()))
                         .collect();
 
-                    let (middleware_addr, ref_id) = batch.id_type_features.get_remote_ref_info();
+                    let (embedding_worker_addr, ref_id) = batch.id_type_features.get_remote_ref_info();
                     let training_batch = PersiaTrainingBatchImpl {
                         not_id_type_tensors,
                         embeddings,
                         label_tensors,
                         meta_data: batch.meta_data,
-                        middleware_server_addr: middleware_addr.to_string(),
+                        embedding_worker_addr: embedding_worker_addr.to_string(),
                         ref_id,
                         embedding_staleness_permit,
                     };
@@ -674,47 +674,43 @@ impl ForwardImpl {
                         );
 
                         let mut batch = batch;
-                        let (embeddings_rpc_result, middleware_addr, embedding_staleness_permit) =
-                            match batch.id_type_features {
-                                EmbeddingTensor::IDTypeFeature(mut id_type_features) => {
-                                    let (middleware_addr, client) =
-                                        rpc_client.get_random_client_with_addr();
+                        let (
+                            embeddings_rpc_result,
+                            embedding_worker_addr,
+                            embedding_staleness_permit,
+                        ) = match batch.id_type_features {
+                            EmbeddingTensor::IDTypeFeature(mut id_type_features) => {
+                                let (embedding_worker_addr, client) =
+                                    rpc_client.get_random_client_with_addr();
 
-                                    id_type_features.requires_grad = is_training;
-                                    let result =
-                                        client.forward_batched_direct(&id_type_features).await;
+                                id_type_features.requires_grad = is_training;
+                                let result = client.forward_batched_direct(&id_type_features).await;
 
-                                    (result, middleware_addr, None)
-                                }
-                                EmbeddingTensor::IDTypeFeatureRemoteRef(
-                                    id_type_features_ref,
-                                ) => {
-                                    let permit = match &embedding_staleness_semaphore {
-                                        Some(s) => Some(s.clone().acquire_owned().await.unwrap()),
-                                        None => None,
-                                    };
+                                (result, embedding_worker_addr, None)
+                            }
+                            EmbeddingTensor::IDTypeFeatureRemoteRef(id_type_features_ref) => {
+                                let permit = match &embedding_staleness_semaphore {
+                                    Some(s) => Some(s.clone().acquire_owned().await.unwrap()),
+                                    None => None,
+                                };
 
-                                    let client = rpc_client.get_client_by_addr(
-                                        id_type_features_ref.middleware_addr.as_str(),
-                                    );
-                                    let result = client
-                                        .forward_batch_id(&(
-                                            id_type_features_ref.clone(),
-                                            is_training,
-                                        ))
-                                        .await;
-                                    (result, id_type_features_ref.middleware_addr.clone(), permit)
-                                }
-                                EmbeddingTensor::Null => {
-                                    panic!("current id type features do not support null data",)
-                                }
-                            };
+                                let client = rpc_client
+                                    .get_client_by_addr(id_type_features_ref.embedding_worker_addr.as_str());
+                                let result = client
+                                    .forward_batch_id(&(id_type_features_ref.clone(), is_training))
+                                    .await;
+                                (result, id_type_features_ref.embedding_worker_addr.clone(), permit)
+                            }
+                            EmbeddingTensor::Null => {
+                                panic!("current sparse data not support null data",)
+                            }
+                        };
 
                         if let Err(err) = embeddings_rpc_result {
                             tracing::error!(
-                                "forward data failed {:?}, middleware: {:?}, wait embedding server recovery service",
+                                "forward data failed {:?}, embedding worker: {:?}, wait embedding server recovery service",
                                 err,
-                                middleware_addr
+                                embedding_worker_addr
                             );
                             rpc_client.wait_for_serving().await.unwrap();
                             continue;
@@ -730,7 +726,7 @@ impl ForwardImpl {
                             Ok(embedding) => {
                                 let id_type_feature_remote_ref = match embedding.backward_ref_id {
                                     Some(backward_ref_id) => IDTypeFeatureRemoteRef {
-                                        middleware_addr,
+                                        embedding_worker_addr,
                                         ref_id: backward_ref_id,
                                         batcher_idx: 0,
                                     },
@@ -749,8 +745,8 @@ impl ForwardImpl {
                                     );
                                 }
                             }
-                            Err(MiddlewareServerError::EmbeddingServerError(_))
-                            | Err(MiddlewareServerError::RpcError(_)) => {
+                            Err(EmbeddingWorkerError::EmbeddingParameterServerError(_))
+                            | Err(EmbeddingWorkerError::RpcError(_)) => {
                                 match rpc_client.wait_for_serving().await {
                                     Ok(_) => {
                                         tracing::debug!("wait for serving success");
@@ -800,7 +796,7 @@ pub fn forward_directly(
     let embeddings = match &batch.id_type_features {
         EmbeddingTensor::IDTypeFeature(id_type_features) => {
             let _guard = async_runtime.enter();
-            let (_middleware_addr, client) = rpc_client.get_random_client_with_addr();
+            let (_embedding_worker_addr, client) = rpc_client.get_random_client_with_addr();
             let embeddings: EmbeddingBatch = async_runtime
                 .block_on(client.forward_batched_direct(id_type_features))
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?

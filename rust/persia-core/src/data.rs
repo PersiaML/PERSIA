@@ -21,7 +21,7 @@ impl EmbeddingTensor {
     pub fn get_remote_ref_info(&self) -> (&str, u64) {
         match &self {
             EmbeddingTensor::IDTypeFeatureRemoteRef(id_type_feature_ref) => {
-                (&id_type_feature_ref.middleware_addr, id_type_feature_ref.ref_id)
+                (&id_type_feature_ref.embedding_worker_addr, id_type_feature_ref.ref_id)
             }
             _ => unreachable!(),
         }

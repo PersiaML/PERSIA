@@ -64,9 +64,9 @@ def cli():
 @cli.command()
 @click.argument("filepath", type=str)
 @click.option("--nproc-per-node", type=int, default=1, help="Process num of per node")
-@click.option("--node-rank", type=int, default=0, help="Replica index of trainer")
-@click.option("--nnodes", type=int, default=1, help="Replica num of trainer")
-def trainer(filepath, nproc_per_node: int, node_rank: int, nnodes: int):
+@click.option("--node-rank", type=int, default=0, help="Replica index of nn worker")
+@click.option("--nnodes", type=int, default=1, help="Replica num of nn owrker")
+def nn_worker(filepath, nproc_per_node: int, node_rank: int, nnodes: int):
 
     cmd = [
         "python3",
@@ -86,10 +86,10 @@ def trainer(filepath, nproc_per_node: int, node_rank: int, nnodes: int):
 @cli.command()
 @click.argument("filepath", type=str)
 @click.option(
-    "--replica-index", type=str, default=0, help="Replica index of data compose"
+    "--replica-index", type=str, default=0, help="Replica index of data loader"
 )
-@click.option("--replica-size", type=str, default=1, help="Replica num of data compose")
-def compose(filepath: str, replica_index: int, replica_size: int):
+@click.option("--replica-size", type=str, default=1, help="Replica num of data loader")
+def data_loader(filepath: str, replica_index: int, replica_size: int):
     cmd = [
         "python3",
         filepath,
@@ -102,23 +102,25 @@ def compose(filepath: str, replica_index: int, replica_size: int):
 
 
 @cli.command()
-@click.option("--port", type=int, default=8887, help="Middleware server listen port")
+@click.option("--port", type=int, default=8887, help="Embedding worker listen port")
 @click.option("--embedding-config", type=str, help="Config of embedding definition")
 @click.option(
-    "--global-config", type=str, help="Config of embedding server and middleware"
+    "--global-config", type=str, help="Config of embedding server and embedding worker"
 )
 @click.option(
-    "--replica-index", type=str, default=0, help="Replica index of middleware"
+    "--replica-index", type=str, default=0, help="Replica index of embedding worker"
 )
-@click.option("--replica-size", type=str, default=1, help="Replica num of middleware")
-def middleware(
+@click.option(
+    "--replica-size", type=str, default=1, help="Replica num of embedding worker"
+)
+def embedding_worker(
     port: int,
     embedding_config: str,
     global_config: str,
     replica_index: int,
     replica_size: int,
 ):
-    executable_path = resolve_binary_execute_path("persia-middleware-server")
+    executable_path = resolve_binary_execute_path("persia-embedding-worker")
     cmd = [
         executable_path,
         "--port",
@@ -139,7 +141,7 @@ def middleware(
 @click.option("--port", type=int, default=8888, help="Embedding server listen port")
 @click.option("--embedding-config", type=str, help="Config of embedding definition")
 @click.option(
-    "--global-config", type=str, help="Config of embedding server and middleware"
+    "--global-config", type=str, help="Config of embedding server and embedding worker"
 )
 @click.option(
     "--replica-index", type=str, default=0, help="Replica index of embedding server"
@@ -147,14 +149,14 @@ def middleware(
 @click.option(
     "--replica-size", type=str, default=1, help="Replica num of embedding server"
 )
-def server(
+def embedding_parameter_server(
     port: int,
     embedding_config: str,
     global_config: str,
     replica_index: int,
     replica_size: int,
 ):
-    executable_path = resolve_binary_execute_path("persia-embedding-server")
+    executable_path = resolve_binary_execute_path("persia-embedding-parameter-server")
     cmd = [
         executable_path,
         "--port",

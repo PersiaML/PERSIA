@@ -9,7 +9,7 @@ from persia.utils import setup_seed
 
 from data_generator import make_dataloader
 
-logger = get_logger("data_compose")
+logger = get_logger("data_loader")
 
 setup_seed(3)
 

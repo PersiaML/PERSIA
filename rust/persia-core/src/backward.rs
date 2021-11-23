@@ -45,7 +45,7 @@ pub enum SkippableSingleSlotGradient {
 pub struct GradientBatchImpl {
     pub gradients: Vec<SkippableSingleSlotGradient>,
     pub backward_ref_id: u64,
-    pub middleware_addr: String,
+    pub embedding_worker_addr: String,
     pub embedding_staleness_permit: Arc<Option<OwnedSemaphorePermit>>,
 }
 
@@ -57,14 +57,14 @@ pub struct GradientBatch {
 impl GradientBatch {
     pub fn new(
         forward_id: u64,
-        middleware_addr: &str,
+        embedding_worker_addr: &str,
         embedding_staleness_permit: Option<OwnedSemaphorePermit>,
     ) -> Self {
         Self {
             inner: Some(GradientBatchImpl {
                 gradients: vec![],
                 backward_ref_id: forward_id,
-                middleware_addr: middleware_addr.to_string(),
+                embedding_worker_addr: embedding_worker_addr.to_string(),
                 embedding_staleness_permit: Arc::new(embedding_staleness_permit),
             }),
         }
@@ -107,7 +107,7 @@ impl GradientBatch {
 
 struct EmbeddingBackwardPacket {
     pub backward_ref_id: u64,
-    pub middleware_addr: String,
+    pub embedding_worker_addr: String,
     pub embedding_staleness_permit: Option<OwnedSemaphorePermit>,
     pub embedding_gradient_batch: EmbeddingGradientBatch,
 }
@@ -287,7 +287,7 @@ impl BackwardImpl {
 
                     if let Err(e) = channel_s.send(EmbeddingBackwardPacket {
                         backward_ref_id: gradients.backward_ref_id,
-                        middleware_addr: gradients.middleware_addr,
+                        embedding_worker_addr: gradients.embedding_worker_addr,
                         embedding_staleness_permit,
                         embedding_gradient_batch: req,
                     }) {
@@ -315,16 +315,16 @@ impl BackwardImpl {
                     }
                     let start_time = std::time::Instant::now();
                     if let Ok(embedding_backward_packet) = channel_r.recv_async().await {
-                        let forward_id = embedding_backward_packet.backward_ref_id;
-                        let middleware_addr = embedding_backward_packet.middleware_addr;
+                        let backward_ref_id = embedding_backward_packet.backward_ref_id;
+                        let embedding_worker_addr = embedding_backward_packet.embedding_worker_addr;
                         let embedding_staleness_permit =
                             embedding_backward_packet.embedding_staleness_permit;
                         let req = embedding_backward_packet.embedding_gradient_batch;
 
                         tracing::debug!("get backward packet time cost {:?}", start_time.elapsed());
 
-                        let client = rpc_client.get_client_by_addr(middleware_addr.as_str());
-                        let result = client.update_gradient_batched(&(forward_id, req)).await;
+                        let client = rpc_client.get_client_by_addr(embedding_worker_addr.as_str());
+                        let result = client.update_gradient_batched(&(backward_ref_id, req)).await;
 
                         if result.is_err() {
                             tracing::error!("backward error {:?}", result.unwrap_err());

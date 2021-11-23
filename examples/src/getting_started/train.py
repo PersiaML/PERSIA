@@ -19,7 +19,7 @@ from model import DNN
 from data_generator import make_dataloader
 
 
-logger = get_default_logger("trainer")
+logger = get_default_logger("nn_worker")
 
 device_id = get_local_rank()
 setup_seed(3)
@@ -49,14 +49,14 @@ class TestDataset(PersiaDataset):
         return self.loader_size
 
 
-def test(model: torch.nn.Module, data_laoder: Dataloder, cuda: bool):
+def test(model: torch.nn.Module, data_loader: Dataloder, cuda: bool):
     logger.info("start to test...")
     model.eval()
 
     with eval_ctx(model=model) as ctx:
         accuracies, losses = [], []
         all_pred, all_target = [], []
-        for (batch_idx, batch_data) in enumerate(tqdm(data_laoder, desc="test...")):
+        for (batch_idx, batch_data) in enumerate(tqdm(data_loader, desc="test...")):
             (pred, target) = ctx.forward(batch_data)
             loss = loss_fn(pred, target)
             if cuda:
