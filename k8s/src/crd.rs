@@ -11,16 +11,16 @@ use std::collections::BTreeMap;
 pub const DEFAULT_CUDA_IMAGE: &str = "persiaml/persia-cuda-runtime:latest";
 pub const DEFAULT_CPU_IMAGE: &str = "persiaml/persia-cpu-runtime:latest";
 
-pub fn get_emb_server_pod_name(job_name: &str, replica_index: usize) -> String {
-    format!("{}-embedding-server-{}", job_name, replica_index)
+pub fn get_embedding_ps_pod_name(job_name: &str, replica_index: usize) -> String {
+    format!("{}-embedding-ps-{}", job_name, replica_index)
 }
 
-pub fn get_mid_server_pod_name(job_name: &str, replica_index: usize) -> String {
-    format!("{}-middware-server-{}", job_name, replica_index)
+pub fn get_embedding_worker_pod_name(job_name: &str, replica_index: usize) -> String {
+    format!("{}-embedding-worker-{}", job_name, replica_index)
 }
 
-pub fn get_trainer_pod_name(job_name: &str, replica_index: usize) -> String {
-    format!("{}-trainer-{}", job_name, replica_index)
+pub fn get_nn_worker_pod_name(job_name: &str, replica_index: usize) -> String {
+    format!("{}-nn-worker-{}", job_name, replica_index)
 }
 
 pub fn get_dataloader_pod_name(job_name: &str, replica_index: usize) -> String {
@@ -52,15 +52,15 @@ pub fn get_label_selector(job_name: &str) -> String {
 pub struct PersiaJobSpec {
     pub globalConfigPath: String,
     pub embeddingConfigPath: String,
-    pub trainerPyEntryPath: Option<String>,
+    pub nnWorkerPyEntryPath: Option<String>,
     pub dataLoaderPyEntryPath: Option<String>,
     pub enableMetrics: Option<bool>,
     pub volumes: Option<Vec<Volume>>,
     pub env: Option<Vec<EnvVar>>,
     pub logLevel: Option<String>,
-    pub embeddingServer: Option<EmbeddingSpec>,
-    pub middlewareServer: Option<MiddlewareSpec>,
-    pub trainer: Option<TrainerSpec>,
+    pub embeddingParameterServer: Option<EmbeddingParameterServerSpec>,
+    pub embeddingWorker: Option<EmbeddingWorkerSpec>,
+    pub nnWorker: Option<NNWorkerSpec>,
     pub dataloader: Option<DataLoaderSpec>,
 }
 
@@ -169,7 +169,7 @@ impl PersiaJobSpec {
     pub fn gen_pods(&self, job_name: &str, namespace: &str) -> Vec<Pod> {
         let mut results = Vec::new();
 
-        if let Some(embedding_server) = &self.embeddingServer {
+        if let Some(embedding_server) = &self.embeddingParameterServer {
             let mut emb_server_spec: Vec<Pod> = (0..embedding_server.replicas)
                 .into_iter()
                 .map(|replica_idx| {
@@ -223,7 +223,7 @@ impl PersiaJobSpec {
                         });
                     }
 
-                    pod.metadata.name = Some(get_emb_server_pod_name(job_name, replica_idx));
+                    pod.metadata.name = Some(get_embedding_ps_pod_name(job_name, replica_idx));
                     pod
                 })
                 .collect();
@@ -231,18 +231,18 @@ impl PersiaJobSpec {
             results.append(&mut emb_server_spec);
         }
 
-        if let Some(middleware_server) = &self.middlewareServer {
-            let mut middleware_server_spec: Vec<Pod> = (0..middleware_server.replicas)
+        if let Some(embedding_worker) = &self.embeddingWorker {
+            let mut embedding_worker_spec: Vec<Pod> = (0..embedding_worker.replicas)
                 .into_iter()
                 .map(|replica_idx| {
                     let mut pod = self.gen_pod_template(job_name, namespace);
                     let podspec = pod.spec.as_mut().unwrap();
                     let container = podspec.containers.first_mut().unwrap();
 
-                    container.name = "middleware-server".to_string();
+                    container.name = "embedding-worker".to_string();
                     container.args = Some(
                         vec![
-                            "middleware",
+                            "embedding-worker",
                             "--embedding-config",
                             "$(EMBEDDING_CONFIG_PATH)",
                             "--global-config",
@@ -257,10 +257,10 @@ impl PersiaJobSpec {
                         .collect(),
                     );
 
-                    container.resources = middleware_server.resources.clone();
-                    container.volume_mounts = middleware_server.volumeMounts.clone();
+                    container.resources = embedding_worker.resources.clone();
+                    container.volume_mounts = embedding_worker.volumeMounts.clone();
 
-                    container.image = middleware_server.image.clone();
+                    container.image = embedding_worker.image.clone();
                     if container.image.is_none() {
                         container.image = Some(String::from(DEFAULT_CPU_IMAGE));
                     }
@@ -274,26 +274,26 @@ impl PersiaJobSpec {
 
                     env.push(EnvVar {
                         name: String::from("REPLICA_SIZE"),
-                        value: Some(middleware_server.replicas.to_string()),
+                        value: Some(embedding_worker.replicas.to_string()),
                         ..EnvVar::default()
                     });
 
-                    if let Some(e) = &middleware_server.env {
+                    if let Some(e) = &embedding_worker.env {
                         e.iter().for_each(|env_var| {
                             env.push(env_var.clone());
                         });
                     }
 
-                    pod.metadata.name = Some(get_mid_server_pod_name(job_name, replica_idx));
+                    pod.metadata.name = Some(get_embedding_worker_pod_name(job_name, replica_idx));
                     pod
                 })
                 .collect();
 
-            results.append(&mut middleware_server_spec);
+            results.append(&mut embedding_worker_spec);
         }
 
-        if let Some(trainer) = &self.trainer {
-            let mut trainer_spec: Vec<Pod> = (0..trainer.replicas)
+        if let Some(nn_worker) = &self.nnWorker {
+            let mut nn_worker_spec: Vec<Pod> = (0..nn_worker.replicas)
                 .into_iter()
                 .map(|replica_idx| {
                     let mut pod = self.gen_pod_template(job_name, namespace);
@@ -301,11 +301,11 @@ impl PersiaJobSpec {
 
                     let container = podspec.containers.first_mut().unwrap();
 
-                    container.name = "trainer".to_string();
+                    container.name = "nn-worker".to_string();
                     container.args = Some(
                         vec![
-                            "trainer",
-                            "$(TRAINER_PY_ENTRY_PATH)",
+                            "nn-worker",
+                            "$(NN_WORKER_PY_ENTRY_PATH)",
                             "--nproc-per-node",
                             "$(NPROC_PER_NODE)",
                             "--nnodes",
@@ -318,10 +318,10 @@ impl PersiaJobSpec {
                         .collect(),
                     );
 
-                    container.resources = trainer.resources.clone();
-                    container.volume_mounts = trainer.volumeMounts.clone();
+                    container.resources = nn_worker.resources.clone();
+                    container.volume_mounts = nn_worker.volumeMounts.clone();
 
-                    container.image = trainer.image.clone();
+                    container.image = nn_worker.image.clone();
                     if container.image.is_none() {
                         container.image = Some(String::from(DEFAULT_CUDA_IMAGE));
                     }
@@ -334,32 +334,32 @@ impl PersiaJobSpec {
                     });
                     env.push(EnvVar {
                         name: String::from("REPLICA_SIZE"),
-                        value: Some(trainer.replicas.to_string()),
+                        value: Some(nn_worker.replicas.to_string()),
                         ..EnvVar::default()
                     });
                     env.push(EnvVar {
                         name: String::from("NPROC_PER_NODE"),
-                        value: Some(trainer.nprocPerNode.to_string()),
+                        value: Some(nn_worker.nprocPerNode.to_string()),
                         ..EnvVar::default()
                     });
                     env.push(EnvVar {
-                        name: String::from("TRAINER_PY_ENTRY_PATH"),
-                        value: self.trainerPyEntryPath.clone(),
+                        name: String::from("NN_WORKER_PY_ENTRY_PATH"),
+                        value: self.nnWorkerPyEntryPath.clone(),
                         ..EnvVar::default()
                     });
 
-                    if let Some(e) = &trainer.env {
+                    if let Some(e) = &nn_worker.env {
                         e.iter().for_each(|env_var| {
                             env.push(env_var.clone());
                         });
                     }
 
-                    pod.metadata.name = Some(get_trainer_pod_name(job_name, replica_idx));
+                    pod.metadata.name = Some(get_nn_worker_pod_name(job_name, replica_idx));
                     pod
                 })
                 .collect();
 
-            results.append(&mut trainer_spec);
+            results.append(&mut nn_worker_spec);
         }
 
         if let Some(dataloader) = &self.dataloader {
@@ -373,10 +373,10 @@ impl PersiaJobSpec {
                         .first_mut()
                         .expect("no containers in a persia podspec template");
 
-                    container.name = "dataloader".to_string();
+                    container.name = "data-loader".to_string();
                     container.args = Some(
                         vec![
-                            "compose",
+                            "data-loader",
                             "$(DATALOADER_PY_ENTRY_PATH)",
                             "--replica-index",
                             "$(REPLICA_INDEX)",
@@ -464,7 +464,7 @@ impl PersiaJobSpec {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, JsonSchema)]
 #[allow(non_snake_case)]
-pub struct EmbeddingSpec {
+pub struct EmbeddingParameterServerSpec {
     pub replicas: usize,
     pub resources: Option<ResourceRequirements>,
     pub volumeMounts: Option<Vec<VolumeMount>>,
@@ -474,7 +474,7 @@ pub struct EmbeddingSpec {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, JsonSchema)]
 #[allow(non_snake_case)]
-pub struct MiddlewareSpec {
+pub struct EmbeddingWorkerSpec {
     pub replicas: usize,
     pub resources: Option<ResourceRequirements>,
     pub volumeMounts: Option<Vec<VolumeMount>>,
@@ -484,7 +484,7 @@ pub struct MiddlewareSpec {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, JsonSchema)]
 #[allow(non_snake_case)]
-pub struct TrainerSpec {
+pub struct NNWorkerSpec {
     pub replicas: usize,
     pub nprocPerNode: usize,
     pub resources: Option<ResourceRequirements>,

@@ -6,27 +6,27 @@ metadata:
 spec:
   globalConfigPath: /home/PersiaML/examples/src/getting_started/config/global_config.yml
   embeddingConfigPath: /home/PersiaML/examples/src/getting_started/config/embedding_config.yml
-  trainerPyEntryPath: /home/PersiaML/examples/src/getting_started/train.py
+  nnWorkerPyEntryPath: /home/PersiaML/examples/src/getting_started/train.py
   dataLoaderPyEntryPath: /home/PersiaML/examples/src/getting_started/data_compose.py
   env:
     - name: PERSIA_NATS_IP
       value: nats://persia-nats-service:4222
 
-  embeddingServer:
+  embeddingParameterServer:
     replicas: 1
     resources:
       limits:
         memory: "24Gi"
         cpu: "4"
 
-  middlewareServer:
+  embeddingWorker:
     replicas: 1
     resources:
       limits:
         memory: "24Gi"
         cpu: "4"
 
-  trainer:
+  nnWorker:
     replicas: 1
     nprocPerNode: 1
     resources:
