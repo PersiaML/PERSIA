@@ -45,7 +45,7 @@ pub enum SkippableSingleSlotGradient {
 pub struct GradientBatch {
     pub gradients: Vec<SkippableSingleSlotGradient>,
     pub forward_id: u64,
-    pub middleware_addr: String,
+    pub embedding_worker_addr: String,
     pub embedding_staleness_permit: Arc<Option<OwnedSemaphorePermit>>,
 }
 
@@ -57,14 +57,14 @@ pub struct PythonGradientBatch {
 impl PythonGradientBatch {
     pub fn new(
         forward_id: u64,
-        middleware_addr: &str,
+        embedding_worker_addr: &str,
         embedding_staleness_permit: Option<OwnedSemaphorePermit>,
     ) -> Self {
         Self {
             inner: Some(GradientBatch {
                 gradients: vec![],
                 forward_id,
-                middleware_addr: middleware_addr.to_string(),
+                embedding_worker_addr: embedding_worker_addr.to_string(),
                 embedding_staleness_permit: Arc::new(embedding_staleness_permit),
             }),
         }
@@ -107,7 +107,7 @@ impl PythonGradientBatch {
 
 struct EmbeddingBackwardPacket {
     pub forward_id: u64,
-    pub middleware_addr: String,
+    pub embedding_worker_addr: String,
     pub embedding_staleness_permit: Option<OwnedSemaphorePermit>,
     pub embedding_gradient_batch: EmbeddingGradientBatch,
 }
@@ -287,7 +287,7 @@ impl Backward {
 
                     if let Err(e) = channel_s.send(EmbeddingBackwardPacket {
                         forward_id: gradients.forward_id,
-                        middleware_addr: gradients.middleware_addr,
+                        embedding_worker_addr: gradients.embedding_worker_addr,
                         embedding_staleness_permit,
                         embedding_gradient_batch: req,
                     }) {
@@ -316,7 +316,7 @@ impl Backward {
                     let start_time = std::time::Instant::now();
                     if let Ok(embedding_backward_packet) = channel_r.recv_async().await {
                         let forward_id = embedding_backward_packet.forward_id;
-                        let middleware_addr = embedding_backward_packet.middleware_addr;
+                        let embedding_worker_addr = embedding_backward_packet.embedding_worker_addr;
                         let embedding_staleness_permit =
                             embedding_backward_packet.embedding_staleness_permit;
                         let req = embedding_backward_packet.embedding_gradient_batch;
@@ -326,7 +326,7 @@ impl Backward {
                             start_time.elapsed()
                         );
 
-                        let client = rpc_client.get_client_by_addr(middleware_addr.as_str());
+                        let client = rpc_client.get_client_by_addr(embedding_worker_addr.as_str());
                         let result = client.update_gradient_batched(&(forward_id, req)).await;
 
                         if result.is_err() {

@@ -32,7 +32,13 @@ pub struct FeatureBatch {
     pub index_batch: Vec<SingleSignInFeatureBatch>,
     /// how many signs in each sample of the batch
     pub sample_num_signs: Vec<u32>,
-    pub hashed2index_batch_idx: HashMap<u64, usize>, // hashed2index_batch_idx is the mapping from emb_id to raw_embedding_result idx. Place each emb result in correct idx and processed the raw emb gradient update
+    /// mapping of id to batch index
+    /// hashed2index_batch_idx is the mapping from emb_id to raw_embedding_result idx.
+    /// Place each emb result in correct idx and processed the raw emb gradient update
+    /// TODO: use i32 to represent the index
+    /// Current solution is due to pytorch index_select function not support int32 index
+    /// when installed pytorch version below 1.8.
+    pub hashed2index_batch_idx: HashMap<u64, i64>,
     pub batch_size: u16,
 }
 
@@ -56,9 +62,9 @@ impl FeatureBatch {
                         .push((batch_idx as u16, col_idx as u16));
                 })
             });
-        let mut hashed2index_batch_idx: HashMap<u64, usize> = HashMap::default();
+        let mut hashed2index_batch_idx: HashMap<u64, i64> = HashMap::default();
         m.iter().enumerate().for_each(|(idx, (id, _))| {
-            hashed2index_batch_idx.insert(id.clone(), idx);
+            hashed2index_batch_idx.insert(*id, idx as i64);
         });
         Self {
             feature_name,
@@ -70,7 +76,7 @@ impl FeatureBatch {
                 })
                 .collect_vec(),
             sample_num_signs,
-            hashed2index_batch_idx: hashed2index_batch_idx,
+            hashed2index_batch_idx,
             batch_size: batch_size as u16,
         }
     }
@@ -81,7 +87,7 @@ impl FeatureBatch {
 pub struct FeatureRawEmbeddingBatch {
     pub feature_name: String,
     pub embeddings: Array2<half::f16>,
-    pub index: Vec<usize>,
+    pub index: Vec<i64>,
     pub sample_id_num: Vec<usize>,
 }
 
@@ -133,7 +139,7 @@ impl Default for SparseBatch {
 
 #[derive(Readable, Writable, Debug, Clone)]
 pub struct SparseBatchRemoteReference {
-    pub middleware_addr: String,
+    pub embedding_worker_addr: String,
     pub ref_id: u64,
     pub batcher_idx: usize,
 }
@@ -141,7 +147,7 @@ pub struct SparseBatchRemoteReference {
 impl Default for SparseBatchRemoteReference {
     fn default() -> Self {
         Self {
-            middleware_addr: String::from(""),
+            embedding_worker_addr: String::from(""),
             ref_id: 0,
             batcher_idx: 0,
         }

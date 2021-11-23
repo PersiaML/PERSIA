@@ -10,7 +10,7 @@ version = "0.1.0"
 persia-embedding-config = {path = "../persia-embedding-config"}
 persia-common = {path = "../persia-common"}
 persia-libs = {path = "../persia-libs"}
-persia-speedy = "0.9"
+persia-speedy = { path = "../persia-speedy" }
 array-linked-list = "0.1.0"
 ahash = "0.7"
 

@@ -14,31 +14,31 @@ services:
         deploy:
             endpoint_mode: dnsrr
         depends_on:
-            - middleware
-            - emb_server
+            - embedding_worker
+            - embedding_parameter_server
 
-    middleware:
+    embedding_worker:
         env_file:
             - adult_income/.test_env
         environment:
             TASK_SLOT_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia-launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
+        command: persia-launcher embedding-worker --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
         volumes:
             - ./adult_income:/workspace
             - ./cache:/cache
         deploy:
             endpoint_mode: dnsrr
         depends_on:
-            - emb_server
+            - embedding_parameter_server
 
-    emb_server:
+    embedding_parameter_server:
         env_file:
             - adult_income/.test_env
         environment:
             TASK_SLOT_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia-launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
+        command: persia-launcher embedding-parameter-server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_infer.yml
         volumes:
             - ./adult_income:/workspace
             - ./cache:/cache

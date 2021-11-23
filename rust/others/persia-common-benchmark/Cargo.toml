@@ -11,7 +11,7 @@ version = "0.1.0"
 bincode = "1"
 criterion = "0.3"
 criterion-macro = "0.3"
-persia-speedy = "0.9"
+persia-speedy = { path = "../../persia-speedy" }
 serde = {version = "1", features = ["derive"]}
 smallvec = "1"
 tinystr = "0.4"

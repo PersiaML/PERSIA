@@ -9,4 +9,4 @@ version = "0.1.0"
 [dependencies]
 async-nats = "0.10.1"
 persia-libs = {path = "../../persia-libs"}
-persia-speedy = "0.9"
+persia-speedy = { path = "../../persia-speedy" }

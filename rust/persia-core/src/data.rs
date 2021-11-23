@@ -21,7 +21,7 @@ impl EmbeddingTensor {
     pub fn get_remote_ref_info(&self) -> (&str, u64) {
         match &self {
             EmbeddingTensor::SparseBatchRemoteReference(sparse_ref) => {
-                (&sparse_ref.middleware_addr, sparse_ref.ref_id)
+                (&sparse_ref.embedding_worker_addr, sparse_ref.ref_id)
             }
             _ => unreachable!(),
         }

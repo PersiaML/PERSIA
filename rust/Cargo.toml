@@ -11,6 +11,7 @@ members = [
   "persia-storage",
   "persia-embedding-holder",
   "persia-metrics",
+  "persia-speedy",
   "others/persia-common-benchmark",
   "others/persia-nats-client",
   "others/persia-nats-marcos",

@@ -1,5 +1,5 @@
 from persia.ctx import InferCtx
-from persia.service import get_middleware_services
+from persia.service import get_embedding_worker_services
 from ts.torch_handler.base_handler import BaseHandler
 
 from abc import ABC
@@ -11,8 +11,8 @@ device_id = 0 if torch.cuda.is_available() else None
 class PersiaHandler(BaseHandler, ABC):
     def initialize(self, context):
         super().initialize(context)
-        middleware_addrs = get_middleware_services()
-        self.persia_context = InferCtx(middleware_addrs, device_id=device_id)
+        embedding_worker_addrs = get_embedding_worker_services()
+        self.persia_context = InferCtx(embedding_worker_addrs, device_id=device_id)
         self.persia_context.wait_for_serving()
 
     def preprocess(self, data):

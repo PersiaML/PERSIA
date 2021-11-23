@@ -5,15 +5,15 @@ common_config:
   job_type: Infer
   infer_config:
     servers:
-      - emb_server:8888
+      - embedding_parameter_server:8888
     embedding_checkpoint: /cache/infer_checkpoint
   checkpointing_config:
     num_workers: 8
-embedding_server_config:
+embedding_parameter_server_config:
   capacity: 1000000
   num_hashmap_internal_shards: 1
   enable_incremental_update: false
   incremental_buffer_size: 5000000
   incremental_channel_capacity: 1000
-middleware_config:
+embedding_worker_config:
   forward_buffer_size: 1000

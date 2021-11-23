@@ -79,10 +79,10 @@ impl DType {
             DType::I32 => (*&DLDataTypeCode::DLInt, 32),
             DType::I64 => (*&DLDataTypeCode::DLInt, 64),
             DType::U8 => (*&DLDataTypeCode::DLUInt, 8),
-            DType::U16 => (*&DLDataTypeCode::DLUInt, 16),
-            DType::U32 => (*&DLDataTypeCode::DLUInt, 32),
-            DType::U64 => (*&DLDataTypeCode::DLUInt, 64),
-            DType::USIZE => (*&DLDataTypeCode::DLUInt, 64),
+            _ => panic!(
+                "converting {} to DLDataType failed, uint8 is the only supported unsigned integer type in PyTorch",
+                self
+            ),
         };
         let code = code as u8;
 

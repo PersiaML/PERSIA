@@ -17,7 +17,7 @@ use persia_libs::{
 
 use persia_common::utils::ChannelPair;
 use persia_embedding_config::{
-    PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig, PersiaGlobalConfigError,
+    EmbeddingParameterServerConfig, PerisaJobType, PersiaCommonConfig, PersiaGlobalConfigError,
     PersiaReplicaInfo,
 };
 use persia_embedding_holder::{
@@ -89,7 +89,7 @@ pub struct PerisaIncrementalUpdateManager {
 impl PerisaIncrementalUpdateManager {
     pub fn get() -> Result<Arc<Self>, IncrementalUpdateError> {
         let singleton = INCREMENTAL_UPDATE_MANAGER.get_or_try_init(|| {
-            let server_config = PersiaEmbeddingServerConfig::get()?;
+            let server_config = EmbeddingParameterServerConfig::get()?;
             let common_config = PersiaCommonConfig::get()?;
             let embedding_holder = PersiaEmbeddingHolder::get()?;
             let replica_info = PersiaReplicaInfo::get()?;

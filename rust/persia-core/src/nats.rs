@@ -16,7 +16,7 @@ use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
     BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
 };
-use persia_embedding_server::middleware_service::MiddlewareNatsServicePublisher;
+use persia_embedding_server::embedding_worker_service::EmbeddingWorkerNatsServicePublisher;
 use persia_nats_client::NatsError;
 
 pub mod master_discovery_service {
@@ -108,8 +108,8 @@ pub mod persia_dataflow_service {
 
     #[derive(thiserror::Error, Debug, Readable, Writable)]
     pub enum Error {
-        #[error("trainer buffer full error")]
-        TrainerBufferFullError,
+        #[error("nn worker buffer full error")]
+        NNWorkerBufferFullError,
     }
 
     #[derive(Clone)]
@@ -126,7 +126,7 @@ pub mod persia_dataflow_service {
                 .output_channel
                 .send_timeout(batch, std::time::Duration::from_millis(500));
             if !result.is_ok() {
-                Err(Error::TrainerBufferFullError)
+                Err(Error::NNWorkerBufferFullError)
             } else {
                 Ok(())
             }
@@ -142,9 +142,9 @@ static RESPONDER: OnceCell<Arc<persia_dataflow_service::DataflowServiceResponder
     OnceCell::new();
 
 pub struct PersiaDataFlowComponent {
-    middleware_publish_service: MiddlewareNatsServicePublisher,
-    num_middlewares: usize,
-    cur_middleware_id: AtomicUsize,
+    embedding_worker_publish_service: EmbeddingWorkerNatsServicePublisher,
+    num_embedding_workers: usize,
+    cur_embedding_worker_id: AtomicUsize,
     cur_batch_id: AtomicUsize,
     replica_info: Arc<PersiaReplicaInfo>,
     dataflow_publish_service: persia_dataflow_service::DataflowServicePublisher,
@@ -178,10 +178,10 @@ impl PersiaDataFlowComponent {
 
         tracing::info!("Get world_size {}", world_size);
 
-        let preforward_sparse_publish_service = MiddlewareNatsServicePublisher::new().await;
+        let preforward_sparse_publish_service = EmbeddingWorkerNatsServicePublisher::new().await;
 
         let backoff = backoff::ExponentialBackoff::default();
-        let num_middlewares = backoff::future::retry(backoff, || async {
+        let num_embedding_workers = backoff::future::retry(backoff, || async {
             let result: Result<usize, PersiaError> = preforward_sparse_publish_service
                 .publish_get_replica_size(&(), None)
                 .await
@@ -189,7 +189,7 @@ impl PersiaDataFlowComponent {
                 .map_err(|e| PersiaError::from(e));
             if result.is_err() {
                 tracing::warn!(
-                    "failed to get middleware replica size via nats due to {:?}, retrying...",
+                    "failed to get embedding worker replica size via nats due to {:?}, retrying...",
                     result
                 );
             }
@@ -201,76 +201,77 @@ impl PersiaDataFlowComponent {
 
         Ok(Self {
             dataflow_publish_service,
-            middleware_publish_service: preforward_sparse_publish_service,
-            num_middlewares,
-            cur_middleware_id: AtomicUsize::new(0),
+            embedding_worker_publish_service: preforward_sparse_publish_service,
+            num_embedding_workers,
+            cur_embedding_worker_id: AtomicUsize::new(0),
             world_size,
             cur_batch_id: AtomicUsize::new(0),
             replica_info,
         })
     }
 
-    pub async fn get_middleware_addr_list(&self) -> Result<Vec<String>, PersiaError> {
-        // TODO: auto update middleware addr list to avoid the bad middleware addr
-        let middleware_replica_size = self.num_middlewares;
+    pub async fn get_embedding_worker_addr_list(&self) -> Result<Vec<String>, PersiaError> {
+        // TODO: auto update embedding worker addr list to avoid the bad embedding worker addr
+        let embedding_worker_replica_size = self.num_embedding_workers;
 
-        let mut middleware_addr_list = Vec::new();
-        for middleware_idx in 0..middleware_replica_size {
+        let mut embedding_worker_addr_list = Vec::new();
+        for embedding_worker_idx in 0..embedding_worker_replica_size {
             let backoff = backoff::ExponentialBackoff::default();
-            let middleware_addr = backoff::future::retry(backoff, || async {
-                let middleware_addr = self
-                    .middleware_publish_service
-                    .publish_get_address(&(), Some(middleware_idx))
+            let embedding_worker_addr = backoff::future::retry(backoff, || async {
+                let embedding_worker_addr = self
+                    .embedding_worker_publish_service
+                    .publish_get_address(&(), Some(embedding_worker_idx))
                     .await
                     .map_err(|e| PersiaError::from(e))?
                     .map_err(|e| PersiaError::from(e));
-                if middleware_addr.is_err() {
+                if embedding_worker_addr.is_err() {
                     tracing::warn!(
-                        "failed to get addr for middleware {} due to {:?}",
-                        middleware_idx,
-                        middleware_addr
+                        "failed to get addr for embedding worker {} due to {:?}",
+                        embedding_worker_idx,
+                        embedding_worker_addr
                     );
                 }
-                Ok(middleware_addr?)
+                Ok(embedding_worker_addr?)
             })
             .await?;
 
-            middleware_addr_list.push(middleware_addr.to_string())
+            embedding_worker_addr_list.push(embedding_worker_addr.to_string())
         }
-        Ok(middleware_addr_list)
+        Ok(embedding_worker_addr_list)
     }
 
-    pub async fn send_sparse_to_middleware(
+    pub async fn send_sparse_to_embedding_worker(
         &self,
         batch: &mut PyPersiaBatchData,
     ) -> Result<(), PersiaError> {
         let start = std::time::Instant::now();
         match &mut batch.inner.sparse_data {
             EmbeddingTensor::SparseBatchRemoteReference(_) => {
-                tracing::error!("sparse data has already sent to middleware, you are calling send_sparse_to_middleware muti times");
+                tracing::error!("sparse data has already sent to embedding worker, you are calling send_sparse_to_embedding_worker muti times");
                 return Err(PersiaError::MultipleSendError);
             }
             EmbeddingTensor::SparseBatch(sparse_batch) => {
                 let replica_index = self.replica_info.replica_index;
                 sparse_batch.batcher_idx = Some(replica_index);
 
-                let cur_middleware_id = self.cur_middleware_id.fetch_add(1, Ordering::AcqRel);
+                let cur_embedding_worker_id =
+                    self.cur_embedding_worker_id.fetch_add(1, Ordering::AcqRel);
 
                 let backoff = backoff::ExponentialBackoff::default();
                 let sparse_ref: SparseBatchRemoteReference =
                     backoff::future::retry(backoff, || async {
                         let sparse_ref = self
-                            .middleware_publish_service
+                            .embedding_worker_publish_service
                             .publish_forward_batched(
                                 sparse_batch,
-                                Some(cur_middleware_id % self.num_middlewares),
+                                Some(cur_embedding_worker_id % self.num_embedding_workers),
                             )
                             .await
                             .map_err(|e| PersiaError::from(e))?
                             .map_err(|e| PersiaError::from(e));
                         if sparse_ref.is_err() {
                             tracing::warn!(
-                                "failed to send ids to middleware due to {:?}, retrying...",
+                                "failed to send ids to embedding worker due to {:?}, retrying...",
                                 sparse_ref
                             );
                         }
@@ -284,7 +285,7 @@ impl PersiaDataFlowComponent {
                     + self.replica_info.replica_index;
                 batch.inner.batch_id = Some(batch_id);
                 tracing::debug!(
-                    "send_sparse_to_middleware time cost {} ms",
+                    "send_sparse_to_embedding_worker time cost {} ms",
                     start.elapsed().as_millis()
                 );
                 return Ok(());
@@ -296,13 +297,13 @@ impl PersiaDataFlowComponent {
         }
     }
 
-    pub async fn send_dense_to_trainer(
+    pub async fn send_dense_to_nn_worker(
         &self,
         batch: &PyPersiaBatchData,
     ) -> Result<(), PersiaError> {
         let start = std::time::Instant::now();
         if batch.inner.batch_id.is_none() {
-            tracing::warn!("batch id is null, please call send_sparse_to_middleware first");
+            tracing::warn!("batch id is null, please call send_sparse_to_embedding_worker first");
             return Err(PersiaError::NullBatchIdError);
         }
         let rank_id = batch.inner.batch_id.unwrap() % self.world_size;
@@ -317,7 +318,7 @@ impl PersiaDataFlowComponent {
                 .map_err(|e| PersiaError::from(e));
             if resp.is_err() {
                 tracing::warn!(
-                    "failed to send data to trainer due to {:?}, retrying...",
+                    "failed to send data to nn worker due to {:?}, retrying...",
                     resp
                 );
             }
@@ -326,14 +327,14 @@ impl PersiaDataFlowComponent {
         .await?;
 
         tracing::debug!(
-            "send_dense_to_trainer {} time cost {} ms",
+            "send_dense_to_nn_worker {} time cost {} ms",
             rank_id,
             start.elapsed().as_millis()
         );
         Ok(())
     }
 
-    pub async fn configure_embedding_servers(
+    pub async fn configure_embedding_parameter_servers(
         &self,
         initialize_lower: f32,
         initialize_upper: f32,
@@ -357,8 +358,8 @@ impl PersiaDataFlowComponent {
             enable_weight_bound,
         };
 
-        self.middleware_publish_service
-            .publish_configure_embedding_servers(&config, None)
+        self.embedding_worker_publish_service
+            .publish_configure_embedding_parameter_servers(&config, None)
             .await??;
 
         Ok(())
@@ -371,7 +372,7 @@ impl PersiaDataFlowComponent {
         }
         let optimizer = optimizer.unwrap();
 
-        self.middleware_publish_service
+        self.embedding_worker_publish_service
             .publish_register_optimizer(&optimizer, None)
             .await??;
 
@@ -380,7 +381,7 @@ impl PersiaDataFlowComponent {
 
     pub async fn wait_servers_ready(&self) -> Result<String, PersiaError> {
         let addr = self
-            .middleware_publish_service
+            .embedding_worker_publish_service
             .publish_get_address(&(), None)
             .await??;
         Ok(addr)
