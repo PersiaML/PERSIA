@@ -204,7 +204,7 @@ class EmbeddingCtx(BaseCtx):
     ``persia.ctx.inference_ctx`` to get the ``EmbeddingCtx`` instance.
 
     Example:
-        >>> from persia.prelude import PyPersiaBatchData
+        >>> from persia.prelude import PersiaBatch
         >>> model = get_dnn_model()
         >>> loader = make_dataloader()
         >>> embedding_config = EmbeddingConfig()
@@ -214,7 +214,7 @@ class EmbeddingCtx(BaseCtx):
         ...     embedding_config
         ... ) as ctx:
         >>>     for (non_id_type_feature, id_type_features, label) in loader:
-        >>>         batch_data = PyPersiaBatchData()
+        >>>         batch_data = PersiaBatch()
         >>>         batch_data.add_non_id_type_feature(non_id_type_feature)
         >>>         batch_data.add_id_type_features(id_type_features)
         >>>         batch_data.add_label(label)
@@ -535,7 +535,7 @@ class EmbeddingCtx(BaseCtx):
         """Get embeddings of the input batch data.
 
         Arguments:
-            data (PyPersiaBatchData): Input data without embeddings.
+            data (PersiaBatch): Input data without embeddings.
             device_id (int, optional): The CUDA device to use for this process.
 
         Returns:
@@ -549,7 +549,7 @@ class EmbeddingCtx(BaseCtx):
         """Get embeddings of the serialized input batch data.
 
         Arguments:
-            data (PyPersiaBatchData): Serialized input data without embeddings.
+            data (PersiaBatch): Serialized input data without embeddings.
             device_id (int, optional): The CUDA device to use for this process.
 
         Returns:
