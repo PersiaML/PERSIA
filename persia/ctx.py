@@ -63,7 +63,7 @@ class PreprocessMode(Enum):
 
     When set to ``TRAIN``, ``prepare_features`` will return a torch tensor with ``requires_grad`` attribute set to ``True``.
     When set to ``EVAL``, ``prepare_features`` will return a torch tensor with ``requires_grad`` attribute set to ``False``.
-    ``INFERENCE`` behaves almost identical to ``PreprocessMode.EVAL``, except that ``INFERENCE`` allows ""EmbeddingCtx`` 
+    ``INFERENCE`` behaves almost identical to ``PreprocessMode.EVAL``, except that ``INFERENCE`` allows ""EmbeddingCtx``
     to process the ``PersiaTrainingBatch`` without a target tensor.
     """
     TRAIN = 1
