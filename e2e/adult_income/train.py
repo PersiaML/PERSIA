@@ -76,13 +76,14 @@ def test(
         accuracies, losses = [], []
         all_pred, all_target = [], []
         for (_batch_idx, batch_data) in enumerate(tqdm(test_loader, desc="test...")):
-            (pred, target) = ctx.forward(batch_data)
+            (pred, targets) = ctx.forward(batch_data)
+            target = targets[0]
             loss = loss_fn(pred, target)
             if cuda:
                 pred = pred.cpu()
                 target = target.cpu()
             else:
-                # cpu mode need copy the target data to avoid use the invalid data.
+                # cpu mode need copy the target data to avoid use the expired data.
                 target = target.clone()
             all_pred.append(pred.detach().numpy())
             all_target.append(target.detach().numpy())
