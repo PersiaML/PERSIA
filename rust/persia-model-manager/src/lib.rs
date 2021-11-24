@@ -313,7 +313,8 @@ impl EmbeddingModelManager {
                     let dumped = num_dumped_shards.fetch_add(1, Ordering::AcqRel) + 1;
                     let dumping_progress = (dumped as f32) / (num_internal_shards as f32);
 
-                    *manager.status.write() = EmbeddingModelManagerStatus::Dumping(dumping_progress);
+                    *manager.status.write() =
+                        EmbeddingModelManagerStatus::Dumping(dumping_progress);
                     tracing::debug!("dumping progress is {}", dumping_progress);
 
                     if dumped >= num_internal_shards {
@@ -347,9 +348,9 @@ impl EmbeddingModelManager {
     ) -> Result<Vec<PathBuf>, EmbeddingModelManagerError> {
         let done = self.check_embedding_dump_done(&dir)?;
         if !done {
-            return Err(EmbeddingModelManagerError::LoadingFromUncompeleteCheckpoint(
-                format!("{:?}", &dir),
-            ));
+            return Err(
+                EmbeddingModelManagerError::LoadingFromUncompeleteCheckpoint(format!("{:?}", &dir)),
+            );
         }
         let persia_dir = PersiaPath::from_pathbuf(dir.clone());
         let file_list = persia_dir.list()?;
@@ -363,9 +364,9 @@ impl EmbeddingModelManager {
 
         if file_list.len() == 0 {
             tracing::error!("trying to load embedding from an empty dir");
-            return Err(EmbeddingModelManagerError::LoadingFromUncompeleteCheckpoint(
-                format!("{:?}", &dir),
-            ));
+            return Err(
+                EmbeddingModelManagerError::LoadingFromUncompeleteCheckpoint(format!("{:?}", &dir)),
+            );
         }
 
         Ok(file_list)

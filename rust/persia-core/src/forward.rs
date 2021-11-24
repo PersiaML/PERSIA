@@ -615,7 +615,8 @@ impl ForwardImpl {
                         .map(|t| t.to(common_ctx.device_id.as_ref()))
                         .collect();
 
-                    let (embedding_worker_addr, ref_id) = batch.id_type_features.get_remote_ref_info();
+                    let (embedding_worker_addr, ref_id) =
+                        batch.id_type_features.get_remote_ref_info();
                     let training_batch = PersiaTrainingBatchImpl {
                         not_id_type_tensors,
                         embeddings,
@@ -694,12 +695,17 @@ impl ForwardImpl {
                                     None => None,
                                 };
 
-                                let client = rpc_client
-                                    .get_client_by_addr(id_type_features_ref.embedding_worker_addr.as_str());
+                                let client = rpc_client.get_client_by_addr(
+                                    id_type_features_ref.embedding_worker_addr.as_str(),
+                                );
                                 let result = client
                                     .forward_batch_id(&(id_type_features_ref.clone(), is_training))
                                     .await;
-                                (result, id_type_features_ref.embedding_worker_addr.clone(), permit)
+                                (
+                                    result,
+                                    id_type_features_ref.embedding_worker_addr.clone(),
+                                    permit,
+                                )
                             }
                             EmbeddingTensor::Null => {
                                 panic!("current id type feature not support null data",)
@@ -732,8 +738,9 @@ impl ForwardImpl {
                                     },
                                     None => IDTypeFeatureRemoteRef::default(), // batch without gradient backward
                                 };
-                                batch.id_type_features =
-                                    EmbeddingTensor::IDTypeFeatureRemoteRef(id_type_feature_remote_ref);
+                                batch.id_type_features = EmbeddingTensor::IDTypeFeatureRemoteRef(
+                                    id_type_feature_remote_ref,
+                                );
 
                                 if let Err(e) = channel_s
                                     .send_async((batch, embedding, embedding_staleness_permit))

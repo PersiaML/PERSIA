@@ -28,17 +28,19 @@ use persia_common::{
     ndarray_f16_to_f32, ndarray_f32_to_f16,
     optim::OptimizerConfig,
     EmbeddingBatch, FeatureEmbeddingBatch, FeatureRawEmbeddingBatch, FeatureSumEmbeddingBatch,
-    SingleSignInFeatureBatch, IDTypeFeatureBatch, IDTypeFeatureRemoteRef,
+    IDTypeFeatureBatch, IDTypeFeatureRemoteRef, SingleSignInFeatureBatch,
 };
 use persia_embedding_config::{
     EmbeddingConfig, EmbeddingWorkerConfig, InstanceInfo, PersiaCommonConfig,
-    PersiaGlobalConfigError, PersiaReplicaInfo, PersiaEmbeddingModelHyperparameters, SlotConfig,
+    PersiaEmbeddingModelHyperparameters, PersiaGlobalConfigError, PersiaReplicaInfo, SlotConfig,
 };
 use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
 use persia_metrics::{
     Gauge, GaugeVec, IntCounterVec, PersiaMetricsManager, PersiaMetricsManagerError,
 };
-use persia_model_manager::{EmbeddingModelManager, EmbeddingModelManagerError, EmbeddingModelManagerStatus};
+use persia_model_manager::{
+    EmbeddingModelManager, EmbeddingModelManagerError, EmbeddingModelManagerStatus,
+};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::{Readable, Writable};
 
@@ -338,7 +340,10 @@ pub fn sign_to_shard_modulo(sign: u64, replica_size: u64) -> u64 {
 }
 
 #[inline]
-pub fn indices_to_hashstack_indices(indices: &mut IDTypeFeatureBatch, config: &EmbeddingConfig) -> () {
+pub fn indices_to_hashstack_indices(
+    indices: &mut IDTypeFeatureBatch,
+    config: &EmbeddingConfig,
+) -> () {
     for feature_batch in indices.batches.iter_mut() {
         let slot_conf = config.get_slot_by_feature_name(&feature_batch.feature_name);
         if slot_conf.hash_stack_config.hash_stack_rounds > 0 {
