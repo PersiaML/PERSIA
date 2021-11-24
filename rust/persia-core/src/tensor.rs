@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use paste::paste;
+// use paste::paste;
 
 use persia_libs::{anyhow::Result, half::f16, thiserror, tracing};
 
@@ -35,7 +35,7 @@ pub enum DTypeImpl {
     U16 = 9,
     U32 = 10,
     U64 = 11,
-    USIZE = 12,
+    BOOL = 12,
 }
 
 impl fmt::Display for DTypeImpl {
@@ -48,6 +48,7 @@ impl DTypeImpl {
     /// Bit size of current datatype.
     pub fn get_type_size(&self) -> usize {
         match self {
+            DTypeImpl::BOOL => std::mem::size_of::<bool>(),
             DTypeImpl::F16 => std::mem::size_of::<f16>(),
             DTypeImpl::F32 => std::mem::size_of::<f32>(),
             DTypeImpl::F64 => std::mem::size_of::<f64>(),
@@ -59,7 +60,6 @@ impl DTypeImpl {
             DTypeImpl::U16 => std::mem::size_of::<u16>(),
             DTypeImpl::U32 => std::mem::size_of::<u32>(),
             DTypeImpl::U64 => std::mem::size_of::<u64>(),
-            DTypeImpl::USIZE => std::mem::size_of::<usize>(),
         }
     }
 
@@ -79,6 +79,7 @@ impl DTypeImpl {
             DTypeImpl::I32 => (*&DLDataTypeCode::DLInt, 32),
             DTypeImpl::I64 => (*&DLDataTypeCode::DLInt, 64),
             DTypeImpl::U8 => (*&DLDataTypeCode::DLUInt, 8),
+            DTypeImpl::BOOL => (*&DLDataTypeCode::DLUInt, 8),
             _ => panic!(
                 "converting {} to DLDataType failed, uint8 is the only supported unsigned integer type in PyTorch",
                 self
@@ -97,14 +98,18 @@ impl DTypeImpl {
 /// Storarge that store the vector data.
 #[derive(Readable, Writable, Debug)]
 pub enum CPUStorage {
+    BOOL(Vec<bool>),
     F16(Vec<f16>),
     F32(Vec<f32>),
     F64(Vec<f64>),
+    I8(Vec<i8>),
+    I16(Vec<i16>),
     I32(Vec<i32>),
     I64(Vec<i64>),
+    U8(Vec<u8>),
+    U16(Vec<u16>),
     U32(Vec<u32>),
     U64(Vec<u64>),
-    USIZE(Vec<usize>),
 }
 
 impl CPUStorage {
@@ -113,24 +118,32 @@ impl CPUStorage {
             CPUStorage::F16(_) => DTypeImpl::F16,
             CPUStorage::F32(_) => DTypeImpl::F32,
             CPUStorage::F64(_) => DTypeImpl::F64,
+            CPUStorage::I8(_) => DTypeImpl::I8,
+            CPUStorage::I16(_) => DTypeImpl::I16,
             CPUStorage::I32(_) => DTypeImpl::I32,
             CPUStorage::I64(_) => DTypeImpl::I64,
+            CPUStorage::U8(_) => DTypeImpl::U8,
+            CPUStorage::U16(_) => DTypeImpl::U16,
             CPUStorage::U32(_) => DTypeImpl::U32,
             CPUStorage::U64(_) => DTypeImpl::U64,
-            CPUStorage::USIZE(_) => DTypeImpl::USIZE,
+            CPUStorage::BOOL(_) => DTypeImpl::BOOL,
         }
     }
 
     pub fn get_raw_ptr(&mut self) -> *mut std::os::raw::c_void {
         match self {
-            CPUStorage::F32(val) => val.as_ptr() as *mut std::os::raw::c_void,
+            CPUStorage::BOOL(val) => val.as_ptr() as *mut std::os::raw::c_void,
             CPUStorage::F16(val) => val.as_ptr() as *mut std::os::raw::c_void,
+            CPUStorage::F32(val) => val.as_ptr() as *mut std::os::raw::c_void,
             CPUStorage::F64(val) => val.as_ptr() as *mut std::os::raw::c_void,
+            CPUStorage::I8(val) => val.as_ptr() as *mut std::os::raw::c_void,
+            CPUStorage::I16(val) => val.as_ptr() as *mut std::os::raw::c_void,
             CPUStorage::I32(val) => val.as_ptr() as *mut std::os::raw::c_void,
             CPUStorage::I64(val) => val.as_ptr() as *mut std::os::raw::c_void,
+            CPUStorage::U8(val) => val.as_ptr() as *mut std::os::raw::c_void,
+            CPUStorage::U16(val) => val.as_ptr() as *mut std::os::raw::c_void,
             CPUStorage::U32(val) => val.as_ptr() as *mut std::os::raw::c_void,
             CPUStorage::U64(val) => val.as_ptr() as *mut std::os::raw::c_void,
-            CPUStorage::USIZE(val) => val.as_ptr() as *mut std::os::raw::c_void,
         }
     }
 
@@ -138,31 +151,6 @@ impl CPUStorage {
         self.get_raw_ptr() as u64
     }
 }
-
-macro_rules! add_new_func2_cpu_storage {
-    ($(($typ:ty, $attr:ident)),*) => {
-        paste! {
-            impl CPUStorage {
-                    $(
-                        pub fn [<from_ $typ:lower>](data: Vec<$typ>) -> Self {
-                            CPUStorage::$attr(data)
-                        }
-                    )*
-            }
-        }
-    }
-}
-
-add_new_func2_cpu_storage!(
-    (f16, F16),
-    (f32, F32),
-    (f64, F64),
-    (i32, I32),
-    (i64, I64),
-    (usize, USIZE),
-    (u32, U32),
-    (u64, U64)
-);
 
 #[derive(Readable, Writable, Debug)]
 pub enum Storage {

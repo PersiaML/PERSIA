@@ -172,30 +172,14 @@ class DataCtx(BaseCtx):
         self.common_context.init_nats_publisher(None)
         self.common_context.wait_servers_ready()
 
-    def send_id_type_features_to_embedding_worker(self, data: PersiaBatch):
-        """Send PersiaBatch from data loader to embedding worker side.
-
-        Arguments:
-            data (PersiaBatch): PersiaBatch that haven't been process.
-        """
-        self.common_context.send_id_type_features_to_embedding_worker(data)
-
-    def send_non_id_type_features_to_nn_worker(self, data: PersiaBatch):
-        """Send `PersiaBatch` from data loader to nn worker side.
-
-        Arguments:
-            data (PersiaBatch): PersiaBatch that have been sent to embedding worker.
-        """
-        self.common_context.send_non_id_type_features_to_nn_worker(data)
-
     def send_data(self, data: PersiaBatch):
         """Send PersiaBatch from data loader to nn worker and embedding worker side.
 
         Arguments:
             data (PersiaBatch): PersiaBatch that haven't been process.
         """
-        self.send_id_type_features_to_embedding_worker(data)
-        self.send_non_id_type_features_to_nn_worker(data)
+        self.common_context.send_id_type_features_to_embedding_worker(data)
+        self.common_context.send_non_id_type_features_to_nn_worker(data)
 
 
 class EmbeddingCtx(BaseCtx):

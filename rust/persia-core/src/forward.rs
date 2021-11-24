@@ -222,24 +222,28 @@ impl Tensor {
     pub fn numpy(&self, py: Python) -> PyResult<PyObject> {
         if let Storage::CPU(storage) = &self.inner.storage {
             // PyArray::from_array(py, arr)
-            let py_obj = match &storage {
-                CPUStorage::F16(val) => {
-                    // TODO:
-                    // * Implement half array to avoid convert half to f32. current workaround
-                    //   due to rust numpy no implement half, convert the half to f32 is needed.
-                    //   https://github.com/PyO3/rust-numpy/issues/201
-                    // * Use PyArrayDyn to implement dynamic shape of ndarray to avoid reshape ndarray at
-                    //   python side, current corruption is due to persia-speedy is not compatible with
-                    //   ndarray 0.14.0
-                    PyArray::from_vec(py, val.as_slice().to_f32_vec()).into_py(py)
-                }
+            let py_obj = match storage {
+                // TODO:
+                // * Implement half array to avoid convert half to f32. current workaround
+                //   due to rust numpy no implement half, convert the half to f32 is needed.
+                //   https://github.com/PyO3/rust-numpy/issues/201
+                // * Use PyArrayDyn to implement dynamic shape of ndarray to avoid reshape ndarray at
+                //   python side, current corruption is due to persia-speedy is not compatible with
+                //   ndarray 0.14.0
+                CPUStorage::BOOL(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
                 CPUStorage::F32(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
                 CPUStorage::F64(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
+                CPUStorage::I8(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
+                CPUStorage::I16(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
                 CPUStorage::I32(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
                 CPUStorage::I64(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
-                CPUStorage::USIZE(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
+                CPUStorage::U8(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
+                CPUStorage::U16(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
                 CPUStorage::U32(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
                 CPUStorage::U64(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
+                CPUStorage::F16(val) => panic!(
+                    "float16 numpy array conversion failed, pyo3 numpy is not support float16 now"
+                ),
             };
             Ok(py_obj)
         } else {
@@ -348,23 +352,21 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
             let no_empty_index_list_len = std::cmp::max(non_empty_index_list.len(), 1);
 
             let tensor = TensorImpl::new(
-                Storage::CPU(CPUStorage::from_f16(
-                    raw_embedding.embeddings.into_raw_vec(),
-                )),
+                Storage::CPU(CPUStorage::F16(raw_embedding.embeddings.into_raw_vec())),
                 embedding_shape,
                 Some(feature_name.clone()),
                 None,
             );
 
             let index = TensorImpl::new(
-                Storage::CPU(CPUStorage::from_i64(raw_embedding.index)),
+                Storage::CPU(CPUStorage::I64(raw_embedding.index)),
                 vec![index_len],
                 Some(format!("{}_index", &feature_name)),
                 None,
             );
 
             let non_empty_index = TensorImpl::new(
-                Storage::CPU(CPUStorage::from_i64(non_empty_index_list)),
+                Storage::CPU(CPUStorage::I64(non_empty_index_list)),
                 vec![no_empty_index_list_len],
                 Some(format!("{}_non_empty_index", &feature_name)),
                 None,
@@ -380,9 +382,7 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
         FeatureEmbeddingBatch::SumEmbedding(sum_embedding) => {
             let embedding_shape = sum_embedding.embeddings.shape().to_vec();
             let tensor = TensorImpl::new(
-                Storage::CPU(CPUStorage::from_f16(
-                    sum_embedding.embeddings.into_raw_vec(),
-                )),
+                Storage::CPU(CPUStorage::F16(sum_embedding.embeddings.into_raw_vec())),
                 embedding_shape,
                 Some(sum_embedding.feature_name),
                 None,
