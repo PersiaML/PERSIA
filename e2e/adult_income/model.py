@@ -23,10 +23,10 @@ class DNN(nn.Module):
 
     def forward(
         self,
-        not_id_tensors: List[torch.Tensor],
+        non_id_tensors: List[torch.Tensor],
         embedding_tensors: List[torch.Tensor],
     ):
-        dense_x = not_id_tensors[0]
+        dense_x = non_id_tensors[0]
 
         sparse_concat = torch.cat(embedding_tensors, dim=1)
         sparse = self.sparse_mlp(sparse_concat.float())

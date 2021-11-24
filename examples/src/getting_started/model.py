@@ -22,11 +22,11 @@ class DNN(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(
-        self, dense_x_list: List[torch.Tensor], sparses_list: List[torch.Tensor]
+        self, non_id_tensors: List[torch.Tensor], embedding_tensors: List[torch.Tensor]
     ):
-        dense_x = dense_x_list[0]
+        dense_x = non_id_tensors[0]
 
-        sparse_concat = torch.cat(sparses_list, dim=1)
+        sparse_concat = torch.cat(embedding_tensors, dim=1)
         sparse = self.sparse_mlp(sparse_concat.float())
         sparse = self.sparse_bn(sparse)
 
