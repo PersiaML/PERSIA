@@ -87,8 +87,8 @@ impl PersiaBatch {
         }
     }
 
-    pub fn add_not_id_type_feature(&mut self, not_id_type_feature: Vec<&PyArray2<f32>>) {
-        not_id_type_feature.iter().for_each(|x| {
+    pub fn add_non_id_type_feature(&mut self, non_id_type_feature: Vec<&PyArray2<f32>>) {
+        non_id_type_feature.iter().for_each(|x| {
             self.inner.non_id_type_features.push(TensorImpl::new(
                 Storage::CPU(CPUStorage::from_f32(
                     x.to_vec().expect("convert ndarray to vec failed"),

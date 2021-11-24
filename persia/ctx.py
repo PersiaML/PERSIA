@@ -213,9 +213,9 @@ class EmbeddingCtx(BaseCtx):
         ...     PreprocessMode.EVAL,
         ...     embedding_config
         ... ) as ctx:
-        >>>     for (not_id_type_feature, id_type_features, label) in loader:
+        >>>     for (non_id_type_feature, id_type_features, label) in loader:
         >>>         batch_data = PyPersiaBatchData()
-        >>>         batch_data.add_not_id_type_feature(not_id_type_feature)
+        >>>         batch_data.add_non_id_type_feature(non_id_type_feature)
         >>>         batch_data.add_id_type_features(id_type_features)
         >>>         batch_data.add_label(label)
         >>>         python_training_batch = ctx.get_embedding_from_data(batch_data)
@@ -315,8 +315,8 @@ class EmbeddingCtx(BaseCtx):
         batch.non_id_type_features = batch.consume_all_non_id_type_features()
         # pytype: enable=attribute-error
         batch.non_id_type_tensors = [
-            _cast_dlpack2torch_tensor(not_id_type_feature)
-            for not_id_type_feature in batch.non_id_type_features
+            _cast_dlpack2torch_tensor(non_id_type_feature)
+            for non_id_type_feature in batch.non_id_type_features
         ]
 
         # pytype: disable=attribute-error

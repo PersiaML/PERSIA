@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     for (dense, batch_sparse_ids, target) in tqdm(loader, desc="gen batch data..."):
         batch_data = PersiaBatch()
-        batch_data.add_not_id_type_feature([dense])
+        batch_data.add_non_id_type_feature([dense])
         batch_data.add_id_type_features(batch_sparse_ids, False)
 
         model_input = batch_data.to_bytes()
