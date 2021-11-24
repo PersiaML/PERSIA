@@ -15,7 +15,9 @@ logger = get_logger("data_loader")
 
 setup_seed(3)
 
-train_filepath = os.path.abspath(os.path.join(__file__, "../data_source/train.npz"))
+train_filepath = os.path.join(
+    os.path.dirname(os.path.realpath(__file__)), "data/train.npz"
+)
 
 logger.info("init py client done...")
 if __name__ == "__main__":

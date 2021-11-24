@@ -43,6 +43,19 @@ if __name__ == "__main__":
         )
     )
 
+    rust_extensions.append(
+        RustExtension(
+            {
+                "gencrd": "persia.gencrd",
+                "operator": "persia.operator",
+                "server": "persia.server",
+            },
+            path="k8s/Cargo.toml",
+            binding=Binding.Exec,
+            native=native,
+        )
+    )
+
     install_requires = ["colorlog", "pyyaml", "click"]
 
     setup(
@@ -58,7 +71,8 @@ if __name__ == "__main__":
         rust_extensions=rust_extensions,
         entry_points={
             "console_scripts": [
-                "persia_launcher= persia.launcher:cli",
+                "persia-launcher=persia.launcher:cli",
+                "persia-k8s-utils=persia.k8s_utils:cli",
             ]
         },
         python_requires=">=3.6",

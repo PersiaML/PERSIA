@@ -1,0 +1,60 @@
+apiVersion: persia.com/v1
+kind: PersiaJob
+metadata:
+  name: adult-income
+  namespace: default
+spec:
+  globalConfigPath: /home/PersiaML/examples/src/getting_started/config/global_config.yml
+  embeddingConfigPath: /home/PersiaML/examples/src/getting_started/config/embedding_config.yml
+  nnWorkerPyEntryPath: /home/PersiaML/examples/src/getting_started/train.py
+  dataLoaderPyEntryPath: /home/PersiaML/examples/src/getting_started/data_loader.py
+  env:
+    - name: PERSIA_NATS_IP
+      value: nats://persia-nats-service:4222
+
+  embeddingParameterServer:
+    replicas: 1
+    resources:
+      limits:
+        memory: "24Gi"
+        cpu: "4"
+
+  embeddingWorker:
+    replicas: 1
+    resources:
+      limits:
+        memory: "24Gi"
+        cpu: "4"
+
+  nnWorker:
+    replicas: 1
+    nprocPerNode: 1
+    resources:
+      limits:
+        memory: "24Gi"
+        cpu: "12"
+        nvidia.com/gpu: "1"
+    env:
+      - name: CUBLAS_WORKSPACE_CONFIG
+        value: :4096:8
+
+  dataloader:
+    replicas: 1
+    resources:
+      limits:
+        memory: "8Gi"
+        cpu: "1"
+
+---
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "persia-nats-service"
+spec:
+  size: 1
+  natsConfig:
+    maxPayload: 52428800
+  resources:
+    limits:
+      memory: "8Gi"
+      cpu: "2" 
