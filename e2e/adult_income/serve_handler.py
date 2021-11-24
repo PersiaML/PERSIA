@@ -27,9 +27,9 @@ class PersiaHandler(BaseHandler, ABC):
         return model_input
 
     def inference(self, data, *args, **kwargs):
-        not_id_type_tensors, id_type_tensors, _ = data
+        non_id_type_tensors, id_type_tensors, _ = data
         with torch.no_grad():
-            results = self.model(not_id_type_tensors, id_type_tensors)
+            results = self.model(non_id_type_tensors, id_type_tensors)
         return results
 
     def postprocess(self, data):

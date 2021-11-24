@@ -276,8 +276,8 @@ class EmbeddingCtx(BaseCtx):
             the tuple of output data and target data.
         """
         assert self.model is not None, "model not found, please init context with model"
-        not_id_type_tensors, embedding_tensors, labels = self.prepare_features(batch)
-        output = self.model(not_id_type_tensors, embedding_tensors)
+        non_id_type_tensors, embedding_tensors, labels = self.prepare_features(batch)
+        output = self.model(non_id_type_tensors, embedding_tensors)
         return (output, labels)
 
     def prepare_features(
@@ -314,7 +314,7 @@ class EmbeddingCtx(BaseCtx):
         # pytype: disable=attribute-error
         batch.non_id_type_features = batch.consume_all_non_id_type_features()
         # pytype: enable=attribute-error
-        batch.not_id_type_tensors = [
+        batch.non_id_type_tensors = [
             _cast_dlpack2torch_tensor(not_id_type_feature)
             for not_id_type_feature in batch.non_id_type_features
         ]
@@ -393,7 +393,7 @@ class EmbeddingCtx(BaseCtx):
         batch.emb_tensors = emb_tensors
         self.current_batch = batch
 
-        return batch.not_id_type_tensors, batch.id_type_tensors, batch.label_tensors
+        return batch.non_id_type_tensors, batch.id_type_tensors, batch.label_tensors
 
     def dump_checkpoint(
         self,

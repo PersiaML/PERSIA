@@ -262,7 +262,7 @@ impl PersiaTrainingBatch {
     }
 
     pub fn consume_all_non_id_type_features(&mut self) -> Vec<Tensor> {
-        std::mem::replace(&mut self.inner.not_id_type_tensors, vec![])
+        std::mem::replace(&mut self.inner.non_id_type_tensors, vec![])
             .into_iter()
             .map(|x| Tensor { inner: x })
             .collect()
@@ -304,7 +304,7 @@ impl PersiaTrainingBatch {
 
 #[derive(Debug)]
 pub struct PersiaTrainingBatchImpl {
-    pub not_id_type_tensors: Vec<TensorImpl>,
+    pub non_id_type_tensors: Vec<TensorImpl>,
     pub embeddings: Vec<EmbeddingImpl>,
     pub label_tensors: Vec<TensorImpl>,
     pub meta_data: Option<Vec<u8>>,
@@ -316,7 +316,7 @@ pub struct PersiaTrainingBatchImpl {
 impl Default for PersiaTrainingBatchImpl {
     fn default() -> Self {
         Self {
-            not_id_type_tensors: Vec::new(),
+            non_id_type_tensors: Vec::new(),
             embeddings: Vec::new(),
             label_tensors: Vec::new(),
             meta_data: None,
@@ -603,7 +603,7 @@ impl ForwardImpl {
                         })
                         .collect();
 
-                    let not_id_type_tensors: Vec<TensorImpl> = batch
+                    let non_id_type_tensors: Vec<TensorImpl> = batch
                         .non_id_type_features
                         .into_iter()
                         .map(|d| d.to(common_ctx.device_id.as_ref()))
@@ -618,7 +618,7 @@ impl ForwardImpl {
                     let (embedding_worker_addr, ref_id) =
                         batch.id_type_features.get_remote_ref_info();
                     let training_batch = PersiaTrainingBatchImpl {
-                        not_id_type_tensors,
+                        non_id_type_tensors,
                         embeddings,
                         label_tensors,
                         meta_data: batch.meta_data,
@@ -794,7 +794,7 @@ pub fn forward_directly(
     let rpc_client = PersiaCommonContextImpl::get().rpc_client.clone();
     let async_runtime = PersiaCommonContextImpl::get().async_runtime.clone();
 
-    let not_id_type_tensors: Vec<TensorImpl> = batch
+    let non_id_type_tensors: Vec<TensorImpl> = batch
         .non_id_type_features
         .into_iter()
         .map(|d| d.to(&device_id))
@@ -825,7 +825,7 @@ pub fn forward_directly(
     let label_tensors = batch.labels.into_iter().map(|t| t.to(&device_id)).collect();
 
     let infer_batch = PersiaTrainingBatchImpl {
-        not_id_type_tensors,
+        non_id_type_tensors,
         embeddings,
         label_tensors,
         meta_data: batch.meta_data,
