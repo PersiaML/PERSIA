@@ -302,7 +302,7 @@ impl PersiaDataFlowComponent {
         }
     }
 
-    pub async fn send_not_id_type_features_to_nn_worker(
+    pub async fn send_non_id_type_features_to_nn_worker(
         &self,
         batch: &PersiaBatch,
     ) -> Result<(), PersiaError> {
@@ -325,7 +325,7 @@ impl PersiaDataFlowComponent {
                 .map_err(|e| PersiaError::from(e));
             if resp.is_err() {
                 tracing::warn!(
-                    "failed to send not_id_type_features to nn worker due to {:?}, retrying...",
+                    "failed to send non_id_type_features to nn worker due to {:?}, retrying...",
                     resp
                 );
             }
@@ -334,7 +334,7 @@ impl PersiaDataFlowComponent {
         .await?;
 
         tracing::debug!(
-            "send_not_id_type_features_to_nn_worker {} time cost {} ms",
+            "send_non_id_type_features_to_nn_worker {} time cost {} ms",
             rank_id,
             start.elapsed().as_millis()
         );

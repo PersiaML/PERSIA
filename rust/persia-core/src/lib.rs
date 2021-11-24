@@ -354,13 +354,13 @@ impl PersiaCommonContext {
             .map_err(|e| e.into())
     }
 
-    pub fn send_not_id_type_features_to_nn_worker(&self, batch: &PersiaBatch) -> PyResult<()> {
+    pub fn send_non_id_type_features_to_nn_worker(&self, batch: &PersiaBatch) -> PyResult<()> {
         self.inner
             .async_runtime
             .block_on(
                 self.inner
                     .get_nats_publish_service()?
-                    .send_not_id_type_features_to_nn_worker(batch),
+                    .send_non_id_type_features_to_nn_worker(batch),
             )
             .map_err(|e| e.into())
     }

@@ -149,9 +149,9 @@ class DataCtx(BaseCtx):
         >>> from persia.prelude import PersiaBatch
         >>> loader = make_simple_loader()
         >>> with DataCtx() as ctx:
-        >>>     for (not_id_type_features, id_type_features, label) in loader:
+        >>>     for (non_id_type_features, id_type_features, label) in loader:
         >>>         batch_data = PersiaBatch()
-        >>>         batch_data.add_not_id_type_features(not_id_type_features)
+        >>>         batch_data.add_non_id_type_features(non_id_type_features)
         >>>         batch_data.add_id_type_features(id_type_features)
         >>>         batch_data.add_label(label)
         >>>         ctx.send_data(batch_data)
@@ -180,13 +180,13 @@ class DataCtx(BaseCtx):
         """
         self.common_context.send_id_type_features_to_embedding_worker(data)
 
-    def send_not_id_type_features_to_nn_worker(self, data: PersiaBatch):
+    def send_non_id_type_features_to_nn_worker(self, data: PersiaBatch):
         """Send `PersiaBatch` from data loader to nn worker side.
 
         Arguments:
             data (PersiaBatch): PersiaBatch that have been sent to embedding worker.
         """
-        self.common_context.send_not_id_type_features_to_nn_worker(data)
+        self.common_context.send_non_id_type_features_to_nn_worker(data)
 
     def send_data(self, data: PersiaBatch):
         """Send PersiaBatch from data loader to nn worker and embedding worker side.
@@ -195,7 +195,7 @@ class DataCtx(BaseCtx):
             data (PersiaBatch): PersiaBatch that haven't been process.
         """
         self.send_id_type_features_to_embedding_worker(data)
-        self.send_not_id_type_features_to_nn_worker(data)
+        self.send_non_id_type_features_to_nn_worker(data)
 
 
 class EmbeddingCtx(BaseCtx):
@@ -283,7 +283,7 @@ class EmbeddingCtx(BaseCtx):
     def prepare_features(
         self, batch: PersiaTrainingBatch
     ) -> Tuple[torch.Tensor, List[torch.Tensor], Optional[torch.Tensor]]:
-        """Converts the not_id_type_features, sparse and target raw data in``PersiaTrainingBatch`` to `torch.Tensor``.
+        """Converts the non_id_type_features, sparse and target raw data in``PersiaTrainingBatch`` to `torch.Tensor``.
 
         TODO: Add the feature conversion detail
         For example
@@ -312,11 +312,11 @@ class EmbeddingCtx(BaseCtx):
         is_training = self.preprocess_mode == PreprocessMode.TRAIN  # cache property
 
         # pytype: disable=attribute-error
-        batch.not_id_type_features = batch.consume_all_not_id_type_features()
+        batch.non_id_type_features = batch.consume_all_non_id_type_features()
         # pytype: enable=attribute-error
         batch.not_id_type_tensors = [
             _cast_dlpack2torch_tensor(not_id_type_feature)
-            for not_id_type_feature in batch.not_id_type_features
+            for not_id_type_feature in batch.non_id_type_features
         ]
 
         # pytype: disable=attribute-error
@@ -572,7 +572,7 @@ class TrainCtx(EmbeddingCtx):
         >>>     dense_optimizer,
         >>> ) as ctx:
         >>>     parallel_model = ctx.model
-        >>>     for batch_data in dataloder:
+        >>>     for batch_data in datalaoder:
         >>>         dense, sparse, target = ctx.prepare_features(data)
         >>>         output = parallel_model(dense, sparse)
         >>>         loss = loss_fn(output, target)

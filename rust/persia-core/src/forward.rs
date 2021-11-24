@@ -261,7 +261,7 @@ impl PersiaTrainingBatch {
         self.inner.embedding_worker_addr.as_str()
     }
 
-    pub fn consume_all_not_id_type_features(&mut self) -> Vec<Tensor> {
+    pub fn consume_all_non_id_type_features(&mut self) -> Vec<Tensor> {
         std::mem::replace(&mut self.inner.not_id_type_tensors, vec![])
             .into_iter()
             .map(|x| Tensor { inner: x })
@@ -604,7 +604,7 @@ impl ForwardImpl {
                         .collect();
 
                     let not_id_type_tensors: Vec<TensorImpl> = batch
-                        .not_id_type_features
+                        .non_id_type_features
                         .into_iter()
                         .map(|d| d.to(common_ctx.device_id.as_ref()))
                         .collect();
@@ -795,7 +795,7 @@ pub fn forward_directly(
     let async_runtime = PersiaCommonContextImpl::get().async_runtime.clone();
 
     let not_id_type_tensors: Vec<TensorImpl> = batch
-        .not_id_type_features
+        .non_id_type_features
         .into_iter()
         .map(|d| d.to(&device_id))
         .collect();
