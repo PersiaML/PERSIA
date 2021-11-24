@@ -24,7 +24,7 @@ use persia_speedy::{Readable, Writable};
 use persia_storage::{PersiaPath, PersiaPathImpl};
 
 #[derive(Clone, Readable, Writable, thiserror::Error, Debug)]
-pub enum SparseModelManagerError {
+pub enum EmbeddingModelManagerError {
     #[error("storage error {0}")]
     StorageError(String),
     #[error("embedding holder error: {0}")]
@@ -45,42 +45,42 @@ pub enum SparseModelManagerError {
     DecodeInfoError(String),
 }
 
-impl From<AnyhowError> for SparseModelManagerError {
+impl From<AnyhowError> for EmbeddingModelManagerError {
     fn from(e: AnyhowError) -> Self {
         let msg = format!("{:?}", e);
-        SparseModelManagerError::StorageError(msg)
+        EmbeddingModelManagerError::StorageError(msg)
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "self::serde")]
-pub struct SparseModelInfo {
+pub struct EmbeddingModelInfo {
     pub num_shards: usize,
     pub num_internal_shards: usize,
     pub datetime: SystemTime,
 }
 
 #[derive(Clone, Readable, Writable, Debug)]
-pub enum SparseModelManagerStatus {
+pub enum EmbeddingModelManagerStatus {
     Dumping(f32),
     Loading(f32),
     Idle,
-    Failed(SparseModelManagerError),
+    Failed(EmbeddingModelManagerError),
 }
 
-static SPARSE_MODEL_MANAGER: OnceCell<Arc<SparseModelManager>> = OnceCell::new();
+static EMBEDDING_MODEL_MANAGER: OnceCell<Arc<EmbeddingModelManager>> = OnceCell::new();
 
 #[derive(Clone)]
-pub struct SparseModelManager {
-    pub status: Arc<RwLock<SparseModelManagerStatus>>,
+pub struct EmbeddingModelManager {
+    pub status: Arc<RwLock<EmbeddingModelManagerStatus>>,
     pub thread_pool: Arc<ThreadPool>,
     pub replica_index: usize,
     pub replica_size: usize,
 }
 
-impl SparseModelManager {
-    pub fn get() -> Result<Arc<Self>, SparseModelManagerError> {
-        let singleton = SPARSE_MODEL_MANAGER.get_or_try_init(|| {
+impl EmbeddingModelManager {
+    pub fn get() -> Result<Arc<Self>, EmbeddingModelManagerError> {
+        let singleton = EMBEDDING_MODEL_MANAGER.get_or_try_init(|| {
             let common_config = PersiaCommonConfig::get()?;
             let replica_info = PersiaReplicaInfo::get()?;
 
@@ -100,7 +100,7 @@ impl SparseModelManager {
 
     fn new(concurrent_size: usize, replica_index: usize, replica_size: usize) -> Self {
         Self {
-            status: Arc::new(RwLock::new(SparseModelManagerStatus::Idle)),
+            status: Arc::new(RwLock::new(EmbeddingModelManagerStatus::Idle)),
             thread_pool: Arc::new(
                 ThreadPoolBuilder::new()
                     .num_threads(concurrent_size)
@@ -116,7 +116,7 @@ impl SparseModelManager {
         self.replica_index == 0
     }
 
-    pub fn get_status(&self) -> SparseModelManagerStatus {
+    pub fn get_status(&self) -> EmbeddingModelManagerStatus {
         let status = self.status.read().clone();
         status
     }
@@ -157,13 +157,13 @@ impl SparseModelManager {
         &self,
         emb_dir: PathBuf,
         num_internal_shards: usize,
-    ) -> Result<(), SparseModelManagerError> {
+    ) -> Result<(), EmbeddingModelManagerError> {
         tracing::info!("mark_embedding_dump_done {:?}", emb_dir);
         let emb_dump_done_file = self.get_emb_dump_done_file_name();
         let emb_dump_done_path = PersiaPath::from_vec(vec![&emb_dir, &emb_dump_done_file]);
         emb_dump_done_path.create(false)?;
 
-        let model_info = SparseModelInfo {
+        let model_info = EmbeddingModelInfo {
             num_shards: self.replica_size,
             num_internal_shards,
             datetime: SystemTime::now(),
@@ -178,7 +178,7 @@ impl SparseModelManager {
     pub fn check_embedding_dump_done(
         &self,
         emb_dir: &PathBuf,
-    ) -> Result<bool, SparseModelManagerError> {
+    ) -> Result<bool, EmbeddingModelManagerError> {
         let emb_dump_done_file = self.get_emb_dump_done_file_name();
         let emb_dump_done_path = PersiaPath::from_vec(vec![emb_dir, &emb_dump_done_file]);
         Ok(emb_dump_done_path.is_file()?)
@@ -187,21 +187,21 @@ impl SparseModelManager {
     pub fn load_embedding_checkpoint_info(
         &self,
         emb_dir: &PathBuf,
-    ) -> Result<SparseModelInfo, SparseModelManagerError> {
+    ) -> Result<EmbeddingModelInfo, EmbeddingModelManagerError> {
         let emb_dump_done_file = self.get_emb_dump_done_file_name();
         let emb_dump_done_path = PersiaPath::from_vec(vec![emb_dir, &emb_dump_done_file]);
         let s: String = emb_dump_done_path.read_to_string()?;
         tracing::debug!("load_embedding_checkpoint_info {}", s);
 
         serde_yaml::from_str(&s)
-            .map_err(|e| SparseModelManagerError::DecodeInfoError(format!("{:?}", e)))
+            .map_err(|e| EmbeddingModelManagerError::DecodeInfoError(format!("{:?}", e)))
     }
 
     pub fn waiting_for_all_embedding_server_dump(
         &self,
         timeout_sec: usize,
         dst_dir: PathBuf,
-    ) -> Result<(), SparseModelManagerError> {
+    ) -> Result<(), EmbeddingModelManagerError> {
         let replica_size = self.replica_size;
         if replica_size < 2 {
             tracing::info!("replica_size < 2, will not wait for other embedding servers");
@@ -232,7 +232,7 @@ impl SparseModelManager {
 
             if start_time.elapsed().as_secs() as usize > timeout_sec {
                 tracing::error!("waiting for other embedding server to dump embedding TIMEOUT");
-                return Err(SparseModelManagerError::WaitForOtherServerTimeOut);
+                return Err(EmbeddingModelManagerError::WaitForOtherServerTimeOut);
             }
         }
 
@@ -244,7 +244,7 @@ impl SparseModelManager {
         internal_shard_idx: usize,
         dst_dir: PathBuf,
         embedding_holder: PersiaEmbeddingHolder,
-    ) -> Result<(), SparseModelManagerError> {
+    ) -> Result<(), EmbeddingModelManagerError> {
         let shard = embedding_holder
             .get_shard_by_index(internal_shard_idx)
             .read();
@@ -261,7 +261,7 @@ impl SparseModelManager {
         &self,
         file_path: PathBuf,
         embedding_holder: PersiaEmbeddingHolder,
-    ) -> Result<(), SparseModelManagerError> {
+    ) -> Result<(), EmbeddingModelManagerError> {
         let decoded = self.load_array_linked_list(file_path)?;
 
         decoded.into_iter().for_each(|entry| {
@@ -276,7 +276,7 @@ impl SparseModelManager {
     pub fn load_array_linked_list(
         &self,
         file_path: PathBuf,
-    ) -> Result<ArrayLinkedList<HashMapEmbeddingEntry>, SparseModelManagerError> {
+    ) -> Result<ArrayLinkedList<HashMapEmbeddingEntry>, EmbeddingModelManagerError> {
         tracing::debug!("loading embedding linked list from {:?}", file_path);
         let emb_path = PersiaPath::from_pathbuf(file_path);
         let decoded: ArrayLinkedList<HashMapEmbeddingEntry> = emb_path.read_to_end_speedy()?;
@@ -287,8 +287,8 @@ impl SparseModelManager {
         &self,
         dst_dir: PathBuf,
         embedding_holder: PersiaEmbeddingHolder,
-    ) -> Result<(), SparseModelManagerError> {
-        *self.status.write() = SparseModelManagerStatus::Dumping(0.0);
+    ) -> Result<(), EmbeddingModelManagerError> {
+        *self.status.write() = EmbeddingModelManagerStatus::Dumping(0.0);
         tracing::info!("start to dump embedding to {:?}", dst_dir);
 
         let shard_dir = self.get_shard_dir(&dst_dir);
@@ -303,7 +303,7 @@ impl SparseModelManager {
             let embedding_holder = embedding_holder.clone();
 
             self.thread_pool.spawn(move || {
-                let closure = || -> Result<(), SparseModelManagerError> {
+                let closure = || -> Result<(), EmbeddingModelManagerError> {
                     manager.dump_internal_shard_embeddings(
                         internal_shard_idx,
                         dst_dir.clone(),
@@ -313,7 +313,8 @@ impl SparseModelManager {
                     let dumped = num_dumped_shards.fetch_add(1, Ordering::AcqRel) + 1;
                     let dumping_progress = (dumped as f32) / (num_internal_shards as f32);
 
-                    *manager.status.write() = SparseModelManagerStatus::Dumping(dumping_progress);
+                    *manager.status.write() =
+                        EmbeddingModelManagerStatus::Dumping(dumping_progress);
                     tracing::debug!("dumping progress is {}", dumping_progress);
 
                     if dumped >= num_internal_shards {
@@ -326,14 +327,14 @@ impl SparseModelManager {
                         }
 
                         tracing::info!("dump embedding to {:?} compelete", dst_dir);
-                        *manager.status.write() = SparseModelManagerStatus::Idle;
+                        *manager.status.write() = EmbeddingModelManagerStatus::Idle;
                     }
 
                     Ok(())
                 };
 
                 if let Err(e) = closure() {
-                    *manager.status.write() = SparseModelManagerStatus::Failed(e);
+                    *manager.status.write() = EmbeddingModelManagerStatus::Failed(e);
                 }
             })
         });
@@ -344,12 +345,12 @@ impl SparseModelManager {
     pub fn get_emb_file_list_in_dir(
         &self,
         dir: PathBuf,
-    ) -> Result<Vec<PathBuf>, SparseModelManagerError> {
+    ) -> Result<Vec<PathBuf>, EmbeddingModelManagerError> {
         let done = self.check_embedding_dump_done(&dir)?;
         if !done {
-            return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint(
-                format!("{:?}", &dir),
-            ));
+            return Err(
+                EmbeddingModelManagerError::LoadingFromUncompeleteCheckpoint(format!("{:?}", &dir)),
+            );
         }
         let persia_dir = PersiaPath::from_pathbuf(dir.clone());
         let file_list = persia_dir.list()?;
@@ -363,9 +364,9 @@ impl SparseModelManager {
 
         if file_list.len() == 0 {
             tracing::error!("trying to load embedding from an empty dir");
-            return Err(SparseModelManagerError::LoadingFromUncompeleteCheckpoint(
-                format!("{:?}", &dir),
-            ));
+            return Err(
+                EmbeddingModelManagerError::LoadingFromUncompeleteCheckpoint(format!("{:?}", &dir)),
+            );
         }
 
         Ok(file_list)
@@ -375,7 +376,7 @@ impl SparseModelManager {
         &self,
         dir: PathBuf,
         embedding_holder: PersiaEmbeddingHolder,
-    ) -> Result<(), SparseModelManagerError> {
+    ) -> Result<(), EmbeddingModelManagerError> {
         tracing::info!("start to load embedding from dir {:?}", dir);
 
         let file_list = self.get_emb_file_list_in_dir(dir)?;
@@ -392,7 +393,7 @@ impl SparseModelManager {
                 let num_loaded_files = num_loaded_files.clone();
                 let embedding_holder = embedding_holder.clone();
                 move || {
-                    let closure = || -> Result<(), SparseModelManagerError> {
+                    let closure = || -> Result<(), EmbeddingModelManagerError> {
                         tracing::debug!("start to execute load embedding from {:?}", file_path);
                         manager
                             .load_internal_shard_embeddings(file_path.clone(), embedding_holder)?;
@@ -400,11 +401,11 @@ impl SparseModelManager {
                         let loaded = num_loaded_files.fetch_add(1, Ordering::AcqRel) + 1;
                         let loading_progress = (loaded as f32) / (num_total_files as f32);
                         *manager.status.write() =
-                            SparseModelManagerStatus::Loading(loading_progress);
+                            EmbeddingModelManagerStatus::Loading(loading_progress);
                         tracing::debug!("load embedding progress is {}", loading_progress);
 
                         if num_total_files == loaded {
-                            *manager.status.write() = SparseModelManagerStatus::Idle;
+                            *manager.status.write() = EmbeddingModelManagerStatus::Idle;
                             let parent = manager.get_parent_dir(&file_path);
                             tracing::info!("load checkpoint from {:?} compelete", parent);
                         }
@@ -413,12 +414,12 @@ impl SparseModelManager {
                     };
 
                     if let Err(e) = closure() {
-                        *manager.status.write() = SparseModelManagerStatus::Failed(e);
+                        *manager.status.write() = EmbeddingModelManagerStatus::Failed(e);
                     }
                 }
             });
         }
-        *self.status.write() = SparseModelManagerStatus::Loading(0.0);
+        *self.status.write() = EmbeddingModelManagerStatus::Loading(0.0);
 
         Ok(())
     }

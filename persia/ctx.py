@@ -4,22 +4,26 @@ import socket
 
 from enum import Enum
 from queue import Queue
-from typing import List, Tuple, Optional, NewType, Union
+from typing import List, Tuple, Optional, Union
 
 import torch
 
 import persia.env as env
 
 from persia.logger import get_default_logger
-from persia.sparse.optim import Optimizer
-from persia.prelude import PyPersiaCommonContext, PyPersiaBatchData, PyTensor
+from persia.embedding.optim import Optimizer
+from persia.embedding import EmbeddingConfig, get_default_embedding_config
+from persia.prelude import (
+    PersiaCommonContext,
+    PersiaBatch,
+    PersiaTrainingBatch,
+    Tensor,
+)
 from persia.distributed import DistributedBaseOption, get_default_distributed_option
 
 _CURRENT_CXT = None
 
 _logger = get_default_logger()
-
-PythonTrainBatch = NewType("PythonTrainBatch", object)
 
 
 def _check_finite(tensors: List[torch.Tensor]) -> bool:
@@ -35,19 +39,19 @@ def _check_finite(tensors: List[torch.Tensor]) -> bool:
 
 
 def _cast_dlpack2torch_tensor(
-    pytensor: PyTensor, requires_grad: bool = False
+    tensor: Tensor, requires_grad: bool = False
 ) -> torch.Tensor:
     """Convert the DLPack PythonCapsule to torch tensor
 
     Arguments:
-        pytensor (PyTensor): PersiaTensor wrapper that contains dlpack information.
+        Tensor (Tensor): Tensor wrapper that contains dlpack information.
         requires_grad (bool, optional): Whether current tensor requires grad or not.
     Returns: pytorch tensor
     """
 
     import torch.utils.dlpack as dlpack
 
-    tensor = dlpack.from_dlpack(pytensor.dlpack)
+    tensor = dlpack.from_dlpack(tensor.dlpack)
     tensor.requires_grad = requires_grad
     return tensor
 
@@ -92,7 +96,7 @@ class BaseCtx:
 
         self.device_id = device_id
 
-        # PyPersiaCommonContext initialize with the rank and world size if
+        # PersiaCommonContext initialize with the rank and world size if
         # it can retrive corresponding information
         if env.get_rank() is not None and env.get_rank() >= 0:
             replica_index = env.get_rank()
@@ -101,7 +105,7 @@ class BaseCtx:
             replica_index = env.get_replica_index()
             replica_size = env.get_replica_size()
 
-        self.common_context = PyPersiaCommonContext(
+        self.common_context = PersiaCommonContext(
             threadpool_worker_size, replica_index, replica_size, device_id
         )
         _logger.info(
@@ -142,14 +146,14 @@ class DataCtx(BaseCtx):
     to the nn worker and embedding worker.
 
     Example:
-        >>> from persia.prelude import PyPersiaBatchData
+        >>> from persia.prelude import PersiaBatch
         >>> loader = make_simple_loader()
         >>> with DataCtx() as ctx:
-        >>>     for (dense, batch_sparse_ids, target) in loader:
-        >>>         batch_data = PyPersiaBatchData()
-        >>>         batch_data.add_dense([dense])
-        >>>         batch_data.add_sparse(batch_sparse_ids)
-        >>>         batch_data.add_target(target)
+        >>>     for (non_id_type_features, id_type_features, label) in loader:
+        >>>         batch_data = PersiaBatch()
+        >>>         batch_data.add_non_id_type_features(non_id_type_features)
+        >>>         batch_data.add_id_type_features(id_type_features)
+        >>>         batch_data.add_label(label)
         >>>         ctx.send_data(batch_data)
     """
 
@@ -168,55 +172,30 @@ class DataCtx(BaseCtx):
         self.common_context.init_nats_publisher(None)
         self.common_context.wait_servers_ready()
 
-    def send_sparse_to_embedding_worker(self, data: PyPersiaBatchData):
-        """Send PersiaBatchData from data loader to embedding worker side.
+    def send_id_type_features_to_embedding_worker(self, data: PersiaBatch):
+        """Send PersiaBatch from data loader to embedding worker side.
 
         Arguments:
-            data (PyPersiaBatchData): PersiaBatchData that haven't been process.
+            data (PersiaBatch): PersiaBatch that haven't been process.
         """
-        self.common_context.send_sparse_to_embedding_worker(data)
+        self.common_context.send_id_type_features_to_embedding_worker(data)
 
-    def send_dense_to_nn_worker(self, data: PyPersiaBatchData):
-        """Send PersiaBatchData from data loader to nn worker side.
+    def send_non_id_type_features_to_nn_worker(self, data: PersiaBatch):
+        """Send `PersiaBatch` from data loader to nn worker side.
 
         Arguments:
-            data (PyPersiaBatchData): PersiaBatchData that have been sent to embedding worker.
+            data (PersiaBatch): PersiaBatch that have been sent to embedding worker.
         """
-        self.common_context.send_dense_to_nn_worker(data)
+        self.common_context.send_non_id_type_features_to_nn_worker(data)
 
-    def send_data(self, data: PyPersiaBatchData):
-        """Send PersiaBatchData from data loader to nn worker and embedding worker side.
+    def send_data(self, data: PersiaBatch):
+        """Send PersiaBatch from data loader to nn worker and embedding worker side.
 
         Arguments:
-            data (PyPersiaBatchData): PersiaBatchData that haven't been process.
+            data (PersiaBatch): PersiaBatch that haven't been process.
         """
-        self.send_sparse_to_embedding_worker(data)
-        self.send_dense_to_nn_worker(data)
-
-
-class EmbeddingConfig:
-    r"""Embedding hyperparameters, argument of ``EmbeddingCtx``."""
-
-    def __init__(
-        self,
-        emb_initialization: Tuple[float, float] = (-0.01, 0.01),
-        admit_probability: float = 1.0,
-        weight_bound: float = 10,
-    ):
-        """
-        Arguments:
-            emb_initialization (Tuple[float, float], optional): Lower and upper bound of embedding uniform initialization.
-            admit_probability (float, optional): The probability (0<=, <=1) of admitting a new embedding.
-            weight_bound (float, optional): Restrict each element value of an embedding in [-weight_bound, weight_bound].
-        """
-        self.emb_initialization = emb_initialization
-        self.admit_probability = admit_probability
-        self.weight_bound = weight_bound
-
-
-def _get_default_embedding_config():
-    """Get default embedding configuration"""
-    return EmbeddingConfig()
+        self.send_id_type_features_to_embedding_worker(data)
+        self.send_non_id_type_features_to_nn_worker(data)
 
 
 class EmbeddingCtx(BaseCtx):
@@ -234,13 +213,13 @@ class EmbeddingCtx(BaseCtx):
         ...     PreprocessMode.EVAL,
         ...     embedding_config
         ... ) as ctx:
-        >>>     for (dense, batch_sparse_ids, target) in loader:
+        >>>     for (non_id_type_feature, id_type_features, label) in loader:
         >>>         batch_data = PyPersiaBatchData()
-        >>>         batch_data.add_dense([dense])
-        >>>         batch_data.add_sparse(batch_sparse_ids)
-        >>>         batch_data.add_target(target)
-        >>>         python_train_batch = ctx.get_embedding_from_data(batch_data)
-        >>>         (output, target) = ctx.forward(python_train_batch)
+        >>>         batch_data.add_non_id_type_feature(non_id_type_feature)
+        >>>         batch_data.add_id_type_features(id_type_features)
+        >>>         batch_data.add_label(label)
+        >>>         python_training_batch = ctx.get_embedding_from_data(batch_data)
+        >>>         (output, label) = ctx.forward(python_training_batch)
     """
 
     def __init__(
@@ -260,7 +239,7 @@ class EmbeddingCtx(BaseCtx):
         super(EmbeddingCtx, self).__init__(*args, **kwargs)
         self.preprocess_mode = preprocess_mode
         self.model = model
-        self.embedding_config = embedding_config or _get_default_embedding_config()
+        self.embedding_config = embedding_config or get_default_embedding_config()
 
         self.current_batch = None
 
@@ -285,7 +264,7 @@ class EmbeddingCtx(BaseCtx):
         )
 
     def forward(
-        self, batch: PythonTrainBatch
+        self, batch: PersiaTrainingBatch
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """Call `prepare_features` and then do a forward step of the model in context.
 
@@ -297,59 +276,68 @@ class EmbeddingCtx(BaseCtx):
             the tuple of output data and target data.
         """
         assert self.model is not None, "model not found, please init context with model"
-        dense, sparse, target = self.prepare_features(batch)
-        output = self.model(dense, sparse)
-        return (output, target)
+        non_id_type_tensors, embedding_tensors, labels = self.prepare_features(batch)
+        output = self.model(non_id_type_tensors, embedding_tensors)
+        return (output, labels)
 
     def prepare_features(
-        self, batch: PythonTrainBatch
+        self, batch: PersiaTrainingBatch
     ) -> Tuple[torch.Tensor, List[torch.Tensor], Optional[torch.Tensor]]:
-        """Converts the dense, sparse and target raw data in``PythonTrainBatch`` to `torch.Tensor``.
+        """Converts the non_id_type_features, sparse and target raw data in``PersiaTrainingBatch`` to `torch.Tensor``.
+
+        TODO: Add the feature conversion detail
+        For example
+
+        NotIdTypeFeatures -> ...
+        IDTypeFeatures -> ...
+        Labels -> ...
 
         Arguments:
-            batch (PythonTrainBatch): Training data provided by PersiaML upstream including
+            batch (PersiaTrainingBatch): Training data provided by PersiaML upstream including
                 dense, target, sparse data and meta info.
 
         Returns:
             the tuple of dense data, list of sparse data and target data.
         """
         if self.preprocess_mode == PreprocessMode.INFERENCE:
-            batch.target_tensor = None
+            batch.label_tensors = None
         else:
             # pytype: disable=attribute-error
-            batch.target = batch.consume_all_targets()
+            batch.labels = batch.consume_all_labels()
             # pytype: enable=attribute-error
-            assert len(batch.target) == 1
-            batch.target = batch.target[0]
-            batch.target_tensor = _cast_dlpack2torch_tensor(batch.target)
+            batch.label_tensors = [
+                _cast_dlpack2torch_tensor(label) for label in batch.labels
+            ]
 
         is_training = self.preprocess_mode == PreprocessMode.TRAIN  # cache property
 
         # pytype: disable=attribute-error
-        batch.dense = batch.consume_all_dense_features()
+        batch.non_id_type_features = batch.consume_all_non_id_type_features()
         # pytype: enable=attribute-error
-        batch.dense = batch.dense[0]
-        batch.dense_tensor = _cast_dlpack2torch_tensor(batch.dense)
+        batch.non_id_type_tensors = [
+            _cast_dlpack2torch_tensor(non_id_type_feature)
+            for non_id_type_feature in batch.non_id_type_features
+        ]
 
         # pytype: disable=attribute-error
-        batch.emb = batch.consume_all_sparse_features()
+        batch.id_type_features = batch.consume_all_id_type_features()
         # pytype: enable=attribute-error
 
-        batch.emb_slot = []
-        # sparse embedding processing
-        emb_tensors, forward_tensors = [], []
+        batch.emb_slots = []  # cache embedding to prevent tensor expired
+        emb_tensors = []  # cache origin embedding for later backward procedure
+        id_type_tensors = []  # id type tensos for later forward procedure
 
-        for emb in batch.emb:
-            if emb.is_raw_embedding():
+        for id_type_feature in batch.id_type_features:
+            if id_type_feature.is_raw_embedding():
                 # no duplicate id in raw_id_tensor
                 (
                     raw_embedding,
                     index,
                     non_empty_index,
                     sample_id_num,
-                ) = emb.get_raw_embedding()
+                ) = id_type_feature.get_raw_embedding()
 
-                batch.emb_slot.append([raw_embedding, index, non_empty_index])
+                batch.emb_slots.append([raw_embedding, index, non_empty_index])
                 distinct_id_tensor = _cast_dlpack2torch_tensor(raw_embedding)
                 index_tensor = _cast_dlpack2torch_tensor(
                     index
@@ -391,19 +379,21 @@ class EmbeddingCtx(BaseCtx):
                         index_select_raw_tensor,
                     )
                 )
-                forward_tensors.append(raw_fixed_size_tensor_with_mask)
+                id_type_tensors.append(raw_fixed_size_tensor_with_mask)
             else:
-                emb = emb.get_sum_embedding()
-                batch.emb_slot.append([emb])
-                sum_tensor = _cast_dlpack2torch_tensor(emb, requires_grad=is_training)
-                forward_tensors.append(sum_tensor)
-                emb_tensors.append((emb.name, None, None, None, sum_tensor))
+                emb = id_type_feature.get_sum_embedding()
+                batch.emb_slots.append([emb])
+                attention_sum_tensor = _cast_dlpack2torch_tensor(
+                    emb, requires_grad=is_training
+                )
+                id_type_tensors.append(attention_sum_tensor)
+                emb_tensors.append((emb.name, None, None, None, attention_sum_tensor))
 
-        batch.forward_tensors = forward_tensors
+        batch.id_type_tensors = id_type_tensors
         batch.emb_tensors = emb_tensors
         self.current_batch = batch
 
-        return batch.dense_tensor, batch.forward_tensors, batch.target_tensor
+        return batch.non_id_type_tensors, batch.id_type_tensors, batch.label_tensors
 
     def dump_checkpoint(
         self,
@@ -540,8 +530,8 @@ class EmbeddingCtx(BaseCtx):
         self.common_context.clear_embeddings()
 
     def get_embedding_from_data(
-        self, data: PyPersiaBatchData, device_id: Optional[int] = None
-    ) -> PythonTrainBatch:
+        self, data: PersiaBatch, device_id: Optional[int] = None
+    ) -> PersiaTrainingBatch:
         """Get embeddings of the input batch data.
 
         Arguments:
@@ -555,7 +545,7 @@ class EmbeddingCtx(BaseCtx):
 
     def get_embedding_from_bytes(
         self, data: bytes, device_id: Optional[int] = None
-    ) -> PythonTrainBatch:
+    ) -> PersiaTrainingBatch:
         """Get embeddings of the serialized input batch data.
 
         Arguments:
@@ -574,15 +564,15 @@ class TrainCtx(EmbeddingCtx):
     Example:
         >>> import torch
         >>> model = get_dnn_model()
-        >>> sparse_optimizer = persia.sparse.optim.SGD(lr=1e-3)
+        >>> embedding_optimizer = persia.embedding.optim.SGD(lr=1e-3)
         >>> dense_optimizer = torch.optim.SGD(lr=1e-3)
         >>> loss_fn = torch.nn.BCELoss(reduction="mean")
         >>> with TrainCtx(
-        >>>     sparse_optimizer,
+        >>>     embedding_optimizer,
         >>>     dense_optimizer,
         >>> ) as ctx:
         >>>     parallel_model = ctx.model
-        >>>     for batch_data in dataloder:
+        >>>     for batch_data in datalaoder:
         >>>         dense, sparse, target = ctx.prepare_features(data)
         >>>         output = parallel_model(dense, sparse)
         >>>         loss = loss_fn(output, target)
@@ -591,7 +581,7 @@ class TrainCtx(EmbeddingCtx):
 
     def __init__(
         self,
-        sparse_optimizer: Optimizer,
+        embedding_optimizer: Optimizer,
         dense_optimizer: torch.optim.Optimizer,
         grad_scalar_update_factor: float = 4,
         backward_buffer_size: int = 10,
@@ -605,7 +595,7 @@ class TrainCtx(EmbeddingCtx):
     ):
         """
         Arguments:
-            sparse_optimizer (persia.sparse.optim.Optimizer): Optimizer for the embeddings.
+            embedding_optimizer (persia.embedding.optim.Optimizer): Optimizer for the embeddings.
             dense_optimizer (torch.optim.Optimizer): Optimizer for dense parameters.
             grad_scalar_update_factor (float, optional): Update factor of ``Gradscalar`` to ensure loss scale finitely if set ``mixed_precision=True``.
             backward_buffer_size (int, optional): Max number of not updated gradients queued.
@@ -619,8 +609,8 @@ class TrainCtx(EmbeddingCtx):
         super(TrainCtx, self).__init__(PreprocessMode.TRAIN, *args, **kwargs)
 
         assert (
-            sparse_optimizer is not None
-        ), "Sparse_optimizer should not be none in train context"
+            embedding_optimizer is not None
+        ), "EmbeddingOptimizer should not be none in train context"
         assert grad_scalar_update_factor > 0, "grad scalar should greater than zero"
         assert (
             self.model is not None
@@ -669,7 +659,7 @@ class TrainCtx(EmbeddingCtx):
             _logger.info("SingleMachine training context init done.")
 
         self.dense_optimizer = dense_optimizer
-        self.sparse_optimizer = sparse_optimizer
+        self.embedding_optimizer = embedding_optimizer
 
         self.wait_servers_ready()
 
@@ -679,15 +669,15 @@ class TrainCtx(EmbeddingCtx):
 
         self.backward_workers_size = backward_workers_size
 
-        from persia.prelude import PyBackward
+        from persia.prelude import Backward
 
         self.grad_queue = Queue(grad_update_buffer_size)
-        self.backward_engine = PyBackward(backward_buffer_size)
+        self.backward_engine = Backward(backward_buffer_size)
 
     def _enter(self):
         super()._enter()
 
-        self.sparse_optimizer.apply()
+        self.embedding_optimizer.apply()
         self.backward_engine.launch(self.backward_workers_size)
 
     def _exit(self):
@@ -778,7 +768,9 @@ class TrainCtx(EmbeddingCtx):
             )
             self.update_times += 1
 
-        grad_slots, empty_grads = [], []
+        grad_slots = []  # cache grad slots
+        empty_grads = []  # counting empty grads
+
         gradient_batch = self.current_batch.create_gradient_batch()
 
         for (
@@ -822,7 +814,7 @@ class TrainCtx(EmbeddingCtx):
         if self.device_id is not None:
             torch.cuda.synchronize()
 
-        self.backward_engine.update_sparse_gradient_batched(gradient_batch)
+        self.backward_engine.update_id_type_feature_gradient_batched(gradient_batch)
         self.grad_queue.put(grad_slots)
 
         if len(empty_grads) > 0:

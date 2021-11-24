@@ -124,12 +124,10 @@ _ignore_classes = []
 
 _ignore_module = [
     "persia.version",
-    "persia.sparse.emb",
     "persia.launcher",
     "persia.error",
     "persia.logger",
     "persia.prelude",
-    "persia.sparse.__init__",
 ]
 
 

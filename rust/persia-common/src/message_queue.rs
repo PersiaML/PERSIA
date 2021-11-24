@@ -17,7 +17,7 @@ pub enum PersiaMessageQueueError {
 }
 
 #[derive(Clone)]
-pub struct PersiaMessageQueueClient {
+pub struct PersiaMessageQueueClientImpl {
     client: hyper::Client<hyper::client::HttpConnector>,
     server_addr: url::Url,
 }
@@ -28,7 +28,7 @@ fn expect_uri(url: url::Url) -> hyper::Uri {
         .expect("a parsed Url should always be a valid Uri")
 }
 
-impl PersiaMessageQueueClient {
+impl PersiaMessageQueueClientImpl {
     pub fn new(server_addr: &str) -> Self {
         let server_addr = url::Url::parse("http://".to_string().add(server_addr).as_str()).unwrap();
         Self {
@@ -77,13 +77,13 @@ pub struct PersiaMessageQueueService {
 }
 
 #[derive(Clone)]
-pub struct PersiaMessageQueueServer {
+pub struct PersiaMessageQueueServerImpl {
     message_queue: ChannelPair<hyper::body::Bytes>,
     server_handler: Arc<tokio::task::JoinHandle<hyper::Result<()>>>,
 }
 
-impl PersiaMessageQueueServer {
-    pub fn new(port: u16, cap: usize) -> PersiaMessageQueueServer {
+impl PersiaMessageQueueServerImpl {
+    pub fn new(port: u16, cap: usize) -> PersiaMessageQueueServerImpl {
         let message_queue = ChannelPair::new(cap);
         let service = PersiaMessageQueueService {
             message_queue: message_queue.clone(),

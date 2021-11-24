@@ -28,17 +28,19 @@ use persia_common::{
     ndarray_f16_to_f32, ndarray_f32_to_f16,
     optim::OptimizerConfig,
     EmbeddingBatch, FeatureEmbeddingBatch, FeatureRawEmbeddingBatch, FeatureSumEmbeddingBatch,
-    SingleSignInFeatureBatch, SparseBatch, SparseBatchRemoteReference,
+    IDTypeFeatureBatch, IDTypeFeatureRemoteRef, SingleSignInFeatureBatch,
 };
 use persia_embedding_config::{
     EmbeddingConfig, EmbeddingWorkerConfig, InstanceInfo, PersiaCommonConfig,
-    PersiaGlobalConfigError, PersiaReplicaInfo, PersiaSparseModelHyperparameters, SlotConfig,
+    PersiaEmbeddingModelHyperparameters, PersiaGlobalConfigError, PersiaReplicaInfo, SlotConfig,
 };
 use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
 use persia_metrics::{
     Gauge, GaugeVec, IntCounterVec, PersiaMetricsManager, PersiaMetricsManagerError,
 };
-use persia_model_manager::{SparseModelManager, SparseModelManagerError, SparseModelManagerStatus};
+use persia_model_manager::{
+    EmbeddingModelManager, EmbeddingModelManagerError, EmbeddingModelManagerStatus,
+};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::{Readable, Writable};
 
@@ -72,7 +74,7 @@ impl MetricsHolder {
                 )?,
                 staleness: m.create_gauge(
                     "staleness", 
-                    "staleness of sparse model. The iteration of dense model run one by one, while the embedding lookup happened 
+                    "staleness of embedding model. The iteration of dense model run one by one, while the embedding lookup happened 
                     before concurrently. The staleness describe the delay of embeddings. The value of staleness start with 0, 
                     increase one when lookup a batch, decrease one when a batch update its gradients"
                 )?,
@@ -108,8 +110,8 @@ pub enum EmbeddingWorkerError {
     RpcError(String),
     #[error("embedding server error: {0}")]
     EmbeddingParameterServerError(#[from] EmbeddingParameterServerError),
-    #[error("sparse model manager error: {0}")]
-    SparseModelManagerError(#[from] SparseModelManagerError),
+    #[error("embedding model manager error: {0}")]
+    EmbeddingModelManagerError(#[from] EmbeddingModelManagerError),
     #[error("forward id not found")]
     ForwardIdNotFound(u64),
     #[error("forward failed")]
@@ -217,14 +219,14 @@ impl AllEmbeddingServerClient {
         futures::future::try_join_all(futs).await.is_ok()
     }
 
-    pub async fn model_manager_status(&self) -> Vec<SparseModelManagerStatus> {
+    pub async fn model_manager_status(&self) -> Vec<EmbeddingModelManagerStatus> {
         let futs = (0..self.replica_size()).map(|client_idx| async move {
             let client = self.get_client_by_index(client_idx).await;
             client.model_manager_status(&()).await
         });
 
         let status: Vec<_> = futures::future::try_join_all(futs).await.unwrap_or(vec![
-                SparseModelManagerStatus::Failed(SparseModelManagerError::FailedToGetStatus);
+                EmbeddingModelManagerStatus::Failed(EmbeddingModelManagerError::FailedToGetStatus);
                 self.replica_size()
             ]);
 
@@ -338,7 +340,10 @@ pub fn sign_to_shard_modulo(sign: u64, replica_size: u64) -> u64 {
 }
 
 #[inline]
-pub fn indices_to_hashstack_indices(indices: &mut SparseBatch, config: &EmbeddingConfig) -> () {
+pub fn indices_to_hashstack_indices(
+    indices: &mut IDTypeFeatureBatch,
+    config: &EmbeddingConfig,
+) -> () {
     for feature_batch in indices.batches.iter_mut() {
         let slot_conf = config.get_slot_by_feature_name(&feature_batch.feature_name);
         if slot_conf.hash_stack_config.hash_stack_rounds > 0 {
@@ -390,7 +395,7 @@ pub fn indices_to_hashstack_indices(indices: &mut SparseBatch, config: &Embeddin
 }
 
 #[inline]
-pub fn indices_add_prefix(indices: &mut SparseBatch, config: &EmbeddingConfig) -> () {
+pub fn indices_add_prefix(indices: &mut IDTypeFeatureBatch, config: &EmbeddingConfig) -> () {
     let feature_spacing = if config.feature_index_prefix_bit > 0 {
         (1u64 << (u64::BITS - config.feature_index_prefix_bit as u32)) - 1
     } else {
@@ -436,13 +441,13 @@ impl SignWithConfig {
 }
 
 pub fn lookup_batched_all_slots_preprocess(
-    indices: &mut SparseBatch,
+    indices: &mut IDTypeFeatureBatch,
     config: &EmbeddingConfig,
     replica_size: u64,
 ) -> Vec<Vec<SignWithConfig>> {
     #[inline]
     fn indices_to_sharded_indices(
-        indices: &SparseBatch,
+        indices: &IDTypeFeatureBatch,
         config: &EmbeddingConfig,
         replica_size: u64,
     ) -> Vec<Vec<SignWithConfig>> {
@@ -474,7 +479,7 @@ pub fn lookup_batched_all_slots_preprocess(
 }
 
 pub fn lookup_batched_all_slots_postprocess<'a>(
-    indices: &SparseBatch,
+    indices: &IDTypeFeatureBatch,
     forwarded_groups: Vec<(Vec<f32>, Vec<SignWithConfig>)>,
     config: &'a EmbeddingConfig,
 ) -> Vec<FeatureEmbeddingBatch> {
@@ -625,12 +630,12 @@ pub struct EmbeddingWorkerInner {
     pub forward_id: AtomicU64,
     pub cannot_forward_batched_time: crossbeam::atomic::AtomicCell<SystemTime>, // TODO: use parking_lot::RwLock to replace
     pub forward_id_buffer:
-        persia_libs::async_lock::RwLock<HashMap<usize, HashMap<u64, SparseBatch>>>,
-    pub post_forward_buffer: persia_libs::async_lock::RwLock<HashMap<u64, SparseBatch>>,
+        persia_libs::async_lock::RwLock<HashMap<usize, HashMap<u64, IDTypeFeatureBatch>>>,
+    pub post_forward_buffer: persia_libs::async_lock::RwLock<HashMap<u64, IDTypeFeatureBatch>>,
     pub staleness: AtomicUsize,
     pub embedding_config: Arc<EmbeddingConfig>,
     pub embedding_worker_config: Arc<EmbeddingWorkerConfig>,
-    pub sparse_model_manager: Arc<SparseModelManager>,
+    pub embedding_model_manager: Arc<EmbeddingModelManager>,
 }
 
 impl EmbeddingWorkerInner {
@@ -645,7 +650,7 @@ impl EmbeddingWorkerInner {
 
     async fn forward_batched(
         &self,
-        indices: SparseBatch,
+        indices: IDTypeFeatureBatch,
         batcher_idx: usize,
     ) -> Result<u64, EmbeddingWorkerError> {
         let id = self.get_id();
@@ -693,7 +698,7 @@ impl EmbeddingWorkerInner {
     pub async fn update_all_batched_gradients(
         &self,
         embedding_gradient_batch: &mut EmbeddingGradientBatch,
-        indices: SparseBatch,
+        indices: IDTypeFeatureBatch,
     ) -> Result<(), EmbeddingWorkerError> {
         let start_time = std::time::Instant::now();
 
@@ -863,7 +868,7 @@ impl EmbeddingWorkerInner {
 
     pub async fn lookup_batched_all_slots(
         &self,
-        indices: &mut SparseBatch,
+        indices: &mut IDTypeFeatureBatch,
         requires_grad: bool,
     ) -> Result<Vec<FeatureEmbeddingBatch>, EmbeddingWorkerError> {
         let start_time_all = std::time::Instant::now();
@@ -937,7 +942,7 @@ impl EmbeddingWorkerInner {
         result
     }
 
-    pub async fn model_manager_status(&self) -> Vec<SparseModelManagerStatus> {
+    pub async fn model_manager_status(&self) -> Vec<EmbeddingModelManagerStatus> {
         let result = self
             .all_embedding_server_client
             .model_manager_status()
@@ -1020,16 +1025,16 @@ impl EmbeddingWorkerInner {
 
     pub async fn forward_batch_id(
         &self,
-        req: (SparseBatchRemoteReference, bool),
+        req: (IDTypeFeatureRemoteRef, bool),
     ) -> Result<EmbeddingBatch, EmbeddingWorkerError> {
-        let (sparse_ref, requires_grad) = req;
-        let ref_id = sparse_ref.ref_id;
+        let (id_type_feature_remote_ref, requires_grad) = req;
+        let ref_id = id_type_feature_remote_ref.ref_id;
 
         let inner = self.clone();
         let mut indices = {
             let mut forward_id_buffer = inner.forward_id_buffer.write().await;
             let sub_buffer = forward_id_buffer
-                .get_mut(&sparse_ref.batcher_idx)
+                .get_mut(&id_type_feature_remote_ref.batcher_idx)
                 .ok_or_else(|| EmbeddingWorkerError::ForwardIdNotFound(ref_id))?;
             sub_buffer
                 .remove(&ref_id)
@@ -1065,7 +1070,7 @@ impl EmbeddingWorkerInner {
 
     pub async fn forward_batched_direct(
         &self,
-        indices: SparseBatch,
+        indices: IDTypeFeatureBatch,
     ) -> Result<EmbeddingBatch, EmbeddingWorkerError> {
         let mut indices = indices;
 
@@ -1140,7 +1145,7 @@ impl EmbeddingWorkerInner {
     pub async fn load(&self, req: String) -> Result<(), EmbeddingWorkerError> {
         let emb_dir = PathBuf::from(req.clone());
         let model_info = self
-            .sparse_model_manager
+            .embedding_model_manager
             .load_embedding_checkpoint_info(&emb_dir)?;
         if model_info.num_shards == self.all_embedding_server_client.dst_replica_size {
             tracing::info!("loading embedding from {} via embedding servers", req);
@@ -1191,10 +1196,10 @@ impl EmbeddingWorkerInner {
         let mut emb_file_list: Vec<PathBuf> = Vec::new();
         while dst_shard_idx < num_model_shards {
             let shard_dir = self
-                .sparse_model_manager
+                .embedding_model_manager
                 .get_other_shard_dir(&root_dir, dst_shard_idx);
             let mut shard_file_list = self
-                .sparse_model_manager
+                .embedding_model_manager
                 .get_emb_file_list_in_dir(shard_dir)?;
             emb_file_list.append(&mut shard_file_list);
 
@@ -1224,12 +1229,12 @@ impl EmbeddingWorkerInner {
             .into_iter()
             .map(|file_list| {
                 let embedding_worker_inner = self.clone();
-                let sparse_model_manager = self.sparse_model_manager.clone();
+                let embedding_model_manager = self.embedding_model_manager.clone();
                 let loaded = loaded.clone();
                 async move {
                     for file_path in file_list.into_iter() {
                         let array_linked_list = tokio::task::block_in_place(|| {
-                            sparse_model_manager.load_array_linked_list(file_path)
+                            embedding_model_manager.load_array_linked_list(file_path)
                         })?;
                         let entries = Vec::from_iter(array_linked_list.into_iter());
                         embedding_worker_inner.set_embedding(entries).await?;
@@ -1250,7 +1255,7 @@ impl EmbeddingWorkerInner {
 
     pub async fn configure_embedding_parameter_servers(
         &self,
-        req: PersiaSparseModelHyperparameters,
+        req: PersiaEmbeddingModelHyperparameters,
     ) -> Result<(), EmbeddingWorkerError> {
         let inner = self.clone();
         let req = req;
@@ -1372,7 +1377,7 @@ impl EmbeddingWorker {
         self.inner.ready_for_serving().await
     }
 
-    pub async fn model_manager_status(&self, _req: ()) -> Vec<SparseModelManagerStatus> {
+    pub async fn model_manager_status(&self, _req: ()) -> Vec<EmbeddingModelManagerStatus> {
         self.inner.model_manager_status().await
     }
 
@@ -1430,7 +1435,7 @@ impl EmbeddingWorker {
 
     pub async fn forward_batch_id(
         &self,
-        req: (SparseBatchRemoteReference, bool),
+        req: (IDTypeFeatureRemoteRef, bool),
     ) -> Result<EmbeddingBatch, EmbeddingWorkerError> {
         let resp = self.inner.forward_batch_id(req).await;
         if resp.is_err() {
@@ -1441,7 +1446,7 @@ impl EmbeddingWorker {
 
     pub async fn forward_batched_direct(
         &self,
-        indices: SparseBatch,
+        indices: IDTypeFeatureBatch,
     ) -> Result<EmbeddingBatch, EmbeddingWorkerError> {
         self.inner.forward_batched_direct(indices).await
     }
@@ -1467,7 +1472,7 @@ impl EmbeddingWorker {
 
     pub async fn configure_embedding_parameter_servers(
         &self,
-        req: PersiaSparseModelHyperparameters,
+        req: PersiaEmbeddingModelHyperparameters,
     ) -> Result<(), EmbeddingWorkerError> {
         self.inner.configure_embedding_parameter_servers(req).await
     }
@@ -1491,7 +1496,7 @@ impl EmbeddingWorkerNatsService {
         self.inner.ready_for_serving().await
     }
 
-    pub async fn model_manager_status(&self, _req: ()) -> Vec<SparseModelManagerStatus> {
+    pub async fn model_manager_status(&self, _req: ()) -> Vec<EmbeddingModelManagerStatus> {
         self.inner.model_manager_status().await
     }
 
@@ -1501,8 +1506,8 @@ impl EmbeddingWorkerNatsService {
 
     pub async fn forward_batched(
         &self,
-        indices: SparseBatch,
-    ) -> Result<SparseBatchRemoteReference, EmbeddingWorkerError> {
+        indices: IDTypeFeatureBatch,
+    ) -> Result<IDTypeFeatureRemoteRef, EmbeddingWorkerError> {
         let batcher_idx = indices
             .batcher_idx
             .ok_or_else(|| EmbeddingWorkerError::DataSrcIdxNotSet)?;
@@ -1511,12 +1516,12 @@ impl EmbeddingWorkerNatsService {
         }
         let ref_id = self.inner.forward_batched(indices, batcher_idx).await?;
         let embedding_worker_addr = self.inner.get_address().await?;
-        let sparse_ref = SparseBatchRemoteReference {
+        let id_type_feature_remote_ref = IDTypeFeatureRemoteRef {
             embedding_worker_addr,
             ref_id,
             batcher_idx,
         };
-        Ok(sparse_ref)
+        Ok(id_type_feature_remote_ref)
     }
 
     pub async fn dump(&self, req: String) -> Result<(), EmbeddingWorkerError> {
@@ -1529,7 +1534,7 @@ impl EmbeddingWorkerNatsService {
 
     pub async fn configure_embedding_parameter_servers(
         &self,
-        req: PersiaSparseModelHyperparameters,
+        req: PersiaEmbeddingModelHyperparameters,
     ) -> Result<(), EmbeddingWorkerError> {
         self.inner.configure_embedding_parameter_servers(req).await
     }
@@ -1566,15 +1571,15 @@ mod lookup_batched_all_slots_preprocess_tests {
         let raw_batch: Vec<Vec<u64>> = vec![vec![12, 23, 34], vec![56, 78, 90], vec![12, 56]];
         let feature_name = "Test".to_string();
         let feature_batch = FeatureBatch::new(feature_name.clone(), raw_batch);
-        let mut sparse_batch = SparseBatch {
+        let mut id_type_feature_batch = IDTypeFeatureBatch {
             requires_grad: false,
             batches: vec![feature_batch],
             enter_forward_id_buffer_time: None,
             enter_post_forward_buffer_time: None,
             batcher_idx: None,
         };
-        indices_to_hashstack_indices(&mut sparse_batch, &config);
-        let hashstack_feature_batch = sparse_batch.batches.first().unwrap();
+        indices_to_hashstack_indices(&mut id_type_feature_batch, &config);
+        let hashstack_feature_batch = id_type_feature_batch.batches.first().unwrap();
 
         let target_raw_batch: Vec<Vec<u64>> = vec![
             vec![2, 18, 5, 10, 0, 11],
@@ -1615,15 +1620,15 @@ mod lookup_batched_all_slots_preprocess_tests {
         ];
         let feature_name = "feature1".to_string();
         let feature_batch = FeatureBatch::new(feature_name.clone(), raw_batch.clone());
-        let mut sparse_batch = SparseBatch {
+        let mut id_type_feature_batch = IDTypeFeatureBatch {
             requires_grad: false,
             batches: vec![feature_batch],
             enter_forward_id_buffer_time: None,
             enter_post_forward_buffer_time: None,
             batcher_idx: None,
         };
-        indices_add_prefix(&mut sparse_batch, &config);
-        let result_feature_batch = sparse_batch.batches.first().unwrap();
+        indices_add_prefix(&mut id_type_feature_batch, &config);
+        let result_feature_batch = id_type_feature_batch.batches.first().unwrap();
 
         result_feature_batch.index_batch.iter().for_each(|x| {
             x.in_which_batch_samples

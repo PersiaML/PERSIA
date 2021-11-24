@@ -1,5 +1,5 @@
 use crate::metrics::MetricsHolder;
-use crate::PersiaCommonContext;
+use crate::PersiaCommonContextImpl;
 
 use core::slice;
 use std::sync::{
@@ -42,28 +42,28 @@ pub enum SkippableSingleSlotGradient {
 }
 
 #[derive(Debug)]
-pub struct GradientBatch {
+pub struct GradientBatchImpl {
     pub gradients: Vec<SkippableSingleSlotGradient>,
-    pub forward_id: u64,
+    pub backward_ref_id: u64,
     pub embedding_worker_addr: String,
     pub embedding_staleness_permit: Arc<Option<OwnedSemaphorePermit>>,
 }
 
 #[pyclass]
-pub struct PythonGradientBatch {
-    pub inner: Option<GradientBatch>,
+pub struct GradientBatch {
+    pub inner: Option<GradientBatchImpl>,
 }
 
-impl PythonGradientBatch {
+impl GradientBatch {
     pub fn new(
         forward_id: u64,
         embedding_worker_addr: &str,
         embedding_staleness_permit: Option<OwnedSemaphorePermit>,
     ) -> Self {
         Self {
-            inner: Some(GradientBatch {
+            inner: Some(GradientBatchImpl {
                 gradients: vec![],
-                forward_id,
+                backward_ref_id: forward_id,
                 embedding_worker_addr: embedding_worker_addr.to_string(),
                 embedding_staleness_permit: Arc::new(embedding_staleness_permit),
             }),
@@ -72,7 +72,7 @@ impl PythonGradientBatch {
 }
 
 #[pymethods]
-impl PythonGradientBatch {
+impl GradientBatch {
     pub fn add_skipped_gradient(&mut self, slot_name: String) {
         self.inner
             .as_mut()
@@ -106,15 +106,15 @@ impl PythonGradientBatch {
 }
 
 struct EmbeddingBackwardPacket {
-    pub forward_id: u64,
+    pub backward_ref_id: u64,
     pub embedding_worker_addr: String,
     pub embedding_staleness_permit: Option<OwnedSemaphorePermit>,
     pub embedding_gradient_batch: EmbeddingGradientBatch,
 }
 
-struct Backward {
-    pub backward_channel_s: flume::Sender<GradientBatch>,
-    pub backward_channel_r: flume::Receiver<GradientBatch>,
+struct BackwardImpl {
+    pub backward_channel_s: flume::Sender<GradientBatchImpl>,
+    pub backward_channel_r: flume::Receiver<GradientBatchImpl>,
     pub cpu_backward_channel_s: flume::Sender<EmbeddingBackwardPacket>,
     pub cpu_backward_channel_r: flume::Receiver<EmbeddingBackwardPacket>,
     pub launch: bool,
@@ -199,7 +199,7 @@ fn copy_gradients(
     )
 }
 
-impl Backward {
+impl BackwardImpl {
     fn new(queue_size: usize) -> Self {
         let (backward_channel_s, backward_channel_r) = flume::bounded(queue_size);
         let (cpu_backward_channel_s, cpu_backward_channel_r) = flume::bounded(queue_size);
@@ -234,7 +234,7 @@ impl Backward {
         let channel_s = self.cpu_backward_channel_s.clone();
 
         let running = self.running.clone();
-        let device_id = PersiaCommonContext::get().device_id.clone();
+        let device_id = PersiaCommonContextImpl::get().device_id.clone();
         let handler = std::thread::spawn(move || {
             #[cfg(feature = "cuda")]
             if let Some(device_id) = device_id.as_ref() {
@@ -247,7 +247,7 @@ impl Backward {
                 }
                 let start_time = std::time::Instant::now();
                 if let Ok(gradients) = channel_r.recv() {
-                    tracing::debug!("get backward message time cost {:?}", start_time.elapsed());
+                    tracing::debug!("get gradient batch time cost {:?}", start_time.elapsed());
                     let grads = gradients.gradients.into_iter().map(|single_slot_grad| {
                         match single_slot_grad {
                             SkippableSingleSlotGradient::Skip(x) => {
@@ -286,7 +286,7 @@ impl Backward {
                         Arc::try_unwrap(gradients.embedding_staleness_permit).unwrap();
 
                     if let Err(e) = channel_s.send(EmbeddingBackwardPacket {
-                        forward_id: gradients.forward_id,
+                        backward_ref_id: gradients.backward_ref_id,
                         embedding_worker_addr: gradients.embedding_worker_addr,
                         embedding_staleness_permit,
                         embedding_gradient_batch: req,
@@ -301,7 +301,7 @@ impl Backward {
     }
 
     fn spawn_backward_worker(&mut self, num_backward_worker: usize) {
-        let context = PersiaCommonContext::get();
+        let context = PersiaCommonContextImpl::get();
         let _guard = context.async_runtime.enter();
 
         for _ in 0..num_backward_worker {
@@ -315,19 +315,18 @@ impl Backward {
                     }
                     let start_time = std::time::Instant::now();
                     if let Ok(embedding_backward_packet) = channel_r.recv_async().await {
-                        let forward_id = embedding_backward_packet.forward_id;
+                        let backward_ref_id = embedding_backward_packet.backward_ref_id;
                         let embedding_worker_addr = embedding_backward_packet.embedding_worker_addr;
                         let embedding_staleness_permit =
                             embedding_backward_packet.embedding_staleness_permit;
                         let req = embedding_backward_packet.embedding_gradient_batch;
 
-                        tracing::debug!(
-                            "get cpu backward message time cost {:?}",
-                            start_time.elapsed()
-                        );
+                        tracing::debug!("get backward packet time cost {:?}", start_time.elapsed());
 
                         let client = rpc_client.get_client_by_addr(embedding_worker_addr.as_str());
-                        let result = client.update_gradient_batched(&(forward_id, req)).await;
+                        let result = client
+                            .update_gradient_batched(&(backward_ref_id, req))
+                            .await;
 
                         if result.is_err() {
                             tracing::error!("backward error {:?}", result.unwrap_err());
@@ -355,16 +354,16 @@ impl Backward {
 }
 
 #[pyclass]
-struct PyBackward {
-    inner: Backward,
+struct Backward {
+    inner: BackwardImpl,
 }
 
 #[pymethods]
-impl PyBackward {
+impl Backward {
     #[new]
-    pub fn new(queue_size: usize) -> PyBackward {
-        PyBackward {
-            inner: Backward::new(queue_size),
+    pub fn new(queue_size: usize) -> Backward {
+        Backward {
+            inner: BackwardImpl::new(queue_size),
         }
     }
 
@@ -376,9 +375,9 @@ impl PyBackward {
         self.inner.shutdown()
     }
 
-    pub fn update_sparse_gradient_batched(
+    pub fn update_id_type_feature_gradient_batched(
         &self,
-        gradients: &mut PythonGradientBatch,
+        gradients: &mut GradientBatch,
     ) -> PyResult<()> {
         let start_time = std::time::Instant::now();
         if let Err(err) = self
@@ -392,7 +391,7 @@ impl PyBackward {
         let elapsed = start_time.elapsed().as_millis();
         if elapsed > 1 {
             tracing::warn!(
-                message = "update_sparse_gradient_batched takes more than 1 milli seconds",
+                message = "update_id_type_feature_gradient_batched takes more than 1 milli seconds",
                 took_time = tracing::field::debug(&elapsed)
             );
             if let Ok(m) = MetricsHolder::get() {
@@ -406,7 +405,7 @@ impl PyBackward {
 
 pub fn init_module(super_module: &PyModule, py: Python) -> PyResult<()> {
     let module = PyModule::new(py, "backward")?;
-    module.add_class::<PyBackward>()?;
+    module.add_class::<Backward>()?;
     super_module.add_submodule(module)?;
     Ok(())
 }
