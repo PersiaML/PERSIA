@@ -181,7 +181,7 @@ impl PersiaJobSpec {
                     container.name = "emb-server".to_string();
                     container.args = Some(
                         vec![
-                            "server",
+                            "embedding-parameter-server",
                             "--embedding-config",
                             "$(EMBEDDING_CONFIG_PATH)",
                             "--global-config",
