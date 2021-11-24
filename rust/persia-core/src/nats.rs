@@ -74,7 +74,8 @@ impl MasterDiscoveryComponent {
         if let Some(master_addr) = &self.master_addr {
             Ok(master_addr.clone())
         } else {
-            let backoff = backoff::ExponentialBackoff::default();
+            let mut backoff = backoff::ExponentialBackoff::default();
+            backoff.max_interval = std::time::Duration::from_millis(500);
 
             let master_addr = backoff::future::retry(backoff, || async {
                 let master_addr = self
@@ -159,7 +160,9 @@ impl PersiaDataFlowComponent {
         let world_size = match world_size {
             Some(w) => Ok(w),
             None => {
-                let backoff = backoff::ExponentialBackoff::default();
+                let mut backoff = backoff::ExponentialBackoff::default();
+                backoff.max_interval = std::time::Duration::from_millis(500);
+
                 backoff::future::retry(backoff, || async {
                     let result: Result<usize, NatsError> = dataflow_publish_service
                         .publish_get_world_size(&(), None)
@@ -180,7 +183,9 @@ impl PersiaDataFlowComponent {
 
         let embedding_worker_publish_service = EmbeddingWorkerNatsServicePublisher::new().await;
 
-        let backoff = backoff::ExponentialBackoff::default();
+        let mut backoff = backoff::ExponentialBackoff::default();
+        backoff.max_interval = std::time::Duration::from_millis(500);
+
         let num_embedding_workers = backoff::future::retry(backoff, || async {
             let result: Result<usize, PersiaError> = embedding_worker_publish_service
                 .publish_get_replica_size(&(), None)
@@ -216,7 +221,9 @@ impl PersiaDataFlowComponent {
 
         let mut embedding_worker_addr_list = Vec::new();
         for embedding_worker_idx in 0..embedding_worker_replica_size {
-            let backoff = backoff::ExponentialBackoff::default();
+            let mut backoff = backoff::ExponentialBackoff::default();
+            backoff.max_interval = std::time::Duration::from_millis(500);
+
             let embedding_worker_addr = backoff::future::retry(backoff, || async {
                 let embedding_worker_addr = self
                     .embedding_worker_publish_service
@@ -257,7 +264,9 @@ impl PersiaDataFlowComponent {
                 let cur_embedding_worker_id =
                     self.cur_embedding_worker_id.fetch_add(1, Ordering::AcqRel);
 
-                let backoff = backoff::ExponentialBackoff::default();
+                let mut backoff = backoff::ExponentialBackoff::default();
+                backoff.max_interval = std::time::Duration::from_millis(500);
+
                 let id_type_feature_ref: IDTypeFeatureRemoteRef =
                     backoff::future::retry(backoff, || async {
                         let id_type_features_ref = self
@@ -315,7 +324,9 @@ impl PersiaDataFlowComponent {
         }
         let rank_id = batch.inner.batch_id.unwrap() % self.world_size;
 
-        let backoff = backoff::ExponentialBackoff::default();
+        let mut backoff = backoff::ExponentialBackoff::default();
+        backoff.max_interval = std::time::Duration::from_millis(500);
+
         backoff::future::retry(backoff, || async {
             let resp = self
                 .dataflow_publish_service
