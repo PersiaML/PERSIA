@@ -17,9 +17,9 @@ mod utils;
 #[cfg(feature = "cuda")]
 mod cuda;
 
-use crate::data::{PersiaBatchData, PyPersiaBatchData};
-use crate::forward::{forward_directly, PyTrainBatch};
-use crate::optim::PyOptimizerBase;
+use crate::data::{PersiaBatch, PersiaBatchImpl};
+use crate::forward::{forward_directly, PersiaTrainingBatch};
+use crate::optim::OptimizerBase;
 use crate::rpc::PersiaRpcClient;
 
 use std::path::PathBuf;
@@ -66,13 +66,13 @@ pub enum PersiaError {
     RpcError(#[from] persia_rpc::PersiaRpcError),
     #[error("Nats error: {0}")]
     NatsError(#[from] persia_nats_client::NatsError),
-    #[error("Send sparse data to embedding worker multi times")]
+    #[error("Send ID type features to embedding worker multiple times")]
     MultipleSendError,
-    #[error("Sparse data is null, please call batch.add_sparse first")]
-    NullSparseDataError,
-    #[error("Batch id is null, please call send_sparse_to_embedding_worker first")]
+    #[error("Id type features is null, please call batch.add_id_type_features before sending PersiaBatch")]
+    NullIDTypeFeaturesError,
+    #[error("Batch id is null, please call send_id_type_features_to_embedding_worker first")]
     NullBatchIdError,
-    #[error("Sparse optimizer not set yet")]
+    #[error("Embedding optimizer not set yet")]
     NullOptimizerError,
     #[error("Data send failed")]
     SendDataError,
@@ -98,9 +98,9 @@ impl From<PersiaError> for PyErr {
     }
 }
 
-static PERSIA_COMMON_CONTEXT: OnceCell<Arc<PersiaCommonContext>> = OnceCell::new();
+static PERSIA_COMMON_CONTEXT: OnceCell<Arc<PersiaCommonContextImpl>> = OnceCell::new();
 
-struct PersiaCommonContext {
+struct PersiaCommonContextImpl {
     pub rpc_client: Arc<PersiaRpcClient>,
     pub nats_publisher: RwLock<Option<nats::PersiaDataFlowComponent>>,
     pub master_discovery_service: RwLock<Option<nats::MasterDiscoveryComponent>>,
@@ -108,7 +108,7 @@ struct PersiaCommonContext {
     pub device_id: Arc<Option<i32>>,
 }
 
-impl PersiaCommonContext {
+impl PersiaCommonContextImpl {
     pub fn get() -> Arc<Self> {
         PERSIA_COMMON_CONTEXT
             .get()
@@ -164,7 +164,7 @@ impl PersiaCommonContext {
         Ok(instance)
     }
 
-    pub fn register_optimizer(&self, optimizer: &PyOptimizerBase) -> Result<(), PersiaError> {
+    pub fn register_optimizer(&self, optimizer: &OptimizerBase) -> Result<(), PersiaError> {
         self.async_runtime.block_on(
             self.get_nats_publish_service()?
                 .register_optimizer(optimizer),
@@ -189,12 +189,12 @@ impl PersiaCommonContext {
 }
 
 #[pyclass]
-pub struct PyPersiaCommonContext {
-    inner: Arc<PersiaCommonContext>,
+pub struct PersiaCommonContext {
+    inner: Arc<PersiaCommonContextImpl>,
 }
 
 #[pymethods]
-impl PyPersiaCommonContext {
+impl PersiaCommonContext {
     #[new]
     pub fn new(
         num_coroutines_worker: usize,
@@ -202,7 +202,7 @@ impl PyPersiaCommonContext {
         replica_size: usize,
         device_id: Option<i32>,
     ) -> PyResult<Self> {
-        let inner = PersiaCommonContext::new(
+        let inner = PersiaCommonContextImpl::new(
             num_coroutines_worker,
             replica_index,
             replica_size,
@@ -340,24 +340,27 @@ impl PyPersiaCommonContext {
             .map_err(|e| e.into())
     }
 
-    pub fn send_sparse_to_embedding_worker(&self, batch: &mut PyPersiaBatchData) -> PyResult<()> {
+    pub fn send_id_type_features_to_embedding_worker(
+        &self,
+        batch: &mut PersiaBatch,
+    ) -> PyResult<()> {
         self.inner
             .async_runtime
             .block_on(
                 self.inner
                     .get_nats_publish_service()?
-                    .send_sparse_to_embedding_worker(batch),
+                    .send_id_type_features_to_embedding_worker(batch),
             )
             .map_err(|e| e.into())
     }
 
-    pub fn send_dense_to_nn_worker(&self, batch: &PyPersiaBatchData) -> PyResult<()> {
+    pub fn send_non_id_type_features_to_nn_worker(&self, batch: &PersiaBatch) -> PyResult<()> {
         self.inner
             .async_runtime
             .block_on(
                 self.inner
                     .get_nats_publish_service()?
-                    .send_dense_to_nn_worker(batch),
+                    .send_non_id_type_features_to_nn_worker(batch),
             )
             .map_err(|e| e.into())
     }
@@ -388,9 +391,9 @@ impl PyPersiaCommonContext {
 
     pub fn get_embedding_from_data(
         &self,
-        batch: &mut PyPersiaBatchData,
+        batch: &mut PersiaBatch,
         device_id: Option<i32>,
-    ) -> PyResult<PyTrainBatch> {
+    ) -> PyResult<PersiaTrainingBatch> {
         let batch = std::mem::take(&mut batch.inner);
         forward_directly(batch, device_id)
     }
@@ -399,8 +402,8 @@ impl PyPersiaCommonContext {
         &self,
         batch: &PyBytes,
         device_id: Option<i32>,
-    ) -> PyResult<PyTrainBatch> {
-        let batch: PersiaBatchData = PersiaBatchData::read_from_buffer(batch.as_bytes()).unwrap();
+    ) -> PyResult<PersiaTrainingBatch> {
+        let batch: PersiaBatchImpl = PersiaBatchImpl::read_from_buffer(batch.as_bytes()).unwrap();
         forward_directly(batch, device_id)
     }
 
@@ -467,7 +470,7 @@ fn persia_core(py: Python, m: &PyModule) -> PyResult<()> {
         tracing::warn!("http_proxy environment is set, this is generally not what we want, please double check");
     }
 
-    m.add_class::<PyPersiaCommonContext>()?;
+    m.add_class::<PersiaCommonContext>()?;
 
     forward::init_module(m, py)?;
     backward::init_module(m, py)?;

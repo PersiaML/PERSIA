@@ -7,12 +7,12 @@ import numpy as np
 from tqdm import tqdm
 from sklearn import metrics
 
-from persia.ctx import TrainCtx, eval_ctx, EmbeddingConfig
-from persia.sparse.optim import Adagrad
+from persia.ctx import TrainCtx, eval_ctx
+from persia.embedding.optim import Adagrad
 from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
 from persia.data import Dataloder, PersiaDataset, StreamingDataset
-from persia.prelude import PyPersiaBatchData, PyPersiaBatchDataSender
+from persia.prelude import PersiaBatch, PersiaBatchDataSender
 from persia.utils import setup_seed
 
 from model import DNN
@@ -34,69 +34,46 @@ class TestDataset(PersiaDataset):
 
         logger.info(f"test dataset size is {size}")
 
-    def fetch_data(self, persia_sender_channel: PyPersiaBatchDataSender):
+    def fetch_data(self, persia_sender_channel: PersiaBatchDataSender):
         logger.info("test loader start to generate data...")
         for idx, (dense, batch_sparse_ids, target) in enumerate(
             tqdm(self.loader, desc="gen batch data")
         ):
-            batch_data = PyPersiaBatchData()
-            batch_data.add_dense([dense])
-            batch_data.add_sparse(batch_sparse_ids)
-            batch_data.add_target(target)
+            batch_data = PersiaBatch()
+            batch_data.add_non_id_type_feature([dense])
+            batch_data.add_id_type_features(batch_sparse_ids)
+            batch_data.add_label(target)
             persia_sender_channel.send(batch_data)
 
     def __len__(self):
         return self.loader_size
 
 
-class TrainDataset(PersiaDataset):
-    def __init__(self, train_dir: str, batch_size: int = 128):
-        super(TestDataset, self).__init__(buffer_size=10)
-        size, loader = make_dataloader(test_dir, batch_size)
-        self.loader = loader
-        self.loader_size = size
-
-        logger.info(f"test dataset size is {size}")
-
-    def fetch_data(self, persia_sender_channel: PyPersiaBatchDataSender):
-        logger.info("test loader start to generate data...")
-        for idx, (dense, batch_sparse_ids, target) in enumerate(
-            tqdm(self.loader, desc="gen batch data")
-        ):
-            batch_data = PyPersiaBatchData()
-            batch_data.add_dense([dense])
-            batch_data.add_sparse(batch_sparse_ids)
-            batch_data.add_target(target)
-            persia_sender_channel.send(batch_data)
-
-    def __len__(self):
-        return self.loader_size
-
-
-def test(model: torch.nn.Module, data_loader: Dataloder, cuda: bool = True):
+def test(model: torch.nn.Module, data_loader: Dataloder, cuda: bool):
     logger.info("start to test...")
     model.eval()
 
     with eval_ctx(model=model) as ctx:
         accuracies, losses = [], []
-        all_pred, all_target = [], []
+        all_pred, all_labels = [], []
         for (batch_idx, batch_data) in enumerate(tqdm(data_loader, desc="test...")):
-            (pred, target) = ctx.forward(batch_data)
-            loss = loss_fn(pred, target)
+            (pred, labels) = ctx.forward(batch_data)
+            label = labels[0]
+            loss = loss_fn(pred, label)
             if cuda:
                 pred = pred.cpu()
-                target = target.cpu()
+                label = label.cpu()
             else:
-                target = target.clone()  # cpu mode need copy the target data..
+                label = label.clone()  # cpu mode need copy the target data..
             all_pred.append(pred.detach().numpy())
-            all_target.append(target.detach().numpy())
-            accuracy = (torch.round(pred) == target).sum() / target.shape[0]
+            all_labels.append(label.detach().numpy())
+            accuracy = (torch.round(pred) == label).sum() / label.shape[0]
             accuracies.append(accuracy)
             losses.append(loss)
 
-        all_pred, all_target = np.concatenate(all_pred), np.concatenate(all_target)
+        all_pred, all_labels = np.concatenate(all_pred), np.concatenate(all_labels)
 
-        fpr, tpr, th = metrics.roc_curve(all_target, all_pred)
+        fpr, tpr, th = metrics.roc_curve(all_labels, all_pred)
         test_auc = metrics.auc(fpr, tpr)
 
         test_accuracies = torch.mean(torch.tensor(accuracies))
@@ -113,7 +90,7 @@ if __name__ == "__main__":
     logger.info("init Simple DNN model...")
     rank, device_id, world_size = get_rank(), get_local_rank(), get_world_size()
 
-    cuda = bool(int(os.environ.get("ENABLE_CUDA", 1)))
+    cuda = bool(int(os.environ.get("ENABLE_CUDA", 0)))
     mixed_precision = True
 
     if cuda:
@@ -122,8 +99,10 @@ if __name__ == "__main__":
     else:
         mixed_precision = False
         device_id = None
+    logger.info(f"device_id is {device_id}")
+
     dense_optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-    sparse_optimizer = Adagrad(lr=1e-2)
+    embedding_optimizer = Adagrad(lr=1e-2)
     loss_fn = torch.nn.BCELoss(reduction="mean")
     logger.info("finish genreate dense ctx")
 
@@ -132,25 +111,23 @@ if __name__ == "__main__":
     test_interval = 254
     buffer_size = 10
 
-    embedding_config = EmbeddingConfig()
-
     with TrainCtx(
         model=model,
-        sparse_optimizer=sparse_optimizer,
+        embedding_optimizer=embedding_optimizer,
         dense_optimizer=dense_optimizer,
         mixed_precision=mixed_precision,
         device_id=device_id,
-        embedding_config=embedding_config,
     ) as ctx:
         train_dataloader = Dataloder(StreamingDataset(buffer_size))
         test_loader = Dataloder(test_dataset, is_training=False)
 
         logger.info("start to training...")
         for (batch_idx, data) in enumerate(train_dataloader):
-            (output, target) = ctx.forward(data)
-            loss = loss_fn(output, target)
+            (output, labels) = ctx.forward(data)
+            label = labels[0]
+            loss = loss_fn(output, label)
             scaled_loss = ctx.backward(loss)
-            accuracy = (torch.round(output) == target).sum() / target.shape[0]
+            accuracy = (torch.round(output) == label).sum() / label.shape[0]
             logger.info(
                 f"current idx: {batch_idx} loss: {float(loss)} scaled_loss: {float(scaled_loss)} accuracy: {float(accuracy)}"
             )

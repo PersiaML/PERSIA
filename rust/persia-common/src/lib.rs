@@ -114,7 +114,7 @@ pub struct EmbeddingBatch {
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
 #[serde(crate = "self::serde")]
-pub struct SparseBatch {
+pub struct IDTypeFeatureBatch {
     pub requires_grad: bool,
     pub batches: Vec<FeatureBatch>,
     #[serde(skip)]
@@ -125,9 +125,9 @@ pub struct SparseBatch {
     pub batcher_idx: Option<usize>,
 }
 
-impl Default for SparseBatch {
+impl Default for IDTypeFeatureBatch {
     fn default() -> Self {
-        SparseBatch {
+        IDTypeFeatureBatch {
             requires_grad: false,
             batches: Vec::new(),
             enter_forward_id_buffer_time: None,
@@ -138,13 +138,13 @@ impl Default for SparseBatch {
 }
 
 #[derive(Readable, Writable, Debug, Clone)]
-pub struct SparseBatchRemoteReference {
+pub struct IDTypeFeatureRemoteRef {
     pub embedding_worker_addr: String,
     pub ref_id: u64,
     pub batcher_idx: usize,
 }
 
-impl Default for SparseBatchRemoteReference {
+impl Default for IDTypeFeatureRemoteRef {
     fn default() -> Self {
         Self {
             embedding_worker_addr: String::from(""),

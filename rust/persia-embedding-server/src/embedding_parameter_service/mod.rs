@@ -9,14 +9,16 @@ use snafu::ResultExt;
 use persia_common::optim::{Optimizable, Optimizer, OptimizerConfig};
 use persia_embedding_config::{
     EmbeddingConfig, EmbeddingParameterServerConfig, InstanceInfo, PerisaJobType,
-    PersiaCommonConfig, PersiaGlobalConfigError, PersiaReplicaInfo,
-    PersiaSparseModelHyperparameters,
+    PersiaCommonConfig, PersiaEmbeddingModelHyperparameters, PersiaGlobalConfigError,
+    PersiaReplicaInfo,
 };
 use persia_embedding_holder::{emb_entry::HashMapEmbeddingEntry, PersiaEmbeddingHolder};
 use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
 
 use persia_metrics::{Gauge, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError};
-use persia_model_manager::{SparseModelManager, SparseModelManagerError, SparseModelManagerStatus};
+use persia_model_manager::{
+    EmbeddingModelManager, EmbeddingModelManagerError, EmbeddingModelManagerStatus,
+};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::{Readable, Writable};
 
@@ -87,7 +89,7 @@ pub enum EmbeddingParameterServerError {
     #[error("service not configured error")]
     NotConfiguredError,
     #[error("model manager error: {0}")]
-    SparseModelManagerError(#[from] SparseModelManagerError),
+    EmbeddingModelManagerError(#[from] EmbeddingModelManagerError),
     #[error("nats error: {0}")]
     NatsError(#[from] NatsError),
     #[error("optimizer not found error")]
@@ -102,13 +104,13 @@ pub struct EmbeddingParameterServiceInner {
     pub embedding: PersiaEmbeddingHolder,
     pub optimizer: persia_libs::async_lock::RwLock<Option<Arc<Box<dyn Optimizable + Send + Sync>>>>,
     pub hyperparameter_config:
-        persia_libs::async_lock::RwLock<Option<Arc<PersiaSparseModelHyperparameters>>>,
+        persia_libs::async_lock::RwLock<Option<Arc<PersiaEmbeddingModelHyperparameters>>>,
     pub hyperparameter_configured: persia_libs::async_lock::Mutex<bool>,
     pub server_config: Arc<EmbeddingParameterServerConfig>,
     pub common_config: Arc<PersiaCommonConfig>,
     pub embedding_config: Arc<EmbeddingConfig>,
     pub inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
-    pub sparse_model_manager: Arc<SparseModelManager>,
+    pub embedding_model_manager: Arc<EmbeddingModelManager>,
     pub replica_index: usize,
 }
 
@@ -119,7 +121,7 @@ impl EmbeddingParameterServiceInner {
         common_config: Arc<PersiaCommonConfig>,
         embedding_config: Arc<EmbeddingConfig>,
         inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
-        sparse_model_manager: Arc<SparseModelManager>,
+        embedding_model_manager: Arc<EmbeddingModelManager>,
         replica_index: usize,
     ) -> Self {
         Self {
@@ -131,7 +133,7 @@ impl EmbeddingParameterServiceInner {
             common_config,
             embedding_config,
             inc_update_manager,
-            sparse_model_manager,
+            embedding_model_manager,
             replica_index,
         }
     }
@@ -147,7 +149,7 @@ impl EmbeddingParameterServiceInner {
 
     pub async fn get_configuration(
         &self,
-    ) -> Result<Arc<PersiaSparseModelHyperparameters>, EmbeddingParameterServerError> {
+    ) -> Result<Arc<PersiaEmbeddingModelHyperparameters>, EmbeddingParameterServerError> {
         let conf = self.hyperparameter_config.read().await;
         let conf = conf.as_ref();
         if let Some(conf) = conf {
@@ -260,12 +262,12 @@ impl EmbeddingParameterServiceInner {
     }
 
     pub async fn ready_for_serving(&self) -> bool {
-        let model_status = self.sparse_model_manager.get_status();
+        let model_status = self.embedding_model_manager.get_status();
         let model_ready = match model_status {
-            SparseModelManagerStatus::Dumping(_) => true,
-            SparseModelManagerStatus::Idle => true,
-            SparseModelManagerStatus::Loading(_) => false,
-            SparseModelManagerStatus::Failed(_) => false,
+            EmbeddingModelManagerStatus::Dumping(_) => true,
+            EmbeddingModelManagerStatus::Idle => true,
+            EmbeddingModelManagerStatus::Loading(_) => false,
+            EmbeddingModelManagerStatus::Failed(_) => false,
         };
         if !model_ready {
             return false;
@@ -277,8 +279,8 @@ impl EmbeddingParameterServiceInner {
         }
     }
 
-    pub async fn model_manager_status(&self) -> SparseModelManagerStatus {
-        let status = self.sparse_model_manager.get_status();
+    pub async fn model_manager_status(&self) -> EmbeddingModelManagerStatus {
+        let status = self.embedding_model_manager.get_status();
         status
     }
 
@@ -437,7 +439,7 @@ impl EmbeddingParameterServiceInner {
 
     pub async fn configure(
         &self,
-        config: PersiaSparseModelHyperparameters,
+        config: PersiaEmbeddingModelHyperparameters,
     ) -> Result<(), EmbeddingParameterServerError> {
         {
             let mut conf_guard = self.hyperparameter_config.write().await;
@@ -450,15 +452,15 @@ impl EmbeddingParameterServiceInner {
 
     pub async fn dump(&self, dir: String) -> Result<(), EmbeddingParameterServerError> {
         let dst_dir = PathBuf::from(dir);
-        self.sparse_model_manager
+        self.embedding_model_manager
             .dump_embedding(dst_dir, self.embedding.clone())?;
         Ok(())
     }
 
     pub async fn load(&self, dir: String) -> Result<(), EmbeddingParameterServerError> {
         let dst_dir = PathBuf::from(dir);
-        let shard_dir = self.sparse_model_manager.get_shard_dir(&dst_dir);
-        self.sparse_model_manager
+        let shard_dir = self.embedding_model_manager.get_shard_dir(&dst_dir);
+        self.embedding_model_manager
             .load_embedding_from_dir(shard_dir, self.embedding.clone())?;
         Ok(())
     }
@@ -499,7 +501,7 @@ impl EmbeddingParameterService {
         self.inner.ready_for_serving().await
     }
 
-    pub async fn model_manager_status(&self, _req: ()) -> SparseModelManagerStatus {
+    pub async fn model_manager_status(&self, _req: ()) -> EmbeddingModelManagerStatus {
         self.inner.model_manager_status().await
     }
 
@@ -537,7 +539,7 @@ impl EmbeddingParameterService {
 
     pub async fn configure(
         &self,
-        config: PersiaSparseModelHyperparameters,
+        config: PersiaEmbeddingModelHyperparameters,
     ) -> Result<(), EmbeddingParameterServerError> {
         self.inner.configure(config).await
     }
@@ -601,7 +603,7 @@ impl EmbeddingParameterNatsService {
         self.inner.ready_for_serving().await
     }
 
-    pub async fn model_manager_status(&self, _req: ()) -> SparseModelManagerStatus {
+    pub async fn model_manager_status(&self, _req: ()) -> EmbeddingModelManagerStatus {
         self.inner.model_manager_status().await
     }
 
@@ -611,7 +613,7 @@ impl EmbeddingParameterNatsService {
 
     pub async fn configure(
         &self,
-        config: PersiaSparseModelHyperparameters,
+        config: PersiaEmbeddingModelHyperparameters,
     ) -> Result<(), EmbeddingParameterServerError> {
         self.inner.configure(config).await
     }

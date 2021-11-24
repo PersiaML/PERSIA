@@ -97,7 +97,7 @@ impl Default for InitializationMethod {
 }
 
 #[derive(Readable, Writable, Debug, Clone)]
-pub struct PersiaSparseModelHyperparameters {
+pub struct PersiaEmbeddingModelHyperparameters {
     pub initialization_method: InitializationMethod,
     pub admit_probability: f32,
     pub weight_bound: f32,

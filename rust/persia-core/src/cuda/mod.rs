@@ -15,7 +15,7 @@ use pinned_memory_pool::{PinnedMemoryPtr, PINNED_MEMORY_POOL};
 use persia_libs::{anyhow::Result, tracing};
 use persia_speedy::{Readable, Writable};
 
-use crate::tensor::{CPUStorage, DType};
+use crate::tensor::{CPUStorage, DTypeImpl};
 
 pub fn set_device(card_index: i32) {
     let result = unsafe { cuda::cudaSetDevice(card_index) };
@@ -31,7 +31,7 @@ pub struct GPUStorage {
     pub event: CudaEventPtr,
     #[speedy(skip)]
     pub host_ptr: PinnedMemoryPtr,
-    pub dtype: DType,
+    pub dtype: DTypeImpl,
     pub is_ready: bool,
 }
 
@@ -92,7 +92,7 @@ impl GPUStorage {
         self.ptr.inner
     }
 
-    pub fn get_dtype(&self) -> DType {
+    pub fn get_dtype(&self) -> DTypeImpl {
         self.dtype.clone()
     }
 }

@@ -19,7 +19,7 @@ use persia_embedding_server::embedding_worker_service::{
     AllEmbeddingServerClient, EmbeddingWorker, EmbeddingWorkerInner, EmbeddingWorkerNatsService,
     EmbeddingWorkerNatsServiceResponder,
 };
-use persia_model_manager::SparseModelManager;
+use persia_model_manager::EmbeddingModelManager;
 
 #[derive(Debug, StructOpt, Clone)]
 #[structopt()]
@@ -80,7 +80,7 @@ async fn main() -> Result<()> {
     let replica_size = all_embedding_server_client.replica_size() as u64;
     let embedding_worker_config = EmbeddingWorkerConfig::get()?;
     let embedding_config = EmbeddingConfig::get()?;
-    let sparse_model_manager = SparseModelManager::get()?;
+    let embedding_model_manager = EmbeddingModelManager::get()?;
 
     let inner = Arc::new(EmbeddingWorkerInner {
         all_embedding_server_client,
@@ -94,7 +94,7 @@ async fn main() -> Result<()> {
         embedding_config,
         staleness: Default::default(),
         embedding_worker_config,
-        sparse_model_manager,
+        embedding_model_manager,
     });
 
     let _responder = match &common_config.job_type {

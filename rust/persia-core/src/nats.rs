@@ -1,7 +1,7 @@
-use crate::data::{EmbeddingTensor, PyPersiaBatchData};
-use crate::optim::PyOptimizerBase;
-use crate::utils::PyPersiaBatchDataSender;
-use crate::{PersiaCommonContext, PersiaError};
+use crate::data::{EmbeddingTensor, PersiaBatch};
+use crate::optim::OptimizerBase;
+use crate::utils::PersiaBatchDataSender;
+use crate::{PersiaCommonContextImpl, PersiaError};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -11,10 +11,10 @@ use persia_libs::{async_lock::RwLock, backoff, once_cell::sync::OnceCell, tracin
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
-use persia_common::SparseBatchRemoteReference;
+use persia_common::IDTypeFeatureRemoteRef;
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
-    BoundedUniformInitialization, InitializationMethod, PersiaSparseModelHyperparameters,
+    BoundedUniformInitialization, InitializationMethod, PersiaEmbeddingModelHyperparameters,
 };
 use persia_embedding_server::embedding_worker_service::EmbeddingWorkerNatsServicePublisher;
 use persia_nats_client::NatsError;
@@ -99,7 +99,7 @@ impl MasterDiscoveryComponent {
 }
 
 pub mod persia_dataflow_service {
-    use crate::data::PersiaBatchData;
+    use crate::data::PersiaBatchImpl;
     use persia_embedding_config::PersiaReplicaInfo;
     use persia_libs::{flume, thiserror, tokio, tracing};
 
@@ -114,13 +114,13 @@ pub mod persia_dataflow_service {
 
     #[derive(Clone)]
     pub struct DataflowService {
-        pub output_channel: flume::Sender<PersiaBatchData>,
+        pub output_channel: flume::Sender<PersiaBatchImpl>,
         pub world_size: usize,
     }
 
     #[persia_nats_marcos::service]
     impl DataflowService {
-        pub async fn batch(&self, batch: PersiaBatchData) -> Result<(), Error> {
+        pub async fn batch(&self, batch: PersiaBatchImpl) -> Result<(), Error> {
             tracing::debug!("nats get batch");
             let result = self
                 .output_channel
@@ -178,11 +178,11 @@ impl PersiaDataFlowComponent {
 
         tracing::info!("Get world_size {}", world_size);
 
-        let preforward_sparse_publish_service = EmbeddingWorkerNatsServicePublisher::new().await;
+        let embedding_worker_publish_service = EmbeddingWorkerNatsServicePublisher::new().await;
 
         let backoff = backoff::ExponentialBackoff::default();
         let num_embedding_workers = backoff::future::retry(backoff, || async {
-            let result: Result<usize, PersiaError> = preforward_sparse_publish_service
+            let result: Result<usize, PersiaError> = embedding_worker_publish_service
                 .publish_get_replica_size(&(), None)
                 .await
                 .map_err(|e| PersiaError::from(e))?
@@ -201,7 +201,7 @@ impl PersiaDataFlowComponent {
 
         Ok(Self {
             dataflow_publish_service,
-            embedding_worker_publish_service: preforward_sparse_publish_service,
+            embedding_worker_publish_service,
             num_embedding_workers,
             cur_embedding_worker_id: AtomicUsize::new(0),
             world_size,
@@ -240,70 +240,77 @@ impl PersiaDataFlowComponent {
         Ok(embedding_worker_addr_list)
     }
 
-    pub async fn send_sparse_to_embedding_worker(
+    pub async fn send_id_type_features_to_embedding_worker(
         &self,
-        batch: &mut PyPersiaBatchData,
+        batch: &mut PersiaBatch,
     ) -> Result<(), PersiaError> {
         let start = std::time::Instant::now();
-        match &mut batch.inner.sparse_data {
-            EmbeddingTensor::SparseBatchRemoteReference(_) => {
-                tracing::error!("sparse data has already sent to embedding worker, you are calling send_sparse_to_embedding_worker muti times");
+        match &mut batch.inner.id_type_features {
+            EmbeddingTensor::IDTypeFeatureRemoteRef(_) => {
+                tracing::error!("id type features has already sent to embedding worker, you are calling send_id_type_features_to_embedding_worker multiple times");
                 return Err(PersiaError::MultipleSendError);
             }
-            EmbeddingTensor::SparseBatch(sparse_batch) => {
+            EmbeddingTensor::IDTypeFeature(id_type_features) => {
                 let replica_index = self.replica_info.replica_index;
-                sparse_batch.batcher_idx = Some(replica_index);
+                id_type_features.batcher_idx = Some(replica_index);
 
                 let cur_embedding_worker_id =
                     self.cur_embedding_worker_id.fetch_add(1, Ordering::AcqRel);
 
                 let backoff = backoff::ExponentialBackoff::default();
-                let sparse_ref: SparseBatchRemoteReference =
+                let id_type_feature_ref: IDTypeFeatureRemoteRef =
                     backoff::future::retry(backoff, || async {
-                        let sparse_ref = self
+                        let id_type_features_ref = self
                             .embedding_worker_publish_service
                             .publish_forward_batched(
-                                sparse_batch,
+                                id_type_features,
                                 Some(cur_embedding_worker_id % self.num_embedding_workers),
                             )
                             .await
                             .map_err(|e| PersiaError::from(e))?
                             .map_err(|e| PersiaError::from(e));
-                        if sparse_ref.is_err() {
+
+                        if id_type_features_ref.is_err() {
                             tracing::warn!(
-                                "failed to send ids to embedding worker due to {:?}, retrying...",
-                                sparse_ref
+                                "failed to send id type features to embedding worker due to {:?}, retrying...",
+                                id_type_features_ref
                             );
                         }
-                        Ok(sparse_ref?)
+
+                        Ok(id_type_features_ref?)
                     })
                     .await?;
 
-                batch.inner.sparse_data = EmbeddingTensor::SparseBatchRemoteReference(sparse_ref);
+                batch.inner.id_type_features =
+                    EmbeddingTensor::IDTypeFeatureRemoteRef(id_type_feature_ref);
                 let local_batch_id = self.cur_batch_id.fetch_add(1, Ordering::AcqRel);
                 let batch_id = local_batch_id * self.replica_info.replica_size
                     + self.replica_info.replica_index;
                 batch.inner.batch_id = Some(batch_id);
                 tracing::debug!(
-                    "send_sparse_to_embedding_worker time cost {} ms",
+                    "send_id_type_features_to_embedding_worker time cost {} ms",
                     start.elapsed().as_millis()
                 );
                 return Ok(());
             }
             EmbeddingTensor::Null => {
-                tracing::warn!("sparse data is null, please call batch.add_sparse first");
-                return Err(PersiaError::NullSparseDataError);
+                tracing::warn!(
+                    "id type features is null, please call batch.add_id_type_features first"
+                );
+                return Err(PersiaError::NullIDTypeFeaturesError);
             }
         }
     }
 
-    pub async fn send_dense_to_nn_worker(
+    pub async fn send_non_id_type_features_to_nn_worker(
         &self,
-        batch: &PyPersiaBatchData,
+        batch: &PersiaBatch,
     ) -> Result<(), PersiaError> {
         let start = std::time::Instant::now();
         if batch.inner.batch_id.is_none() {
-            tracing::warn!("batch id is null, please call send_sparse_to_embedding_worker first");
+            tracing::warn!(
+                "batch id is null, please call send_id_type_features_to_embedding_worker first"
+            );
             return Err(PersiaError::NullBatchIdError);
         }
         let rank_id = batch.inner.batch_id.unwrap() % self.world_size;
@@ -318,7 +325,7 @@ impl PersiaDataFlowComponent {
                 .map_err(|e| PersiaError::from(e));
             if resp.is_err() {
                 tracing::warn!(
-                    "failed to send data to nn worker due to {:?}, retrying...",
+                    "failed to send non_id_type_features to nn worker due to {:?}, retrying...",
                     resp
                 );
             }
@@ -327,7 +334,7 @@ impl PersiaDataFlowComponent {
         .await?;
 
         tracing::debug!(
-            "send_dense_to_nn_worker {} time cost {} ms",
+            "send_non_id_type_features_to_nn_worker {} time cost {} ms",
             rank_id,
             start.elapsed().as_millis()
         );
@@ -346,7 +353,7 @@ impl PersiaDataFlowComponent {
             (0. <= admit_probability) && (admit_probability <= 1.),
             "admit probability should be within 0 ~ 1"
         );
-        let config = PersiaSparseModelHyperparameters {
+        let config = PersiaEmbeddingModelHyperparameters {
             initialization_method: InitializationMethod::BoundedUniform(
                 BoundedUniformInitialization {
                     lower: initialize_lower,
@@ -365,7 +372,7 @@ impl PersiaDataFlowComponent {
         Ok(())
     }
 
-    pub async fn register_optimizer(&self, opt: &PyOptimizerBase) -> Result<(), PersiaError> {
+    pub async fn register_optimizer(&self, opt: &OptimizerBase) -> Result<(), PersiaError> {
         let optimizer = opt.get_inner();
         if optimizer.is_none() {
             return Err(PersiaError::NullOptimizerError);
@@ -389,8 +396,8 @@ impl PersiaDataFlowComponent {
 }
 
 #[pyfunction]
-pub fn init_responder(world_size: usize, channel: &PyPersiaBatchDataSender) -> PyResult<()> {
-    let common_context = PersiaCommonContext::get();
+pub fn init_responder(world_size: usize, channel: &PersiaBatchDataSender) -> PyResult<()> {
+    let common_context = PersiaCommonContextImpl::get();
     RESPONDER.get_or_init(|| {
         let nats_service = persia_dataflow_service::DataflowService {
             output_channel: channel.inner.clone(),
