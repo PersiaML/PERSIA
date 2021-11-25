@@ -280,7 +280,7 @@ class EmbeddingCtx(BaseCtx):
             the tuple of non_id_type_features, id_type_feature_embeddings and labels.
         """
         if self.preprocess_mode == PreprocessMode.INFERENCE:
-            batch.label_tensors = None
+            batch.label_torch_tensors = None
         else:
             # pytype: disable=attribute-error
             batch.label_tensors = batch.consume_all_label_tensors()
