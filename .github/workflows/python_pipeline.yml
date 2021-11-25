@@ -139,7 +139,7 @@ jobs:
       CIBW_BUILD: "${{ format('cp{0}{1}*', matrix.python-major-version, matrix.python-minor-version) || '*' }}"
       CIBW_MANYLINUX_X86_64_IMAGE: "baguasys/manylinux-cuda:${{ matrix.cuda-version }}"
       CIBW_ARCHS_LINUX: "${{ matrix.arch || 'auto' }}"
-      CIBW_ENVIRONMENT: 'AUDITWHEEL_PLAT="manylinux2014_${{ matrix.arch }}" USE_CUDA=1' 
+      CIBW_ENVIRONMENT: 'AUDITWHEEL_PLAT="manylinux2014_${{ matrix.arch }}" PERSIA_CUDA_VERSION="${{ matrix.cuda-version }}" USE_CUDA=1' 
       CIBW_REPAIR_WHEEL_COMMAND: "auditwheel show {wheel} && auditwheel repair -w {dest_dir} {wheel}"
       CIBW_BEFORE_BUILD: "pip install git+https://github.com/rossant/auditwheel.git@include-exclude"
 
@@ -172,19 +172,19 @@ jobs:
           path: "wheelhouse/*"
           if-no-files-found: error
 
-      # - name: Publish a Python distribution to PyPI
-      #   if: github.ref == 'refs/heads/master' && !startsWith(github.ref, 'refs/tags')
-      #   uses: pypa/gh-action-pypi-publish@release/v1
-      #   with:
-      #     user: __token__
-      #     password: ${{ secrets.PYPI_API_TOKEN }}
-      #     packages_dir: wheelhouse/
-      #     skip_existing: true
+      - name: Publish a Python distribution to PyPI
+        if: github.ref == 'refs/heads/master' && !startsWith(github.ref, 'refs/tags')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages_dir: wheelhouse/
+          skip_existing: true
 
-      # - name: Publish package
-      #   if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release')
-      #   uses: pypa/gh-action-pypi-publish@release/v1
-      #   with:
-      #     user: __token__
-      #     password: ${{ secrets.PYPI_API_TOKEN }}
-      #     packages_dir: wheelhouse/
+      - name: Publish package
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages_dir: wheelhouse/

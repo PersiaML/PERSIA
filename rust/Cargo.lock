@@ -1805,7 +1805,6 @@ name = "persia-common"
 version = "0.1.0"
 dependencies = [
  "hyper",
- "paste 1.0.6",
  "persia-embedding-config",
  "persia-libs",
  "persia-simd",
@@ -1970,7 +1969,6 @@ dependencies = [
 name = "persia-model-manager"
 version = "0.1.0"
 dependencies = [
- "persia-common",
  "persia-embedding-config",
  "persia-embedding-holder",
  "persia-libs",
