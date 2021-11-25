@@ -9,10 +9,11 @@ from sklearn import metrics
 
 from persia.ctx import TrainCtx, eval_ctx
 from persia.embedding.optim import Adagrad
+from persia.embedding.data import PersiaBatch
 from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
 from persia.data import Dataloder, PersiaDataset, StreamingDataset
-from persia.prelude import PersiaBatch, PersiaBatchDataSender
+from persia.prelude import PersiaBatchDataSender
 from persia.utils import setup_seed
 
 from model import DNN
@@ -36,14 +37,13 @@ class TestDataset(PersiaDataset):
 
     def fetch_data(self, persia_sender_channel: PersiaBatchDataSender):
         logger.info("test loader start to generate data...")
-        for idx, (dense, batch_sparse_ids, target) in enumerate(
+        for _idx, (non_id_type_feature, id_type_features, label) in enumerate(
             tqdm(self.loader, desc="gen batch data")
         ):
-            batch_data = PersiaBatch()
-            batch_data.add_non_id_type_feature([dense])
-            batch_data.add_id_type_features(batch_sparse_ids)
-            batch_data.add_label(target)
-            persia_sender_channel.send(batch_data)
+            persia_batch = PersiaBatch(id_type_features, requires_grad=False)
+            persia_batch.add_non_id_type_feature(non_id_type_feature)
+            persia_batch.add_label(label)
+            persia_sender_channel.send(persia_batch.data)
 
     def __len__(self):
         return self.loader_size
@@ -107,7 +107,7 @@ if __name__ == "__main__":
     logger.info("finish genreate dense ctx")
 
     test_dir = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "data/train.npz"
+        os.path.dirname(os.path.realpath(__file__)), "data/test.npz"
     )
     test_dataset = TestDataset(test_dir, batch_size=128)
     test_interval = 254

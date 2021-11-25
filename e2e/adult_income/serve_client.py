@@ -6,14 +6,15 @@ import json
 sys.path.append("/cache/proto/")
 
 import numpy as np
+
 from tqdm import tqdm
 from sklearn import metrics
+from persia.embedding.data import PersiaBatch
 
 import inference_pb2
 import inference_pb2_grpc
 
 from data_generator import make_dataloader
-from persia.prelude import PersiaBatch
 
 
 def get_inference_stub():
@@ -46,11 +47,11 @@ if __name__ == "__main__":
     all_pred = []
     all_target = []
 
-    for (dense, batch_sparse_ids, target) in tqdm(loader, desc="gen batch data..."):
-        batch_data = PersiaBatch()
-        batch_data.add_non_id_type_feature([dense])
-        batch_data.add_id_type_features(batch_sparse_ids, False)
-
+    for (non_id_type_feature, id_type_features, target) in tqdm(
+        loader, desc="gen batch data..."
+    ):
+        batch_data = PersiaBatch(id_type_features, requires_grad=False)
+        batch_data.add_non_id_type_feature(non_id_type_feature)
         model_input = batch_data.to_bytes()
         prediction = infer(get_inference_stub(), "adult_income", model_input)
 

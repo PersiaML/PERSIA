@@ -43,14 +43,13 @@ class TestDataset(PersiaDataset):
 
     def fetch_data(self, persia_sender_channel: PersiaBatchDataSender):
         logger.info("test loader start to generate data...")
-        for _idx, (dense, batch_sparse_ids, target) in enumerate(
+        for _idx, (non_id_type_feature, id_type_features, label) in enumerate(
             tqdm(self.loader, desc="gen batch data")
         ):
-            batch_data = PersiaBatch()
-            batch_data.add_non_id_type_feature([dense])
-            batch_data.add_id_type_features(batch_sparse_ids)
-            batch_data.add_label(target)
-            persia_sender_channel.send(batch_data)
+            persia_batch = PersiaBatch(id_type_features, requires_grad=False)
+            persia_batch.add_non_id_type_feature(non_id_type_feature)
+            persia_batch.add_label(label)
+            persia_sender_channel.send(persia_batch)
 
     def __len__(self):
         return self.loader_size

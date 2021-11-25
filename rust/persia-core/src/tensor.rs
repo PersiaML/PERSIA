@@ -2,8 +2,6 @@
 
 use std::fmt;
 
-// use paste::paste;
-
 use persia_libs::{anyhow::Result, half::f16, thiserror, tracing};
 
 #[cfg(feature = "cuda")]

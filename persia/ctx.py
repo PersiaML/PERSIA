@@ -13,9 +13,9 @@ import persia.env as env
 from persia.logger import get_default_logger
 from persia.embedding.optim import Optimizer
 from persia.embedding import EmbeddingConfig, get_default_embedding_config
+from persia.embedding.data import PersiaBatch
 from persia.prelude import (
     PersiaCommonContext,
-    PersiaBatch,
     PersiaTrainingBatch,
     Tensor,
 )
@@ -172,14 +172,15 @@ class DataCtx(BaseCtx):
         self.common_context.init_nats_publisher(None)
         self.common_context.wait_servers_ready()
 
-    def send_data(self, data: PersiaBatch):
+    def send_data(self, persia_batch: PersiaBatch):
         """Send PersiaBatch from data loader to nn worker and embedding worker side.
 
         Arguments:
-            data (PersiaBatch): PersiaBatch that haven't been process.
+            persia_batch (PersiaBatch): PersiaBatch that haven't been process.
         """
-        self.common_context.send_id_type_features_to_embedding_worker(data)
-        self.common_context.send_non_id_type_features_to_nn_worker(data)
+        persia_batch.is_valid()
+        self.common_context.send_id_type_features_to_embedding_worker(persia_batch.data)
+        self.common_context.send_non_id_type_features_to_nn_worker(persia_batch.data)
 
 
 class EmbeddingCtx(BaseCtx):
@@ -514,18 +515,18 @@ class EmbeddingCtx(BaseCtx):
         self.common_context.clear_embeddings()
 
     def get_embedding_from_data(
-        self, data: PersiaBatch, device_id: Optional[int] = None
+        self, persia_batch: PersiaBatch, device_id: Optional[int] = None
     ) -> PersiaTrainingBatch:
         """Get embeddings of the input batch data.
 
         Arguments:
-            data (PyPersiaBatchData): Input data without embeddings.
+            persia_batch (PersiaBatch): Input data without embeddings.
             device_id (int, optional): The CUDA device to use for this process.
 
         Returns:
             Input data with embeddings.
         """
-        return self.common_context.get_embedding_from_data(data, device_id)
+        return self.common_context.get_embedding_from_data(persia_batch.data, device_id)
 
     def get_embedding_from_bytes(
         self, data: bytes, device_id: Optional[int] = None
