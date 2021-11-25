@@ -97,16 +97,17 @@ impl Default for InitializationMethod {
 }
 
 #[derive(Readable, Writable, Debug, Clone)]
-pub struct PersiaSparseModelHyperparameters {
+pub struct PersiaEmbeddingModelHyperparameters {
     pub initialization_method: InitializationMethod,
     pub admit_probability: f32,
     pub weight_bound: f32,
     pub enable_weight_bound: bool,
 }
 
-static PERSIA_EMBEDDING_SEVER_CONFIG: OnceCell<Arc<PersiaEmbeddingServerConfig>> = OnceCell::new();
+static PERSIA_EMBEDDING_SEVER_CONFIG: OnceCell<Arc<EmbeddingParameterServerConfig>> =
+    OnceCell::new();
 
-static PERSIA_MIDDLEWARE_CONFIG: OnceCell<Arc<PersiaMiddlewareConfig>> = OnceCell::new();
+static PERSIA_EMBEDDING_WORKER_CONFIG: OnceCell<Arc<EmbeddingWorkerConfig>> = OnceCell::new();
 
 static PERSIA_COMMON_CONFIG: OnceCell<Arc<PersiaCommonConfig>> = OnceCell::new();
 
@@ -266,12 +267,12 @@ fn get_default_common_config() -> PersiaCommonConfig {
     PersiaCommonConfig::default()
 }
 
-fn get_default_middleware_config() -> PersiaMiddlewareConfig {
-    PersiaMiddlewareConfig::default()
+fn get_default_embedding_worker_config() -> EmbeddingWorkerConfig {
+    EmbeddingWorkerConfig::default()
 }
 
-fn get_default_embedding_server_config() -> PersiaEmbeddingServerConfig {
-    PersiaEmbeddingServerConfig::default()
+fn get_default_embedding_parameter_server_config() -> EmbeddingParameterServerConfig {
+    EmbeddingParameterServerConfig::default()
 }
 
 fn get_default_metrics_config() -> PersiaMetricsConfig {
@@ -371,14 +372,14 @@ impl PersiaCommonConfig {
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
 #[serde(crate = "self::serde")]
-pub struct PersiaMiddlewareConfig {
+pub struct EmbeddingWorkerConfig {
     #[serde(default = "get_thousand")]
     pub forward_buffer_size: usize,
     #[serde(default = "get_thousand")]
     pub buffered_data_expired_sec: usize,
 }
 
-impl Default for PersiaMiddlewareConfig {
+impl Default for EmbeddingWorkerConfig {
     fn default() -> Self {
         Self {
             forward_buffer_size: 1000,
@@ -387,9 +388,9 @@ impl Default for PersiaMiddlewareConfig {
     }
 }
 
-impl PersiaMiddlewareConfig {
+impl EmbeddingWorkerConfig {
     pub fn get() -> Result<Arc<Self>, PersiaGlobalConfigError> {
-        let singleton = PERSIA_MIDDLEWARE_CONFIG.get();
+        let singleton = PERSIA_EMBEDDING_WORKER_CONFIG.get();
         match singleton {
             Some(s) => Ok(s.clone()),
             None => Err(PersiaGlobalConfigError::NotReadyError),
@@ -399,7 +400,7 @@ impl PersiaMiddlewareConfig {
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
 #[serde(crate = "self::serde")]
-pub struct PersiaEmbeddingServerConfig {
+pub struct EmbeddingParameterServerConfig {
     // Eviction map config
     #[serde(default = "get_billion")]
     pub capacity: usize,
@@ -416,7 +417,7 @@ pub struct PersiaEmbeddingServerConfig {
     pub incremental_channel_capacity: usize,
 }
 
-impl Default for PersiaEmbeddingServerConfig {
+impl Default for EmbeddingParameterServerConfig {
     fn default() -> Self {
         Self {
             capacity: 1_000_000_000,
@@ -429,7 +430,7 @@ impl Default for PersiaEmbeddingServerConfig {
     }
 }
 
-impl PersiaEmbeddingServerConfig {
+impl EmbeddingParameterServerConfig {
     pub fn get() -> Result<Arc<Self>, PersiaGlobalConfigError> {
         let singleton = PERSIA_EMBEDDING_SEVER_CONFIG.get();
         match singleton {
@@ -444,10 +445,10 @@ impl PersiaEmbeddingServerConfig {
 pub struct PersiaGlobalConfig {
     #[serde(default = "get_default_common_config")]
     pub common_config: PersiaCommonConfig,
-    #[serde(default = "get_default_middleware_config")]
-    pub middleware_config: PersiaMiddlewareConfig,
-    #[serde(default = "get_default_embedding_server_config")]
-    pub embedding_server_config: PersiaEmbeddingServerConfig,
+    #[serde(default = "get_default_embedding_worker_config")]
+    pub embedding_worker_config: EmbeddingWorkerConfig,
+    #[serde(default = "get_default_embedding_parameter_server_config")]
+    pub embedding_parameter_server_config: EmbeddingParameterServerConfig,
 }
 
 impl PersiaGlobalConfig {
@@ -469,19 +470,19 @@ impl PersiaGlobalConfig {
         .expect("cannot parse config file");
 
         tracing::info!(
-            "setting embedding_server_config {:?}",
-            global_config.embedding_server_config
+            "setting embedding_parameter_server_config {:?}",
+            global_config.embedding_parameter_server_config
         );
         PERSIA_EMBEDDING_SEVER_CONFIG
-            .set(Arc::new(global_config.embedding_server_config))
+            .set(Arc::new(global_config.embedding_parameter_server_config))
             .map_err(|_| PersiaGlobalConfigError::SetError)?;
 
         tracing::info!(
-            "setting middleware_config {:?}",
-            global_config.middleware_config
+            "setting embedding_worker_config {:?}",
+            global_config.embedding_worker_config
         );
-        PERSIA_MIDDLEWARE_CONFIG
-            .set(Arc::new(global_config.middleware_config))
+        PERSIA_EMBEDDING_WORKER_CONFIG
+            .set(Arc::new(global_config.embedding_worker_config))
             .map_err(|_| PersiaGlobalConfigError::SetError)?;
 
         tracing::info!("setting common_config {:?}", global_config.common_config);

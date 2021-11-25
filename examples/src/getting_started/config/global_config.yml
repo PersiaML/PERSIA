@@ -1,0 +1,15 @@
+common_config:
+  metrics_config:
+    enable_metrics: false
+    push_interval_sec: 10
+  job_type: Train
+  checkpointing_config:
+    num_workers: 8
+embedding_parameter_server_config:
+  capacity: 1000000
+  num_hashmap_internal_shards: 1
+  enable_incremental_update: false
+  incremental_buffer_size: 5000000
+  incremental_channel_capacity: 1000
+embedding_worker_config:
+  forward_buffer_size: 1000

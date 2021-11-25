@@ -7,13 +7,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: recursive
       - uses: actions-rs/toolchain@v1
         with:
             toolchain: stable
             components: rustfmt
             override: true
       - name: rust-rustfmt-check
-        uses: mbrobbel/rustfmt-check@0.3.0
+        uses: mbrobbel/rustfmt-check@master
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --manifest-path rust/Cargo.toml --all
@@ -21,6 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: recursive
       - name: Install latest nightly
         uses: actions-rs/toolchain@v1
         with:

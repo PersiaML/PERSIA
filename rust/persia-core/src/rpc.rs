@@ -9,11 +9,11 @@ use persia_libs::{
 };
 
 use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
-use persia_embedding_server::middleware_service::MiddlewareServerClient;
-use persia_model_manager::SparseModelManagerStatus;
+use persia_embedding_server::embedding_worker_service::EmbeddingWorkerClient;
+use persia_model_manager::EmbeddingModelManagerStatus;
 
 pub struct PersiaRpcClient {
-    pub clients: RwLock<IndexMap<String, Arc<MiddlewareServerClient>>>,
+    pub clients: RwLock<IndexMap<String, Arc<EmbeddingWorkerClient>>>,
 }
 
 impl PersiaRpcClient {
@@ -23,18 +23,18 @@ impl PersiaRpcClient {
         }
     }
 
-    pub fn get_random_client_with_addr(&self) -> (String, Arc<MiddlewareServerClient>) {
+    pub fn get_random_client_with_addr(&self) -> (String, Arc<EmbeddingWorkerClient>) {
         let clients = self.clients.read();
         let client_idx = rand::random::<usize>() % clients.len();
-        let (middleware_addr, client) = clients.get_index(client_idx).unwrap();
-        (middleware_addr.to_string(), client.clone())
+        let (embedding_worker_addr, client) = clients.get_index(client_idx).unwrap();
+        (embedding_worker_addr.to_string(), client.clone())
     }
 
-    pub fn get_random_client(&self) -> Arc<MiddlewareServerClient> {
+    pub fn get_random_client(&self) -> Arc<EmbeddingWorkerClient> {
         return self.get_random_client_with_addr().1;
     }
 
-    pub fn get_first_client(&self) -> Arc<MiddlewareServerClient> {
+    pub fn get_first_client(&self) -> Arc<EmbeddingWorkerClient> {
         let clients = self.clients.read();
         clients
             .get_index(0)
@@ -43,7 +43,7 @@ impl PersiaRpcClient {
             .clone()
     }
 
-    pub fn get_client_by_index(&self, client_index: usize) -> Arc<MiddlewareServerClient> {
+    pub fn get_client_by_index(&self, client_index: usize) -> Arc<EmbeddingWorkerClient> {
         self.clients
             .read()
             .get_index(client_index)
@@ -52,17 +52,24 @@ impl PersiaRpcClient {
             .clone()
     }
 
-    pub fn get_client_by_addr(&self, middleware_addr: &str) -> Arc<MiddlewareServerClient> {
-        if self.clients.read().contains_key(middleware_addr) {
-            self.clients.read().get(middleware_addr).unwrap().clone()
+    pub fn get_client_by_addr(&self, embedding_worker_addr: &str) -> Arc<EmbeddingWorkerClient> {
+        if self.clients.read().contains_key(embedding_worker_addr) {
+            self.clients
+                .read()
+                .get(embedding_worker_addr)
+                .unwrap()
+                .clone()
         } else {
-            let rpc_client = persia_rpc::RpcClient::new(middleware_addr).unwrap();
-            let client = Arc::new(MiddlewareServerClient::new(rpc_client));
+            let rpc_client = persia_rpc::RpcClient::new(embedding_worker_addr).unwrap();
+            let client = Arc::new(EmbeddingWorkerClient::new(rpc_client));
 
-            tracing::debug!("created client for middleware {}", middleware_addr);
+            tracing::debug!(
+                "created client for embedding worker {}",
+                embedding_worker_addr
+            );
             self.clients
                 .write()
-                .insert(middleware_addr.to_string(), client.clone());
+                .insert(embedding_worker_addr.to_string(), client.clone());
             client
         }
     }
@@ -71,12 +78,12 @@ impl PersiaRpcClient {
         &self,
         entries: Vec<HashMapEmbeddingEntry>,
     ) -> Result<(), PersiaError> {
-        let num_middlewares = self.clients.read().len();
+        let num_embedding_workers = self.clients.read().len();
         let num_entries = entries.len();
 
         let grouped_entries: Vec<Vec<HashMapEmbeddingEntry>> = entries
             .into_iter()
-            .chunks(num_entries / num_middlewares)
+            .chunks(num_entries / num_embedding_workers)
             .into_iter()
             .map(|chunk| chunk.collect())
             .collect();
@@ -138,7 +145,7 @@ impl PersiaRpcClient {
                     return Ok(());
                 }
             } else {
-                tracing::warn!("failed to get sparse model status, retry later");
+                tracing::warn!("failed to get embedding model status, retry later");
                 std::thread::sleep(Duration::from_secs(5));
             }
         }
@@ -153,7 +160,7 @@ impl PersiaRpcClient {
                     return Ok(());
                 }
                 std::thread::sleep(Duration::from_secs(5));
-                let status: Vec<SparseModelManagerStatus> =
+                let status: Vec<EmbeddingModelManagerStatus> =
                     client.model_manager_status(&()).await.unwrap();
 
                 match self.process_status(status) {
@@ -163,7 +170,7 @@ impl PersiaRpcClient {
                     }
                 }
             } else {
-                tracing::warn!("failed to get sparse model status, retry later");
+                tracing::warn!("failed to get embedding model status, retry later");
             }
         }
     }
@@ -185,7 +192,7 @@ impl PersiaRpcClient {
                         Ok(())
                     } else {
                         Err(PersiaError::ShutdownError(String::from(
-                            "shutdown middleware failed",
+                            "shutdown embedding worker failed",
                         )))
                     }
                 }
@@ -206,11 +213,11 @@ impl PersiaRpcClient {
 
         loop {
             std::thread::sleep(Duration::from_secs(5));
-            let status: Result<Vec<SparseModelManagerStatus>, _> =
+            let status: Result<Vec<EmbeddingModelManagerStatus>, _> =
                 client.model_manager_status(&()).await;
             if let Ok(status) = status {
                 if status.iter().any(|s| match s {
-                    SparseModelManagerStatus::Loading(_) => true,
+                    EmbeddingModelManagerStatus::Loading(_) => true,
                     _ => false,
                 }) {
                     let err_msg = String::from("emb status is loading but waiting for dump.");
@@ -228,36 +235,36 @@ impl PersiaRpcClient {
                     }
                 }
             } else {
-                tracing::warn!("failed to get sparse model status, retry later");
+                tracing::warn!("failed to get embedding model status, retry later");
             }
         }
     }
 
-    fn process_status(&self, status: Vec<SparseModelManagerStatus>) -> Result<usize, String> {
+    fn process_status(&self, status: Vec<EmbeddingModelManagerStatus>) -> Result<usize, String> {
         let mut num_compeleted: usize = 0;
         let mut errors = Vec::new();
         status
             .into_iter()
             .enumerate()
             .for_each(|(replica_index, s)| match s {
-                SparseModelManagerStatus::Failed(e) => {
+                EmbeddingModelManagerStatus::Failed(e) => {
                     let err_msg = format!(
-                        "emb dump FAILED for server {}, due to {}.",
+                        "emb dump FAILED for server {}, due to {:?}.",
                         replica_index, e
                     );
                     errors.push(err_msg);
                 }
-                SparseModelManagerStatus::Loading(p) => {
+                EmbeddingModelManagerStatus::Loading(p) => {
                     tracing::info!(
                         "loading emb for server {}, pregress: {:?}%",
                         replica_index,
                         p * 100.0
                     );
                 }
-                SparseModelManagerStatus::Idle => {
+                EmbeddingModelManagerStatus::Idle => {
                     num_compeleted = num_compeleted + 1;
                 }
-                SparseModelManagerStatus::Dumping(p) => {
+                EmbeddingModelManagerStatus::Dumping(p) => {
                     tracing::info!(
                         "dumping emb for server {}, pregress: {:?}%",
                         replica_index,

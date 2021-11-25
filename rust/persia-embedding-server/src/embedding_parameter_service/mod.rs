@@ -8,14 +8,17 @@ use snafu::ResultExt;
 
 use persia_common::optim::{Optimizable, Optimizer, OptimizerConfig};
 use persia_embedding_config::{
-    EmbeddingConfig, InstanceInfo, PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig,
-    PersiaGlobalConfigError, PersiaReplicaInfo, PersiaSparseModelHyperparameters,
+    EmbeddingConfig, EmbeddingParameterServerConfig, InstanceInfo, PerisaJobType,
+    PersiaCommonConfig, PersiaEmbeddingModelHyperparameters, PersiaGlobalConfigError,
+    PersiaReplicaInfo,
 };
 use persia_embedding_holder::{emb_entry::HashMapEmbeddingEntry, PersiaEmbeddingHolder};
 use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
 
 use persia_metrics::{Gauge, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError};
-use persia_model_manager::{SparseModelManager, SparseModelManagerError, SparseModelManagerStatus};
+use persia_model_manager::{
+    EmbeddingModelManager, EmbeddingModelManagerError, EmbeddingModelManagerStatus,
+};
 use persia_nats_client::{NatsClient, NatsError};
 use persia_speedy::{Readable, Writable};
 
@@ -76,7 +79,7 @@ impl MetricsHolder {
 }
 
 #[derive(thiserror::Error, Debug, Readable, Writable)]
-pub enum EmbeddingServerError {
+pub enum EmbeddingParameterServerError {
     #[error("rpc error")]
     RpcError(String),
     #[error("shutdown error: shutdown channel send signal failed")]
@@ -86,7 +89,7 @@ pub enum EmbeddingServerError {
     #[error("service not configured error")]
     NotConfiguredError,
     #[error("model manager error: {0}")]
-    SparseModelManagerError(#[from] SparseModelManagerError),
+    EmbeddingModelManagerError(#[from] EmbeddingModelManagerError),
     #[error("nats error: {0}")]
     NatsError(#[from] NatsError),
     #[error("optimizer not found error")]
@@ -97,28 +100,28 @@ pub enum EmbeddingServerError {
     EmbeddingDimNotMatch,
 }
 
-pub struct EmbeddingServiceInner {
+pub struct EmbeddingParameterServiceInner {
     pub embedding: PersiaEmbeddingHolder,
     pub optimizer: persia_libs::async_lock::RwLock<Option<Arc<Box<dyn Optimizable + Send + Sync>>>>,
     pub hyperparameter_config:
-        persia_libs::async_lock::RwLock<Option<Arc<PersiaSparseModelHyperparameters>>>,
+        persia_libs::async_lock::RwLock<Option<Arc<PersiaEmbeddingModelHyperparameters>>>,
     pub hyperparameter_configured: persia_libs::async_lock::Mutex<bool>,
-    pub server_config: Arc<PersiaEmbeddingServerConfig>,
+    pub server_config: Arc<EmbeddingParameterServerConfig>,
     pub common_config: Arc<PersiaCommonConfig>,
     pub embedding_config: Arc<EmbeddingConfig>,
     pub inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
-    pub sparse_model_manager: Arc<SparseModelManager>,
+    pub embedding_model_manager: Arc<EmbeddingModelManager>,
     pub replica_index: usize,
 }
 
-impl EmbeddingServiceInner {
+impl EmbeddingParameterServiceInner {
     pub fn new(
         embedding: PersiaEmbeddingHolder,
-        server_config: Arc<PersiaEmbeddingServerConfig>,
+        server_config: Arc<EmbeddingParameterServerConfig>,
         common_config: Arc<PersiaCommonConfig>,
         embedding_config: Arc<EmbeddingConfig>,
         inc_update_manager: Arc<PerisaIncrementalUpdateManager>,
-        sparse_model_manager: Arc<SparseModelManager>,
+        embedding_model_manager: Arc<EmbeddingModelManager>,
         replica_index: usize,
     ) -> Self {
         Self {
@@ -130,7 +133,7 @@ impl EmbeddingServiceInner {
             common_config,
             embedding_config,
             inc_update_manager,
-            sparse_model_manager,
+            embedding_model_manager,
             replica_index,
         }
     }
@@ -139,20 +142,20 @@ impl EmbeddingServiceInner {
         self.replica_index
     }
 
-    pub fn get_job_type(&self) -> Result<PerisaJobType, EmbeddingServerError> {
+    pub fn get_job_type(&self) -> Result<PerisaJobType, EmbeddingParameterServerError> {
         let job_type = self.common_config.job_type.clone();
         Ok(job_type)
     }
 
     pub async fn get_configuration(
         &self,
-    ) -> Result<Arc<PersiaSparseModelHyperparameters>, EmbeddingServerError> {
+    ) -> Result<Arc<PersiaEmbeddingModelHyperparameters>, EmbeddingParameterServerError> {
         let conf = self.hyperparameter_config.read().await;
         let conf = conf.as_ref();
         if let Some(conf) = conf {
             Ok(conf.clone())
         } else {
-            Err(EmbeddingServerError::NotConfiguredError)
+            Err(EmbeddingParameterServerError::NotConfiguredError)
         }
     }
 
@@ -160,7 +163,7 @@ impl EmbeddingServiceInner {
         &self,
         req: Vec<(u64, usize)>,
         is_training: bool,
-    ) -> Result<Vec<f32>, EmbeddingServerError> {
+    ) -> Result<Vec<f32>, EmbeddingParameterServerError> {
         let num_elements: usize = req.iter().map(|x| x.1).sum();
         let mut embeddings = Vec::with_capacity(num_elements);
 
@@ -176,7 +179,7 @@ impl EmbeddingServiceInner {
         tokio::task::block_in_place(|| match is_training {
             true => {
                 if optimizer.is_none() {
-                    return Err(EmbeddingServerError::OptimizerNotFoundError);
+                    return Err(EmbeddingParameterServerError::OptimizerNotFoundError);
                 }
                 let optimizer = optimizer.as_ref().unwrap();
 
@@ -259,12 +262,12 @@ impl EmbeddingServiceInner {
     }
 
     pub async fn ready_for_serving(&self) -> bool {
-        let model_status = self.sparse_model_manager.get_status();
+        let model_status = self.embedding_model_manager.get_status();
         let model_ready = match model_status {
-            SparseModelManagerStatus::Dumping(_) => true,
-            SparseModelManagerStatus::Idle => true,
-            SparseModelManagerStatus::Loading(_) => false,
-            SparseModelManagerStatus::Failed(_) => false,
+            EmbeddingModelManagerStatus::Dumping(_) => true,
+            EmbeddingModelManagerStatus::Idle => true,
+            EmbeddingModelManagerStatus::Loading(_) => false,
+            EmbeddingModelManagerStatus::Failed(_) => false,
         };
         if !model_ready {
             return false;
@@ -276,15 +279,15 @@ impl EmbeddingServiceInner {
         }
     }
 
-    pub async fn model_manager_status(&self) -> SparseModelManagerStatus {
-        let status = self.sparse_model_manager.get_status();
+    pub async fn model_manager_status(&self) -> EmbeddingModelManagerStatus {
+        let status = self.embedding_model_manager.get_status();
         status
     }
 
     pub async fn set_embedding(
         &self,
         embeddings: Vec<HashMapEmbeddingEntry>,
-    ) -> Result<(), EmbeddingServerError> {
+    ) -> Result<(), EmbeddingParameterServerError> {
         let start_time = std::time::Instant::now();
 
         tokio::task::block_in_place(|| {
@@ -302,12 +305,15 @@ impl EmbeddingServiceInner {
         Ok(())
     }
 
-    pub async fn lookup_inference(&self, req: Bytes) -> Result<Bytes, EmbeddingServerError> {
+    pub async fn lookup_inference(
+        &self,
+        req: Bytes,
+    ) -> Result<Bytes, EmbeddingParameterServerError> {
         let start_time = std::time::Instant::now();
         let indices =
             tokio::task::block_in_place(|| Vec::<(u64, usize)>::read_from_buffer(req.as_ref()));
         if indices.is_err() {
-            return Err(EmbeddingServerError::RpcError(
+            return Err(EmbeddingParameterServerError::RpcError(
                 "fail to deserialize lookup inference request".to_string(),
             ));
         }
@@ -329,7 +335,7 @@ impl EmbeddingServiceInner {
             }
             Ok(Bytes::from(buffer))
         } else {
-            Err(EmbeddingServerError::RpcError(
+            Err(EmbeddingParameterServerError::RpcError(
                 "fail to lookup embedding".to_string(),
             ))
         }
@@ -338,7 +344,7 @@ impl EmbeddingServiceInner {
     pub async fn lookup_mixed(
         &self,
         req: (Vec<(u64, usize)>, bool),
-    ) -> Result<Vec<f32>, EmbeddingServerError> {
+    ) -> Result<Vec<f32>, EmbeddingParameterServerError> {
         let (indices, is_training) = req;
         let start_time = std::time::Instant::now();
         let embedding = self.batched_lookup(indices, is_training).await;
@@ -353,7 +359,7 @@ impl EmbeddingServiceInner {
     pub async fn update_gradient_mixed(
         &self,
         req: (Vec<u64>, Vec<f32>),
-    ) -> Result<(), EmbeddingServerError> {
+    ) -> Result<(), EmbeddingParameterServerError> {
         let conf = self.get_configuration().await?;
         let (signs, remaining_gradients) = req;
         let mut remaining_gradients = remaining_gradients.as_slice();
@@ -362,7 +368,7 @@ impl EmbeddingServiceInner {
 
         let optimizer = self.optimizer.read().await;
         if optimizer.is_none() {
-            return Err(EmbeddingServerError::OptimizerNotFoundError);
+            return Err(EmbeddingParameterServerError::OptimizerNotFoundError);
         }
 
         let optimizer = optimizer.as_ref().unwrap();
@@ -423,7 +429,7 @@ impl EmbeddingServiceInner {
     pub async fn register_optimizer(
         &self,
         optimizer: OptimizerConfig,
-    ) -> Result<(), EmbeddingServerError> {
+    ) -> Result<(), EmbeddingParameterServerError> {
         {
             let mut optimizer_ = self.optimizer.write().await;
             *optimizer_ = Some(Arc::new(Optimizer::new(optimizer).to_optimizable()));
@@ -433,8 +439,8 @@ impl EmbeddingServiceInner {
 
     pub async fn configure(
         &self,
-        config: PersiaSparseModelHyperparameters,
-    ) -> Result<(), EmbeddingServerError> {
+        config: PersiaEmbeddingModelHyperparameters,
+    ) -> Result<(), EmbeddingParameterServerError> {
         {
             let mut conf_guard = self.hyperparameter_config.write().await;
             *conf_guard = Some(Arc::new(config));
@@ -444,74 +450,79 @@ impl EmbeddingServiceInner {
         Ok(())
     }
 
-    pub async fn dump(&self, dir: String) -> Result<(), EmbeddingServerError> {
+    pub async fn dump(&self, dir: String) -> Result<(), EmbeddingParameterServerError> {
         let dst_dir = PathBuf::from(dir);
-        self.sparse_model_manager
+        self.embedding_model_manager
             .dump_embedding(dst_dir, self.embedding.clone())?;
         Ok(())
     }
 
-    pub async fn load(&self, dir: String) -> Result<(), EmbeddingServerError> {
+    pub async fn load(&self, dir: String) -> Result<(), EmbeddingParameterServerError> {
         let dst_dir = PathBuf::from(dir);
-        let shard_dir = self.sparse_model_manager.get_shard_dir(&dst_dir);
-        self.sparse_model_manager
+        let shard_dir = self.embedding_model_manager.get_shard_dir(&dst_dir);
+        self.embedding_model_manager
             .load_embedding_from_dir(shard_dir, self.embedding.clone())?;
         Ok(())
     }
 
-    pub async fn get_address(&self) -> Result<String, EmbeddingServerError> {
+    pub async fn get_address(&self) -> Result<String, EmbeddingParameterServerError> {
         let instance_info = InstanceInfo::get()?;
         let address = format!("{}:{}", instance_info.ip_address, instance_info.port);
         Ok(address)
     }
 
-    pub async fn get_replica_info(&self) -> Result<PersiaReplicaInfo, EmbeddingServerError> {
+    pub async fn get_replica_info(
+        &self,
+    ) -> Result<PersiaReplicaInfo, EmbeddingParameterServerError> {
         let replica_info = PersiaReplicaInfo::get()?;
         let replica_info = replica_info.as_ref().clone();
         Ok(replica_info)
     }
 
-    pub async fn get_embedding_size(&self) -> Result<usize, EmbeddingServerError> {
+    pub async fn get_embedding_size(&self) -> Result<usize, EmbeddingParameterServerError> {
         Ok(self.embedding.num_total_signs())
     }
 
-    pub async fn clear_embeddings(&self) -> Result<(), EmbeddingServerError> {
+    pub async fn clear_embeddings(&self) -> Result<(), EmbeddingParameterServerError> {
         Ok(self.embedding.clear())
     }
 }
 
 #[derive(Clone)]
-pub struct EmbeddingService {
-    pub inner: Arc<EmbeddingServiceInner>,
+pub struct EmbeddingParameterService {
+    pub inner: Arc<EmbeddingParameterServiceInner>,
     pub shutdown_channel:
         Arc<persia_libs::async_lock::RwLock<Option<tokio::sync::oneshot::Sender<()>>>>,
 }
 
 #[persia_rpc_macro::service]
-impl EmbeddingService {
+impl EmbeddingParameterService {
     pub async fn ready_for_serving(&self, _req: ()) -> bool {
         self.inner.ready_for_serving().await
     }
 
-    pub async fn model_manager_status(&self, _req: ()) -> SparseModelManagerStatus {
+    pub async fn model_manager_status(&self, _req: ()) -> EmbeddingModelManagerStatus {
         self.inner.model_manager_status().await
     }
 
     pub async fn set_embedding(
         &self,
         req: Vec<HashMapEmbeddingEntry>,
-    ) -> Result<(), EmbeddingServerError> {
+    ) -> Result<(), EmbeddingParameterServerError> {
         self.inner.set_embedding(req).await
     }
 
-    pub async fn lookup_inference(&self, req: Bytes) -> Result<Bytes, EmbeddingServerError> {
+    pub async fn lookup_inference(
+        &self,
+        req: Bytes,
+    ) -> Result<Bytes, EmbeddingParameterServerError> {
         self.inner.lookup_inference(req).await
     }
 
     pub async fn lookup_mixed(
         &self,
         req: (Vec<(u64, usize)>, bool),
-    ) -> Result<Vec<f32>, EmbeddingServerError> {
+    ) -> Result<Vec<f32>, EmbeddingParameterServerError> {
         self.inner.lookup_mixed(req).await
     }
 
@@ -522,41 +533,44 @@ impl EmbeddingService {
     pub async fn update_gradient_mixed(
         &self,
         req: (Vec<u64>, Vec<f32>),
-    ) -> Result<(), EmbeddingServerError> {
+    ) -> Result<(), EmbeddingParameterServerError> {
         self.inner.update_gradient_mixed(req).await
     }
 
     pub async fn configure(
         &self,
-        config: PersiaSparseModelHyperparameters,
-    ) -> Result<(), EmbeddingServerError> {
+        config: PersiaEmbeddingModelHyperparameters,
+    ) -> Result<(), EmbeddingParameterServerError> {
         self.inner.configure(config).await
     }
 
-    pub async fn dump(&self, req: String) -> Result<(), EmbeddingServerError> {
+    pub async fn dump(&self, req: String) -> Result<(), EmbeddingParameterServerError> {
         self.inner.dump(req).await
     }
 
-    pub async fn load(&self, req: String) -> Result<(), EmbeddingServerError> {
+    pub async fn load(&self, req: String) -> Result<(), EmbeddingParameterServerError> {
         self.inner.load(req).await
     }
 
-    pub async fn get_embedding_size(&self, _req: ()) -> Result<usize, EmbeddingServerError> {
+    pub async fn get_embedding_size(
+        &self,
+        _req: (),
+    ) -> Result<usize, EmbeddingParameterServerError> {
         self.inner.get_embedding_size().await
     }
 
-    pub async fn clear_embeddings(&self, _req: ()) -> Result<(), EmbeddingServerError> {
+    pub async fn clear_embeddings(&self, _req: ()) -> Result<(), EmbeddingParameterServerError> {
         self.inner.clear_embeddings().await
     }
 
     pub async fn register_optimizer(
         &self,
         optimizer: OptimizerConfig,
-    ) -> Result<(), EmbeddingServerError> {
+    ) -> Result<(), EmbeddingParameterServerError> {
         self.inner.register_optimizer(optimizer).await
     }
 
-    pub async fn shutdown(&self, _req: ()) -> Result<(), EmbeddingServerError> {
+    pub async fn shutdown(&self, _req: ()) -> Result<(), EmbeddingParameterServerError> {
         let mut shutdown_channel = self.shutdown_channel.write().await;
         let shutdown_channel = shutdown_channel.take();
         match shutdown_channel {
@@ -567,7 +581,7 @@ impl EmbeddingService {
                 }
                 Err(_) => {
                     tracing::warn!("Send the shutdown singal failed corresponding receiver has already been deallocated");
-                    Err(EmbeddingServerError::ShutdownError)
+                    Err(EmbeddingParameterServerError::ShutdownError)
                 }
             },
             None => {
@@ -579,17 +593,17 @@ impl EmbeddingService {
 }
 
 #[derive(Clone)]
-pub struct EmbeddingServerNatsService {
-    pub inner: Arc<EmbeddingServiceInner>,
+pub struct EmbeddingParameterNatsService {
+    pub inner: Arc<EmbeddingParameterServiceInner>,
 }
 
 #[persia_nats_marcos::service]
-impl EmbeddingServerNatsService {
+impl EmbeddingParameterNatsService {
     pub async fn ready_for_serving(&self, _req: ()) -> bool {
         self.inner.ready_for_serving().await
     }
 
-    pub async fn model_manager_status(&self, _req: ()) -> SparseModelManagerStatus {
+    pub async fn model_manager_status(&self, _req: ()) -> EmbeddingModelManagerStatus {
         self.inner.model_manager_status().await
     }
 
@@ -599,34 +613,34 @@ impl EmbeddingServerNatsService {
 
     pub async fn configure(
         &self,
-        config: PersiaSparseModelHyperparameters,
-    ) -> Result<(), EmbeddingServerError> {
+        config: PersiaEmbeddingModelHyperparameters,
+    ) -> Result<(), EmbeddingParameterServerError> {
         self.inner.configure(config).await
     }
 
-    pub async fn dump(&self, req: String) -> Result<(), EmbeddingServerError> {
+    pub async fn dump(&self, req: String) -> Result<(), EmbeddingParameterServerError> {
         self.inner.dump(req).await
     }
 
-    pub async fn load(&self, req: String) -> Result<(), EmbeddingServerError> {
+    pub async fn load(&self, req: String) -> Result<(), EmbeddingParameterServerError> {
         self.inner.load(req).await
     }
 
-    pub async fn get_address(&self, _req: ()) -> Result<String, EmbeddingServerError> {
+    pub async fn get_address(&self, _req: ()) -> Result<String, EmbeddingParameterServerError> {
         self.inner.get_address().await
     }
 
     pub async fn get_replica_info(
         &self,
         _req: (),
-    ) -> Result<PersiaReplicaInfo, EmbeddingServerError> {
+    ) -> Result<PersiaReplicaInfo, EmbeddingParameterServerError> {
         self.inner.get_replica_info().await
     }
 
     pub async fn register_optimizer(
         &self,
         optimizer: OptimizerConfig,
-    ) -> Result<(), EmbeddingServerError> {
+    ) -> Result<(), EmbeddingParameterServerError> {
         self.inner.register_optimizer(optimizer).await
     }
 }

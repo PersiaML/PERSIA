@@ -10,16 +10,16 @@ use structopt::StructOpt;
 
 use persia_common::utils::start_deadlock_detection_thread;
 use persia_embedding_config::{
-    EmbeddingConfig, PerisaJobType, PersiaCommonConfig, PersiaEmbeddingServerConfig,
+    EmbeddingConfig, EmbeddingParameterServerConfig, PerisaJobType, PersiaCommonConfig,
     PersiaGlobalConfig,
 };
 use persia_embedding_holder::PersiaEmbeddingHolder;
-use persia_embedding_server::embedding_service::{
-    EmbeddingServerNatsService, EmbeddingServerNatsServiceResponder, EmbeddingService,
-    EmbeddingServiceInner,
+use persia_embedding_server::embedding_parameter_service::{
+    EmbeddingParameterNatsService, EmbeddingParameterNatsServiceResponder,
+    EmbeddingParameterService, EmbeddingParameterServiceInner,
 };
 use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
-use persia_model_manager::SparseModelManager;
+use persia_model_manager::EmbeddingModelManager;
 
 #[derive(Debug, StructOpt, Clone)]
 #[structopt()]
@@ -68,23 +68,23 @@ async fn main() -> Result<()> {
 
     let embedding_config = EmbeddingConfig::get()?;
     let common_config = PersiaCommonConfig::get()?;
-    let server_config = PersiaEmbeddingServerConfig::get()?;
+    let server_config = EmbeddingParameterServerConfig::get()?;
     let embedding_holder = PersiaEmbeddingHolder::get()?;
     let inc_update_manager = PerisaIncrementalUpdateManager::get()?;
-    let sparse_model_manager = SparseModelManager::get()?;
+    let embedding_model_manager = EmbeddingModelManager::get()?;
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
 
-    let inner = Arc::new(EmbeddingServiceInner::new(
+    let inner = Arc::new(EmbeddingParameterServiceInner::new(
         embedding_holder,
         server_config,
         common_config,
         embedding_config,
         inc_update_manager,
-        sparse_model_manager,
+        embedding_model_manager,
         args.replica_index,
     ));
 
-    let service = EmbeddingService {
+    let service = EmbeddingParameterService {
         inner: inner.clone(),
         shutdown_channel: Arc::new(persia_libs::async_lock::RwLock::new(Some(tx))),
     };
@@ -100,10 +100,10 @@ async fn main() -> Result<()> {
     let _responder = match job_type {
         PerisaJobType::Infer => None,
         _ => {
-            let nats_service = EmbeddingServerNatsService {
+            let nats_service = EmbeddingParameterNatsService {
                 inner: inner.clone(),
             };
-            let responder = EmbeddingServerNatsServiceResponder::new(nats_service).await;
+            let responder = EmbeddingParameterNatsServiceResponder::new(nats_service).await;
             Some(responder)
         }
     };
@@ -111,8 +111,8 @@ async fn main() -> Result<()> {
     match job_type {
         PerisaJobType::Infer => {
             let common_config = PersiaCommonConfig::get()?;
-            let sparse_ckpt = common_config.infer_config.embedding_checkpoint.clone();
-            inner.load(sparse_ckpt).await?;
+            let embedding_cpk = common_config.infer_config.embedding_checkpoint.clone();
+            inner.load(embedding_cpk).await?;
         }
         _ => {}
     }

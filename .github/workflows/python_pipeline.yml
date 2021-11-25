@@ -24,40 +24,23 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
+        with:
+          submodules: recursive
       - name: Run flake8 with reviewdog
         # You may pin to the exact commit or the version.
         # uses: reviewdog/action-flake8@6146a50d029068dbd40bf1c6ce75f5fd8970a1b1
         uses: reviewdog/action-flake8@v3.0.0
         with:
           fail_on_error: false
-          flake8_args: "--ignore E501,E503,W503,E203 --exclude test/**,docs/*,e2e/**,rust/**"
+          flake8_args: "--ignore E501,E503,W503,E203 --exclude test/**,docs/*,e2e/**,rust/**,examples/**"
 
   black:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Check files using the black formatter
-        uses: rickstaa/action-black@v1
-        id: action_black
         with:
-          black_args: "."
-      - name: Annotate diff changes using reviewdog
-        if: steps.action_black.outputs.is_formatted == 'true'
-        uses: reviewdog/action-suggester@v1
-        with:
-          tool_name: blackfmt
-      - name: Create Pull Request
-        if: steps.action_black.outputs.is_formatted == 'true'
-        uses: peter-evans/create-pull-request@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          title: "Format Python code with psf/black push"
-          commit-message: ":art: Format Python code with psf/black"
-          body: |
-            There appear to be some python formatting errors in ${{ github.sha }}. This pull request
-            uses the [psf/black](https://github.com/psf/black) formatter to fix these issues.
-          base: ${{ github.head_ref }} # Creates pull request onto pull request or commit branch
-          branch: actions/black
+          submodules: recursive
+      - uses: psf/black@stable
   pytype:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
@@ -66,6 +49,8 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
+        with:
+          submodules: recursive
 
       - name: Pytype Python Checker
         # You may pin to the exact commit or the version.
@@ -103,6 +88,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
+          submodules: recursive
           fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v2

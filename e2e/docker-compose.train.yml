@@ -5,31 +5,31 @@ services:
         deploy:
             replicas: 1
                 
-    data_compose:
+    data_loader:
         env_file:
             - adult_income/.test_env
         environment:
-            JOB_ID: 1
+            TASK_SLOT_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia_launcher compose /workspace/data_compose.py
+        command: persia-launcher data-loader /workspace/data_loader.py
         volumes:
             - ./adult_income:/workspace
             - ./cache:/cache
             - /data/adult_income:/data/
 
-    trainer:
+    nn_worker:
         env_file:
             - adult_income/.test_env
         environment:
-            JOB_ID: 1
+            TASK_SLOT_ID: 1
             GPU_NUM: 1
             CUBLAS_WORKSPACE_CONFIG: :4096:8 # Adapt to pytorch deterministic feature
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia_launcher trainer /workspace/train.py
+        command: persia-launcher nn-worker /workspace/train.py
         depends_on:
-            - data_compose
-            - middleware
-            - server
+            - data_loader
+            - embedding_worker
+            - embedding_parameter_server
             - persia_nats_service
             - hdfsserver
         volumes:
@@ -37,24 +37,24 @@ services:
             - ./adult_income:/workspace
             - /data/adult_income:/data/
 
-    middleware:
+    embedding_worker:
         env_file:
             - adult_income/.test_env
         environment:
-            JOB_ID: 1
+            TASK_SLOT_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia_launcher middleware --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
+        command: persia-launcher embedding-worker --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
         volumes:
             - ./adult_income:/workspace
             - ./cache:/cache
 
-    server:
+    embedding_parameter_server:
         env_file:
             - adult_income/.test_env
         environment:
-            JOB_ID: 1
+            TASK_SLOT_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia_launcher server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
+        command: persia-launcher embedding-parameter-server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
         volumes:
             - ./adult_income:/workspace
             - ./cache:/cache

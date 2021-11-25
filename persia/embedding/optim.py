@@ -1,14 +1,14 @@
 from abc import ABC
 from typing import Tuple
 
-from persia.prelude import PyOptimizerBase
+from persia.prelude import OptimizerBase
 
 
 class Optimizer(ABC):
     r"""Base optimizer to configurate the sparse embedding update behavior."""
 
     def __init__(self):
-        self.optimizer_base = PyOptimizerBase()
+        self.optimizer_base = OptimizerBase()
 
     def apply(self):
         """Register sparse optimizer to embedding server."""

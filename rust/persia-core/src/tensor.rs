@@ -23,7 +23,7 @@ pub enum TensorError {
 
 /// Enum representation of rust datatype.
 #[derive(Readable, Writable, Copy, Clone, Debug)]
-pub enum DType {
+pub enum DTypeImpl {
     F16 = 1,
     F32 = 2,
     F64 = 3,
@@ -38,28 +38,28 @@ pub enum DType {
     USIZE = 12,
 }
 
-impl fmt::Display for DType {
+impl fmt::Display for DTypeImpl {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl DType {
+impl DTypeImpl {
     /// Bit size of current datatype.
     pub fn get_type_size(&self) -> usize {
         match self {
-            DType::F16 => std::mem::size_of::<f16>(),
-            DType::F32 => std::mem::size_of::<f32>(),
-            DType::F64 => std::mem::size_of::<f64>(),
-            DType::I8 => std::mem::size_of::<i8>(),
-            DType::I16 => std::mem::size_of::<i16>(),
-            DType::I32 => std::mem::size_of::<i32>(),
-            DType::I64 => std::mem::size_of::<i64>(),
-            DType::U8 => std::mem::size_of::<u8>(),
-            DType::U16 => std::mem::size_of::<u16>(),
-            DType::U32 => std::mem::size_of::<u32>(),
-            DType::U64 => std::mem::size_of::<u64>(),
-            DType::USIZE => std::mem::size_of::<usize>(),
+            DTypeImpl::F16 => std::mem::size_of::<f16>(),
+            DTypeImpl::F32 => std::mem::size_of::<f32>(),
+            DTypeImpl::F64 => std::mem::size_of::<f64>(),
+            DTypeImpl::I8 => std::mem::size_of::<i8>(),
+            DTypeImpl::I16 => std::mem::size_of::<i16>(),
+            DTypeImpl::I32 => std::mem::size_of::<i32>(),
+            DTypeImpl::I64 => std::mem::size_of::<i64>(),
+            DTypeImpl::U8 => std::mem::size_of::<u8>(),
+            DTypeImpl::U16 => std::mem::size_of::<u16>(),
+            DTypeImpl::U32 => std::mem::size_of::<u32>(),
+            DTypeImpl::U64 => std::mem::size_of::<u64>(),
+            DTypeImpl::USIZE => std::mem::size_of::<usize>(),
         }
     }
 
@@ -71,18 +71,18 @@ impl DType {
     /// Convert to [`DLDataType`].
     pub fn to_dldtype(&self) -> DLDataType {
         let (code, bits) = match self {
-            DType::F16 => (*&DLDataTypeCode::DLFloat, 16),
-            DType::F32 => (*&DLDataTypeCode::DLFloat, 32),
-            DType::F64 => (*&DLDataTypeCode::DLFloat, 64),
-            DType::I8 => (*&DLDataTypeCode::DLInt, 8),
-            DType::I16 => (*&DLDataTypeCode::DLInt, 16),
-            DType::I32 => (*&DLDataTypeCode::DLInt, 32),
-            DType::I64 => (*&DLDataTypeCode::DLInt, 64),
-            DType::U8 => (*&DLDataTypeCode::DLUInt, 8),
-            DType::U16 => (*&DLDataTypeCode::DLUInt, 16),
-            DType::U32 => (*&DLDataTypeCode::DLUInt, 32),
-            DType::U64 => (*&DLDataTypeCode::DLUInt, 64),
-            DType::USIZE => (*&DLDataTypeCode::DLUInt, 64),
+            DTypeImpl::F16 => (*&DLDataTypeCode::DLFloat, 16),
+            DTypeImpl::F32 => (*&DLDataTypeCode::DLFloat, 32),
+            DTypeImpl::F64 => (*&DLDataTypeCode::DLFloat, 64),
+            DTypeImpl::I8 => (*&DLDataTypeCode::DLInt, 8),
+            DTypeImpl::I16 => (*&DLDataTypeCode::DLInt, 16),
+            DTypeImpl::I32 => (*&DLDataTypeCode::DLInt, 32),
+            DTypeImpl::I64 => (*&DLDataTypeCode::DLInt, 64),
+            DTypeImpl::U8 => (*&DLDataTypeCode::DLUInt, 8),
+            _ => panic!(
+                "converting {} to DLDataType failed, uint8 is the only supported unsigned integer type in PyTorch",
+                self
+            )
         };
         let code = code as u8;
 
@@ -108,16 +108,16 @@ pub enum CPUStorage {
 }
 
 impl CPUStorage {
-    pub fn get_dtype(&self) -> DType {
+    pub fn get_dtype(&self) -> DTypeImpl {
         match self {
-            CPUStorage::F16(_) => DType::F16,
-            CPUStorage::F32(_) => DType::F32,
-            CPUStorage::F64(_) => DType::F64,
-            CPUStorage::I32(_) => DType::I32,
-            CPUStorage::I64(_) => DType::I64,
-            CPUStorage::U32(_) => DType::U32,
-            CPUStorage::U64(_) => DType::U64,
-            CPUStorage::USIZE(_) => DType::USIZE,
+            CPUStorage::F16(_) => DTypeImpl::F16,
+            CPUStorage::F32(_) => DTypeImpl::F32,
+            CPUStorage::F64(_) => DTypeImpl::F64,
+            CPUStorage::I32(_) => DTypeImpl::I32,
+            CPUStorage::I64(_) => DTypeImpl::I64,
+            CPUStorage::U32(_) => DTypeImpl::U32,
+            CPUStorage::U64(_) => DTypeImpl::U64,
+            CPUStorage::USIZE(_) => DTypeImpl::USIZE,
         }
     }
 
@@ -241,7 +241,7 @@ pub fn get_stride_by_shape(shape: &[usize]) -> Vec<i64> {
 }
 
 #[derive(Readable, Writable, Debug)]
-pub struct Tensor {
+pub struct TensorImpl {
     pub storage: Storage,
     pub shape: Vec<usize>,
     pub stride: Vec<i64>,
@@ -249,7 +249,7 @@ pub struct Tensor {
     pub device: Device,
 }
 
-impl Tensor {
+impl TensorImpl {
     pub fn new(
         storage: Storage,
         shape: Vec<usize>,
@@ -269,7 +269,7 @@ impl Tensor {
     }
 
     #[cfg(feature = "cuda")]
-    pub fn to(self, device: &Option<i32>) -> Tensor {
+    pub fn to(self, device: &Option<i32>) -> TensorImpl {
         if let Some(device_id) = device {
             self.cuda(*device_id)
         } else {
@@ -278,17 +278,17 @@ impl Tensor {
     }
 
     #[cfg(not(feature = "cuda"))]
-    pub fn to(self, _device: &Option<i32>) -> Tensor {
+    pub fn to(self, _device: &Option<i32>) -> TensorImpl {
         self
     }
 
     #[cfg(feature = "cuda")]
-    pub fn cuda(self, device_id: i32) -> Tensor {
+    pub fn cuda(self, device_id: i32) -> TensorImpl {
         let shape = self.shape.clone();
         let cpu_storage = self.storage.consume_cpu_storage().unwrap();
         let gpu_storage = GPUStorage::new(cpu_storage, shape).unwrap();
 
-        Tensor {
+        TensorImpl {
             storage: Storage::GPU(gpu_storage),
             shape: self.shape,
             stride: self.stride,
@@ -317,7 +317,7 @@ impl Tensor {
         self.raw_data_ptr() as u64
     }
 
-    pub fn dtype(&self) -> DType {
+    pub fn dtype(&self) -> DTypeImpl {
         match &self.storage {
             Storage::CPU(val) => val.get_dtype(),
             #[cfg(feature = "cuda")]
@@ -347,11 +347,4 @@ impl Tensor {
             deleter: Some(drop_dl_managed_tensor),
         }
     }
-}
-
-#[derive(Readable, Writable, Debug)]
-pub struct SparseTensor {
-    pub data: Storage,
-    pub offset: Vec<u64>,
-    pub name: Option<String>,
 }

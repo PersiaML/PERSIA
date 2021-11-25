@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -x
 
 ssh-keygen -t rsa -N "" -f /root/.ssh/id_rsa
 

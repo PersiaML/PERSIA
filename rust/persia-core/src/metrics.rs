@@ -26,7 +26,7 @@ impl MetricsHolder {
                 forward_error: m.create_counter("forward_error", "get embedding error counter")?,
                 backward_client_time_cost_sec: m.create_gauge(
                     "backward_client_time_cost_sec", 
-                    "get graident of sparse feature and update it to server time cost"
+                    "get graident backward packet and update it to server time cost"
                 )?,
                 get_train_batch_time_cost_more_than_1ms_sec: m.create_gauge(
                     "get_train_batch_time_cost_more_than_1ms_sec",
@@ -34,7 +34,7 @@ impl MetricsHolder {
                 )?,
                 update_gradient_batched_time_cost_more_than_1ms_sec: m.create_gauge(
                     "update_gradient_batched_time_cost_more_than_1ms_sec",
-                    "send gradient of sparse feature to gradient update buffer time cost when it takes more than 1ms"
+                    "send gradient of embedding to gradient update buffer time cost when it takes more than 1ms"
                 )?,
             };
             Ok(holder)

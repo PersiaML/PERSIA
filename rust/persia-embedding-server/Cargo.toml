@@ -19,7 +19,7 @@ persia-nats-client = {path = "../others/persia-nats-client"}
 persia-nats-marcos = {path = "../others/persia-nats-marcos"}
 persia-rpc = {path = "../others/persia-rpc"}
 persia-rpc-macro = {path = "../others/persia-rpc-macro"}
-persia-speedy = "0.9"
+persia-speedy = { path = "../persia-speedy" }
 persia-simd = {path = "../persia-simd"}
 shadow-rs = "0.8"
 snafu = "0.6"
@@ -31,12 +31,12 @@ tracing = "0.1"
 rand = "0.8"
 
 [[bin]]
-name = "persia-embedding-server"
-path = "src/bin/persia-embedding-server.rs"
+name = "persia-embedding-parameter-server"
+path = "src/bin/persia-embedding-parameter-server.rs"
 
 [[bin]]
-name = "persia-middleware-server"
-path = "src/bin/persia-middleware-server.rs"
+name = "persia-embedding-worker"
+path = "src/bin/persia-embedding-worker.rs"
 
 [build-dependencies]
 shadow-rs = "0.8"

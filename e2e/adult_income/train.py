@@ -11,18 +11,18 @@ from sklearn import metrics
 
 from persia.ctx import TrainCtx, eval_ctx
 from persia.distributed import DDPOption
-from persia.sparse.optim import Adagrad
+from persia.embedding.optim import Adagrad
 from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
 from persia.utils import setup_seed
 from persia.data import Dataloder, PersiaDataset, StreamingDataset
-from persia.prelude import PyPersiaBatchData, PyPersiaBatchDataSender
+from persia.prelude import PersiaBatch, PersiaBatchDataSender
 
 from model import DNN
 from data_generator import make_dataloader
 
 
-logger = get_default_logger("trainer")
+logger = get_default_logger("nn_worker")
 
 device_id = get_local_rank()
 
@@ -41,15 +41,15 @@ class TestDataset(PersiaDataset):
 
         logger.info(f"test dataset size is {size}")
 
-    def fetch_data(self, persia_sender_channel: PyPersiaBatchDataSender):
+    def fetch_data(self, persia_sender_channel: PersiaBatchDataSender):
         logger.info("test loader start to generate data...")
         for _idx, (dense, batch_sparse_ids, target) in enumerate(
             tqdm(self.loader, desc="gen batch data")
         ):
-            batch_data = PyPersiaBatchData()
-            batch_data.add_dense([dense])
-            batch_data.add_sparse(batch_sparse_ids)
-            batch_data.add_target(target)
+            batch_data = PersiaBatch()
+            batch_data.add_non_id_type_feature([dense])
+            batch_data.add_id_type_features(batch_sparse_ids)
+            batch_data.add_label(target)
             persia_sender_channel.send(batch_data)
 
     def __len__(self):
@@ -75,14 +75,15 @@ def test(
             ctx.load_checkpoint(checkpoint_dir)
         accuracies, losses = [], []
         all_pred, all_target = [], []
-        for (batch_idx, batch_data) in enumerate(tqdm(test_loader, desc="test...")):
-            (pred, target) = ctx.forward(batch_data)
+        for (_batch_idx, batch_data) in enumerate(tqdm(test_loader, desc="test...")):
+            (pred, targets) = ctx.forward(batch_data)
+            target = targets[0]
             loss = loss_fn(pred, target)
             if cuda:
                 pred = pred.cpu()
                 target = target.cpu()
             else:
-                # cpu mode need copy the target data to avoid use the invalid data.
+                # cpu mode need copy the target data to avoid use the expired data.
                 target = target.clone()
             all_pred.append(pred.detach().numpy())
             all_target.append(target.detach().numpy())
@@ -129,7 +130,7 @@ if __name__ == "__main__":
         cuda = False
 
     dense_optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-    sparse_optimizer = Adagrad(lr=1e-2)
+    embedding_optimizer = Adagrad(lr=1e-2)
     loss_fn = torch.nn.BCELoss(reduction="mean")
 
     eval_checkpoint_dir = os.environ["EVAL_CHECKPOINT_DIR"]
@@ -140,7 +141,7 @@ if __name__ == "__main__":
 
     with TrainCtx(
         model=model,
-        sparse_optimizer=sparse_optimizer,
+        embedding_optimizer=embedding_optimizer,
         dense_optimizer=dense_optimizer,
         device_id=device_id,
         mixed_precision=mixed_precision,
@@ -150,7 +151,9 @@ if __name__ == "__main__":
             StreamingDataset(buffer_size), reproducible=True, embedding_staleness=1
         )
         for (batch_idx, data) in enumerate(train_dataloader):
-            (output, target) = ctx.forward(data)
+            (output, targets) = ctx.forward(data)
+            target = targets[0]
+
             loss = loss_fn(output, target)
             scaled_loss = ctx.backward(loss)
             accuracy = (torch.round(output) == target).sum() / target.shape[0]

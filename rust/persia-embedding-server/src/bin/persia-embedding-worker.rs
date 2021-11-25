@@ -12,14 +12,14 @@ use structopt::StructOpt;
 
 use persia_common::utils::start_deadlock_detection_thread;
 use persia_embedding_config::{
-    EmbeddingConfig, PerisaJobType, PersiaCommonConfig, PersiaGlobalConfig, PersiaMiddlewareConfig,
+    EmbeddingConfig, EmbeddingWorkerConfig, PerisaJobType, PersiaCommonConfig, PersiaGlobalConfig,
 };
-use persia_embedding_server::embedding_service::EmbeddingServerNatsServicePublisher;
-use persia_embedding_server::middleware_service::{
-    AllEmbeddingServerClient, MiddlewareNatsService, MiddlewareNatsServiceResponder,
-    MiddlewareServer, MiddlewareServerInner,
+use persia_embedding_server::embedding_parameter_service::EmbeddingParameterNatsServicePublisher;
+use persia_embedding_server::embedding_worker_service::{
+    AllEmbeddingServerClient, EmbeddingWorker, EmbeddingWorkerInner, EmbeddingWorkerNatsService,
+    EmbeddingWorkerNatsServiceResponder,
 };
-use persia_model_manager::SparseModelManager;
+use persia_model_manager::EmbeddingModelManager;
 
 #[derive(Debug, StructOpt, Clone)]
 #[structopt()]
@@ -72,17 +72,17 @@ async fn main() -> Result<()> {
             AllEmbeddingServerClient::with_addrs(servers).await
         }
         _ => {
-            let nats_publisher = EmbeddingServerNatsServicePublisher::new().await;
+            let nats_publisher = EmbeddingParameterNatsServicePublisher::new().await;
             AllEmbeddingServerClient::with_nats(nats_publisher).await
         }
     };
 
     let replica_size = all_embedding_server_client.replica_size() as u64;
-    let middleware_config = PersiaMiddlewareConfig::get()?;
+    let embedding_worker_config = EmbeddingWorkerConfig::get()?;
     let embedding_config = EmbeddingConfig::get()?;
-    let sparse_model_manager = SparseModelManager::get()?;
+    let embedding_model_manager = EmbeddingModelManager::get()?;
 
-    let inner = Arc::new(MiddlewareServerInner {
+    let inner = Arc::new(EmbeddingWorkerInner {
         all_embedding_server_client,
         replica_size,
         forward_id: std::sync::atomic::AtomicU64::new(rand::random()),
@@ -93,23 +93,23 @@ async fn main() -> Result<()> {
         ),
         embedding_config,
         staleness: Default::default(),
-        middleware_config,
-        sparse_model_manager,
+        embedding_worker_config,
+        embedding_model_manager,
     });
 
     let _responder = match &common_config.job_type {
         PerisaJobType::Infer => None,
         _ => {
-            let nats_service = MiddlewareNatsService {
+            let nats_service = EmbeddingWorkerNatsService {
                 inner: inner.clone(),
             };
-            let responder = MiddlewareNatsServiceResponder::new(nats_service).await;
+            let responder = EmbeddingWorkerNatsServiceResponder::new(nats_service).await;
             Some(responder)
         }
     };
 
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-    let service = MiddlewareServer {
+    let service = EmbeddingWorker {
         inner: inner,
         shutdown_channel: Arc::new(persia_libs::async_lock::RwLock::new(Some(tx))),
     };
@@ -121,16 +121,16 @@ async fn main() -> Result<()> {
             async { Ok::<_, hyper::Error>(service) }
         }));
 
-    tracing::info!("middleware rpc server started");
+    tracing::info!("embedding worker rpc server started");
 
     let graceful = server.with_graceful_shutdown(async {
         rx.await.ok();
     });
 
     if let Err(err) = graceful.await {
-        tracing::error!("middleware exited with error: {:?}!", err);
+        tracing::error!("embedding worker exited with error: {:?}!", err);
     } else {
-        tracing::info!("middleware exited successfully");
+        tracing::info!("embedding worker exited successfully");
     }
 
     Ok(())

@@ -10,4 +10,4 @@ version = "0.1.0"
 get_if_addrs = "0.5.3"
 num-traits = "0.2.6"
 persia-libs = {path = "../persia-libs"}
-persia-speedy = "0.9"
+persia-speedy = { path = "../persia-speedy" }

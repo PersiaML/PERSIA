@@ -1,3 +1,3 @@
-pub mod embedding_service;
-pub mod middleware_service;
+pub mod embedding_parameter_service;
+pub mod embedding_worker_service;
 pub mod monitor;

@@ -13,7 +13,7 @@ import inference_pb2
 import inference_pb2_grpc
 
 from data_generator import make_dataloader
-from persia.prelude import PyPersiaBatchData
+from persia.prelude import PersiaBatch
 
 
 def get_inference_stub():
@@ -47,9 +47,9 @@ if __name__ == "__main__":
     all_target = []
 
     for (dense, batch_sparse_ids, target) in tqdm(loader, desc="gen batch data..."):
-        batch_data = PyPersiaBatchData()
-        batch_data.add_dense([dense])
-        batch_data.add_sparse(batch_sparse_ids, False)
+        batch_data = PersiaBatch()
+        batch_data.add_non_id_type_feature([dense])
+        batch_data.add_id_type_features(batch_sparse_ids, False)
 
         model_input = batch_data.to_bytes()
         prediction = infer(get_inference_stub(), "adult_income", model_input)

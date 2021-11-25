@@ -44,7 +44,9 @@ impl NatsClient {
     async fn new() -> NatsClient {
         let nats_url = std::env::var("PERSIA_NATS_IP")
             .unwrap_or(String::from("nats://persia_nats_service:4222"));
-        let nc = retry(ExponentialBackoff::default(), || async {
+        let mut backoff = ExponentialBackoff::default();
+        backoff.max_interval = std::time::Duration::from_millis(500);
+        let nc = retry(backoff, || async {
             let res = async_nats::connect(nats_url.as_str()).await;
             if res.is_err() {
                 tracing::warn!("failed to connect nats server, {:?}", res);

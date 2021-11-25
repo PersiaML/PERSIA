@@ -1,13 +1,13 @@
 #[cfg(feature = "cuda")]
 use crate::cuda::set_device;
 
-use crate::backward::PythonGradientBatch;
-use crate::data::{EmbeddingTensor, PersiaBatchData};
+use crate::backward::GradientBatch;
+use crate::data::{EmbeddingTensor, PersiaBatchImpl};
 use crate::dlpack::DLManagedTensor;
 use crate::metrics::MetricsHolder;
-use crate::tensor::{CPUStorage, DType, Storage, Tensor};
-use crate::utils::PyPersiaBatchDataReceiver;
-use crate::PersiaCommonContext;
+use crate::tensor::{CPUStorage, DTypeImpl, Storage, TensorImpl};
+use crate::utils::PersiaBatchDataReceiver;
+use crate::PersiaCommonContextImpl;
 
 use std::collections::BinaryHeap;
 use std::os::raw::c_char;
@@ -16,10 +16,10 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use persia_common::{EmbeddingBatch, FeatureEmbeddingBatch, SparseBatchRemoteReference};
+use persia_common::{EmbeddingBatch, FeatureEmbeddingBatch, IDTypeFeatureRemoteRef};
 
 use persia_embedding_config::PersiaReplicaInfo;
-use persia_embedding_server::middleware_service::MiddlewareServerError;
+use persia_embedding_server::embedding_worker_service::EmbeddingWorkerError;
 use persia_libs::{
     flume,
     half::prelude::*,
@@ -37,41 +37,41 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
 #[derive(Debug)]
-pub enum Embedding {
+pub enum EmbeddingImpl {
     Raw(RawEmbedding),
     Sum(SumEmbedding),
 }
 
 #[derive(Debug)]
 pub struct SumEmbedding {
-    pub tensor: Tensor,
+    pub tensor: TensorImpl,
 }
 
 #[derive(Debug)]
 pub struct RawEmbedding {
-    pub tensor: Tensor,
-    pub index: Tensor,
-    pub non_empty_index: Tensor,
+    pub tensor: TensorImpl,
+    pub index: TensorImpl,
+    pub non_empty_index: TensorImpl,
     pub samples_id_num: Vec<usize>,
 }
 
 #[pyclass]
-pub struct PyEmbedding {
-    inner: Option<Embedding>,
+pub struct Embedding {
+    inner: Option<EmbeddingImpl>,
 }
 
 #[pymethods]
-impl PyEmbedding {
+impl Embedding {
     pub fn is_raw_embedding(&self) -> bool {
         match self.inner.as_ref().unwrap() {
-            Embedding::Raw(_) => true,
-            Embedding::Sum(_) => false,
+            EmbeddingImpl::Raw(_) => true,
+            EmbeddingImpl::Sum(_) => false,
         }
     }
 
-    pub fn get_sum_embedding(&mut self) -> PyTensor {
-        if let Embedding::Sum(sum_embedding) = self.inner.take().unwrap() {
-            PyTensor {
+    pub fn get_sum_embedding(&mut self) -> Tensor {
+        if let EmbeddingImpl::Sum(sum_embedding) = self.inner.take().unwrap() {
+            Tensor {
                 inner: sum_embedding.tensor,
             }
         } else {
@@ -79,16 +79,16 @@ impl PyEmbedding {
         }
     }
 
-    pub fn get_raw_embedding(&mut self) -> (PyTensor, PyTensor, PyTensor, Vec<usize>) {
-        if let Embedding::Raw(raw_embedding) = self.inner.take().unwrap() {
+    pub fn get_raw_embedding(&mut self) -> (Tensor, Tensor, Tensor, Vec<usize>) {
+        if let EmbeddingImpl::Raw(raw_embedding) = self.inner.take().unwrap() {
             (
-                PyTensor {
+                Tensor {
                     inner: raw_embedding.tensor,
                 },
-                PyTensor {
+                Tensor {
                     inner: raw_embedding.index,
                 },
-                PyTensor {
+                Tensor {
                     inner: raw_embedding.non_empty_index,
                 },
                 raw_embedding.samples_id_num,
@@ -100,12 +100,12 @@ impl PyEmbedding {
 }
 
 #[pyclass]
-pub struct PyDtype {
-    inner: DType,
+pub struct Dtype {
+    inner: DTypeImpl,
 }
 
 #[pymethods]
-impl PyDtype {
+impl Dtype {
     #[getter]
     pub fn type_id(&self) -> u8 {
         *&self.inner as u8
@@ -118,21 +118,21 @@ impl PyDtype {
 }
 
 #[pyclass]
-pub struct PyTensor {
-    inner: Tensor,
+pub struct Tensor {
+    inner: TensorImpl,
 }
 
 static DL_TENSOR_NAME: &'static [u8] = b"dltensor\0";
 const UNKONW_TENSOR_NAME: &str = "UnkownedTensor";
 
 #[pymethods]
-impl PyTensor {
+impl Tensor {
     #[new]
-    pub fn from_numpy(data: &PyArray2<f32>) -> PyTensor {
+    pub fn from_numpy(data: &PyArray2<f32>) -> Tensor {
         let shape = data.shape().to_vec();
 
-        PyTensor {
-            inner: Tensor::new(
+        Tensor {
+            inner: TensorImpl::new(
                 Storage::CPU(CPUStorage::F32(
                     data.to_vec().expect("convert ndarray to vec failed"),
                 )),
@@ -154,8 +154,8 @@ impl PyTensor {
     }
 
     #[getter]
-    pub fn get_dtype(&self) -> PyDtype {
-        PyDtype {
+    pub fn get_dtype(&self) -> Dtype {
+        Dtype {
             inner: self.inner.dtype(),
         }
     }
@@ -251,38 +251,36 @@ impl PyTensor {
 }
 
 #[pyclass(dict)]
-pub struct PyTrainBatch {
-    pub inner: PersiaTrainingBatch,
+pub struct PersiaTrainingBatch {
+    pub inner: PersiaTrainingBatchImpl,
 }
 
 #[pymethods]
-impl PyTrainBatch {
-    pub fn middleware_server_addr(&self) -> &str {
-        self.inner.middleware_server_addr.as_str()
+impl PersiaTrainingBatch {
+    pub fn embedding_worker_addr(&self) -> &str {
+        self.inner.embedding_worker_addr.as_str()
     }
 
-    pub fn consume_all_dense_features(&mut self) -> Vec<PyTensor> {
-        std::mem::replace(&mut self.inner.dense, vec![])
+    pub fn consume_all_non_id_type_features(&mut self) -> Vec<Tensor> {
+        std::mem::replace(&mut self.inner.non_id_type_tensors, vec![])
             .into_iter()
-            .map(|x| PyTensor { inner: x })
+            .map(|x| Tensor { inner: x })
             .collect()
     }
 
-    pub fn consume_all_sparse_features(&mut self) -> Vec<PyEmbedding> {
+    pub fn consume_all_id_type_features(&mut self) -> Vec<Embedding> {
         std::mem::replace(&mut self.inner.embeddings, vec![])
             .into_iter()
-            .map(|x| PyEmbedding { inner: Some(x) })
+            .map(|x| Embedding { inner: Some(x) })
             .collect()
     }
 
-    pub fn consume_all_targets(&mut self) -> Vec<PyTensor> {
-        std::mem::replace(&mut self.inner.target, vec![])
+    pub fn consume_all_labels(&mut self) -> Vec<Tensor> {
+        std::mem::replace(&mut self.inner.label_tensors, vec![])
             .into_iter()
-            .map(|x| PyTensor { inner: x })
+            .map(|x| Tensor { inner: x })
             .collect()
     }
-
-    pub fn consume_all_map_data(&mut self) {}
 
     pub fn consume_all_meta_data<'a>(&mut self, py: Python<'a>) -> Option<&'a PyBytes> {
         if self.inner.meta_data.is_some() {
@@ -295,41 +293,41 @@ impl PyTrainBatch {
         };
     }
 
-    pub fn create_gradient_batch(&mut self) -> PythonGradientBatch {
-        PythonGradientBatch::new(
+    pub fn create_gradient_batch(&mut self) -> GradientBatch {
+        GradientBatch::new(
             self.inner.ref_id,
-            self.inner.middleware_server_addr.as_str(),
+            self.inner.embedding_worker_addr.as_str(),
             self.inner.embedding_staleness_permit.take(),
         )
     }
 }
 
 #[derive(Debug)]
-pub struct PersiaTrainingBatch {
-    pub dense: Vec<Tensor>,
-    pub embeddings: Vec<Embedding>,
-    pub target: Vec<Tensor>,
+pub struct PersiaTrainingBatchImpl {
+    pub non_id_type_tensors: Vec<TensorImpl>,
+    pub embeddings: Vec<EmbeddingImpl>,
+    pub label_tensors: Vec<TensorImpl>,
     pub meta_data: Option<Vec<u8>>,
-    pub middleware_server_addr: String,
+    pub embedding_worker_addr: String,
     pub ref_id: u64,
     pub embedding_staleness_permit: Option<OwnedSemaphorePermit>,
 }
 
-impl Default for PersiaTrainingBatch {
+impl Default for PersiaTrainingBatchImpl {
     fn default() -> Self {
         Self {
-            dense: Vec::new(),
+            non_id_type_tensors: Vec::new(),
             embeddings: Vec::new(),
-            target: Vec::new(),
+            label_tensors: Vec::new(),
             meta_data: None,
-            middleware_server_addr: String::new(),
+            embedding_worker_addr: String::new(),
             ref_id: 0,
             embedding_staleness_permit: None,
         }
     }
 }
 
-fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> Embedding {
+fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> EmbeddingImpl {
     match embedding {
         FeatureEmbeddingBatch::RawEmbedding(raw_embedding) => {
             let mut non_empty_index_list = Vec::new();
@@ -340,7 +338,7 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
                 .enumerate()
                 .for_each(|(idx, id2idx)| {
                     if *id2idx != 0 {
-                        non_empty_index_list.push(idx as u64);
+                        non_empty_index_list.push(idx as i64);
                     }
                 });
 
@@ -349,7 +347,7 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
             let feature_name = raw_embedding.feature_name.clone();
             let no_empty_index_list_len = std::cmp::max(non_empty_index_list.len(), 1);
 
-            let tensor = Tensor::new(
+            let tensor = TensorImpl::new(
                 Storage::CPU(CPUStorage::from_f16(
                     raw_embedding.embeddings.into_raw_vec(),
                 )),
@@ -358,21 +356,21 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
                 None,
             );
 
-            let index = Tensor::new(
-                Storage::CPU(CPUStorage::from_usize(raw_embedding.index)),
+            let index = TensorImpl::new(
+                Storage::CPU(CPUStorage::from_i64(raw_embedding.index)),
                 vec![index_len],
                 Some(format!("{}_index", &feature_name)),
                 None,
             );
 
-            let non_empty_index = Tensor::new(
-                Storage::CPU(CPUStorage::from_u64(non_empty_index_list)),
+            let non_empty_index = TensorImpl::new(
+                Storage::CPU(CPUStorage::from_i64(non_empty_index_list)),
                 vec![no_empty_index_list_len],
                 Some(format!("{}_non_empty_index", &feature_name)),
                 None,
             );
 
-            Embedding::Raw(RawEmbedding {
+            EmbeddingImpl::Raw(RawEmbedding {
                 tensor: tensor.to(&device),
                 index: index.to(&device),
                 non_empty_index: non_empty_index.to(&device),
@@ -381,7 +379,7 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
         }
         FeatureEmbeddingBatch::SumEmbedding(sum_embedding) => {
             let embedding_shape = sum_embedding.embeddings.shape().to_vec();
-            let tensor = Tensor::new(
+            let tensor = TensorImpl::new(
                 Storage::CPU(CPUStorage::from_f16(
                     sum_embedding.embeddings.into_raw_vec(),
                 )),
@@ -389,7 +387,7 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
                 Some(sum_embedding.feature_name),
                 None,
             );
-            Embedding::Sum(SumEmbedding {
+            EmbeddingImpl::Sum(SumEmbedding {
                 tensor: tensor.to(&device),
             })
         }
@@ -399,7 +397,7 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
 struct PerisaDataOrderManager {
     pub world_size: usize,
     pub expect_batch_id: usize,
-    pub data_buffer: BinaryHeap<PersiaBatchData>,
+    pub data_buffer: BinaryHeap<PersiaBatchImpl>,
     pub latest_pop: Instant,
 }
 
@@ -418,8 +416,8 @@ impl PerisaDataOrderManager {
     pub fn spawn_reorder_worker(
         world_size: usize,
         rank_id: usize,
-        channel_r: flume::Receiver<PersiaBatchData>,
-        channel_s: flume::Sender<PersiaBatchData>,
+        channel_r: flume::Receiver<PersiaBatchImpl>,
+        channel_s: flume::Sender<PersiaBatchImpl>,
         running: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         std::thread::spawn(move || {
@@ -459,7 +457,7 @@ impl PerisaDataOrderManager {
         })
     }
 
-    fn pop_from_buffer(&mut self) -> Option<PersiaBatchData> {
+    fn pop_from_buffer(&mut self) -> Option<PersiaBatchImpl> {
         if let Some(poped) = self.data_buffer.pop() {
             self.latest_pop = Instant::now();
             self.expect_batch_id = poped.batch_id.unwrap_or(self.expect_batch_id) + self.world_size;
@@ -470,22 +468,22 @@ impl PerisaDataOrderManager {
     }
 }
 
-struct Forward {
-    pub input_channel: Option<flume::Receiver<PersiaBatchData>>,
-    pub reorder_buffer_channel_s: Option<flume::Sender<PersiaBatchData>>,
-    pub reorder_buffer_channel_r: Option<flume::Receiver<PersiaBatchData>>,
+struct ForwardImpl {
+    pub input_channel: Option<flume::Receiver<PersiaBatchImpl>>,
+    pub reorder_buffer_channel_s: Option<flume::Sender<PersiaBatchImpl>>,
+    pub reorder_buffer_channel_r: Option<flume::Receiver<PersiaBatchImpl>>,
     pub forwarded_channel_s: flume::Sender<(
-        PersiaBatchData,
+        PersiaBatchImpl,
         EmbeddingBatch,
         Option<OwnedSemaphorePermit>,
     )>,
     pub forwarded_channel_r: flume::Receiver<(
-        PersiaBatchData,
+        PersiaBatchImpl,
         EmbeddingBatch,
         Option<OwnedSemaphorePermit>,
     )>,
-    pub gpu_forwarded_channel_s: flume::Sender<PersiaTrainingBatch>,
-    pub gpu_forwarded_channel_r: flume::Receiver<PersiaTrainingBatch>,
+    pub gpu_forwarded_channel_s: flume::Sender<PersiaTrainingBatchImpl>,
+    pub gpu_forwarded_channel_r: flume::Receiver<PersiaTrainingBatchImpl>,
     pub is_training: bool,
     pub launch: bool,
     pub embedding_staleness_semaphore: Option<Arc<Semaphore>>,
@@ -494,7 +492,7 @@ struct Forward {
     pub running: Arc<AtomicBool>,
 }
 
-impl Forward {
+impl ForwardImpl {
     fn new(
         forward_buffer_size: usize,
         is_training: bool,
@@ -580,7 +578,7 @@ impl Forward {
         let channel_s = self.gpu_forwarded_channel_s.clone();
 
         let running = self.running.clone();
-        let common_ctx = PersiaCommonContext::get();
+        let common_ctx = PersiaCommonContextImpl::get();
 
         let handler = std::thread::spawn(move || {
             #[cfg(feature = "cuda")]
@@ -605,25 +603,26 @@ impl Forward {
                         })
                         .collect();
 
-                    let dense_tensors: Vec<Tensor> = batch
-                        .dense_data
+                    let non_id_type_tensors: Vec<TensorImpl> = batch
+                        .non_id_type_features
                         .into_iter()
                         .map(|d| d.to(common_ctx.device_id.as_ref()))
                         .collect();
 
-                    let target_tensors: Vec<Tensor> = batch
-                        .target_data
+                    let label_tensors: Vec<TensorImpl> = batch
+                        .labels
                         .into_iter()
                         .map(|t| t.to(common_ctx.device_id.as_ref()))
                         .collect();
 
-                    let (middleware_addr, ref_id) = batch.sparse_data.get_remote_ref_info();
-                    let training_batch = PersiaTrainingBatch {
-                        dense: dense_tensors,
+                    let (embedding_worker_addr, ref_id) =
+                        batch.id_type_features.get_remote_ref_info();
+                    let training_batch = PersiaTrainingBatchImpl {
+                        non_id_type_tensors,
                         embeddings,
-                        target: target_tensors,
+                        label_tensors,
                         meta_data: batch.meta_data,
-                        middleware_server_addr: middleware_addr.to_string(),
+                        embedding_worker_addr: embedding_worker_addr.to_string(),
                         ref_id,
                         embedding_staleness_permit,
                     };
@@ -643,7 +642,7 @@ impl Forward {
     }
 
     fn spawn_forward_worker(&mut self, num_workers: usize) {
-        let context = PersiaCommonContext::get();
+        let context = PersiaCommonContextImpl::get();
         let _guard = context.async_runtime.enter();
 
         for _ in 0..num_workers {
@@ -676,40 +675,48 @@ impl Forward {
                         );
 
                         let mut batch = batch;
-                        let (embeddings_rpc_result, middleware_addr, embedding_staleness_permit) =
-                            match batch.sparse_data {
-                                EmbeddingTensor::SparseBatch(mut sparse_data) => {
-                                    let (middleware_addr, client) =
-                                        rpc_client.get_random_client_with_addr();
+                        let (
+                            embeddings_rpc_result,
+                            embedding_worker_addr,
+                            embedding_staleness_permit,
+                        ) = match batch.id_type_features {
+                            EmbeddingTensor::IDTypeFeature(mut id_type_features) => {
+                                let (embedding_worker_addr, client) =
+                                    rpc_client.get_random_client_with_addr();
 
-                                    sparse_data.requires_grad = is_training;
-                                    let result = client.forward_batched_direct(&sparse_data).await;
+                                id_type_features.requires_grad = is_training;
+                                let result = client.forward_batched_direct(&id_type_features).await;
 
-                                    (result, middleware_addr, None)
-                                }
-                                EmbeddingTensor::SparseBatchRemoteReference(sparse_ref) => {
-                                    let permit = match &embedding_staleness_semaphore {
-                                        Some(s) => Some(s.clone().acquire_owned().await.unwrap()),
-                                        None => None,
-                                    };
+                                (result, embedding_worker_addr, None)
+                            }
+                            EmbeddingTensor::IDTypeFeatureRemoteRef(id_type_features_ref) => {
+                                let permit = match &embedding_staleness_semaphore {
+                                    Some(s) => Some(s.clone().acquire_owned().await.unwrap()),
+                                    None => None,
+                                };
 
-                                    let client = rpc_client
-                                        .get_client_by_addr(sparse_ref.middleware_addr.as_str());
-                                    let result = client
-                                        .forward_batch_id(&(sparse_ref.clone(), is_training))
-                                        .await;
-                                    (result, sparse_ref.middleware_addr.clone(), permit)
-                                }
-                                EmbeddingTensor::Null => {
-                                    panic!("current sparse data not support null data",)
-                                }
-                            };
+                                let client = rpc_client.get_client_by_addr(
+                                    id_type_features_ref.embedding_worker_addr.as_str(),
+                                );
+                                let result = client
+                                    .forward_batch_id(&(id_type_features_ref.clone(), is_training))
+                                    .await;
+                                (
+                                    result,
+                                    id_type_features_ref.embedding_worker_addr.clone(),
+                                    permit,
+                                )
+                            }
+                            EmbeddingTensor::Null => {
+                                panic!("current id type feature not support null data",)
+                            }
+                        };
 
                         if let Err(err) = embeddings_rpc_result {
                             tracing::error!(
-                                "forward data failed {:?}, middleware: {:?}, wait embedding server recovery service",
+                                "forward data failed {:?}, embedding worker: {:?}, wait embedding parameter server recovery service",
                                 err,
-                                middleware_addr
+                                embedding_worker_addr
                             );
                             rpc_client.wait_for_serving().await.unwrap();
                             continue;
@@ -723,16 +730,17 @@ impl Forward {
                         }
                         match embedding_batch {
                             Ok(embedding) => {
-                                let sparse_ref = match embedding.backward_ref_id {
-                                    Some(backward_ref_id) => SparseBatchRemoteReference {
-                                        middleware_addr,
+                                let id_type_feature_remote_ref = match embedding.backward_ref_id {
+                                    Some(backward_ref_id) => IDTypeFeatureRemoteRef {
+                                        embedding_worker_addr,
                                         ref_id: backward_ref_id,
                                         batcher_idx: 0,
                                     },
-                                    None => SparseBatchRemoteReference::default(), // batch without gradient backward
+                                    None => IDTypeFeatureRemoteRef::default(), // batch without gradient backward
                                 };
-                                batch.sparse_data =
-                                    EmbeddingTensor::SparseBatchRemoteReference(sparse_ref);
+                                batch.id_type_features = EmbeddingTensor::IDTypeFeatureRemoteRef(
+                                    id_type_feature_remote_ref,
+                                );
 
                                 if let Err(e) = channel_s
                                     .send_async((batch, embedding, embedding_staleness_permit))
@@ -744,8 +752,8 @@ impl Forward {
                                     );
                                 }
                             }
-                            Err(MiddlewareServerError::EmbeddingServerError(_))
-                            | Err(MiddlewareServerError::RpcError(_)) => {
+                            Err(EmbeddingWorkerError::EmbeddingParameterServerError(_))
+                            | Err(EmbeddingWorkerError::RpcError(_)) => {
                                 match rpc_client.wait_for_serving().await {
                                     Ok(_) => {
                                         tracing::debug!("wait for serving success");
@@ -778,27 +786,30 @@ impl Forward {
     }
 }
 
-pub fn forward_directly(batch: PersiaBatchData, device_id: Option<i32>) -> PyResult<PyTrainBatch> {
-    let device_id = device_id.or(PersiaCommonContext::get().device_id.as_ref().clone());
-    let rpc_client = PersiaCommonContext::get().rpc_client.clone();
-    let async_runtime = PersiaCommonContext::get().async_runtime.clone();
+pub fn forward_directly(
+    batch: PersiaBatchImpl,
+    device_id: Option<i32>,
+) -> PyResult<PersiaTrainingBatch> {
+    let device_id = device_id.or(PersiaCommonContextImpl::get().device_id.as_ref().clone());
+    let rpc_client = PersiaCommonContextImpl::get().rpc_client.clone();
+    let async_runtime = PersiaCommonContextImpl::get().async_runtime.clone();
 
-    let dense: Vec<Tensor> = batch
-        .dense_data
+    let non_id_type_tensors: Vec<TensorImpl> = batch
+        .non_id_type_features
         .into_iter()
         .map(|d| d.to(&device_id))
         .collect();
 
-    let embeddings = match &batch.sparse_data {
-        EmbeddingTensor::SparseBatch(sparse_batch) => {
+    let embeddings = match &batch.id_type_features {
+        EmbeddingTensor::IDTypeFeature(id_type_features) => {
             let _guard = async_runtime.enter();
-            let (_middleware_addr, client) = rpc_client.get_random_client_with_addr();
+            let (_embedding_worker_addr, client) = rpc_client.get_random_client_with_addr();
             let embeddings: EmbeddingBatch = async_runtime
-                .block_on(client.forward_batched_direct(sparse_batch))
+                .block_on(client.forward_batched_direct(id_type_features))
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
-            let embeddings: Vec<Embedding> = embeddings
+            let embeddings: Vec<EmbeddingImpl> = embeddings
                 .batches
                 .into_iter()
                 .map(|feature_embedding_batch| {
@@ -811,41 +822,37 @@ pub fn forward_directly(batch: PersiaBatchData, device_id: Option<i32>) -> PyRes
         _ => Vec::new(),
     };
 
-    let target = batch
-        .target_data
-        .into_iter()
-        .map(|t| t.to(&device_id))
-        .collect();
+    let label_tensors = batch.labels.into_iter().map(|t| t.to(&device_id)).collect();
 
-    let infer_batch = PersiaTrainingBatch {
-        dense,
+    let infer_batch = PersiaTrainingBatchImpl {
+        non_id_type_tensors,
         embeddings,
-        target,
+        label_tensors,
         meta_data: batch.meta_data,
-        ..PersiaTrainingBatch::default()
+        ..PersiaTrainingBatchImpl::default()
     };
 
-    let infer_batch = PyTrainBatch { inner: infer_batch };
+    let infer_batch = PersiaTrainingBatch { inner: infer_batch };
 
     Ok(infer_batch)
 }
 
 #[pyclass]
-pub struct PyForward {
-    inner: Forward,
+pub struct Forward {
+    inner: ForwardImpl,
 }
 
 #[pymethods]
-impl PyForward {
+impl Forward {
     #[new]
     fn new(
         forward_buffer_size: usize,
         is_training: bool,
         reproducible: bool,
         embedding_staleness: Option<usize>,
-    ) -> PyResult<PyForward> {
-        Ok(PyForward {
-            inner: Forward::new(
+    ) -> PyResult<Forward> {
+        Ok(Forward {
+            inner: ForwardImpl::new(
                 forward_buffer_size,
                 is_training,
                 reproducible,
@@ -863,7 +870,7 @@ impl PyForward {
         self.inner.shutdown()
     }
 
-    pub fn get_batch(&self, timeout_ms: u64, py: Python) -> PyResult<PyTrainBatch> {
+    pub fn get_batch(&self, timeout_ms: u64, py: Python) -> PyResult<PersiaTrainingBatch> {
         let start_time = std::time::Instant::now();
         let receiver = self.inner.gpu_forwarded_channel_r.clone();
         let replica_info = PersiaReplicaInfo::get().expect("not in persia context");
@@ -871,12 +878,12 @@ impl PyForward {
 
         py.allow_threads(move || {
             let batch = match receiver.try_recv() {
-                Ok(x) => Ok(PyTrainBatch { inner: x }),
+                Ok(x) => Ok(PersiaTrainingBatch { inner: x }),
                 Err(_) => {
                     tracing::warn!("local forwarded queue empty for rank {}!", rank_id);
                     let result = receiver.recv_timeout(Duration::from_millis(timeout_ms));
                     if let Ok(batch) = result {
-                        Ok(PyTrainBatch { inner: batch })
+                        Ok(PersiaTrainingBatch { inner: batch })
                     } else {
                         Err(pyo3::exceptions::PyTimeoutError::new_err(
                             "get train batch timed out",
@@ -902,7 +909,7 @@ impl PyForward {
         })
     }
 
-    fn set_input_channel(&mut self, receiver: &PyPersiaBatchDataReceiver) -> PyResult<()> {
+    fn set_input_channel(&mut self, receiver: &PersiaBatchDataReceiver) -> PyResult<()> {
         if self.inner.input_channel.is_none() {
             self.inner.input_channel = Some(receiver.inner.clone());
             Ok(())
@@ -914,9 +921,9 @@ impl PyForward {
 
 pub fn init_module(super_module: &PyModule, py: Python) -> PyResult<()> {
     let module = PyModule::new(py, "forward")?;
-    module.add_class::<PyForward>()?;
-    module.add_class::<PyTensor>()?;
-    module.add_class::<PyTrainBatch>()?;
+    module.add_class::<Forward>()?;
+    module.add_class::<Tensor>()?;
+    module.add_class::<PersiaTrainingBatch>()?;
     super_module.add_submodule(module)?;
     Ok(())
 }
