@@ -23,7 +23,7 @@ class PersiaBatch:
         >>> import time
         >>> import json
         >>> import numpy as np
-        >>> from persia.data import PersiaBatch
+        >>> from persia.embedding.data import PersiaBatch
         >>> ...
         >>> batch_size = 1024
         >>> non_id_type_feature = np.zeros((batch_size, 1), dtype=np.float32)

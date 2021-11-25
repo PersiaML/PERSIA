@@ -254,7 +254,7 @@ class EmbeddingCtx(BaseCtx):
         """Call `prepare_features` and then do a forward step of the model in context.
 
         Arguments:
-            batch (PythonTrainBatch): Training data provided by PersiaML upstream including
+            batch (PersiaTrainingBatch): Training data provided by PersiaML upstream including
                 dense, target, sparse data and meta info.
 
         Returns:

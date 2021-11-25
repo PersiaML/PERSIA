@@ -25,8 +25,6 @@ from data_generator import make_dataloader
 
 logger = get_default_logger("nn_worker")
 
-device_id = get_local_rank()
-
 setup_seed(3)
 
 CPU_TEST_AUC = 0.8936692224423999
@@ -45,7 +43,7 @@ class TestDataset(PersiaDataset):
     def fetch_data(self, persia_sender_channel: PersiaBatchDataSender):
         logger.info("test loader start to generate data...")
         for _idx, (non_id_type_feature, id_type_features, label) in enumerate(
-            tqdm(self.loader, desc="gen batch data")
+            tqdm(self.loader, desc="generate data")
         ):
             persia_batch = PersiaBatch(id_type_features, requires_grad=False)
             persia_batch.add_non_id_type_feature(non_id_type_feature)
