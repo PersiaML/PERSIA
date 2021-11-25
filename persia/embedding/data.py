@@ -15,15 +15,16 @@ IDTypeFeatureSparse = NewType("IDTypeFeatureSparse", Tuple[str, List[np.ndarray]
 # Only one element for every sample in the batch
 # IDTypeFeature = NewType("IDTypeFeature", Tuple[str, np.ndarray])
 
+
 class PersiaBatch:
     r"""`PersiaBatch` store the id_type_features, non_id_type_features, labels and meta bytes data。
 
     Example:
         >>> import time
         >>> import json
-
+        >>> ...
         >>> import numpy as np
-
+        >>> ...
         >>> from persia.embedding.data import PersiaBatch
         >>> ...
         >>> batch_size = 1024
