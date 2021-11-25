@@ -265,21 +265,21 @@ impl PersiaTrainingBatch {
         self.inner.embedding_worker_addr.as_str()
     }
 
-    pub fn consume_all_non_id_type_features(&mut self) -> Vec<Tensor> {
-        std::mem::replace(&mut self.inner.non_id_type_tensors, vec![])
+    pub fn consume_all_non_id_type_feature_tensors(&mut self) -> Vec<Tensor> {
+        std::mem::replace(&mut self.inner.non_id_type_feature_tensors, vec![])
             .into_iter()
             .map(|x| Tensor { inner: x })
             .collect()
     }
 
-    pub fn consume_all_id_type_features(&mut self) -> Vec<Embedding> {
-        std::mem::replace(&mut self.inner.embeddings, vec![])
+    pub fn consume_all_id_type_feature_embedding_tensors(&mut self) -> Vec<Embedding> {
+        std::mem::replace(&mut self.inner.id_type_feature_embedding_tensors, vec![])
             .into_iter()
             .map(|x| Embedding { inner: Some(x) })
             .collect()
     }
 
-    pub fn consume_all_labels(&mut self) -> Vec<Tensor> {
+    pub fn consume_all_label_tensors(&mut self) -> Vec<Tensor> {
         std::mem::replace(&mut self.inner.label_tensors, vec![])
             .into_iter()
             .map(|x| Tensor { inner: x })
@@ -308,8 +308,8 @@ impl PersiaTrainingBatch {
 
 #[derive(Debug)]
 pub struct PersiaTrainingBatchImpl {
-    pub non_id_type_tensors: Vec<TensorImpl>,
-    pub embeddings: Vec<EmbeddingImpl>,
+    pub non_id_type_feature_tensors: Vec<TensorImpl>,
+    pub id_type_feature_embedding_tensors: Vec<EmbeddingImpl>,
     pub label_tensors: Vec<TensorImpl>,
     pub meta_data: Option<Vec<u8>>,
     pub embedding_worker_addr: String,
@@ -320,8 +320,8 @@ pub struct PersiaTrainingBatchImpl {
 impl Default for PersiaTrainingBatchImpl {
     fn default() -> Self {
         Self {
-            non_id_type_tensors: Vec::new(),
-            embeddings: Vec::new(),
+            non_id_type_feature_tensors: Vec::new(),
+            id_type_feature_embedding_tensors: Vec::new(),
             label_tensors: Vec::new(),
             meta_data: None,
             embedding_worker_addr: String::new(),
@@ -595,7 +595,7 @@ impl ForwardImpl {
                 let start_time = std::time::Instant::now();
                 if let Ok((batch, embeddings, embedding_staleness_permit)) = channel_r.recv() {
                     tracing::debug!("get forwarded batch time cost {:?}", start_time.elapsed());
-                    let embeddings: Vec<_> = embeddings
+                    let id_type_feature_embedding_tensors: Vec<_> = embeddings
                         .batches
                         .into_iter()
                         .map(|feature_embedding_batch| {
@@ -603,7 +603,7 @@ impl ForwardImpl {
                         })
                         .collect();
 
-                    let non_id_type_tensors: Vec<TensorImpl> = batch
+                    let non_id_type_feature_tensors: Vec<TensorImpl> = batch
                         .non_id_type_features
                         .into_iter()
                         .map(|d| d.to(common_ctx.device_id.as_ref()))
@@ -618,8 +618,8 @@ impl ForwardImpl {
                     let (embedding_worker_addr, ref_id) =
                         batch.id_type_features.get_remote_ref_info();
                     let training_batch = PersiaTrainingBatchImpl {
-                        non_id_type_tensors,
-                        embeddings,
+                        non_id_type_feature_tensors,
+                        id_type_feature_embedding_tensors,
                         label_tensors,
                         meta_data: batch.meta_data,
                         embedding_worker_addr: embedding_worker_addr.to_string(),
@@ -825,8 +825,8 @@ pub fn forward_directly(
     let label_tensors = batch.labels.into_iter().map(|t| t.to(&device_id)).collect();
 
     let infer_batch = PersiaTrainingBatchImpl {
-        non_id_type_tensors,
-        embeddings,
+        non_id_type_feature_tensors: non_id_type_tensors,
+        id_type_feature_embedding_tensors: embeddings,
         label_tensors,
         meta_data: batch.meta_data,
         ..PersiaTrainingBatchImpl::default()

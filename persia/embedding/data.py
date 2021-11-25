@@ -26,8 +26,8 @@ class PersiaBatch:
         >>> from persia.embedding.data import PersiaBatch
         >>> ...
         >>> batch_size = 1024
-        >>> non_id_type_feature = np.zeros((batch_size, 1), dtype=np.float32)
-        >>> label = np.ones((batch_size, 1), dtype=np.float32)
+        >>> non_id_type_feature = np.zeros((batch_size, 2), dtype=np.float32)
+        >>> label = np.ones((batch_size, 2), dtype=np.float32)
         >>> id_type_feature_num = 3
         >>> id_type_feature_max_sample_size = 100
         >>> id_type_features = [
@@ -55,7 +55,7 @@ class PersiaBatch:
         """
         Arguments:
             id_type_features (List[IDTypeFeatureSparse]): Categorical data with feature_name which datatype should be uint64.
-            requires_grad (bool): Set requires_grad for id_type_features.
+            requires_grad (bool, optional): Set requires_grad for id_type_features.
             meta (bool, optional): Binary data.
         """
 
@@ -96,7 +96,7 @@ class PersiaBatch:
         ), "PersiaBatch format invalid, labels should not be empty while required grad set to True"
 
     def _check_numpy_array(self, data: np.ndarray, data_name: str):
-        r"""Check the dtype, shape and batch_size is valid of not
+        r"""Check the dtype, shape and batch_size is valid or not.
 
         Arguments:
             data (np.ndarray): Data that need to check.
@@ -142,5 +142,6 @@ class PersiaBatch:
         self.has_label = True
 
     def to_bytes(self) -> bytes:
-        """Serialize persia_batch to bytes."""
+        """Serialize persia_batch to bytes after checking."""
+        self.is_valid()
         return self.data.to_bytes()
