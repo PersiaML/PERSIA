@@ -1993,7 +1993,6 @@ dependencies = [
  "persia-libs",
  "persia-speedy",
  "snafu",
- "tracing",
 ]
 
 [[package]]

@@ -8,6 +8,5 @@ version = "0.1.0"
 
 [dependencies]
 persia-libs = {path = "../../persia-libs"}
-persia-speedy = { path = "../../persia-speedy" }
+persia-speedy = {path = "../../persia-speedy"}
 snafu = "0.6"
-tracing = "0.1"
