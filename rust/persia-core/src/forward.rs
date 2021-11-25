@@ -20,10 +20,11 @@ use persia_common::{EmbeddingBatch, FeatureEmbeddingBatch, IDTypeFeatureRemoteRe
 
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_server::embedding_worker_service::EmbeddingWorkerError;
+
+use numpy::{PyArray, PyArray2};
 use persia_libs::{
     flume,
     half::prelude::*,
-    numpy::{PyArray, PyArray2},
     tokio::{
         self,
         sync::{OwnedSemaphorePermit, Semaphore},
@@ -31,7 +32,6 @@ use persia_libs::{
     },
     tracing,
 };
-
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;

@@ -2,8 +2,8 @@ use std::cmp::Ordering;
 
 use crate::tensor::{CPUStorage, Storage, TensorImpl};
 
+use numpy::{PyArray1, PyArray2};
 use paste::paste;
-use persia_libs::numpy::{PyArray1, PyArray2};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
