@@ -207,7 +207,7 @@ impl Tensor {
             tracing::info!("dlmanaged tensor address is {:?}", ptr);
 
             if ptr.is_null() {
-                println!("empty pointer");
+                tracing::info!("dlpack ptr empty pointer");
             }
             Box::from_raw(ptr as *mut DLManagedTensor)
         };

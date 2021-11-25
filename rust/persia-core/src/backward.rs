@@ -56,14 +56,14 @@ pub struct GradientBatch {
 
 impl GradientBatch {
     pub fn new(
-        forward_id: u64,
+        backward_ref_id: u64,
         embedding_worker_addr: &str,
         embedding_staleness_permit: Option<OwnedSemaphorePermit>,
     ) -> Self {
         Self {
             inner: Some(GradientBatchImpl {
                 gradients: vec![],
-                backward_ref_id: forward_id,
+                backward_ref_id,
                 embedding_worker_addr: embedding_worker_addr.to_string(),
                 embedding_staleness_permit: Arc::new(embedding_staleness_permit),
             }),
@@ -118,8 +118,8 @@ struct BackwardImpl {
     pub cpu_backward_channel_s: flume::Sender<EmbeddingBackwardPacket>,
     pub cpu_backward_channel_r: flume::Receiver<EmbeddingBackwardPacket>,
     pub launch: bool,
-    pub std_handles: Vec<JoinHandle<()>>,
-    pub tokio_handles: Vec<TokioJoinHandle<()>>,
+    pub std_handlers: Vec<JoinHandle<()>>,
+    pub tokio_handlers: Vec<TokioJoinHandle<()>>,
     pub running: Arc<AtomicBool>,
 }
 
@@ -169,9 +169,10 @@ fn copy_gradients(
             x.data_ptr as *mut std::os::raw::c_void,
             host_ptr.inner,
         )
-        .expect("cannot move tensor to host");
+        .expect("cannot move tensor from device to host");
 
         event.synchronize();
+
         convert_data_ptr2gradient(host_ptr.inner, x.shape, num_elements, x.is_f16_gradient)
     } else {
         convert_data_ptr2gradient(
@@ -209,8 +210,8 @@ impl BackwardImpl {
             cpu_backward_channel_s,
             cpu_backward_channel_r,
             launch: false,
-            std_handles: Vec::new(),
-            tokio_handles: Vec::new(),
+            std_handlers: Vec::new(),
+            tokio_handlers: Vec::new(),
             running: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -297,7 +298,7 @@ impl BackwardImpl {
             }
         });
 
-        self.std_handles.push(handler);
+        self.std_handlers.push(handler);
     }
 
     fn spawn_backward_worker(&mut self, num_backward_worker: usize) {
@@ -348,7 +349,7 @@ impl BackwardImpl {
                     }
                 }
             });
-            self.tokio_handles.push(handle);
+            self.tokio_handlers.push(handle);
         }
     }
 }

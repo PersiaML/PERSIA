@@ -130,7 +130,7 @@ fn get_local_ip() -> String {
         return ip_addr;
     } else {
         panic!(
-            "failed to get ip of socket {}, please try other by setting PERSIA_SOCKET_NAME",
+            "failed to get ip of socket name {}, please try other by setting PERSIA_SOCKET_NAME",
             persia_socket_name
         );
     }
@@ -585,23 +585,23 @@ pub fn parse_embedding_config(config: EmbeddingConfig) -> EmbeddingConfig {
     let mut config = config;
     let slots_config = &mut config.slots_config;
     let feature_groups = &mut config.feature_groups;
-    let mut slot_name_to_feature_froup = HashMap::new();
+    let mut slot_name_to_feature_group = HashMap::new();
 
     feature_groups
         .iter()
         .for_each(|(feature_group_name, slot_names)| {
             slot_names.iter().for_each(|slot_name| {
-                slot_name_to_feature_froup.insert(slot_name.clone(), feature_group_name.clone());
+                slot_name_to_feature_group.insert(slot_name.clone(), feature_group_name.clone());
             })
         });
 
     slots_config.iter().for_each(|(slot_name, _)| {
-        if !slot_name_to_feature_froup.contains_key(slot_name) {
+        if !slot_name_to_feature_group.contains_key(slot_name) {
             let res = feature_groups.insert(slot_name.clone(), vec![slot_name.clone()]);
             if res.is_some() {
                 panic!("a slot name can not same with feature group name");
             }
-            slot_name_to_feature_froup.insert(slot_name.clone(), slot_name.clone());
+            slot_name_to_feature_group.insert(slot_name.clone(), slot_name.clone());
         }
     });
 
@@ -617,14 +617,14 @@ pub fn parse_embedding_config(config: EmbeddingConfig) -> EmbeddingConfig {
                 slot_config.index_prefix, 0,
                 "please do not set index_prefix manually"
             );
-            let feature_group_name = slot_name_to_feature_froup
+            let feature_group_name = slot_name_to_feature_group
                 .get(slot_name)
                 .expect("feature group not found");
-            let feature_froup_index = feature_groups
+            let feature_group_index = feature_groups
                 .get_index_of(feature_group_name)
                 .expect("feature group not found");
             slot_config.index_prefix = num_traits::CheckedShl::checked_shl(
-                &(feature_froup_index as u64 + 1),
+                &(feature_group_index as u64 + 1),
                 feature_prefix_bias,
             )
             .expect("slot index_prefix overflow, please try a bigger feature_index_prefix_bit");
