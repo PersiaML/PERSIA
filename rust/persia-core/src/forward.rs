@@ -230,6 +230,9 @@ impl Tensor {
                 // * Use PyArrayDyn to implement dynamic shape of ndarray to avoid reshape ndarray at
                 //   python side, current corruption is due to persia-speedy is not compatible with
                 //   ndarray 0.14.0
+                CPUStorage::F16(_val) => panic!(
+                    "float16 numpy array conversion failed, pyo3 numpy is not support float16 now"
+                ),
                 CPUStorage::BOOL(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
                 CPUStorage::F32(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
                 CPUStorage::F64(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
@@ -241,9 +244,6 @@ impl Tensor {
                 CPUStorage::U16(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
                 CPUStorage::U32(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
                 CPUStorage::U64(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
-                CPUStorage::F16(val) => panic!(
-                    "float16 numpy array conversion failed, pyo3 numpy is not support float16 now"
-                ),
             };
             Ok(py_obj)
         } else {

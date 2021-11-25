@@ -12,11 +12,12 @@ from sklearn import metrics
 from persia.ctx import TrainCtx, eval_ctx
 from persia.distributed import DDPOption
 from persia.embedding.optim import Adagrad
+from persia.embedding.data import PersiaBatch
 from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
 from persia.utils import setup_seed
 from persia.data import Dataloder, PersiaDataset, StreamingDataset
-from persia.prelude import PersiaBatch, PersiaBatchDataSender
+from persia.prelude import PersiaBatchDataSender
 
 from model import DNN
 from data_generator import make_dataloader
@@ -49,7 +50,7 @@ class TestDataset(PersiaDataset):
             persia_batch = PersiaBatch(id_type_features, requires_grad=False)
             persia_batch.add_non_id_type_feature(non_id_type_feature)
             persia_batch.add_label(label)
-            persia_sender_channel.send(persia_batch)
+            persia_sender_channel.send(persia_batch.data)
 
     def __len__(self):
         return self.loader_size
@@ -72,6 +73,7 @@ def test(
         if checkpoint_dir is not None:
             logger.info(f"loading checkpoint {checkpoint_dir}")
             ctx.load_checkpoint(checkpoint_dir)
+
         accuracies, losses = [], []
         all_pred, all_target = [], []
         for (_batch_idx, batch_data) in enumerate(tqdm(test_loader, desc="test...")):
