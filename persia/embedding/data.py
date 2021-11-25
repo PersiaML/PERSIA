@@ -13,16 +13,17 @@ IDTypeFeatureSparse = NewType("IDTypeFeatureSparse", Tuple[str, List[np.ndarray]
 
 # TODO: implement dense format id_type_feature.
 # Only one element for every sample in the batch
-IDTypeFeature = NewType("IDTypeFeature", Tuple[str, np.ndarray])
-
+# IDTypeFeature = NewType("IDTypeFeature", Tuple[str, np.ndarray])
 
 class PersiaBatch:
-    r"""PersiaBatch store the id_type_features, non_id_type_features, labels。
+    r"""`PersiaBatch` store the id_type_features, non_id_type_features, labels and meta bytes data。
 
     Example:
         >>> import time
         >>> import json
+
         >>> import numpy as np
+
         >>> from persia.embedding.data import PersiaBatch
         >>> ...
         >>> batch_size = 1024
@@ -56,7 +57,7 @@ class PersiaBatch:
         Arguments:
             id_type_features (List[IDTypeFeatureSparse]): Categorical data with feature_name which datatype should be uint64.
             requires_grad (bool, optional): Set requires_grad for id_type_features.
-            meta (bool, optional): Binary data.
+            meta (bytes, optional): Binary data.
         """
 
         assert len(id_type_features) > 0, "id_type_features should not be empty"
@@ -119,7 +120,7 @@ class PersiaBatch:
         non_id_type_feature: np.ndarray,
         non_id_type_feature_name: Optional[str] = None,
     ):
-        r"""Add the non_id_type_feature into PersiaBatch.
+        r"""Add the non_id_type_feature into `PersiaBatch`.
 
         Arguments:
             non_id_type_feature (np.ndarray): Numerical data should not be empty and corresponding batch_size should equal to id_type_feature
@@ -131,10 +132,10 @@ class PersiaBatch:
         )
 
     def add_label(self, label: np.ndarray, label_name: Optional[str] = None):
-        r"""Add the label into PersiaBatch.
+        r"""Add the label into `PersiaBatch`.
 
         Arguments:
-            label (np.ndarray): Label data.
+            label (np.ndarray): Label data is a ndarray that ndim should greather than one and batch_size should equal to id_type_feature.
             label_name (str, optional): Name of label
         """
         self._check_numpy_array(label, "label")
