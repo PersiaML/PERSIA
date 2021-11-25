@@ -7,9 +7,8 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-hyper = {version = "0.14", features = ["full"]}
 paste = "1.0"
 persia-embedding-config = {path = "../persia-embedding-config"}
 persia-libs = {path = "../persia-libs"}
 persia-simd = {path = "../persia-simd"}
-persia-speedy = { path = "../persia-speedy" }
+persia-speedy = {path = "../persia-speedy"}
