@@ -37,6 +37,8 @@ spec:
     env:
       - name: CUBLAS_WORKSPACE_CONFIG
         value: :4096:8
+      - name: ENABLE_CUDA
+        value: "1"
 
   dataloader:
     replicas: 1
