@@ -41,9 +41,9 @@ class TestDataset(PersiaDataset):
         logger.info(f"test dataset size is {size}")
 
     def fetch_data(self, persia_sender_channel: PersiaBatchDataSender):
-        logger.info("test loader start to generate data...")
+        logger.info("test loader start to generating data...")
         for _idx, (non_id_type_feature, id_type_features, label) in enumerate(
-            tqdm(self.loader, desc="generate data")
+            tqdm(self.loader, desc="generating data")
         ):
             persia_batch = PersiaBatch(id_type_features, requires_grad=False)
             persia_batch.add_non_id_type_feature(non_id_type_feature)
