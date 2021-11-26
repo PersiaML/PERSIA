@@ -24,7 +24,6 @@ use persia_embedding_server::embedding_worker_service::EmbeddingWorkerError;
 use numpy::{PyArray, PyArray2};
 use persia_libs::{
     flume,
-    half::prelude::*,
     tokio::{
         self,
         sync::{OwnedSemaphorePermit, Semaphore},
@@ -222,22 +221,26 @@ impl Tensor {
     pub fn numpy(&self, py: Python) -> PyResult<PyObject> {
         if let Storage::CPU(storage) = &self.inner.storage {
             // PyArray::from_array(py, arr)
-            let py_obj = match &storage {
-                CPUStorage::F16(val) => {
-                    // TODO:
-                    // * Implement half array to avoid convert half to f32. current workaround
-                    //   due to rust numpy no implement half, convert the half to f32 is needed.
-                    //   https://github.com/PyO3/rust-numpy/issues/201
-                    // * Use PyArrayDyn to implement dynamic shape of ndarray to avoid reshape ndarray at
-                    //   python side, current corruption is due to persia-speedy is not compatible with
-                    //   ndarray 0.14.0
-                    PyArray::from_vec(py, val.as_slice().to_f32_vec()).into_py(py)
-                }
+            let py_obj = match storage {
+                // TODO:
+                // * Implement half array to avoid convert half to f32. current workaround
+                //   due to rust numpy no implement half, convert the half to f32 is needed.
+                //   https://github.com/PyO3/rust-numpy/issues/201
+                // * Use PyArrayDyn to implement dynamic shape of ndarray to avoid reshape ndarray at
+                //   python side, current corruption is due to persia-speedy is not compatible with
+                //   ndarray 0.14.0
+                CPUStorage::F16(_val) => panic!(
+                    "float16 numpy array conversion failed, pyo3 numpy is not support float16 now"
+                ),
+                CPUStorage::BOOL(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
                 CPUStorage::F32(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
                 CPUStorage::F64(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
+                CPUStorage::I8(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
+                CPUStorage::I16(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
                 CPUStorage::I32(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
                 CPUStorage::I64(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
-                CPUStorage::USIZE(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
+                CPUStorage::U8(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
+                CPUStorage::U16(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
                 CPUStorage::U32(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
                 CPUStorage::U64(val) => PyArray::from_slice(py, val.as_slice()).into_py(py),
             };
@@ -261,21 +264,21 @@ impl PersiaTrainingBatch {
         self.inner.embedding_worker_addr.as_str()
     }
 
-    pub fn consume_all_non_id_type_features(&mut self) -> Vec<Tensor> {
-        std::mem::replace(&mut self.inner.non_id_type_tensors, vec![])
+    pub fn consume_all_non_id_type_feature_tensors(&mut self) -> Vec<Tensor> {
+        std::mem::replace(&mut self.inner.non_id_type_feature_tensors, vec![])
             .into_iter()
             .map(|x| Tensor { inner: x })
             .collect()
     }
 
-    pub fn consume_all_id_type_features(&mut self) -> Vec<Embedding> {
-        std::mem::replace(&mut self.inner.embeddings, vec![])
+    pub fn consume_all_id_type_feature_embedding_tensors(&mut self) -> Vec<Embedding> {
+        std::mem::replace(&mut self.inner.id_type_feature_embedding_tensors, vec![])
             .into_iter()
             .map(|x| Embedding { inner: Some(x) })
             .collect()
     }
 
-    pub fn consume_all_labels(&mut self) -> Vec<Tensor> {
+    pub fn consume_all_label_tensors(&mut self) -> Vec<Tensor> {
         std::mem::replace(&mut self.inner.label_tensors, vec![])
             .into_iter()
             .map(|x| Tensor { inner: x })
@@ -304,8 +307,8 @@ impl PersiaTrainingBatch {
 
 #[derive(Debug)]
 pub struct PersiaTrainingBatchImpl {
-    pub non_id_type_tensors: Vec<TensorImpl>,
-    pub embeddings: Vec<EmbeddingImpl>,
+    pub non_id_type_feature_tensors: Vec<TensorImpl>,
+    pub id_type_feature_embedding_tensors: Vec<EmbeddingImpl>,
     pub label_tensors: Vec<TensorImpl>,
     pub meta_data: Option<Vec<u8>>,
     pub embedding_worker_addr: String,
@@ -316,8 +319,8 @@ pub struct PersiaTrainingBatchImpl {
 impl Default for PersiaTrainingBatchImpl {
     fn default() -> Self {
         Self {
-            non_id_type_tensors: Vec::new(),
-            embeddings: Vec::new(),
+            non_id_type_feature_tensors: Vec::new(),
+            id_type_feature_embedding_tensors: Vec::new(),
             label_tensors: Vec::new(),
             meta_data: None,
             embedding_worker_addr: String::new(),
@@ -348,23 +351,21 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
             let no_empty_index_list_len = std::cmp::max(non_empty_index_list.len(), 1);
 
             let tensor = TensorImpl::new(
-                Storage::CPU(CPUStorage::from_f16(
-                    raw_embedding.embeddings.into_raw_vec(),
-                )),
+                Storage::CPU(CPUStorage::F16(raw_embedding.embeddings.into_raw_vec())),
                 embedding_shape,
                 Some(feature_name.clone()),
                 None,
             );
 
             let index = TensorImpl::new(
-                Storage::CPU(CPUStorage::from_i64(raw_embedding.index)),
+                Storage::CPU(CPUStorage::I64(raw_embedding.index)),
                 vec![index_len],
                 Some(format!("{}_index", &feature_name)),
                 None,
             );
 
             let non_empty_index = TensorImpl::new(
-                Storage::CPU(CPUStorage::from_i64(non_empty_index_list)),
+                Storage::CPU(CPUStorage::I64(non_empty_index_list)),
                 vec![no_empty_index_list_len],
                 Some(format!("{}_non_empty_index", &feature_name)),
                 None,
@@ -380,9 +381,7 @@ fn embedding2tensor(embedding: FeatureEmbeddingBatch, device: &Option<i32>) -> E
         FeatureEmbeddingBatch::SumEmbedding(sum_embedding) => {
             let embedding_shape = sum_embedding.embeddings.shape().to_vec();
             let tensor = TensorImpl::new(
-                Storage::CPU(CPUStorage::from_f16(
-                    sum_embedding.embeddings.into_raw_vec(),
-                )),
+                Storage::CPU(CPUStorage::F16(sum_embedding.embeddings.into_raw_vec())),
                 embedding_shape,
                 Some(sum_embedding.feature_name),
                 None,
@@ -595,7 +594,7 @@ impl ForwardImpl {
                 let start_time = std::time::Instant::now();
                 if let Ok((batch, embeddings, embedding_staleness_permit)) = channel_r.recv() {
                     tracing::debug!("get forwarded batch time cost {:?}", start_time.elapsed());
-                    let embeddings: Vec<_> = embeddings
+                    let id_type_feature_embedding_tensors: Vec<_> = embeddings
                         .batches
                         .into_iter()
                         .map(|feature_embedding_batch| {
@@ -603,7 +602,7 @@ impl ForwardImpl {
                         })
                         .collect();
 
-                    let non_id_type_tensors: Vec<TensorImpl> = batch
+                    let non_id_type_feature_tensors: Vec<TensorImpl> = batch
                         .non_id_type_features
                         .into_iter()
                         .map(|d| d.to(common_ctx.device_id.as_ref()))
@@ -618,8 +617,8 @@ impl ForwardImpl {
                     let (embedding_worker_addr, ref_id) =
                         batch.id_type_features.get_remote_ref_info();
                     let training_batch = PersiaTrainingBatchImpl {
-                        non_id_type_tensors,
-                        embeddings,
+                        non_id_type_feature_tensors,
+                        id_type_feature_embedding_tensors,
                         label_tensors,
                         meta_data: batch.meta_data,
                         embedding_worker_addr: embedding_worker_addr.to_string(),
@@ -825,8 +824,8 @@ pub fn forward_directly(
     let label_tensors = batch.labels.into_iter().map(|t| t.to(&device_id)).collect();
 
     let infer_batch = PersiaTrainingBatchImpl {
-        non_id_type_tensors,
-        embeddings,
+        non_id_type_feature_tensors: non_id_type_tensors,
+        id_type_feature_embedding_tensors: embeddings,
         label_tensors,
         meta_data: batch.meta_data,
         ..PersiaTrainingBatchImpl::default()

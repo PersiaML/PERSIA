@@ -13,9 +13,9 @@ import persia.env as env
 from persia.logger import get_default_logger
 from persia.embedding.optim import Optimizer
 from persia.embedding import EmbeddingConfig, get_default_embedding_config
+from persia.embedding.data import PersiaBatch
 from persia.prelude import (
     PersiaCommonContext,
-    PersiaBatch,
     PersiaTrainingBatch,
     Tensor,
 )
@@ -173,30 +173,15 @@ class DataCtx(BaseCtx):
         self.common_context.init_nats_publisher(None)
         self.common_context.wait_servers_ready()
 
-    def send_id_type_features_to_embedding_worker(self, data: PersiaBatch):
-        """Send PersiaBatch from data loader to embedding worker side.
-
-        Arguments:
-            data (PersiaBatch): PersiaBatch that haven't been process.
-        """
-        self.common_context.send_id_type_features_to_embedding_worker(data)
-
-    def send_non_id_type_features_to_nn_worker(self, data: PersiaBatch):
-        """Send `PersiaBatch` from data loader to nn worker side.
-
-        Arguments:
-            data (PersiaBatch): PersiaBatch that have been sent to embedding worker.
-        """
-        self.common_context.send_non_id_type_features_to_nn_worker(data)
-
-    def send_data(self, data: PersiaBatch):
+    def send_data(self, persia_batch: PersiaBatch):
         """Send PersiaBatch from data loader to nn worker and embedding worker side.
 
         Arguments:
-            data (PersiaBatch): PersiaBatch that haven't been process.
+            persia_batch (PersiaBatch): PersiaBatch that haven't been process.
         """
-        self.send_id_type_features_to_embedding_worker(data)
-        self.send_non_id_type_features_to_nn_worker(data)
+        persia_batch.is_valid()
+        self.common_context.send_id_type_features_to_embedding_worker(persia_batch.data)
+        self.common_context.send_non_id_type_features_to_nn_worker(persia_batch.data)
 
 
 class EmbeddingCtx(BaseCtx):
@@ -215,12 +200,11 @@ class EmbeddingCtx(BaseCtx):
         ...     embedding_config
         ... ) as ctx:
         >>>     for (non_id_type_feature, id_type_features, label) in loader:
-        >>>         batch_data = PersiaBatch()
-        >>>         batch_data.add_non_id_type_feature(non_id_type_feature)
-        >>>         batch_data.add_id_type_features(id_type_features)
-        >>>         batch_data.add_label(label)
-        >>>         python_training_batch = ctx.get_embedding_from_data(batch_data)
-        >>>         (output, label) = ctx.forward(python_training_batch)
+        >>>         persia_batch = PersiaBatch(id_type_features)
+        >>>         persia_batch.add_non_id_type_feature(non_id_type_feature)
+        >>>         persia_batch.add_label(label)
+        >>>         persia_training_batch = ctx.get_embedding_from_data(persia_batch)
+        >>>         (output, label) = ctx.forward(persia_training_batch)
     """
 
     def __init__(
@@ -283,60 +267,65 @@ class EmbeddingCtx(BaseCtx):
 
     def prepare_features(
         self, batch: PersiaTrainingBatch
-    ) -> Tuple[torch.Tensor, List[torch.Tensor], Optional[torch.Tensor]]:
-        """Converts the non_id_type_features, sparse and target raw data in``PersiaTrainingBatch`` to `torch.Tensor``.
+    ) -> Tuple[List[torch.Tensor], List[torch.Tensor], Optional[List[torch.Tensor]]]:
+        r"""This function convert the data in `PersiaTrainingBatch' to `torch.Tensor`.
 
-        TODO: Add the feature conversion detail
-        For example
-
-        NotIdTypeFeatures -> ...
-        IDTypeFeatures -> ...
-        Labels -> ...
+        `PersiaTrainingBatch' contains non_id_type_features, id_type_feature_embeddings and labels.But they can't use directly in
+        training before convert the `persia.Tensor` to `torch.Tensor`.
 
         Arguments:
             batch (PersiaTrainingBatch): Training data provided by PersiaML upstream including
                 dense, target, sparse data and meta info.
 
         Returns:
-            the tuple of dense data, list of sparse data and target data.
+            the tuple of non_id_type_features, id_type_feature_embeddings and labels.
         """
         if self.preprocess_mode == PreprocessMode.INFERENCE:
-            batch.label_tensors = None
+            batch.label_torch_tensors = None
         else:
             # pytype: disable=attribute-error
-            batch.labels = batch.consume_all_labels()
+            batch.label_tensors = batch.consume_all_label_tensors()
             # pytype: enable=attribute-error
-            batch.label_tensors = [
-                _cast_dlpack2torch_tensor(label) for label in batch.labels
+            batch.label_torch_tensors = [
+                _cast_dlpack2torch_tensor(label_tensor)
+                for label_tensor in batch.label_tensors
             ]
 
         is_training = self.preprocess_mode == PreprocessMode.TRAIN  # cache property
 
         # pytype: disable=attribute-error
-        batch.non_id_type_features = batch.consume_all_non_id_type_features()
+        batch.non_id_type_feature_tensors = (
+            batch.consume_all_non_id_type_feature_tensors()
+        )
         # pytype: enable=attribute-error
-        batch.non_id_type_tensors = [
-            _cast_dlpack2torch_tensor(non_id_type_feature)
-            for non_id_type_feature in batch.non_id_type_features
+        batch.non_id_type_feature_torch_tensors = [
+            _cast_dlpack2torch_tensor(non_id_type_feature_tensor)
+            for non_id_type_feature_tensor in batch.non_id_type_feature_tensors
         ]
 
         # pytype: disable=attribute-error
-        batch.id_type_features = batch.consume_all_id_type_features()
+        batch.id_type_feature_embedding_tensors = (
+            batch.consume_all_id_type_feature_embedding_tensors()
+        )
         # pytype: enable=attribute-error
 
         batch.emb_slots = []  # cache embedding to prevent tensor expired
-        emb_tensors = []  # cache origin embedding for later backward procedure
-        id_type_tensors = []  # id type tensos for later forward procedure
+        id_type_feature_embedding_cache_torch_tensors = (
+            []
+        )  # cache origin embedding for later backward procedure
+        id_type_feature_embedding_torch_tensors = (
+            []
+        )  # id type tensos for later forward procedure
 
-        for id_type_feature in batch.id_type_features:
-            if id_type_feature.is_raw_embedding():
+        for id_type_feature_embedding_tensor in batch.id_type_feature_embedding_tensors:
+            if id_type_feature_embedding_tensor.is_raw_embedding():
                 # no duplicate id in raw_id_tensor
                 (
                     raw_embedding,
                     index,
                     non_empty_index,
                     sample_id_num,
-                ) = id_type_feature.get_raw_embedding()
+                ) = id_type_feature_embedding_tensor.get_raw_embedding()
 
                 batch.emb_slots.append([raw_embedding, index, non_empty_index])
                 distinct_id_tensor = _cast_dlpack2torch_tensor(raw_embedding)
@@ -371,7 +360,7 @@ class EmbeddingCtx(BaseCtx):
                 raw_fixed_size_tensor_with_mask = torch.cat(
                     [raw_fixed_size_tensor, mask], dim=2
                 )
-                emb_tensors.append(
+                id_type_feature_embedding_cache_torch_tensors.append(
                     (
                         raw_embedding.name,
                         distinct_id_tensor,
@@ -380,21 +369,33 @@ class EmbeddingCtx(BaseCtx):
                         index_select_raw_tensor,
                     )
                 )
-                id_type_tensors.append(raw_fixed_size_tensor_with_mask)
-            else:
-                emb = id_type_feature.get_sum_embedding()
-                batch.emb_slots.append([emb])
-                attention_sum_tensor = _cast_dlpack2torch_tensor(
-                    emb, requires_grad=is_training
+                id_type_feature_embedding_torch_tensors.append(
+                    raw_fixed_size_tensor_with_mask
                 )
-                id_type_tensors.append(attention_sum_tensor)
-                emb_tensors.append((emb.name, None, None, None, attention_sum_tensor))
+            else:
+                embedding = id_type_feature_embedding_tensor.get_sum_embedding()
+                batch.emb_slots.append([embedding])
+                attention_sum_tensor = _cast_dlpack2torch_tensor(
+                    embedding, requires_grad=is_training
+                )
+                id_type_feature_embedding_torch_tensors.append(attention_sum_tensor)
+                id_type_feature_embedding_cache_torch_tensors.append(
+                    (embedding.name, None, None, None, attention_sum_tensor)
+                )
 
-        batch.id_type_tensors = id_type_tensors
-        batch.emb_tensors = emb_tensors
+        batch.id_type_feature_embedding_torch_tensors = (
+            id_type_feature_embedding_torch_tensors
+        )
+        batch.id_type_feature_embedding_cache_torch_tensors = (
+            id_type_feature_embedding_cache_torch_tensors
+        )
         self.current_batch = batch
 
-        return batch.non_id_type_tensors, batch.id_type_tensors, batch.label_tensors
+        return (
+            batch.non_id_type_feature_torch_tensors,
+            batch.id_type_feature_embedding_torch_tensors,
+            batch.label_torch_tensors,
+        )
 
     def dump_checkpoint(
         self,
@@ -428,7 +429,7 @@ class EmbeddingCtx(BaseCtx):
         dense_filename: str = "dense.pt",
         blocking: bool = True,
     ):
-        """Load the dense and sparse checkpoint from source directory.
+        """Load the dense and embedding checkpoint from source directory.
 
         Arguments:
             src_dir (str): Source directory.
@@ -531,18 +532,19 @@ class EmbeddingCtx(BaseCtx):
         self.common_context.clear_embeddings()
 
     def get_embedding_from_data(
-        self, data: PersiaBatch, device_id: Optional[int] = None
+        self, persia_batch: PersiaBatch, device_id: Optional[int] = None
     ) -> PersiaTrainingBatch:
-        """Get embeddings of the input batch data.
+        """Get `PersiaTrainingBatch` of the input batch data.
 
         Arguments:
-            data (PersiaBatch): Input data without embeddings.
+            persia_batch (PersiaBatch): Input data without embeddings.
             device_id (int, optional): The CUDA device to use for this process.
 
         Returns:
             Input data with embeddings.
         """
-        return self.common_context.get_embedding_from_data(data, device_id)
+        persia_batch.is_valid()
+        return self.common_context.get_embedding_from_data(persia_batch.data, device_id)
 
     def get_embedding_from_bytes(
         self, data: bytes, device_id: Optional[int] = None
@@ -699,6 +701,7 @@ class TrainCtx(EmbeddingCtx):
         return master_addr
 
     def _init_embedding_worker_rpc_client(self) -> int:
+        """Initialize the embedding worker rpc clients."""
         embedding_worker_addr_list = (
             self.common_context.get_embedding_worker_addr_list()
         )
@@ -708,7 +711,7 @@ class TrainCtx(EmbeddingCtx):
         return len(embedding_worker_addr_list)
 
     def wait_servers_ready(self):
-        """query embedding server to check if servers are ready"""
+        """Wait until embedding servers ready to serve."""
 
         self.common_context.init_nats_publisher(self.world_size)
         self.common_context.wait_servers_ready()
@@ -765,7 +768,10 @@ class TrainCtx(EmbeddingCtx):
             and self.update_times % embedding_gradient_check_frequency == 0
         ):
             finite = _check_finite(
-                [emb[-1].grad for emb in self.current_batch.emb_tensors]
+                [
+                    embedding[-1].grad
+                    for embedding in self.current_batch.id_type_feature_embedding_cache_torch_tensors
+                ]
             )
             self.update_times += 1
 
@@ -780,7 +786,7 @@ class TrainCtx(EmbeddingCtx):
             index,
             non_zero_index,
             emb_tensor,
-        ) in self.current_batch.emb_tensors:
+        ) in self.current_batch.id_type_feature_embedding_cache_torch_tensors:
             if emb_tensor.grad is None:
                 gradient_batch.add_skipped_gradient(emb_name)
                 empty_grads.append(emb_name)

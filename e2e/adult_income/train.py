@@ -12,19 +12,18 @@ from sklearn import metrics
 from persia.ctx import TrainCtx, eval_ctx
 from persia.distributed import DDPOption
 from persia.embedding.optim import Adagrad
+from persia.embedding.data import PersiaBatch
 from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
 from persia.utils import setup_seed
 from persia.data import Dataloder, PersiaDataset, StreamingDataset
-from persia.prelude import PersiaBatch, PersiaBatchDataSender
+from persia.prelude import PersiaBatchDataSender
 
 from model import DNN
 from data_generator import make_dataloader
 
 
 logger = get_default_logger("nn_worker")
-
-device_id = get_local_rank()
 
 setup_seed(3)
 
@@ -42,15 +41,14 @@ class TestDataset(PersiaDataset):
         logger.info(f"test dataset size is {size}")
 
     def fetch_data(self, persia_sender_channel: PersiaBatchDataSender):
-        logger.info("test loader start to generate data...")
-        for _idx, (dense, batch_sparse_ids, target) in enumerate(
-            tqdm(self.loader, desc="gen batch data")
+        logger.info("test loader start to generating data...")
+        for _idx, (non_id_type_feature, id_type_features, label) in enumerate(
+            tqdm(self.loader, desc="generating data")
         ):
-            batch_data = PersiaBatch()
-            batch_data.add_non_id_type_feature([dense])
-            batch_data.add_id_type_features(batch_sparse_ids)
-            batch_data.add_label(target)
-            persia_sender_channel.send(batch_data)
+            persia_batch = PersiaBatch(id_type_features, requires_grad=False)
+            persia_batch.add_non_id_type_feature(non_id_type_feature)
+            persia_batch.add_label(label)
+            persia_sender_channel.send(persia_batch.data)
 
     def __len__(self):
         return self.loader_size
@@ -73,6 +71,7 @@ def test(
         if checkpoint_dir is not None:
             logger.info(f"loading checkpoint {checkpoint_dir}")
             ctx.load_checkpoint(checkpoint_dir)
+
         accuracies, losses = [], []
         all_pred, all_target = [], []
         for (_batch_idx, batch_data) in enumerate(tqdm(test_loader, desc="test...")):

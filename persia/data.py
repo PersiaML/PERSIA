@@ -90,7 +90,7 @@ class PersiaDataset(IterableDataset):
         """Callback function to put the data into PersiaBatchDataSender
 
         Arguments:
-            sender (PersiaBatchDataSender): PersiaBatchData sender channel to send the generate data
+            sender (PersiaBatchDataSender): PersiaBatchData sender channel to send the generating data
                 to the PersiaBatchData receive channel
         """
         raise NotImplementedError("implement this function to fetch data")
