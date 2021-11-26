@@ -56,14 +56,14 @@ pub struct GradientBatch {
 
 impl GradientBatch {
     pub fn new(
-        forward_id: u64,
+        backward_ref_id: u64,
         embedding_worker_addr: &str,
         embedding_staleness_permit: Option<OwnedSemaphorePermit>,
     ) -> Self {
         Self {
             inner: Some(GradientBatchImpl {
                 gradients: vec![],
-                backward_ref_id: forward_id,
+                backward_ref_id,
                 embedding_worker_addr: embedding_worker_addr.to_string(),
                 embedding_staleness_permit: Arc::new(embedding_staleness_permit),
             }),
@@ -169,9 +169,10 @@ fn copy_gradients(
             x.data_ptr as *mut std::os::raw::c_void,
             host_ptr.inner,
         )
-        .expect("cannot move tensor to host");
+        .expect("cannot move tensor from device to host");
 
         event.synchronize();
+
         convert_data_ptr2gradient(host_ptr.inner, x.shape, num_elements, x.is_f16_gradient)
     } else {
         convert_data_ptr2gradient(

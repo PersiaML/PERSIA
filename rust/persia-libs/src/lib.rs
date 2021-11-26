@@ -1,7 +1,6 @@
 pub use anyhow;
 pub use async_lock;
 pub use backoff;
-pub use bincode;
 pub use bytes;
 pub use chrono;
 pub use color_eyre;
@@ -24,7 +23,6 @@ pub use serde;
 pub use serde_bytes;
 pub use serde_yaml;
 pub use smol;
-pub use smol_timeout;
 pub use thiserror;
 pub use tokio;
 pub use tracing;

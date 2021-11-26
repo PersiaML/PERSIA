@@ -19,8 +19,8 @@ persia-nats-client = {path = "../others/persia-nats-client"}
 persia-nats-marcos = {path = "../others/persia-nats-marcos"}
 persia-rpc = {path = "../others/persia-rpc"}
 persia-rpc-macro = {path = "../others/persia-rpc-macro"}
-persia-speedy = { path = "../persia-speedy" }
 persia-simd = {path = "../persia-simd"}
+persia-speedy = {path = "../persia-speedy"}
 shadow-rs = "0.8"
 snafu = "0.6"
 structopt = "0.3"

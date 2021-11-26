@@ -2,7 +2,7 @@ SERVICE := DEMO
 EXAMPLE := "getting_started"
 
 run:
-	make stop &&  export CODE_BASE=../src/$(EXAMPLE) docker stack deploy -c docker-compose.yml $(SERVICE) && make nn_worker
+	make stop &&  export CODE_BASE=../src/$(EXAMPLE) && docker stack deploy -c docker-compose.yml $(SERVICE) && make nn_worker
 
 stop:
 	docker stack rm $(SERVICE)
