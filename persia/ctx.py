@@ -255,7 +255,7 @@ class EmbeddingCtx(BaseCtx):
 
         Arguments:
             batch (PersiaTrainingBatch): Training data provided by PersiaML upstream including
-                dense, target, sparse data and meta info.
+                non_id_type_features ,labels, id_type_feature_embeddings and meta info.
 
         Returns:
             the tuple of output data and target data.
@@ -275,7 +275,7 @@ class EmbeddingCtx(BaseCtx):
 
         Arguments:
             batch (PersiaTrainingBatch): Training data provided by PersiaML upstream including
-                dense, target, sparse data and meta info.
+                non_id_type_features ,labels, id_type_feature_embeddings and meta info.
 
         Returns:
             the tuple of non_id_type_features, id_type_feature_embeddings and labels.
@@ -417,8 +417,8 @@ class EmbeddingCtx(BaseCtx):
         assert self.model is not None, "model not found, please init context with model"
 
         if with_jit_model:
-            self.dump_dense(self.model, dst_dir, jit_dense_filename, True)
-        self.dump_dense(self.model, dst_dir, dense_filename)
+            self.dump_torch_state_dict(self.model, dst_dir, jit_dense_filename, True)
+        self.dump_torch_state_dict(self.model, dst_dir, dense_filename)
 
         self.dump_embedding(dst_dir, blocking=blocking)
 
@@ -441,7 +441,9 @@ class EmbeddingCtx(BaseCtx):
 
         dense_model_filepath = os.path.join(src_dir, dense_filename)
         if os.path.exists(dense_model_filepath):
-            self.load_dense(self.model, dense_model_filepath, map_location=map_location)
+            self.load_torch_state_dict(
+                self.model, dense_model_filepath, map_location=map_location
+            )
 
         self.load_embedding(src_dir, blocking=blocking)
 
@@ -469,9 +471,9 @@ class EmbeddingCtx(BaseCtx):
         if blocking:
             self.wait_for_load_embedding()
 
-    def dump_dense(
+    def dump_torch_state_dict(
         self,
-        dense: Union[torch.nn.Module, torch.optim.Optimizer],
+        torch_instance: Union[torch.nn.Module, torch.optim.Optimizer],
         dst_dir: str,
         file_name: str,
         is_jit: bool = False,
@@ -479,33 +481,34 @@ class EmbeddingCtx(BaseCtx):
         """Dump torch model or optimizer to ``dst_dir`` as ``file_name``.
 
         Arguments:
-            dense (torch.nn.Module or torch.optim.Optimizer): dense model or optimizer to be dumped.
+            torch_instance (torch.nn.Module or torch.optim.Optimizer): dense model or optimizer to be dumped.
             dst_dir (str): Destination directory.
             file_name (str): Destination filename.
             is_jit (bool, optional): whether to dump model as jit script.
         """
+
         buffer = io.BytesIO()
         if not is_jit:
-            torch.save(dense.state_dict(), buffer)
+            torch.save(torch_instance.state_dict(), buffer)
         else:
             assert isinstance(
-                dense, torch.nn.Module
-            ), "saving an optimizer as jit script"
-            jit_model = torch.jit.script(dense)
+                torch_instance, torch.nn.Module
+            ), f"dump_torch_object only support torch.nn.Moudle, but go obj type {type(torch_instance)}"
+            jit_model = torch.jit.script(torch_instance)
             torch.jit.save(jit_model, buffer)
         bytes_model = buffer.getvalue()
         self.common_context.dump_to_file(bytes_model, dst_dir, file_name)
 
-    def load_dense(
+    def load_torch_state_dict(
         self,
-        dense: Union[torch.nn.Module, torch.optim.Optimizer],
+        torch_instance: Union[torch.nn.Module, torch.optim.Optimizer],
         src_filepath: str,
         map_location: Optional[str] = None,
     ):
         """Load the torch state dict from source file path.
 
         Arguments:
-            dense (torch.nn.Module or torch.optim.Optimizer): dense model or optimizer to restore.
+            torch_instance (torch.nn.Module or torch.optim.Optimizer): dense model or optimizer to restore.
             src_filepath (str): Source file path.
             map_location (str, optional): Load the dense checkpoint to specific device.
         """
@@ -513,7 +516,7 @@ class EmbeddingCtx(BaseCtx):
         buffer = io.BytesIO(dense_bytes)
         buffer.seek(0)
         state_dict = torch.load(buffer, map_location=map_location)
-        dense.load_state_dict(state_dict)
+        torch_instance.load_state_dict(state_dict)
 
     def wait_for_dump_embedding(self):
         """Wait for the embedding dump process."""
@@ -562,23 +565,27 @@ class EmbeddingCtx(BaseCtx):
 
 
 class TrainCtx(EmbeddingCtx):
-    r"""Subclass of ``EmbeddingCtx`` that provide the backward ability to update the sparse embedding.
+    r"""Subclass of ``EmbeddingCtx`` that provide the backward ability to update the embeddings.
 
     Example:
         >>> import torch
+        >>> ...
+        >>> from persia.env import get_local_rank
+        >>> ...
+        >>> device_id = get_local_rank()
         >>> model = get_dnn_model()
+        >>> model.cuda(device_id)
         >>> embedding_optimizer = persia.embedding.optim.SGD(lr=1e-3)
-        >>> dense_optimizer = torch.optim.SGD(lr=1e-3)
+        >>> dense_optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
         >>> loss_fn = torch.nn.BCELoss(reduction="mean")
         >>> with TrainCtx(
-        >>>     embedding_optimizer,
-        >>>     dense_optimizer,
+        ...     embedding_optimizer,
+        ...     dense_optimizer,
+        ...     device_id=device_id
         >>> ) as ctx:
-        >>>     parallel_model = ctx.model
-        >>>     for batch_data in datalaoder:
-        >>>         dense, sparse, target = ctx.prepare_features(data)
-        >>>         output = parallel_model(dense, sparse)
-        >>>         loss = loss_fn(output, target)
+        >>>     for persia_batch in datalaoder:
+        >>>         output, labels = ctx.forward(persia_batch)
+        >>>         loss = loss_fn(output, labels[0])
         >>>         scaled_loss = ctx.backward(loss)
     """
 
@@ -598,7 +605,7 @@ class TrainCtx(EmbeddingCtx):
     ):
         """
         Arguments:
-            embedding_optimizer (persia.embedding.optim.Optimizer): Optimizer for the embeddings.
+            embedding_optimizer (persia.embedding.optim.Optimizer): Optimizer for the embedding parameters.
             dense_optimizer (torch.optim.Optimizer): Optimizer for dense parameters.
             grad_scalar_update_factor (float, optional): Update factor of ``Gradscalar`` to ensure loss scale finitely if set ``mixed_precision=True``.
             backward_buffer_size (int, optional): Max number of not updated gradients queued.
@@ -640,7 +647,9 @@ class TrainCtx(EmbeddingCtx):
             self.update_times = 0
 
         if world_size > 1:
-            distributed_option = distributed_option or get_default_distributed_option()
+            distributed_option = distributed_option or get_default_distributed_option(
+                device_id=self.device_id
+            )
             not_env_file = not distributed_option.init_with_env_file()
             not_exists_master_addr = not distributed_option.master_addr
             if not_env_file and not_exists_master_addr:
@@ -719,7 +728,7 @@ class TrainCtx(EmbeddingCtx):
     def backward(
         self, loss: torch.Tensor, embedding_gradient_check_frequency: int = 20
     ) -> torch.Tensor:
-        """Compute the gradient of current dense and sparse tensors.
+        """Update the gradient of current dense and embedding tensors.
 
         This method supports mixed precision training. Depending on whether the current embedding gradient is finite or not, ``GradScalar``
         can update the scale automatically to restrict to parameters in finite range.
@@ -833,8 +842,8 @@ class TrainCtx(EmbeddingCtx):
     def dump_checkpoint(
         self,
         dst_dir: str,
-        dense_filename: str = "dense.pt",
-        jit_dense_filename: str = "jit_dense.pt",
+        dense_model_filename: str = "dense.pt",
+        jit_dense_model_filename: str = "jit_dense.pt",
         opt_filename: str = "opt.pt",
         blocking: bool = True,
         with_jit_model: bool = False,
@@ -843,49 +852,51 @@ class TrainCtx(EmbeddingCtx):
 
         Arguments:
             dst_dir (str): Destination directory.
-            dense_filename (str, optional): Dense checkpoint filename.
-            jit_dense_filename (str, optional): Jit dense checkpoint filename.
+            dense_model_filename (str, optional): Dense model checkpoint filename.
+            jit_dense_model_filename (str, optional): Jit dense checkpoint filename.
             opt_filename (str, optional): Optimizer checkpoint filename.
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
             with_jit_model (bool, optional): Dump dense checkpoint as jit script or not.
         """
         super().dump_checkpoint(
             dst_dir,
-            dense_filename=dense_filename,
-            jit_dense_filename=jit_dense_filename,
+            dense_filename=dense_model_filename,
+            jit_dense_filename=jit_dense_model_filename,
             blocking=blocking,
             with_jit_model=with_jit_model,
         )
 
-        self.dump_dense(self.dense_optimizer, dst_dir, opt_filename)
+        self.dump_torch_state_dict(self.dense_optimizer, dst_dir, opt_filename)
 
     def load_checkpoint(
         self,
         src_dir: str,
         map_location: Optional[str] = None,
-        dense_filename: str = "dense.pt",
+        dense_model_filename: str = "dense.pt",
         opt_filename: str = "opt.pt",
         blocking: bool = True,
     ):
-        """Load the dense and sparse checkpoint from source directory.
+        """Load the dense and embedding checkpoint from source directory.
 
         Arguments:
             src_dir (str): Source directory.
             map_location (str, optional): Load the dense checkpoint to specific device.
-            dense_filename (str, optional): Dense checkpoint filename.
+            dense_model_filename (str, optional): Dense checkpoint filename.
             opt_filename (str, optional): Optimizer checkpoint filename.
             blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
         """
         super().load_checkpoint(
             src_dir,
             map_location=map_location,
-            dense_filename=dense_filename,
+            dense_filename=dense_model_filename,
             blocking=blocking,
         )
 
         optimizer_filepath = os.path.join(src_dir, opt_filename)
         if os.path.exists(optimizer_filepath):
-            self.load_dense(self.dense_optimizer, optimizer_filepath)
+            self.load_torch_state_dict(
+                self.dense_optimizer, optimizer_filepath, map_location=map_location
+            )
 
 
 def cnt_ctx() -> Optional[BaseCtx]:

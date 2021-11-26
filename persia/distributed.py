@@ -237,9 +237,9 @@ class BaguaDistributedOption(DistributedBaseOption):
     def convert2distributed_model(
         self,
         model: torch.nn.Module,
-        _world_size: int,
-        _rank_id: int,
-        _device_id: Optional[int] = None,
+        world_size: int,
+        rank_id: int,
+        device_id: Optional[int] = None,
         master_addr: Optional[str] = None,
         optimizer: Optional[torch.optim.Optimizer] = None,
     ):
@@ -261,9 +261,7 @@ class BaguaDistributedOption(DistributedBaseOption):
 
             # pytype: enable=import-error
         except ImportError as e:
-            _logger.error(
-                "Import Bagua Error, install Bagua before use BaguaOption, you should build the persia docker image with Bagua before task start."
-            )
+            _logger.error("Import Bagua Error, install Bagua before use BaguaOption")
             raise e
 
         current_env = os.environ
@@ -331,9 +329,18 @@ class BaguaDistributedOption(DistributedBaseOption):
         return False
 
 
-def get_default_distributed_option() -> DDPOption:
+def get_default_distributed_option(device_id: Optional[int] = None) -> DDPOption:
     """Get default distributed option.
+
+    Arguments:
+        device_id (int, optional): Cuda device_id.
+
     Returns:
         Default distributed option.
     """
-    return DDPOption()
+    if device_id is not None:
+        backend = "nccl"
+    else:
+        backend = "gloo"
+
+    return DDPOption(backend=backend)
