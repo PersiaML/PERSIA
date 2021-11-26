@@ -4,34 +4,38 @@ from tqdm import tqdm
 
 
 def generate_loader(
-    continuous_data,
-    categorical_data,
-    target,
-    categorical_columns,
+    non_id_type_feature_data,
+    id_type_feature_data,
+    label_data,
+    id_type_feature_names,
     batch_size: int = 128,
     skip_last_batch: bool = False,
 ):
-    dataset_size = len(target)
+    dataset_size = len(label_data)
     for start in range(0, dataset_size, batch_size):
         end = min(start + batch_size, dataset_size)
         if end == dataset_size and skip_last_batch:
             print("skip last batch...")
             continue
-        continuous_batch_data = continuous_data[start:end, :]
-        sparse_batch_data = []
 
-        for idx, categorical_column in enumerate(categorical_columns):
-            tmp_sparse_batch = []
-            categorical_batch_data = categorical_data[start:end]
-            # extend the categorical data to behave list
-            for i in range(len(categorical_batch_data)):
-                tmp_sparse_batch.append(categorical_batch_data[i][idx : idx + 1])
-            sparse_batch_data.append((categorical_column, tmp_sparse_batch))
+        non_id_type_feature = non_id_type_feature_data[start:end, :]
+        id_type_features = []
 
-        target_batch = target[start:end]
-        target_batch = target_batch.reshape(len(target_batch), -1)
+        for id_type_feature_idx, feature_name in enumerate(id_type_feature_names):
+            id_type_feature = []
+            id_type_feature_batch = id_type_feature_data[start:end]
+            for batch_idx in range(len(id_type_feature_batch)):
+                id_type_feature.append(
+                    id_type_feature_batch[batch_idx][
+                        id_type_feature_idx : id_type_feature_idx + 1
+                    ]
+                )
+            id_type_features.append((feature_name, id_type_feature))
 
-        yield continuous_batch_data, sparse_batch_data, target_batch
+        label = label_data[start:end]
+        label = label.reshape(len(label), -1)
+
+        yield non_id_type_feature, id_type_features, label
 
 
 def make_dataloader(
@@ -44,7 +48,7 @@ def make_dataloader(
         categorical_columns = data["categorical_columns"]
 
     dataset_size = len(target)
-    loader_size = (dataset_size - 1) // 128 + 1
+    loader_size = (dataset_size - 1) // batch_size + 1
     if skip_last_batch:
         loader_size = loader_size - 1
 

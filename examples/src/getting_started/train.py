@@ -9,10 +9,11 @@ from sklearn import metrics
 
 from persia.ctx import TrainCtx, eval_ctx
 from persia.embedding.optim import Adagrad
+from persia.embedding.data import PersiaBatch
 from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
 from persia.data import Dataloder, PersiaDataset, StreamingDataset
-from persia.prelude import PersiaBatch, PersiaBatchDataSender
+from persia.prelude import PersiaBatchDataSender
 from persia.utils import setup_seed
 
 from model import DNN
@@ -21,7 +22,6 @@ from data_generator import make_dataloader
 
 logger = get_default_logger("nn_worker")
 
-device_id = get_local_rank()
 setup_seed(3)
 
 
@@ -35,15 +35,14 @@ class TestDataset(PersiaDataset):
         logger.info(f"test dataset size is {size}")
 
     def fetch_data(self, persia_sender_channel: PersiaBatchDataSender):
-        logger.info("test loader start to generate data...")
-        for idx, (dense, batch_sparse_ids, target) in enumerate(
-            tqdm(self.loader, desc="gen batch data")
+        logger.info("test loader start to generating data...")
+        for _idx, (non_id_type_feature, id_type_features, label) in enumerate(
+            tqdm(self.loader, desc="generating data")
         ):
-            batch_data = PersiaBatch()
-            batch_data.add_non_id_type_feature([dense])
-            batch_data.add_id_type_features(batch_sparse_ids)
-            batch_data.add_label(target)
-            persia_sender_channel.send(batch_data)
+            persia_batch = PersiaBatch(id_type_features, requires_grad=False)
+            persia_batch.add_non_id_type_feature(non_id_type_feature)
+            persia_batch.add_label(label)
+            persia_sender_channel.send(persia_batch.data)
 
     def __len__(self):
         return self.loader_size
@@ -99,15 +98,15 @@ if __name__ == "__main__":
     else:
         mixed_precision = False
         device_id = None
+
     logger.info(f"device_id is {device_id}")
 
     dense_optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     embedding_optimizer = Adagrad(lr=1e-2)
     loss_fn = torch.nn.BCELoss(reduction="mean")
-    logger.info("finish genreate dense ctx")
 
     test_dir = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "data/train.npz"
+        os.path.dirname(os.path.realpath(__file__)), "data/test.npz"
     )
     test_dataset = TestDataset(test_dir, batch_size=128)
     test_interval = 254
@@ -130,10 +129,10 @@ if __name__ == "__main__":
             loss = loss_fn(output, label)
             scaled_loss = ctx.backward(loss)
             accuracy = (torch.round(output) == label).sum() / label.shape[0]
+
             logger.info(
                 f"current idx: {batch_idx} loss: {float(loss)} scaled_loss: {float(scaled_loss)} accuracy: {float(accuracy)}"
             )
-
             if batch_idx % test_interval == 0 and batch_idx != 0:
                 test(model, test_loader, cuda)
                 break

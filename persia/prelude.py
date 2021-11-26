@@ -35,7 +35,7 @@ register_submodule(
 from persia_core import PersiaCommonContext, is_cuda_feature_available  # noqa
 
 from persia_core.optim import OptimizerBase
-from persia_core.data import PersiaBatch
+from persia_core.data import PersiaBatch as _PersiaBatch
 from persia_core.utils import (
     PersiaMessageQueueServer,
     PersiaMessageQueueClient,
