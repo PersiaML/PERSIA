@@ -63,7 +63,8 @@ class PreprocessMode(Enum):
 
     When set to ``TRAIN``, ``prepare_features`` will return a torch tensor with ``requires_grad`` attribute set to ``True``.
     When set to ``EVAL``, ``prepare_features`` will return a torch tensor with ``requires_grad`` attribute set to ``False``.
-    ``INFERENCE`` behaves almost identical to ``PreprocessMode.EVAL``, except that ``INFERENCE`` allows ""EmbeddingCtx`` to process the ``PythonTrainBatch`` without a target tensor.
+    ``INFERENCE`` behaves almost identical to ``PreprocessMode.EVAL``, except that ``INFERENCE`` allows ""EmbeddingCtx``
+    to process the ``PersiaTrainingBatch`` without a target tensor.
     """
     TRAIN = 1
     EVAL = 2
@@ -185,8 +186,8 @@ class DataCtx(BaseCtx):
 
 class EmbeddingCtx(BaseCtx):
     r"""Provides the embedding-related functionality. EmbeddingCtx can run offline test or online inference
-    depending on different preprocess_mode. The simplest way to get this context is by using ``persia.ctx.eval_ctx()`` or
-    ``persia.ctx.inference_ctx`` to get the ``EmbeddingCtx`` instance.
+    depending on different preprocess_mode. The simplest way to get this context is by using ``persia.ctx.eval_ctx()``
+    to get the ``EmbeddingCtx`` instance.
 
     Example:
         >>> from persia.prelude import PersiaBatch
@@ -838,7 +839,7 @@ class TrainCtx(EmbeddingCtx):
         blocking: bool = True,
         with_jit_model: bool = False,
     ):
-        """Dump the dense and sparse checkpoint to destination directory.
+        """Dump the dense and embedding checkpoint to destination directory.
 
         Arguments:
             dst_dir (str): Destination directory.

@@ -25,17 +25,16 @@ use crate::rpc::PersiaRpcClient;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use numpy::PyArray1;
 use persia_libs::{
     anyhow::Result,
     color_eyre,
-    numpy::PyArray1,
     once_cell::sync::OnceCell,
     parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard},
     thiserror,
     tokio::{self, runtime::Runtime},
     tracing, tracing_subscriber,
 };
-
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;

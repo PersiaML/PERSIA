@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use crate::tensor::{CPUStorage, Storage, TensorImpl};
 
-use persia_libs::numpy::{DataType, PyArray, PyArray1, PyArrayDescr, PyArrayDyn};
+use numpy::{DataType, PyArray, PyArray1, PyArrayDescr, PyArrayDyn};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::AsPyPointer;

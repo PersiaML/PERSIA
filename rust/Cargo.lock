@@ -1780,12 +1780,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "paste"
-version = "1.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0744126afe1a6dd7f394cb50a716dbe086cb06e255e53d8d0185d82828358fb5"
-
-[[package]]
 name = "paste-impl"
 version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1805,7 +1799,6 @@ name = "persia-common"
 version = "0.1.0"
 dependencies = [
  "hyper",
- "paste 1.0.6",
  "persia-embedding-config",
  "persia-libs",
  "persia-simd",
@@ -1831,6 +1824,7 @@ version = "0.1.0"
 dependencies = [
  "arr_macro",
  "cuda-runtime-sys",
+ "numpy",
  "persia-common",
  "persia-embedding-config",
  "persia-embedding-holder",
@@ -1937,7 +1931,6 @@ dependencies = [
  "lz4",
  "ndarray",
  "ndarray-rand",
- "numpy",
  "once_cell",
  "parking_lot",
  "rand 0.8.4",
@@ -1969,7 +1962,6 @@ dependencies = [
 name = "persia-model-manager"
 version = "0.1.0"
 dependencies = [
- "persia-common",
  "persia-embedding-config",
  "persia-embedding-holder",
  "persia-libs",
@@ -2247,7 +2239,7 @@ dependencies = [
  "inventory",
  "libc",
  "parking_lot",
- "paste 0.1.18",
+ "paste",
  "pyo3-build-config",
  "pyo3-macros",
  "unindent",
