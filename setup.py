@@ -58,8 +58,12 @@ if __name__ == "__main__":
 
     install_requires = ["colorlog", "pyyaml", "click"]
 
+    name_suffix = os.getenv("PERSIA_CUDA_VERSION", "")
+    if name_suffix != "":
+        name_suffix = "-cuda" + name_suffix
+
     setup(
-        name="persia",
+        name="persia" + name_suffix,
         use_scm_version={"local_scheme": "no-local-version"},
         setup_requires=["setuptools_scm"],
         install_requires=install_requires,

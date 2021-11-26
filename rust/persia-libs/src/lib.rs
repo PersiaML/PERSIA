@@ -16,7 +16,6 @@ pub use itertools;
 pub use lz4;
 pub use ndarray;
 pub use ndarray_rand;
-pub use numpy;
 pub use once_cell;
 pub use parking_lot;
 pub use rand;
