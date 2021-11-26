@@ -128,6 +128,7 @@ _ignore_module = [
     "persia.error",
     "persia.logger",
     "persia.prelude",
+    "persia.k8s_utils",
 ]
 
 
