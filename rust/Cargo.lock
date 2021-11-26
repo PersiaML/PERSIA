@@ -1798,7 +1798,6 @@ checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
 name = "persia-common"
 version = "0.1.0"
 dependencies = [
- "paste 1.0.6",
  "persia-embedding-config",
  "persia-libs",
  "persia-simd",
@@ -1824,6 +1823,7 @@ version = "0.1.0"
 dependencies = [
  "arr_macro",
  "cuda-runtime-sys",
+ "numpy",
  "paste 1.0.6",
  "persia-common",
  "persia-embedding-config",
@@ -1929,7 +1929,6 @@ dependencies = [
  "lz4",
  "ndarray",
  "ndarray-rand",
- "numpy",
  "once_cell",
  "parking_lot",
  "rand 0.8.4",
@@ -1960,7 +1959,6 @@ dependencies = [
 name = "persia-model-manager"
 version = "0.1.0"
 dependencies = [
- "persia-common",
  "persia-embedding-config",
  "persia-embedding-holder",
  "persia-libs",

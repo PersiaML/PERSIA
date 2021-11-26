@@ -8,8 +8,7 @@ version = "0.1.0"
 
 [dependencies]
 persia-embedding-config = {path = "../persia-embedding-config"}
-persia-common = {path = "../persia-common"}
 persia-embedding-holder = {path = "../persia-embedding-holder"}
 persia-libs = {path = "../persia-libs"}
-persia-speedy = { path = "../persia-speedy" }
+persia-speedy = {path = "../persia-speedy"}
 persia-storage = {path = "../persia-storage"}
