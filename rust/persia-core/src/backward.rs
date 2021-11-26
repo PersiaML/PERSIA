@@ -118,8 +118,8 @@ struct BackwardImpl {
     pub cpu_backward_channel_s: flume::Sender<EmbeddingBackwardPacket>,
     pub cpu_backward_channel_r: flume::Receiver<EmbeddingBackwardPacket>,
     pub launch: bool,
-    pub std_handlers: Vec<JoinHandle<()>>,
-    pub tokio_handlers: Vec<TokioJoinHandle<()>>,
+    pub std_handles: Vec<JoinHandle<()>>,
+    pub tokio_handles: Vec<TokioJoinHandle<()>>,
     pub running: Arc<AtomicBool>,
 }
 
@@ -210,8 +210,8 @@ impl BackwardImpl {
             cpu_backward_channel_s,
             cpu_backward_channel_r,
             launch: false,
-            std_handlers: Vec::new(),
-            tokio_handlers: Vec::new(),
+            std_handles: Vec::new(),
+            tokio_handles: Vec::new(),
             running: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -298,7 +298,7 @@ impl BackwardImpl {
             }
         });
 
-        self.std_handlers.push(handler);
+        self.std_handles.push(handler);
     }
 
     fn spawn_backward_worker(&mut self, num_backward_worker: usize) {
@@ -349,7 +349,7 @@ impl BackwardImpl {
                     }
                 }
             });
-            self.tokio_handlers.push(handle);
+            self.tokio_handles.push(handle);
         }
     }
 }
