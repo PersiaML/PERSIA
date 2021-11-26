@@ -100,6 +100,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "array-linked-list"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7a2da8beedbfae0b5ec522abb1a1436ff693f2e16829704a4f8538888558079"
+
+[[package]]
 name = "ascii"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1850,6 +1856,7 @@ name = "persia-embedding-holder"
 version = "0.1.0"
 dependencies = [
  "ahash 0.7.6",
+ "array-linked-list",
  "linked-hash-map",
  "persia-common",
  "persia-embedding-config",
