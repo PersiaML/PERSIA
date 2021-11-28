@@ -7,7 +7,7 @@ services:
           
   data_loader:
     env_file:
-      - .env
+      - .docker.env
     environment:
         TASK_SLOT_ID: "{{.Task.Slot}}"
         REPLICAS: 1
@@ -28,7 +28,7 @@ services:
 
   nn_worker:
     env_file:
-      - .env
+      - .docker.env
     environment:
       TASK_SLOT_ID: "{{.Task.Slot}}"
       NCCL_SOCKET_IFNAME: eth0
@@ -46,7 +46,7 @@ services:
 
   embedding_worker:
     env_file:
-      - .env
+      - .docker.env
     environment:
       TASK_SLOT_ID: "{{.Task.Slot}}" 
       REPLICAS: 1
@@ -65,7 +65,7 @@ services:
 
   server:
     env_file:
-      - .env
+      - .docker.env
     environment:
       TASK_SLOT_ID: "{{.Task.Slot}}"
       REPLICAS: 1
