@@ -16,17 +16,11 @@ if __name__ == "__main__":
 
     rust_extensions.append(
         RustExtension(
-            # TODO: Due to this issue https://github.com/PyO3/setuptools-rust/issues/153 still not release
-            # the new version of setuptool_rust, RustExtension can't enable the script feature
-            # {
-            #     "persia-embedding-worker": "persia.persia_embedding_worker",
-            #     "persia-embedding-parameter-server": "persia.persia_embedding_parameter_server"
-            # },
-            # script=True,
             {
-                "persia-embedding-worker": "persia.persia-embedding-worker",
-                "persia-embedding-parameter-server": "persia.persia-embedding-parameter-server",
+                "persia-embedding-worker": "persia.persia_embedding_worker",
+                "persia-embedding-parameter-server": "persia.persia_embedding_parameter_server"
             },
+            script=True,
             path="rust/persia-embedding-server/Cargo.toml",
             binding=Binding.Exec,
             native=native,
@@ -50,6 +44,7 @@ if __name__ == "__main__":
                 "operator": "persia.operator",
                 "server": "persia.server",
             },
+            script=True,
             path="k8s/Cargo.toml",
             binding=Binding.Exec,
             native=native,
