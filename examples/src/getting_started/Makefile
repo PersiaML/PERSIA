@@ -1,8 +1,13 @@
 SERVICE := DEMO
 EXAMPLE := "getting_started"
+IMAGE_PREFIX := ""
+IMAGE_TAG := "dev"
 
 run:
-	make stop &&  export CODE_BASE=../src/$(EXAMPLE) && docker stack deploy -c docker-compose.yml $(SERVICE) && make nn_worker
+	make stop && IMAGE_PREFIX="persiaml/" IMAGE_TAG="latest" docker stack deploy -c docker-compose.yml $(SERVICE) && make nn_worker
+
+dev:
+	make stop && IMAGE_PREFIX=$(IMAGE_PREFIX) IMAGE_TAG=$(IMAGE_TAG) docker stack deploy -c docker-compose.yml $(SERVICE) && make nn_worker
 
 stop:
 	docker stack rm $(SERVICE)

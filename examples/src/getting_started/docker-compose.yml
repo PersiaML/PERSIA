@@ -7,7 +7,7 @@ services:
           
   data_loader:
     env_file:
-      - .env
+      - .docker.env
     environment:
         TASK_SLOT_ID: "{{.Task.Slot}}"
         REPLICAS: 1
@@ -15,11 +15,11 @@ services:
       - nn_worker
       - embedding_worker
       - persia_nats_service
-    image: persia-cuda-runtime:dev
+    image: ${IMAGE_PREFIX}persia-cuda-runtime:${IMAGE_TAG}
     command: persia-launcher data-loader /workspace/data_loader.py
     volumes:
       - type: bind
-        source: ${CODE_BASE}
+        source: .
         target: /workspace
     deploy:
       replicas: 1
@@ -28,16 +28,17 @@ services:
 
   nn_worker:
     env_file:
-      - .env
+      - .docker.env
     environment:
       TASK_SLOT_ID: "{{.Task.Slot}}"
       NCCL_SOCKET_IFNAME: eth0
+      CUBLAS_WORKSPACE_CONFIG: :4096:8
       REPLICAS: 1
-    image: persia-cuda-runtime:dev
+    image: ${IMAGE_PREFIX}persia-cuda-runtime:${IMAGE_TAG}
     command: bash -c "persia-launcher nn-worker /workspace/train.py --nproc-per-node $$NPROC_PER_NODE --node-rank $$(($$TASK_SLOT_ID - 1)) --nnodes $$NN_WORKER_REPLICA"
     volumes:
       - type: bind
-        source: ${CODE_BASE}
+        source: .
         target: /workspace
     deploy:
       replicas: 1
@@ -46,13 +47,13 @@ services:
 
   embedding_worker:
     env_file:
-      - .env
+      - .docker.env
     environment:
       TASK_SLOT_ID: "{{.Task.Slot}}" 
       REPLICAS: 1
     depends_on:
       - server
-    image: persia-cuda-runtime:dev
+    image: ${IMAGE_PREFIX}persia-cuda-runtime:${IMAGE_TAG}
     command: persia-launcher embedding-worker --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config.yml
     deploy:
       replicas: 1
@@ -60,16 +61,16 @@ services:
         condition: on-failure
     volumes:
       - type: bind
-        source: ${CODE_BASE}
+        source: .
         target: /workspace
 
   server:
     env_file:
-      - .env
+      - .docker.env
     environment:
       TASK_SLOT_ID: "{{.Task.Slot}}"
       REPLICAS: 1
-    image: persia-cuda-runtime:dev
+    image: ${IMAGE_PREFIX}persia-cuda-runtime:${IMAGE_TAG}
     command: persia-launcher embedding-parameter-server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config.yml
     deploy:
       replicas: 1
@@ -77,5 +78,5 @@ services:
         condition: on-failure
     volumes:
       - type: bind
-        source: ${CODE_BASE}
+        source: .
         target: /workspace
