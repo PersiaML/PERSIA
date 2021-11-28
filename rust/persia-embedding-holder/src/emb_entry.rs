@@ -1,4 +1,7 @@
+use std::marker::PhantomData;
+
 use persia_libs::{
+    half::{f16, prelude::*},
     ndarray::Array1,
     ndarray_rand::rand_distr::{Gamma, Normal, Poisson, Uniform},
     ndarray_rand::RandomExt,
@@ -14,12 +17,41 @@ use crate::eviction_map::EvictionMapValue;
 
 #[derive(Serialize, Deserialize, Readable, Writable, Clone, Debug)]
 #[serde(crate = "self::serde")]
+pub enum Entry {
+    F32(Vec<f32>),
+    F16(Vec<f16>),
+}
+
+impl Entry {
+    fn as_mut_ref(&self) -> F32EntryMutSlice {
+        let data = match self {
+            Entry::F16(val) => val.as_slice().convert_to_f32_slice(),
+            Entry::F32(val) => val.as_slice(),
+        };
+        F32EntryMutSlice { data, source: self }
+    }
+}
+pub struct F32EntryMutSlice<'a, 'b: 'a> {
+    source: &'b Entry,
+    replcia_data: Option<Vec<f32>>
+}
+
+impl<'a> Drop for F32EntryMutSlice<'a> {
+    fn drop(&mut self) {
+        match &self.source {
+            Entry::F16(_) => {
+                let mut vec_f16 = Entry::F16(Vec::from_f32_slice(self.data));
+                std::mem::swap(&mut self.source, &mut vec_f16);
+            }
+            Entry::F32(_) => {}
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Readable, Writable, Clone, Debug)]
+#[serde(crate = "self::serde")]
 pub struct HashMapEmbeddingEntry {
-    inner: Vec<f32>, // TODO option1: consider using smallvec and slab allocator, and reference that smallvec with &[f32] here to avoid const generics
-    // TODO option2: consider wrap BufferPool (see crates.io) or modify sharded slab to allocate &[f32] here
-    // TODO option3: consider using a object pool of &[f32] with predefined length and all these &[f32] comes from a large continuous Vec. When the object pool is exhausted, create a new large continuous Vec and split it to &[f32]s and add them to the object pool
-    // TODO option4: allocate slices and put them in the slice_arena (see crates.io), then put the slice in the arena into a reusable object pool for consumption
-    // TODO option5: allocate slices in bumpalo_herd allocator with alloc_slice_fill_default, and unsafely converts it to Vec, then put the Vec in a reusable object pool for consumption. In this case we can actually put the whole entry in the pool
+    inner: Vec<f32>,
     embedding_dim: usize,
     sign: u64,
 }
