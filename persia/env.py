@@ -131,7 +131,7 @@ def get_world_size() -> int:
 
 def get_rank() -> int:
     """Get the rank of current process."""
-    return _env.LOCAL_RANK
+    return _env.RANK_ID
 
 
 def get_local_rank() -> int:
