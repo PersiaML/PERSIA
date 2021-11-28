@@ -118,21 +118,33 @@ static PERSIA_INSTANCE_INFO: OnceCell<Arc<InstanceInfo>> = OnceCell::new();
 static PERSIA_EMBEDDING_CONFIG: OnceCell<Arc<EmbeddingConfig>> = OnceCell::new();
 
 fn get_local_ip() -> String {
-    let if_addrs = get_if_addrs::get_if_addrs().expect("failed to get local ip address");
-
     let persia_socket_name = std::env::var("PERSIA_SOCKET_NAME").unwrap_or(String::from("eth0"));
+    let local_ip_addr = match get_if_addrs::get_if_addrs() {
+        Ok(addr_interfaces) => {
+            if let Some(ip_addr) = addr_interfaces
+                .iter()
+                .find(|x| x.name == persia_socket_name.as_str())
+            {
+                let ip_addr = ip_addr.ip().to_string();
+                Some(ip_addr)
+            } else {
+                None
+            }
+        }
+        Err(_) => None,
+    };
 
-    if let Some(ip_addr) = if_addrs
-        .iter()
-        .find(|x| x.name == persia_socket_name.as_str())
-    {
-        let ip_addr = ip_addr.ip().to_string();
-        return ip_addr;
-    } else {
-        panic!(
-            "failed to get ip of socket name {}, please try other by setting PERSIA_SOCKET_NAME",
-            persia_socket_name
-        );
+    match local_ip_addr {
+        Some(ip_addr) => return ip_addr,
+        None => {
+            match local_ipaddress::get() {
+                Some(ip_addr) => {return ip_addr}
+                None => panic!(
+                    "failed to get ip of socket name {}, please try other by setting PERSIA_SOCKET_NAME",
+                    persia_socket_name
+                )
+            }
+        }
     }
 }
 

@@ -68,6 +68,7 @@ if __name__ == "__main__":
         "hours_per_week",
     ]
 
+    print("haha")
     parser = ArgumentParser()
     parser.add_argument("--train-dataset", default="data_source/train.csv")
     parser.add_argument("--test-dataset", default="data_source/test.csv")
@@ -75,7 +76,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     output_path = args.output_path
-
     if args.train_dataset:
         df_train = pd.read_csv(args.train_dataset, names=COLUMNS, skipinitialspace=True)
         process(df_train, os.path.join(output_path, "train.npz"))
