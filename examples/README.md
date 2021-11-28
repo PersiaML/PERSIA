@@ -7,9 +7,8 @@ We provided several examples and multiple laucnher to help you quick start a *Pe
 
 *launch example below*
 ```bash
-cd Persia/examples/honcho
-pip3 install honcho
-CODE_BASE=../src/getting_started/ honcho start
+cd Persia/examples/adult-income
+honcho start -e .honcho.env
 ```
 
 ## Kubernetes Launcher
@@ -21,6 +20,6 @@ Docker [compose](https://docs.docker.com/compose/) can launch the multiple servi
 
 *launcher example below*
 ```bash
-cd Persia/examples/docker-compose
+cd Persia/examples/adult-income
 make run
 ```
