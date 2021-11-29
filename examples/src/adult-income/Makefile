@@ -1,5 +1,5 @@
 SERVICE := DEMO
-EXAMPLE := "getting_started"
+EXAMPLE := "adult-income"
 IMAGE_PREFIX := ""
 IMAGE_TAG := "dev"
 
