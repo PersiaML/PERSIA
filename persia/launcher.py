@@ -1,23 +1,26 @@
 import os
-import click
 import subprocess
 
 from typing import List
 
+import click
+
 from persia.logger import get_logger
+
 
 _logger = get_logger(__file__)
 
 _ENV = os.environ.copy()
+VERBOSE = bool(int(os.environ.get("PERSIA_LAUCNHER_VERBOSE", "0")))
 
 
 def resolve_binary_execute_path(binary_name: str) -> str:
     return os.path.realpath(os.path.join(__file__, "../", binary_name))
 
 
-def run_command(cmd: List[str], verb: bool = True):
+def run_command(cmd: List[str]):
     cmd = list(map(str, cmd))
-    if verb:
+    if VERBOSE:
         cmd_str = " ".join(cmd)
         _logger.info(f"execute command: {cmd_str}")
 

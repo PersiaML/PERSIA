@@ -1,6 +1,7 @@
 import os
-import click
 import subprocess
+
+import click
 
 
 @click.group()
