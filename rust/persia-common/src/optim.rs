@@ -115,7 +115,7 @@ impl Adam {
                 let prefix = embedding_config
                     .feature_configs
                     .get(feature_name)
-                    .expect(format!("feature_name: {} not found", feature_name))
+                    .expect(format!("feature_name: {} not found", feature_name).as_str())
                     .index_prefix;
 
                 let initially_betas = AdamPowerOfBetas {

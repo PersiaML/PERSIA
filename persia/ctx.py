@@ -341,7 +341,7 @@ class EmbeddingCtx(BaseCtx):
 
                 non_empty_index_tensor = _cast_dlpack2torch_tensor(
                     non_empty_index
-                )  # tensor shape (-1), variable length
+                )  # tensor shape (-1), variable max length
 
                 batch_size = len(sample_id_num)
                 dim = distinct_id_tensor.shape[-1]
@@ -784,10 +784,10 @@ class TrainCtx(EmbeddingCtx):
             )
             self.update_times += 1
 
-        grad_slots = []  # cache grad slots
-        empty_grads = []  # counting empty grads
+        id_type_feature_grads_cache = []  # cache grad slots
+        id_type_feature_non_grad_names = []  # counting empty grads
 
-        gradient_batch = self.current_batch.create_gradient_batch()
+        id_type_feature_gradient_batch = self.current_batch.create_gradient_batch()
 
         for (
             emb_name,
@@ -797,8 +797,8 @@ class TrainCtx(EmbeddingCtx):
             emb_tensor,
         ) in self.current_batch.id_type_feature_embedding_cache_torch_tensors:
             if emb_tensor.grad is None:
-                gradient_batch.add_skipped_gradient(emb_name)
-                empty_grads.append(emb_name)
+                id_type_feature_gradient_batch.add_skipped_gradient(emb_name)
+                id_type_feature_non_grad_names.append(emb_name)
             else:
                 if distinct_id_tensor is not None:
                     if distinct_id_tensor.shape[0] > 1:
@@ -818,8 +818,8 @@ class TrainCtx(EmbeddingCtx):
 
                 if grad is not None:
 
-                    grad_slots.append(grad)
-                    gradient_batch.add_gradient(
+                    id_type_feature_grads_cache.append(grad)
+                    id_type_feature_gradient_batch.add_gradient(
                         emb_name,
                         grad.data_ptr(),
                         grad.shape,
@@ -830,12 +830,14 @@ class TrainCtx(EmbeddingCtx):
         if self.device_id is not None:
             torch.cuda.synchronize()
 
-        self.backward_engine.update_id_type_feature_gradient_batched(gradient_batch)
-        self.grad_queue.put(grad_slots)
+        self.backward_engine.update_id_type_feature_gradient_batched(
+            id_type_feature_gradient_batch
+        )
+        self.grad_queue.put(id_type_feature_grads_cache)
 
-        if len(empty_grads) > 0:
+        if len(id_type_feature_non_grad_names) > 0:
             _logger.warning(
-                f"Current batch exists empty gradient tensors, num: {len(empty_grads)}, {empty_grads}"
+                f"Current id_type_feature gradient batch exists non gradient tensors, num: {len(id_type_feature_non_grad_names)}, feature_names: {id_type_feature_non_grad_names}"
             )
         return finite
 

@@ -499,7 +499,7 @@ pub fn lookup_batched_all_features_postprocess<'a>(
         .iter()
         .map(|x| {
             let feature_config = config.get_feature_config_by_name(&x.feature_name);
-            let (feature_len, sign2idx) = if feature_config.sum_atttention {
+            let (feature_len, sign2idx) = if feature_config.sum_attention {
                 (x.batch_size as usize, HashMap::new())
             } else {
                 let distinct_id_size = if feature_config.hash_stack_config.hash_stack_rounds > 0 {
@@ -537,7 +537,7 @@ pub fn lookup_batched_all_features_postprocess<'a>(
         for (emb, single_sign) in lookup_raw_results.iter().zip(signs) {
             let feature_idx = single_sign.feature_idx;
             let result = unsafe { results.get_unchecked_mut(feature_idx) };
-            if !result.config.sum_atttention {
+            if !result.config.sum_attention {
                 let mut row = result
                     .result
                     .row_mut(*result.sign2idx.get(&single_sign.sign).unwrap() as usize + 1);
@@ -567,7 +567,7 @@ pub fn lookup_batched_all_features_postprocess<'a>(
         .into_iter()
         .zip(indices.batches.iter())
         .map(|(mut x, indices)| {
-            if x.config.sum_atttention {
+            if x.config.sum_attention {
                 if x.config.sqrt_scaling {
                     let sample_num_ids = ndarray::Array2::from_shape_vec(
                         (indices.sample_num_signs.len(), 1),
@@ -756,7 +756,7 @@ impl EmbeddingWorkerInner {
 
                     if feature_config.sqrt_scaling {
                         tokio::task::block_in_place(|| {
-                            if feature_config.sum_atttention {
+                            if feature_config.sum_attention {
                                 let sample_num_ids = ndarray::Array2::from_shape_vec(
                                     (feature_batch.sample_num_signs.len(), 1),
                                     feature_batch.sample_num_signs.clone(),
@@ -787,7 +787,7 @@ impl EmbeddingWorkerInner {
                             let mut sign_grad = sign_gradients.row_mut(row);
                             let sign_grad = sign_grad.as_slice_mut().unwrap();
 
-                            if !feature_config.sum_atttention {
+                            if !feature_config.sum_attention {
                                 let batch_idx =
                                     hashed2index_batch_idx.get(&single_sign.sign).unwrap();
                                 unsafe {
