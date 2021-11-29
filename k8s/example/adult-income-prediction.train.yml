@@ -4,10 +4,10 @@ metadata:
   name: adult-income
   namespace: default
 spec:
-  globalConfigPath: /home/PersiaML/examples/src/adult-income/config/global_config.yml
-  embeddingConfigPath: /home/PersiaML/examples/src/adult-income/config/embedding_config.yml
-  nnWorkerPyEntryPath: /home/PersiaML/examples/src/adult-income/train.py
-  dataLoaderPyEntryPath: /home/PersiaML/examples/src/adult-income/data_loader.py
+  globalConfigPath: /home/PERSIA/examples/src/adult-income/config/global_config.yml
+  embeddingConfigPath: /home/PERSIA/examples/src/adult-income/config/embedding_config.yml
+  nnWorkerPyEntryPath: /home/PERSIA/examples/src/adult-income/train.py
+  dataLoaderPyEntryPath: /home/PERSIA/examples/src/adult-income/data_loader.py
   env:
     - name: PERSIA_NATS_IP
       value: nats://persia-nats-service:4222

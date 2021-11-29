@@ -116,6 +116,6 @@ RUN pip3 install *.whl && rm -rf *.whl
 
 
 # Copy examples
-RUN mkdir -p /home/PersiaML/examples
-COPY examples /home/PersiaML/examples
-RUN cd /home/PersiaML/examples/src/adult-income/data/ && ./prepare_data.sh
+RUN mkdir -p /home/PERSIA/examples
+COPY examples /home/PERSIA/examples
+RUN cd /home/PERSIA/examples/src/adult-income/data/ && ./prepare_data.sh
