@@ -95,13 +95,15 @@ impl GradientBatch {
             .as_mut()
             .unwrap()
             .gradients
-            .push(SkippableSingleFeatureGradient::Gradient(SingleFeatureGradient {
-                feature_name,
-                data_ptr,
-                shape,
-                is_f16_gradient,
-                scale_factor,
-            }));
+            .push(SkippableSingleFeatureGradient::Gradient(
+                SingleFeatureGradient {
+                    feature_name,
+                    data_ptr,
+                    shape,
+                    is_f16_gradient,
+                    scale_factor,
+                },
+            ));
     }
 }
 

@@ -355,7 +355,8 @@ pub fn indices_to_hashstack_indices(
             let mut hash_stack_indices: Vec<HashMap<u64, Vec<(u16, u16)>>> =
                 vec![HashMap::new(); feature_config.hash_stack_config.hash_stack_rounds];
             let mut hashed2index_batch_idx: HashMap<u64, i64> = HashMap::with_capacity(
-                feature_batch.index_batch.len() * feature_config.hash_stack_config.hash_stack_rounds,
+                feature_batch.index_batch.len()
+                    * feature_config.hash_stack_config.hash_stack_rounds,
             );
             feature_batch.index_batch.iter().enumerate().for_each(
                 |(distinct_tensor_idx, single_sign)| {
@@ -420,8 +421,10 @@ pub fn indices_add_prefix(indices: &mut IDTypeFeatureBatch, config: &EmbeddingCo
                 .hashed2index_batch_idx
                 .iter()
                 .for_each(|(id, batch_idx)| {
-                    index_prefix_mapping
-                        .insert(id % feature_spacing + feature_config.index_prefix, *batch_idx);
+                    index_prefix_mapping.insert(
+                        id % feature_spacing + feature_config.index_prefix,
+                        *batch_idx,
+                    );
                 });
             feature_batch.hashed2index_batch_idx = index_prefix_mapping;
         }
@@ -880,7 +883,11 @@ impl EmbeddingWorkerInner {
         let start_time = std::time::Instant::now();
 
         let all_shards_ids = tokio::task::block_in_place(|| {
-            lookup_batched_all_features_preprocess(indices, &self.embedding_config, self.replica_size)
+            lookup_batched_all_features_preprocess(
+                indices,
+                &self.embedding_config,
+                self.replica_size,
+            )
         });
 
         let futs = all_shards_ids
@@ -927,7 +934,11 @@ impl EmbeddingWorkerInner {
         let start_time = std::time::Instant::now();
 
         let batches = tokio::task::block_in_place(|| {
-            lookup_batched_all_features_postprocess(indices, forwarded_groups, &self.embedding_config)
+            lookup_batched_all_features_postprocess(
+                indices,
+                forwarded_groups,
+                &self.embedding_config,
+            )
         });
 
         tracing::debug!("summation time cost {:?}", start_time.elapsed());
