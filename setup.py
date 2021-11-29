@@ -4,8 +4,9 @@ import colorama
 from setuptools import setup, find_packages
 from setuptools_rust import Binding, RustExtension
 
-use_cuda = os.environ.get("USE_CUDA", False)
-native = os.environ.get("NATIVE", False)
+use_cuda = bool(int(os.environ.get("USE_CUDA", "1")))
+native = bool(int(os.environ.get("NATIVE", "0")))
+skip_k8s = bool(int(os.environ.get("SKIP_K8S", "0")))
 
 if __name__ == "__main__":
 
@@ -17,8 +18,8 @@ if __name__ == "__main__":
     rust_extensions.append(
         RustExtension(
             {
-                "persia-embedding-worker": "persia.persia_embedding_worker",
-                "persia-embedding-parameter-server": "persia.persia_embedding_parameter_server"
+                "persia-embedding-worker": "persia.persia-embedding-worker",
+                "persia-embedding-parameter-server": "persia.persia-embedding-parameter-server",
             },
             script=True,
             path="rust/persia-embedding-server/Cargo.toml",
@@ -37,19 +38,20 @@ if __name__ == "__main__":
         )
     )
 
-    rust_extensions.append(
-        RustExtension(
-            {
-                "gencrd": "persia.gencrd",
-                "operator": "persia.operator",
-                "server": "persia.server",
-            },
-            script=True,
-            path="k8s/Cargo.toml",
-            binding=Binding.Exec,
-            native=native,
+    if not skip_k8s:
+        rust_extensions.append(
+            RustExtension(
+                {
+                    "gencrd": "persia.gencrd",
+                    "operator": "persia.operator",
+                    "server": "persia.server",
+                },
+                script=True,
+                path="k8s/Cargo.toml",
+                binding=Binding.Exec,
+                native=native,
+            )
         )
-    )
 
     install_requires = ["colorlog", "pyyaml", "click"]
 
