@@ -7,33 +7,36 @@ steps:
 
   - wait
 
-  - label: "launch e2e gpu test"
-    key: "e2e-gpu-test"
-    env:
-      IMAGE_TYPE: "cuda"
-    plugins:
-      - docker-compose#v3.8.0:
-          config: "e2e/docker-compose.train.yml"
-          run: nn_worker
-          graceful-shutdown: true
-      - docker-compose#v3.8.0:
-          config: "e2e/docker-compose.infer.yml"
-          run: torch_serve
-          graceful-shutdown: true
+  - label: "Launch e2e test"
+    command: kubectl apply -f k8s/example/adult-income-prediction.train.yml
 
-  - label: "launch e2e cpu test"
-    key: "e2e-cpu-test"
-    env:
-      IMAGE_TYPE: "cpu"
-    plugins:
-      - docker-compose#v3.8.0:
-          config: "e2e/docker-compose.train.yml"
-          run: nn_worker
-          graceful-shutdown: true
-      - docker-compose#v3.8.0:
-          config: "e2e/docker-compose.infer.yml"
-          run: torch_serve
-          graceful-shutdown: true
+  # - label: "launch e2e gpu test"
+  #   key: "e2e-gpu-test"
+  #   env:
+  #     IMAGE_TYPE: "cuda"
+  #   plugins:
+  #     - docker-compose#v3.8.0:
+  #         config: "e2e/docker-compose.train.yml"
+  #         run: nn_worker
+  #         graceful-shutdown: true
+  #     - docker-compose#v3.8.0:
+  #         config: "e2e/docker-compose.infer.yml"
+  #         run: torch_serve
+  #         graceful-shutdown: true
+
+  # - label: "launch e2e cpu test"
+  #   key: "e2e-cpu-test"
+  #   env:
+  #     IMAGE_TYPE: "cpu"
+  #   plugins:
+  #     - docker-compose#v3.8.0:
+  #         config: "e2e/docker-compose.train.yml"
+  #         run: nn_worker
+  #         graceful-shutdown: true
+  #     - docker-compose#v3.8.0:
+  #         config: "e2e/docker-compose.infer.yml"
+  #         run: torch_serve
+  #         graceful-shutdown: true
 
   - wait
 
