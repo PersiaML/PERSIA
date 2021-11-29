@@ -518,12 +518,13 @@ pub struct HashStackConfig {
 
 #[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
 #[serde(crate = "self::serde")]
-pub struct SlotConfig {
+pub struct FeatureConfig {
     pub dim: usize,
     #[serde(default = "get_ten")]
-    pub sample_fixed_size: usize, // raw embedding placeholder size to fill 3d tensor -> (bs, sample_fix_sized, dim)
+    // raw embedding placeholder size to fill 3d tensor -> (bs, variable_max_length, dim)
+    pub variable_max_length: usize,
     #[serde(default = "get_true")]
-    pub embedding_summation: bool,
+    pub sum_attention: bool,
     #[serde(default = "get_false")]
     pub sqrt_scaling: bool,
     #[serde(default = "get_default_hashstack_config")]
@@ -538,7 +539,7 @@ pub struct SlotConfig {
 pub struct EmbeddingConfig {
     #[serde(default = "get_eight")]
     pub feature_index_prefix_bit: usize,
-    pub slots_config: indexmap::IndexMap<String, SlotConfig>,
+    pub feature_configs: indexmap::IndexMap<String, FeatureConfig>,
     #[serde(default = "get_default_feature_groups")]
     pub feature_groups: indexmap::IndexMap<String, Vec<String>>,
 }
@@ -574,34 +575,34 @@ impl EmbeddingConfig {
         }
     }
 
-    pub fn get_slot_by_feature_name(&self, feature_name: &str) -> &SlotConfig {
-        self.slots_config
+    pub fn get_feature_config_by_name(&self, feature_name: &str) -> &FeatureConfig {
+        self.feature_configs
             .get(feature_name)
-            .expect(format!("slot: {} not found", feature_name).as_str())
+            .expect(format!("feature: {} not found", feature_name).as_str())
     }
 }
 
 pub fn parse_embedding_config(config: EmbeddingConfig) -> EmbeddingConfig {
     let mut config = config;
-    let slots_config = &mut config.slots_config;
+    let feature_configs = &mut config.feature_configs;
     let feature_groups = &mut config.feature_groups;
-    let mut slot_name_to_feature_group = HashMap::new();
+    let mut feature_name2feature_group = HashMap::new();
 
     feature_groups
         .iter()
-        .for_each(|(feature_group_name, slot_names)| {
-            slot_names.iter().for_each(|slot_name| {
-                slot_name_to_feature_group.insert(slot_name.clone(), feature_group_name.clone());
+        .for_each(|(feature_group_name, feature_names)| {
+            feature_names.iter().for_each(|feature_name| {
+                feature_name2feature_group.insert(feature_name.clone(), feature_group_name.clone());
             })
         });
 
-    slots_config.iter().for_each(|(slot_name, _)| {
-        if !slot_name_to_feature_group.contains_key(slot_name) {
-            let res = feature_groups.insert(slot_name.clone(), vec![slot_name.clone()]);
+    feature_configs.iter().for_each(|(feature_name, _)| {
+        if !feature_name2feature_group.contains_key(feature_name) {
+            let res = feature_groups.insert(feature_name.clone(), vec![feature_name.clone()]);
             if res.is_some() {
-                panic!("a slot name can not same with feature group name");
+                panic!("a feature name can not same with feature group name");
             }
-            slot_name_to_feature_group.insert(slot_name.clone(), slot_name.clone());
+            feature_name2feature_group.insert(feature_name.clone(), feature_name.clone());
         }
     });
 
@@ -610,24 +611,24 @@ pub fn parse_embedding_config(config: EmbeddingConfig) -> EmbeddingConfig {
         "feature_index_prefix_bit must > 0"
     );
     let feature_prefix_bias = u64::BITS - config.feature_index_prefix_bit as u32;
-    slots_config
+    feature_configs
         .iter_mut()
-        .for_each(|(slot_name, slot_config)| {
+        .for_each(|(feature_name, feature_config)| {
             assert_eq!(
-                slot_config.index_prefix, 0,
+                feature_config.index_prefix, 0,
                 "please do not set index_prefix manually"
             );
-            let feature_group_name = slot_name_to_feature_group
-                .get(slot_name)
+            let feature_group_name = feature_name2feature_group
+                .get(feature_name)
                 .expect("feature group not found");
             let feature_group_index = feature_groups
                 .get_index_of(feature_group_name)
                 .expect("feature group not found");
-            slot_config.index_prefix = num_traits::CheckedShl::checked_shl(
+            feature_config.index_prefix = num_traits::CheckedShl::checked_shl(
                 &(feature_group_index as u64 + 1),
                 feature_prefix_bias,
             )
-            .expect("slot index_prefix overflow, please try a bigger feature_index_prefix_bit");
+            .expect("feature index_prefix overflow, please try a bigger feature_index_prefix_bit");
         });
 
     config

@@ -31,8 +31,8 @@ use persia_common::{
     IDTypeFeatureBatch, IDTypeFeatureRemoteRef, SingleSignInFeatureBatch,
 };
 use persia_embedding_config::{
-    EmbeddingConfig, EmbeddingWorkerConfig, InstanceInfo, PersiaCommonConfig,
-    PersiaEmbeddingModelHyperparameters, PersiaGlobalConfigError, PersiaReplicaInfo, SlotConfig,
+    EmbeddingConfig, EmbeddingWorkerConfig, FeatureConfig, InstanceInfo, PersiaCommonConfig,
+    PersiaEmbeddingModelHyperparameters, PersiaGlobalConfigError, PersiaReplicaInfo,
 };
 use persia_embedding_holder::emb_entry::HashMapEmbeddingEntry;
 use persia_metrics::{
@@ -350,12 +350,12 @@ pub fn indices_to_hashstack_indices(
     config: &EmbeddingConfig,
 ) -> () {
     for feature_batch in indices.batches.iter_mut() {
-        let slot_conf = config.get_slot_by_feature_name(&feature_batch.feature_name);
-        if slot_conf.hash_stack_config.hash_stack_rounds > 0 {
+        let feature_config = config.get_feature_config_by_name(&feature_batch.feature_name);
+        if feature_config.hash_stack_config.hash_stack_rounds > 0 {
             let mut hash_stack_indices: Vec<HashMap<u64, Vec<(u16, u16)>>> =
-                vec![HashMap::new(); slot_conf.hash_stack_config.hash_stack_rounds];
+                vec![HashMap::new(); feature_config.hash_stack_config.hash_stack_rounds];
             let mut hashed2index_batch_idx: HashMap<u64, i64> = HashMap::with_capacity(
-                feature_batch.index_batch.len() * slot_conf.hash_stack_config.hash_stack_rounds,
+                feature_batch.index_batch.len() * feature_config.hash_stack_config.hash_stack_rounds,
             );
             feature_batch.index_batch.iter().enumerate().for_each(
                 |(distinct_tensor_idx, single_sign)| {
@@ -363,8 +363,8 @@ pub fn indices_to_hashstack_indices(
                     for (round, map) in hash_stack_indices.iter_mut().enumerate() {
                         hashed_sign = farmhash::hash64(&hashed_sign.to_le_bytes());
                         let hashed_sign_bucket = hashed_sign.clone()
-                            % slot_conf.hash_stack_config.embedding_size as u64
-                            + (round * slot_conf.hash_stack_config.embedding_size) as u64;
+                            % feature_config.hash_stack_config.embedding_size as u64
+                            + (round * feature_config.hash_stack_config.embedding_size) as u64;
                         // TODO: to avoid hash conflict, try replace hashed2index_batch_idx to key2list
                         hashed2index_batch_idx
                             .insert(hashed_sign_bucket, distinct_tensor_idx as i64);
@@ -378,7 +378,7 @@ pub fn indices_to_hashstack_indices(
             );
             let mut hashed_index_batch: Vec<SingleSignInFeatureBatch> = Vec::with_capacity(
                 hash_stack_indices.first().unwrap().len()
-                    * slot_conf.hash_stack_config.hash_stack_rounds,
+                    * feature_config.hash_stack_config.hash_stack_rounds,
             );
             for map in hash_stack_indices.into_iter() {
                 for (k, v) in map {
@@ -393,7 +393,7 @@ pub fn indices_to_hashstack_indices(
             feature_batch.sample_num_signs = feature_batch
                 .sample_num_signs
                 .iter()
-                .map(|x| x * slot_conf.hash_stack_config.hash_stack_rounds as u32)
+                .map(|x| x * feature_config.hash_stack_config.hash_stack_rounds as u32)
                 .collect();
         }
     }
@@ -407,11 +407,11 @@ pub fn indices_add_prefix(indices: &mut IDTypeFeatureBatch, config: &EmbeddingCo
         u64::MAX
     };
     for feature_batch in indices.batches.iter_mut() {
-        let slot_conf = config.get_slot_by_feature_name(&feature_batch.feature_name);
-        if slot_conf.index_prefix > 0 {
+        let feature_config = config.get_feature_config_by_name(&feature_batch.feature_name);
+        if feature_config.index_prefix > 0 {
             for single_sign in feature_batch.index_batch.iter_mut() {
                 single_sign.sign %= feature_spacing;
-                single_sign.sign += slot_conf.index_prefix;
+                single_sign.sign += feature_config.index_prefix;
             }
             let mut index_prefix_mapping: HashMap<u64, i64> =
                 HashMap::with_capacity(feature_batch.hashed2index_batch_idx.len());
@@ -421,7 +421,7 @@ pub fn indices_add_prefix(indices: &mut IDTypeFeatureBatch, config: &EmbeddingCo
                 .iter()
                 .for_each(|(id, batch_idx)| {
                     index_prefix_mapping
-                        .insert(id % feature_spacing + slot_conf.index_prefix, *batch_idx);
+                        .insert(id % feature_spacing + feature_config.index_prefix, *batch_idx);
                 });
             feature_batch.hashed2index_batch_idx = index_prefix_mapping;
         }
@@ -445,7 +445,7 @@ impl SignWithConfig {
     }
 }
 
-pub fn lookup_batched_all_slots_preprocess(
+pub fn lookup_batched_all_features_preprocess(
     indices: &mut IDTypeFeatureBatch,
     config: &EmbeddingConfig,
     replica_size: u64,
@@ -460,7 +460,7 @@ pub fn lookup_batched_all_slots_preprocess(
         // Vec<Vec<SignWithConfig>> into Vec<Vec<id>>,
         let mut results = vec![Vec::new(); replica_size as usize];
         for (feature_idx, feature_batch) in indices.batches.iter().enumerate() {
-            let slot_conf = config.get_slot_by_feature_name(&feature_batch.feature_name);
+            let feature_config = config.get_feature_config_by_name(&feature_batch.feature_name);
             for (sign_idx, single_sign) in feature_batch.index_batch.iter().enumerate() {
                 let replica_index = sign_to_shard_modulo(single_sign.sign, replica_size);
                 unsafe {
@@ -470,7 +470,7 @@ pub fn lookup_batched_all_slots_preprocess(
                             sign: single_sign.sign,
                             sign_idx,
                             feature_idx,
-                            dim: slot_conf.dim,
+                            dim: feature_config.dim,
                         });
                 }
             }
@@ -483,35 +483,35 @@ pub fn lookup_batched_all_slots_preprocess(
     indices_to_sharded_indices(&indices, config, replica_size)
 }
 
-pub fn lookup_batched_all_slots_postprocess<'a>(
+pub fn lookup_batched_all_features_postprocess<'a>(
     indices: &IDTypeFeatureBatch,
     forwarded_groups: Vec<(Vec<f32>, Vec<SignWithConfig>)>,
     config: &'a EmbeddingConfig,
 ) -> Vec<FeatureEmbeddingBatch> {
-    struct LookupResultWithSlotConfig<'a> {
+    struct LookupResultWithFeatureConfig<'a> {
         result: ndarray::Array2<f32>,
-        config: &'a SlotConfig,
+        config: &'a FeatureConfig,
         sign2idx: HashMap<u64, i64>,
     }
 
-    let mut results: Vec<LookupResultWithSlotConfig<'a>> = indices
+    let mut results: Vec<LookupResultWithFeatureConfig<'a>> = indices
         .batches
         .iter()
         .map(|x| {
-            let slot_conf = config.get_slot_by_feature_name(&x.feature_name);
-            let (feature_len, sign2idx) = if slot_conf.embedding_summation {
+            let feature_config = config.get_feature_config_by_name(&x.feature_name);
+            let (feature_len, sign2idx) = if feature_config.sum_atttention {
                 (x.batch_size as usize, HashMap::new())
             } else {
-                let distinct_id_size = if slot_conf.hash_stack_config.hash_stack_rounds > 0 {
-                    x.index_batch.len() / slot_conf.hash_stack_config.hash_stack_rounds
+                let distinct_id_size = if feature_config.hash_stack_config.hash_stack_rounds > 0 {
+                    x.index_batch.len() / feature_config.hash_stack_config.hash_stack_rounds
                 } else {
                     x.index_batch.len()
                 };
                 (distinct_id_size + 1, x.hashed2index_batch_idx.clone())
             };
-            LookupResultWithSlotConfig {
-                result: ndarray::Array2::<f32>::zeros((feature_len, slot_conf.dim)),
-                config: slot_conf,
+            LookupResultWithFeatureConfig {
+                result: ndarray::Array2::<f32>::zeros((feature_len, feature_config.dim)),
+                config: feature_config,
                 sign2idx,
             }
         })
@@ -537,7 +537,7 @@ pub fn lookup_batched_all_slots_postprocess<'a>(
         for (emb, single_sign) in lookup_raw_results.iter().zip(signs) {
             let feature_idx = single_sign.feature_idx;
             let result = unsafe { results.get_unchecked_mut(feature_idx) };
-            if !result.config.embedding_summation {
+            if !result.config.sum_atttention {
                 let mut row = result
                     .result
                     .row_mut(*result.sign2idx.get(&single_sign.sign).unwrap() as usize + 1);
@@ -567,7 +567,7 @@ pub fn lookup_batched_all_slots_postprocess<'a>(
         .into_iter()
         .zip(indices.batches.iter())
         .map(|(mut x, indices)| {
-            if x.config.embedding_summation {
+            if x.config.sum_atttention {
                 if x.config.sqrt_scaling {
                     let sample_num_ids = ndarray::Array2::from_shape_vec(
                         (indices.sample_num_signs.len(), 1),
@@ -592,7 +592,7 @@ pub fn lookup_batched_all_slots_postprocess<'a>(
                 }
                 // transform distinct_id tensor to origin batch format
                 let mut index: Vec<i64> =
-                    vec![0; indices.batch_size as usize * x.config.sample_fixed_size];
+                    vec![0; indices.batch_size as usize * x.config.variable_max_length];
                 let mut sample_id_num: Vec<usize> = vec![0; indices.batch_size as usize];
                 let mut transform_id_set =
                     std::collections::HashSet::with_capacity(indices.index_batch.len());
@@ -605,10 +605,10 @@ pub fn lookup_batched_all_slots_postprocess<'a>(
                         for (batch_idx, col_idx) in &item.in_which_batch_samples {
                             let batch_idx = *batch_idx as usize;
                             let col_idx = *col_idx as usize;
-                            if sample_id_num[batch_idx] < x.config.sample_fixed_size
-                                && col_idx < x.config.sample_fixed_size
+                            if sample_id_num[batch_idx] < x.config.variable_max_length
+                                && col_idx < x.config.variable_max_length
                             {
-                                index[batch_idx * x.config.sample_fixed_size + col_idx] =
+                                index[batch_idx * x.config.variable_max_length + col_idx] =
                                     distinct_tensor_idx + 1;
                                 sample_id_num[batch_idx] += 1;
                             }
@@ -723,9 +723,9 @@ impl EmbeddingWorkerInner {
                     let feature_batch = indices_kv
                         .get(&feature_gradient.feature_name.as_str())
                         .unwrap();
-                    let slot_conf = self
+                    let feature_config = self
                         .embedding_config
-                        .get_slot_by_feature_name(feature_batch.feature_name.as_str());
+                        .get_feature_config_by_name(feature_batch.feature_name.as_str());
                     let raw_gradients = std::mem::take(&mut feature_gradient.gradients);
 
                     if tokio::task::block_in_place(|| match &raw_gradients {
@@ -754,9 +754,9 @@ impl EmbeddingWorkerInner {
                         tokio::task::block_in_place(|| f32_gradients.mul_assign(scale));
                     }
 
-                    if slot_conf.sqrt_scaling {
+                    if feature_config.sqrt_scaling {
                         tokio::task::block_in_place(|| {
-                            if slot_conf.embedding_summation {
+                            if feature_config.sum_atttention {
                                 let sample_num_ids = ndarray::Array2::from_shape_vec(
                                     (feature_batch.sample_num_signs.len(), 1),
                                     feature_batch.sample_num_signs.clone(),
@@ -766,9 +766,9 @@ impl EmbeddingWorkerInner {
                                     &sample_num_ids.mapv(|x| (x as f32).sqrt().recip()),
                                 );
                             } else {
-                                if slot_conf.hash_stack_config.hash_stack_rounds > 0 {
+                                if feature_config.hash_stack_config.hash_stack_rounds > 0 {
                                     f32_gradients.mul_assign(
-                                        (slot_conf.hash_stack_config.hash_stack_rounds as f32)
+                                        (feature_config.hash_stack_config.hash_stack_rounds as f32)
                                             .sqrt()
                                             .recip(),
                                     );
@@ -780,14 +780,14 @@ impl EmbeddingWorkerInner {
                     tokio::task::block_in_place(|| {
                         let mut sign_gradients = ndarray::Array2::<f32>::zeros((
                             feature_batch.index_batch.len(),
-                            slot_conf.dim,
+                            feature_config.dim,
                         ));
                         let hashed2index_batch_idx = &feature_batch.hashed2index_batch_idx;
                         for (row, single_sign) in feature_batch.index_batch.iter().enumerate() {
                             let mut sign_grad = sign_gradients.row_mut(row);
                             let sign_grad = sign_grad.as_slice_mut().unwrap();
 
-                            if !slot_conf.embedding_summation {
+                            if !feature_config.sum_atttention {
                                 let batch_idx =
                                     hashed2index_batch_idx.get(&single_sign.sign).unwrap();
                                 unsafe {
@@ -859,7 +859,7 @@ impl EmbeddingWorkerInner {
         let _updated_gradient_groups: Vec<_> = futures::future::try_join_all(futs).await?;
 
         tracing::debug!(
-            "update gradients all slots time cost {:?}",
+            "update gradients for all features time cost {:?}",
             start_time.elapsed()
         );
 
@@ -871,7 +871,7 @@ impl EmbeddingWorkerInner {
         Ok(())
     }
 
-    pub async fn lookup_batched_all_slots(
+    pub async fn lookup_batched_all_features(
         &self,
         indices: &mut IDTypeFeatureBatch,
         requires_grad: bool,
@@ -880,7 +880,7 @@ impl EmbeddingWorkerInner {
         let start_time = std::time::Instant::now();
 
         let all_shards_ids = tokio::task::block_in_place(|| {
-            lookup_batched_all_slots_preprocess(indices, &self.embedding_config, self.replica_size)
+            lookup_batched_all_features_preprocess(indices, &self.embedding_config, self.replica_size)
         });
 
         let futs = all_shards_ids
@@ -927,7 +927,7 @@ impl EmbeddingWorkerInner {
         let start_time = std::time::Instant::now();
 
         let batches = tokio::task::block_in_place(|| {
-            lookup_batched_all_slots_postprocess(indices, forwarded_groups, &self.embedding_config)
+            lookup_batched_all_features_postprocess(indices, forwarded_groups, &self.embedding_config)
         });
 
         tracing::debug!("summation time cost {:?}", start_time.elapsed());
@@ -1049,7 +1049,7 @@ impl EmbeddingWorkerInner {
         tracing::debug!("received forward_batch_id request");
         self.staleness.fetch_add(1, Ordering::AcqRel);
         let result = inner
-            .lookup_batched_all_slots(&mut indices, requires_grad)
+            .lookup_batched_all_features(&mut indices, requires_grad)
             .await;
 
         if result.is_err() {
@@ -1081,7 +1081,7 @@ impl EmbeddingWorkerInner {
 
         let requires_grad = indices.requires_grad.clone();
         let result = self
-            .lookup_batched_all_slots(&mut indices, requires_grad)
+            .lookup_batched_all_features(&mut indices, requires_grad)
             .await?;
 
         let backward_ref_id = if requires_grad {
@@ -1561,7 +1561,7 @@ impl EmbeddingWorkerNatsService {
 }
 
 #[cfg(test)]
-mod lookup_batched_all_slots_preprocess_tests {
+mod lookup_batched_all_features_preprocess_tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use persia_common::FeatureBatch;
@@ -1569,7 +1569,7 @@ mod lookup_batched_all_slots_preprocess_tests {
 
     #[test]
     fn test_indices_to_hashstack_indices() {
-        let config = "feature_index_prefix_bit: 12\nslots_config:\n  Test:\n    dim: 32\n    hash_stack_config:\n      hash_stack_rounds: 2\n      embedding_size: 10\nfeature_groups: {}\n";
+        let config = "feature_index_prefix_bit: 12\nfeature_configs:\n  Test:\n    dim: 32\n    hash_stack_config:\n      hash_stack_rounds: 2\n      embedding_size: 10\nfeature_groups: {}\n";
 
         let config: EmbeddingConfig = serde_yaml::from_str(config).expect("failed to parse config");
 
@@ -1614,7 +1614,7 @@ mod lookup_batched_all_slots_preprocess_tests {
 
     #[test]
     fn test_indices_add_prefix() {
-        let config = "feature_index_prefix_bit: 12\nslots_config:\n  feature1:\n    dim: 64\n    index_prefix: 450359962737049600\n";
+        let config = "feature_index_prefix_bit: 12\nfeature_configs:\n  feature1:\n    dim: 64\n    index_prefix: 450359962737049600\n";
 
         let config: EmbeddingConfig = serde_yaml::from_str(config).expect("failed to parse config");
 

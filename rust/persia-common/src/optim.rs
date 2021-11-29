@@ -110,11 +110,12 @@ impl Adam {
         embedding_config
             .feature_groups
             .iter()
-            .for_each(|(_group_name, slots_name)| {
+            .for_each(|(_group_name, feature_names)| {
+                let feature_name = feature_names.first().expect("group feature get empty size");
                 let prefix = embedding_config
-                    .slots_config
-                    .get(slots_name.first().expect("slot not found"))
-                    .expect("slot not found")
+                    .feature_configs
+                    .get(feature_name)
+                    .expect(format!("feature_name: {} not found", feature_name))
                     .index_prefix;
 
                 let initially_betas = AdamPowerOfBetas {

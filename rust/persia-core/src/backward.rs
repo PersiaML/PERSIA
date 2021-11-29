@@ -22,8 +22,8 @@ use persia_common::grad::{
 };
 
 #[derive(Debug)]
-pub struct SingleSlotGradient {
-    pub slot_name: String,
+pub struct SingleFeatureGradient {
+    pub feature_name: String,
     pub data_ptr: u64,
     pub shape: [usize; 2],
     pub is_f16_gradient: bool,
@@ -31,19 +31,19 @@ pub struct SingleSlotGradient {
 }
 
 #[derive(Debug)]
-pub struct SingleSlotSkippedGradient {
-    pub slot_name: String,
+pub struct SingleFeatureSkippedGradient {
+    pub feature_name: String,
 }
 
 #[derive(Debug)]
-pub enum SkippableSingleSlotGradient {
-    Skip(SingleSlotSkippedGradient),
-    Gradient(SingleSlotGradient),
+pub enum SkippableSingleFeatureGradient {
+    Skip(SingleFeatureSkippedGradient),
+    Gradient(SingleFeatureGradient),
 }
 
 #[derive(Debug)]
 pub struct GradientBatchImpl {
-    pub gradients: Vec<SkippableSingleSlotGradient>,
+    pub gradients: Vec<SkippableSingleFeatureGradient>,
     pub backward_ref_id: u64,
     pub embedding_worker_addr: String,
     pub embedding_staleness_permit: Arc<Option<OwnedSemaphorePermit>>,
@@ -73,19 +73,19 @@ impl GradientBatch {
 
 #[pymethods]
 impl GradientBatch {
-    pub fn add_skipped_gradient(&mut self, slot_name: String) {
+    pub fn add_skipped_gradient(&mut self, feature_name: String) {
         self.inner
             .as_mut()
             .unwrap()
             .gradients
-            .push(SkippableSingleSlotGradient::Skip(
-                SingleSlotSkippedGradient { slot_name },
+            .push(SkippableSingleFeatureGradient::Skip(
+                SingleFeatureSkippedGradient { feature_name },
             ));
     }
 
     pub fn add_gradient(
         &mut self,
-        slot_name: String,
+        feature_name: String,
         data_ptr: u64,
         shape: [usize; 2],
         is_f16_gradient: bool,
@@ -95,8 +95,8 @@ impl GradientBatch {
             .as_mut()
             .unwrap()
             .gradients
-            .push(SkippableSingleSlotGradient::Gradient(SingleSlotGradient {
-                slot_name,
+            .push(SkippableSingleFeatureGradient::Gradient(SingleFeatureGradient {
+                feature_name,
                 data_ptr,
                 shape,
                 is_f16_gradient,
@@ -153,7 +153,7 @@ fn convert_data_ptr2gradient(
 #[cfg(feature = "cuda")]
 #[inline]
 fn copy_gradients(
-    x: &SingleSlotGradient,
+    x: &SingleFeatureGradient,
     num_bytes: usize,
     num_elements: usize,
     device_id: Arc<Option<i32>>,
@@ -187,7 +187,7 @@ fn copy_gradients(
 #[cfg(not(feature = "cuda"))]
 #[inline]
 fn copy_gradients(
-    x: &SingleSlotGradient,
+    x: &SingleFeatureGradient,
     _num_bytes: usize,
     num_elements: usize,
     _device_id: Arc<Option<i32>>,
@@ -249,16 +249,16 @@ impl BackwardImpl {
                 let start_time = std::time::Instant::now();
                 if let Ok(gradients) = channel_r.recv() {
                     tracing::debug!("get gradient batch time cost {:?}", start_time.elapsed());
-                    let grads = gradients.gradients.into_iter().map(|single_slot_grad| {
-                        match single_slot_grad {
-                            SkippableSingleSlotGradient::Skip(x) => {
+                    let grads = gradients.gradients.into_iter().map(|single_feature_grad| {
+                        match single_feature_grad {
+                            SkippableSingleFeatureGradient::Skip(x) => {
                                 SkippableFeatureEmbeddingGradientBatch::Skipped(
                                     SkippedGradientBatch {
-                                        feature_name: x.slot_name,
+                                        feature_name: x.feature_name,
                                     },
                                 )
                             }
-                            SkippableSingleSlotGradient::Gradient(x) => {
+                            SkippableSingleFeatureGradient::Gradient(x) => {
                                 let num_elements = x.shape[0] * x.shape[1];
                                 let num_bytes = if x.is_f16_gradient {
                                     num_elements * std::mem::size_of::<half::f16>()
@@ -271,7 +271,7 @@ impl BackwardImpl {
 
                                 SkippableFeatureEmbeddingGradientBatch::GradientBatch(
                                     FeatureEmbeddingGradientBatch {
-                                        feature_name: x.slot_name,
+                                        feature_name: x.feature_name,
                                         gradients: gradients,
                                         scale_factor: x.scale_factor,
                                     },

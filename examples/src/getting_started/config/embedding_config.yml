@@ -1,5 +1,5 @@
 feature_index_prefix_bit: 12
-slots_config:
+feature_configs:
   workclass:
     dim: 8
     embedding_summation: true
