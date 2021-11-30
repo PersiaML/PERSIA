@@ -36,13 +36,13 @@ class TestDataset(PersiaDataset):
 
     def fetch_data(self, persia_sender_channel: PersiaBatchDataSender):
         logger.info("test loader start to generating data...")
-        for _idx, (non_id_type_features, id_type_features, labels) in enumerate(
+        for _idx, (non_id_type_feature, id_type_features, label) in enumerate(
             tqdm(self.loader, desc="generating data")
         ):
             persia_batch = PersiaBatch(
                 id_type_features,
-                non_id_type_features=non_id_type_features,
-                labels=labels,
+                non_id_type_features=[non_id_type_feature],
+                labels=[label],
                 requires_grad=False,
             )
             persia_sender_channel.send(persia_batch.data)

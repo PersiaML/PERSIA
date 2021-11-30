@@ -135,6 +135,9 @@ class _NdarrayDataBase:
     def name(self):
         return self._name or self.CLASS_NAME
 
+    def __len__(self):
+        return len(self.data)
+
 
 class Label(_NdarrayDataBase):
     CLASS_NAME = "label_anonymous"
@@ -249,6 +252,7 @@ class PersiaBatch:
                     f"expect PersiaBatch.meta type is bytes but got {type(meta)}"
                 )
 
+        self.batch_size = batch_size
         self.batch.check_batch(requires_grad)
 
     @property
