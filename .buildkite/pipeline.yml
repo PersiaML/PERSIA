@@ -38,9 +38,9 @@ steps:
   - label: "launch k8s e2e test"
     pre-command: .buildkite/script/nats_operator_process.sh apply
     command:
-      - docker run --rm -it -v $PWD:/cache/  persia-cpu-runtime:${BUILDKITE_PIPELINE_ID} bash -c "cp /opt/conda/lib/python3.8/site-packages/persia/e2e /cache"
+      - docker run --rm -it -v $BUILDKITE_BUILD_CHECKOUT_PATH/e2e/cache:/cache persia-cpu-runtime:${BUILDKITE_PIPELINE_ID} bash -c "cp /opt/conda/lib/python3.8/site-packages/persia/e2e /cache"
       - export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-      - ./e2e
+      - $BUILDKITE_BUILD_CHECKOUT_PATH/e2e/cache/e2e
     post-command: .buildkite/script/nats_operator_process.sh delete
 
   - wait
