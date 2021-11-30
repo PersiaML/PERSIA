@@ -179,6 +179,9 @@ impl PersiaBatch {
         id_type_feature: Vec<&PyArray1<u64>>,
         id_type_feature_name: String,
     ) {
+        let data = vec![1,2,3];
+        std::mem::forget(data);
+        
         let indices = id_type_feature
             .iter()
             .map(|x| {
@@ -195,7 +198,7 @@ impl PersiaBatch {
             .push(FeatureBatch::new(id_type_feature_name, indices));
     }
 
-    /// Add id_type_feature dense form into [`PersiaBatchImpl`] with required name.
+        /// Add id_type_feature dense form into [`PersiaBatchImpl`] with required name.
     pub fn add_id_type_feature(
         &mut self,
         id_type_feature: &PyArray1<u64>,
@@ -215,7 +218,7 @@ impl PersiaBatch {
             .push(FeatureBatch::new(id_type_feature_name, indices))
     }
 
-    /// Set requires_grad for [`PersiaBatchImpl`] and check it
+    /// Set requires_grad for [`PersiaBatchImpl`] and check it 
     /// valid or not. Finally convert the IdTypeFeatureBatch to EmbeddingTensor.
     pub fn check_batch(&mut self, requires_grad: Option<bool>) -> PyResult<()> {
         let requires_grad = requires_grad.unwrap_or(true);
@@ -242,10 +245,12 @@ impl PersiaBatch {
         self.inner.meta_data = data.map(|x| x.as_bytes().to_vec());
     }
 
+    /// Serialize the [`PersiaBatchImpl`] to bytes.
     pub fn to_bytes<'a>(&mut self, _py: Python<'a>) -> &'a PyBytes {
         PyBytes::new(_py, self.inner.write_to_vec().unwrap().as_slice())
     }
 
+    /// Get batch_id from[`PersiaBatchImpl`] after data sending to embedding-worker.
     pub fn batch_id(&self) -> usize {
         self.inner
             .batch_id

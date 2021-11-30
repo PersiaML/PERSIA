@@ -75,7 +75,7 @@ def _batch_size_check(
 class IDTypeFeatureSparse:
     """IDTypeFeature sparse form"""
 
-    def __init__(self, feature_name: str, id_type_feature: List[np.ndarray]) -> None:
+    def __init__(self, feature_name: str, id_type_feature: List[np.ndarray]):
         """
         Arguments:
             feature_name (str): Name of IDTypeFeature.
@@ -95,7 +95,7 @@ class IDTypeFeatureSparse:
 class IDTypeFeature:
     """IDTypeFeature special form that only exists one id for every sample in the batch."""
 
-    def __init__(self, feature_name: str, id_type_feature: np.ndarray) -> None:
+    def __init__(self, feature_name: str, id_type_feature: np.ndarray):
         """
         Arguments:
             feature_name (str): Name of IDTypeFeature
