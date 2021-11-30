@@ -1,0 +1,6 @@
+# Trick to block the data_loader to prevent process exit before training done.(works for linux and macos)
+data_loader: python3 data_loader.py && cat 
+nn_worker: persia-launcher nn-worker train.py --nproc-per-node=$NPROC_PER_NODE --node-rank=0 --nnodes=1
+embedding_server: persia-launcher embedding-parameter-server --embedding-config config/embedding_config.yml --global-config config/global_config.yml --replica-index 0 --replica-size $REPLICA_SIZE
+embedding_worker: persia-launcher embedding-worker --embedding-config config/embedding_config.yml --global-config config/global_config.yml --replica-index 0 --replica-size $REPLICA_SIZE
+nats_server: nats-server 
