@@ -54,7 +54,7 @@ def _ndarray_check(data: np.ndarray, data_name) -> bool:
     ), f"TypeError: input data {data_name}, type: {type(data)} no match numpy ndarray "
     assert (
         data.dtype in _ND_ARRAY_SUPPORT_TYPE
-    ), f"TypeError: np.array only support {_ND_ARRAY_SUPPORT_TYPE} but got {data_name} dtype {data.dtype}"
+    ), f"TypeError: np.array only support dtype {_ND_ARRAY_SUPPORT_TYPE} but got {data_name} dtype {data.dtype}"
     assert (
         data.ndim > 0
     ), f"{data_name} ndarray got ndim: {data.ndim} expect ndim greater than one"
@@ -118,7 +118,7 @@ class _NdarrayDataBase:
     def __init__(self, data: np.ndarray, name: str = None):
         """
         Arguments:
-            data (np.ndarray): Numpy array. 
+            data (np.ndarray): Numpy array.
             name (str, optional): Name of data.
         """
         self.data = data
