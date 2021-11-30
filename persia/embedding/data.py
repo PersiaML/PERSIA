@@ -33,13 +33,13 @@ def _id_type_data_check(id_type_feature: np.ndarray, feature_name: str):
     """
     assert isinstance(
         id_type_feature, np.ndarray
-    ), f"TypeError: expected id_type_feature: {feature_name} type to be np.ndarray but got tpye: {type(id_type_feature)}"
+    ), f"expected id_type_feature: {feature_name} type to be np.ndarray but got tpye: {type(id_type_feature)}"
     assert (
         id_type_feature.ndim == 1
-    ), f"ValueError: expected id_type_feature: {feature_name} ndim equal to one but got ndim: {id_type_feature.ndim}"
+    ), f"expected id_type_feature: {feature_name} ndim equal to one but got ndim: {id_type_feature.ndim}"
     assert (
         id_type_feature.dtype == np.uint64
-    ), f"DTypeError: expected id_type_feature: {feature_name} dtype as np.uint64 but got dtype: {id_type_feature.dtype}"
+    ), f"expected id_type_feature: {feature_name} dtype as np.uint64 but got dtype: {id_type_feature.dtype}"
 
 
 def _ndarray_check(data: np.ndarray, data_name) -> bool:
@@ -51,10 +51,10 @@ def _ndarray_check(data: np.ndarray, data_name) -> bool:
     """
     assert isinstance(
         data, np.ndarray
-    ), f"TypeError: input data {data_name}, type: {type(data)} no match numpy ndarray "
+    ), f"input data {data_name}, type: {type(data)} no match numpy ndarray "
     assert (
-        data.dtype in _ND_ARRAY_SUPPORT_TYPE
-    ), f"TypeError: np.array only support dtype {_ND_ARRAY_SUPPORT_TYPE} but got {data_name} dtype {data.dtype}"
+        data.dtype.type in _ND_ARRAY_SUPPORT_TYPE
+    ), f"np.array only support dtype {_ND_ARRAY_SUPPORT_TYPE} but got {data_name} dtype {data.dtype}"
     assert (
         data.ndim > 0
     ), f"{data_name} ndarray got ndim: {data.ndim} expect ndim greater than one"
