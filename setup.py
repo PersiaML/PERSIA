@@ -48,7 +48,7 @@ if __name__ == "__main__":
             {
                 "gencrd": "persia.gencrd",
                 "operator": "persia.operator",
-                "server": "persia.server",
+                "e2e": "persia.e2e",
             },
             path="k8s/Cargo.toml",
             binding=Binding.Exec,
