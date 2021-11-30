@@ -149,6 +149,7 @@ impl PersiaBatch {
         }
     }
 
+    /// Add non_id_type_feature into [`PersiaBatchImpl`] with optional name.
     pub fn add_non_id_type_feature(
         &mut self,
         pyarray_object: &PyAny,
@@ -160,6 +161,7 @@ impl PersiaBatch {
         self.inner.non_id_type_features.push(tensor_impl);
     }
 
+    /// Add label into [`PersiaBatchImpl`] with optional name.
     pub fn add_label(
         &mut self,
         py_object: &PyAny,
@@ -171,6 +173,7 @@ impl PersiaBatch {
         self.inner.labels.push(tensor_impl);
     }
 
+    /// Add id_type_feature sparse form into [`PersiaBatchImpl`] with required name.
     pub fn add_id_type_feature_sparse(
         &mut self,
         id_type_feature: Vec<&PyArray1<u64>>,
@@ -192,6 +195,7 @@ impl PersiaBatch {
             .push(FeatureBatch::new(id_type_feature_name, indices));
     }
 
+        /// Add id_type_feature dense form into [`PersiaBatchImpl`] with required name.
     pub fn add_id_type_feature(
         &mut self,
         id_type_feature: &PyArray1<u64>,
@@ -211,6 +215,8 @@ impl PersiaBatch {
             .push(FeatureBatch::new(id_type_feature_name, indices))
     }
 
+    /// Set requires_grad for [`PersiaBatchImpl`] and check it 
+    /// valid or not. Finally convert the IdTypeFeatureBatch to EmbeddingTensor.
     pub fn check_batch(&mut self, requires_grad: Option<bool>) -> PyResult<()> {
         let requires_grad = requires_grad.unwrap_or(true);
 
@@ -231,6 +237,7 @@ impl PersiaBatch {
         Ok(())
     }
 
+    /// Add binary data into [`PersiaBatchImpl`].
     pub fn add_meta(&mut self, data: Option<&PyBytes>) {
         self.inner.meta_data = data.map(|x| x.as_bytes().to_vec());
     }

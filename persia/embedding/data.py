@@ -116,6 +116,11 @@ class _NdarrayDataBase:
     CLASS_NAME = "ndarray_base"
 
     def __init__(self, data: np.ndarray, name: str = None):
+        """
+        Arguments:
+            data (np.ndarray): Numpy array. 
+            name (str, optional): Name of data.
+        """
         self.data = data
         self._name = name
 
