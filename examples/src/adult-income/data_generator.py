@@ -69,6 +69,6 @@ def make_dataloader(
 
 
 if __name__ == "__main__":
-    loader = make_dataloader("data_source/train.npz", 128, skip_last_batch=False)
+    loader = make_dataloader("data/train.npz", 128, skip_last_batch=False)
     for (dense, sparse, target) in tqdm(loader, desc="generate_data"):
         ...
