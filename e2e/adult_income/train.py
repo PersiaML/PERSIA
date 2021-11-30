@@ -45,9 +45,12 @@ class TestDataset(PersiaDataset):
         for _idx, (non_id_type_feature, id_type_features, label) in enumerate(
             tqdm(self.loader, desc="generating data")
         ):
-            persia_batch = PersiaBatch(id_type_features, requires_grad=False)
-            persia_batch.add_non_id_type_feature(non_id_type_feature)
-            persia_batch.add_label(label)
+            persia_batch = PersiaBatch(
+                id_type_features,
+                non_id_type_features=[non_id_type_feature],
+                labels=[label],
+                requires_grad=False,
+            )
             persia_sender_channel.send(persia_batch.data)
 
     def __len__(self):

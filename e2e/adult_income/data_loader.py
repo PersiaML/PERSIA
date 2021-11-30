@@ -22,7 +22,9 @@ if __name__ == "__main__":
         for (non_id_type_feature, id_type_features, label) in tqdm(
             loader, desc="generating data..."
         ):
-            persia_batch = PersiaBatch(id_type_features)
-            persia_batch.add_non_id_type_feature(non_id_type_feature)
-            persia_batch.add_label(label)
+            persia_batch = PersiaBatch(
+                id_type_features,
+                non_id_type_features=[non_id_type_feature],
+                labels=[label],
+            )
             ctx.send_data(persia_batch)

@@ -179,7 +179,6 @@ class DataCtx(BaseCtx):
         Arguments:
             persia_batch (PersiaBatch): PersiaBatch that haven't been process.
         """
-        persia_batch.is_valid()
         self.common_context.send_id_type_features_to_embedding_worker(persia_batch.data)
         self.common_context.send_non_id_type_features_to_nn_worker(persia_batch.data)
 
@@ -546,7 +545,6 @@ class EmbeddingCtx(BaseCtx):
         Returns:
             Input data with embeddings.
         """
-        persia_batch.is_valid()
         return self.common_context.get_embedding_from_data(persia_batch.data, device_id)
 
     def get_embedding_from_bytes(

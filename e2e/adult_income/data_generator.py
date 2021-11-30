@@ -1,6 +1,10 @@
+from typing import Iterable, List, Tuple
+
 import numpy as np
 
 from tqdm import tqdm
+
+from persia.embedding.data import IDTypeFeatureSparse, NonIDTypeFeature, Label
 
 
 def generate_loader(
@@ -10,7 +14,9 @@ def generate_loader(
     id_type_feature_names,
     batch_size: int = 128,
     skip_last_batch: bool = False,
-):
+) -> Iterable[NonIDTypeFeature, List[IDTypeFeatureSparse], Label]:
+    """One epoch dataloader that only generate data onetime."""
+
     dataset_size = len(label_data)
     for start in range(0, dataset_size, batch_size):
         end = min(start + batch_size, dataset_size)
@@ -18,7 +24,7 @@ def generate_loader(
             print("skip last batch...")
             continue
 
-        non_id_type_feature = non_id_type_feature_data[start:end, :]
+        non_id_type_feature = NonIDTypeFeature(non_id_type_feature_data[start:end, :])
         id_type_features = []
 
         for id_type_feature_idx, feature_name in enumerate(id_type_feature_names):
@@ -30,17 +36,17 @@ def generate_loader(
                         id_type_feature_idx : id_type_feature_idx + 1
                     ]
                 )
-            id_type_features.append((feature_name, id_type_feature))
+            id_type_features.append(IDTypeFeatureSparse(feature_name, id_type_feature))
 
         label = label_data[start:end]
-        label = label.reshape(len(label), -1)
+        label = Label(label.reshape(len(label), -1))
 
-        yield non_id_type_feature, id_type_features, label
+        yield [non_id_type_feature], id_type_features, [label]
 
 
 def make_dataloader(
     data_filepath: str, batch_size: int = 128, skip_last_batch: bool = False
-):
+) -> Tuple[int, Iterable[NonIDTypeFeature, List[IDTypeFeatureSparse], Label]]:
     with np.load(data_filepath) as data:
         target = data["target"]
         continuous_data = data["continuous_data"]

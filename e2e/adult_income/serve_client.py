@@ -50,8 +50,11 @@ if __name__ == "__main__":
     for (non_id_type_feature, id_type_features, target) in tqdm(
         loader, desc="gen batch data..."
     ):
-        batch_data = PersiaBatch(id_type_features, requires_grad=False)
-        batch_data.add_non_id_type_feature(non_id_type_feature)
+        batch_data = PersiaBatch(
+            id_type_features,
+            non_id_type_features=[non_id_type_feature],
+            requires_grad=False,
+        )
         model_input = batch_data.to_bytes()
         prediction = infer(get_inference_stub(), "adult_income", model_input)
 
