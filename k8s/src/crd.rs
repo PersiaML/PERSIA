@@ -70,7 +70,10 @@ impl PersiaJobSpec {
     fn gen_pod_template(&self, job_name: &str, namespace: &str) -> Pod {
         let log_level = self.logLevel.clone().unwrap_or(String::from("info"));
         let restart_policy = self.restartPolicy.clone().unwrap_or(String::from("Never"));
-        let image_pull_policy = self.imagePullPolicy.clone().unwrap_or(String::from("Always"));
+        let image_pull_policy = self
+            .imagePullPolicy
+            .clone()
+            .unwrap_or(String::from("Always"));
 
         let mut labels: BTreeMap<String, String> = BTreeMap::new();
         labels.insert("persia_job".to_owned(), job_name.to_owned());
