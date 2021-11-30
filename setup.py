@@ -64,7 +64,7 @@ if __name__ == "__main__":
 
     with open(os.path.realpath(os.path.join(__file__, "../README.md"))) as file:
         long_description = file.read()
-        
+
     setup(
         name="persia" + name_suffix,
         use_scm_version={"local_scheme": "no-local-version"},
