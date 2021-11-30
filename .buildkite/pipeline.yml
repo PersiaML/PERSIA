@@ -5,9 +5,6 @@ steps:
   - label: "Build docker ci image for latest persiaml framework(GPU)"
     command: IMAGE_TAG=$BUILDKITE_PIPELINE_ID make build_cpu_runtime_image -e
 
-  - label: "Apply nats cluster"
-    command: .buildkite/script/nats_operator_process.sh apply
-
   - wait
 
   - label: "launch e2e gpu test"
@@ -39,9 +36,11 @@ steps:
           graceful-shutdown: true
 
   - label: "launch k8s e2e test"
+    pre-command: .buildkite/script/nats_operator_process.sh apply
     command: 
       - export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
       - cargo run --manifest-path k8s/Cargo.toml --bin e2e
+    post-command: .buildkite/script/nats_operator_process.sh delete
 
   - wait
 
@@ -55,6 +54,3 @@ steps:
   
   - label: "remove docker image"
     command: .buildkite/script/docker_image_process.sh remove
-
-  - label: "Delete nats cluster"
-    command: .buildkite/script/nats_operator_process.sh delete
