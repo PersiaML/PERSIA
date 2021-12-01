@@ -6,7 +6,7 @@ use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use kube::client::Client;
 use persia_operator::crd::{
     get_nn_worker_pod_name, DataLoaderSpec, EmbeddingParameterServerSpec, EmbeddingWorkerSpec,
-    NNWorkerSpec, PersiaJobSpec,
+    NNWorkerSpec, PersiaEnvSpec, PersiaJobSpec,
 };
 use persia_operator::PersiaJobResources;
 
@@ -53,18 +53,20 @@ fn gen_spec() -> PersiaJobSpec {
     let cuda_image = format!("persia-cuda-runtime:{}", buildkite_pipeline_id);
 
     PersiaJobSpec {
-        globalConfigPath: String::from(
-            "/home/PERSIA/examples/src/adult-income/config/global_config.yml",
-        ),
-        embeddingConfigPath: String::from(
-            "/home/PERSIA/examples/src/adult-income/config/embedding_config.yml",
-        ),
-        nnWorkerPyEntryPath: Some(String::from(
-            "/home/PERSIA/examples/src/adult-income/train.py",
-        )),
-        dataLoaderPyEntryPath: Some(String::from(
-            "/home/PERSIA/examples/src/adult-income/data_loader.py",
-        )),
+        persiaEnv: PersiaEnvSpec {
+            PERSIA_GLOBAL_CONFIG: String::from(
+                "/home/PERSIA/examples/src/adult-income/config/global_config.yml",
+            ),
+            PERSIA_EMBEDDING_CONFIG: String::from(
+                "/home/PERSIA/examples/src/adult-income/config/embedding_config.yml",
+            ),
+            PERSIA_NN_WORKER_ENTRY: Some(String::from(
+                "/home/PERSIA/examples/src/adult-income/train.py",
+            )),
+            PERSIA_DATALOADER_ENTRY: Some(String::from(
+                "/home/PERSIA/examples/src/adult-income/data_loader.py",
+            )),
+        },
         enableMetrics: Some(false),
         volumes: None,
         env: Some(vec![EnvVar {
