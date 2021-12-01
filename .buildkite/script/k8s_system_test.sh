@@ -1,5 +1,5 @@
 #!/bin/bash
-set -ex
+set -x
 
 cp ${BUILDKITE_BUILD_CHECKOUT_PATH}/k8s/resources/nats.operator.temp.yaml ${BUILDKITE_BUILD_CHECKOUT_PATH}/e2e/cache/nats.operator.${BUILDKITE_PIPELINE_ID}.yaml
 sed -i 's/persia-nats-service/persia-nats-service-'${BUILDKITE_PIPELINE_ID}'/g' ${BUILDKITE_BUILD_CHECKOUT_PATH}/e2e/cache/nats.operator.${BUILDKITE_PIPELINE_ID}.yaml
