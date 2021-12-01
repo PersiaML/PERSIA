@@ -162,7 +162,10 @@ jobs:
       - name: list target wheels
         run: |
           python -m cibuildwheel . --print-build-identifiers
-      - name: build wheels
+      - name: build cuda wheels
+        run: |
+          USE_CUDA=1 python -m cibuildwheel .
+      - name: build cpu wheels
         run: |
           python -m cibuildwheel .
       - uses: actions/upload-artifact@v2
