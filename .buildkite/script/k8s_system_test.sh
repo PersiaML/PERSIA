@@ -13,4 +13,4 @@ result=$?;
 kubectl delete -f ${BUILDKITE_BUILD_CHECKOUT_PATH}/e2e/cache/nats.operator.${BUILDKITE_PIPELINE_ID}.yaml
 rm ${BUILDKITE_BUILD_CHECKOUT_PATH}/e2e/cache/nats.operator.${BUILDKITE_PIPELINE_ID}.yaml
 
-exit result
+exit $result
