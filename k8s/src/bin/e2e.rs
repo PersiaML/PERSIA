@@ -54,16 +54,16 @@ fn gen_spec() -> PersiaJobSpec {
 
     PersiaJobSpec {
         persiaEnv: PersiaEnvSpec {
-            PERSIA_GLOBAL_CONFIG_PATH: String::from(
+            PERSIA_GLOBAL_CONFIG: String::from(
                 "/home/PERSIA/examples/src/adult-income/config/global_config.yml",
             ),
-            PERSIA_EMBEDDING_CONFIG_PATH: String::from(
+            PERSIA_EMBEDDING_CONFIG: String::from(
                 "/home/PERSIA/examples/src/adult-income/config/embedding_config.yml",
             ),
-            PERSIA_NN_WORKER_PY_ENTRY_PATH: Some(String::from(
+            PERSIA_NN_WORKER_ENTRY: Some(String::from(
                 "/home/PERSIA/examples/src/adult-income/train.py",
             )),
-            PERSIA_DATALOADER_PY_ENTRY_PATH: Some(String::from(
+            PERSIA_DATALOADER_ENTRY: Some(String::from(
                 "/home/PERSIA/examples/src/adult-income/data_loader.py",
             )),
         },

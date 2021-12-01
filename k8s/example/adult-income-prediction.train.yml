@@ -5,10 +5,10 @@ metadata:
   namespace: default
 spec:
   persiaEnv:
-    PERSIA_GLOBAL_CONFIG_PATH: /home/PERSIA/examples/src/adult-income/config/global_config.yml
-    PERSIA_EMBEDDING_CONFIG_PATH: /home/PERSIA/examples/src/adult-income/config/embedding_config.yml
-    PERSIA_NN_WORKER_PY_ENTRY_PATH: /home/PERSIA/examples/src/adult-income/train.py
-    PERSIA_DATALOADER_PY_ENTRY_PATH: /home/PERSIA/examples/src/adult-income/data_loader.py
+    PERSIA_GLOBAL_CONFIG: /home/PERSIA/examples/src/adult-income/config/global_config.yml
+    PERSIA_EMBEDDING_CONFIG: /home/PERSIA/examples/src/adult-income/config/embedding_config.yml
+    PERSIA_NN_WORKER_ENTRY: /home/PERSIA/examples/src/adult-income/train.py
+    PERSIA_DATALOADER_ENTRY: /home/PERSIA/examples/src/adult-income/data_loader.py
   env:
     - name: PERSIA_NATS_IP
       value: nats://persia-nats-service:4222

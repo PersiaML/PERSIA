@@ -649,19 +649,19 @@ spec:
                   type: object
                 persiaEnv:
                   properties:
-                    PERSIA_DATALOADER_PY_ENTRY_PATH:
+                    PERSIA_DATALOADER_ENTRY:
                       nullable: true
                       type: string
-                    PERSIA_EMBEDDING_CONFIG_PATH:
+                    PERSIA_EMBEDDING_CONFIG:
                       type: string
-                    PERSIA_GLOBAL_CONFIG_PATH:
+                    PERSIA_GLOBAL_CONFIG:
                       type: string
-                    PERSIA_NN_WORKER_PY_ENTRY_PATH:
+                    PERSIA_NN_WORKER_ENTRY:
                       nullable: true
                       type: string
                   required:
-                    - PERSIA_EMBEDDING_CONFIG_PATH
-                    - PERSIA_GLOBAL_CONFIG_PATH
+                    - PERSIA_EMBEDDING_CONFIG
+                    - PERSIA_GLOBAL_CONFIG
                   type: object
                 restartPolicy:
                   nullable: true
