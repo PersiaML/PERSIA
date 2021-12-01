@@ -21,7 +21,7 @@ logger.info("init py client done...")
 
 if __name__ == "__main__":
     with DataCtx() as ctx:
-        _, loader = make_dataloader(train_filepath)
+        loader = make_dataloader(train_filepath)
         for (non_id_type_feature, id_type_features, label) in tqdm(
             loader, desc="gen batch data..."
         ):
