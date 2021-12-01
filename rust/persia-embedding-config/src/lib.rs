@@ -144,7 +144,7 @@ fn get_local_ip() -> String {
             match local_ipaddress::get() {
                 Some(ip_addr) => return ip_addr,
                 None => panic!(
-                    "failed to get local ip address by PERSIA_SOCKET_IFNAME {}, please try other correct PERSIA_SOCKET_IFNAME",
+                    "failed to get local ip address by PERSIA_SOCKET_IFNAME {}, please specify a correct PERSIA_SOCKET_IFNAME",
                     persia_socket_ifname
                 )
             }
