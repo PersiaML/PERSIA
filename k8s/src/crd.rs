@@ -50,10 +50,7 @@ pub fn get_label_selector(job_name: &str) -> String {
 )]
 #[allow(non_snake_case)]
 pub struct PersiaJobSpec {
-    pub globalConfigPath: String,
-    pub embeddingConfigPath: String,
-    pub nnWorkerPyEntryPath: Option<String>,
-    pub dataLoaderPyEntryPath: Option<String>,
+    pub persiaEnv: PersiaEnvSpec,
     pub enableMetrics: Option<bool>,
     pub volumes: Option<Vec<Volume>>,
     pub env: Option<Vec<EnvVar>>,
@@ -80,13 +77,13 @@ impl PersiaJobSpec {
 
         let mut env = vec![
             EnvVar {
-                name: String::from("EMBEDDING_CONFIG_PATH"),
-                value: Some(self.embeddingConfigPath.clone()),
+                name: String::from("PERSIA_EMBEDDING_CONFIG_PATH"),
+                value: Some(self.persiaEnv.PERSIA_EMBEDDING_CONFIG_PATH.clone()),
                 ..EnvVar::default()
             },
             EnvVar {
-                name: String::from("GLOBAL_CONFIG_PATH"),
-                value: Some(self.globalConfigPath.clone()),
+                name: String::from("PERSIA_GLOBAL_CONFIG_PATH"),
+                value: Some(self.persiaEnv.PERSIA_GLOBAL_CONFIG_PATH.clone()),
                 ..EnvVar::default()
             },
             EnvVar {
@@ -191,9 +188,9 @@ impl PersiaJobSpec {
                         vec![
                             "embedding-parameter-server",
                             "--embedding-config",
-                            "$(EMBEDDING_CONFIG_PATH)",
+                            "$(PERSIA_EMBEDDING_CONFIG_PATH)",
                             "--global-config",
-                            "$(GLOBAL_CONFIG_PATH)",
+                            "$(PERSIA_GLOBAL_CONFIG_PATH)",
                             "--replica-index",
                             "$(REPLICA_INDEX)",
                             "--replica-size",
@@ -252,9 +249,9 @@ impl PersiaJobSpec {
                         vec![
                             "embedding-worker",
                             "--embedding-config",
-                            "$(EMBEDDING_CONFIG_PATH)",
+                            "$(PERSIA_EMBEDDING_CONFIG_PATH)",
                             "--global-config",
-                            "$(GLOBAL_CONFIG_PATH)",
+                            "$(PERSIA_GLOBAL_CONFIG_PATH)",
                             "--replica-index",
                             "$(REPLICA_INDEX)",
                             "--replica-size",
@@ -313,7 +310,7 @@ impl PersiaJobSpec {
                     container.args = Some(
                         vec![
                             "nn-worker",
-                            "$(NN_WORKER_PY_ENTRY_PATH)",
+                            "$(PERSIA_NN_WORKER_PY_ENTRY_PATH)",
                             "--nproc-per-node",
                             "$(NPROC_PER_NODE)",
                             "--nnodes",
@@ -351,8 +348,8 @@ impl PersiaJobSpec {
                         ..EnvVar::default()
                     });
                     env.push(EnvVar {
-                        name: String::from("NN_WORKER_PY_ENTRY_PATH"),
-                        value: self.nnWorkerPyEntryPath.clone(),
+                        name: String::from("PERSIA_NN_WORKER_PY_ENTRY_PATH"),
+                        value: self.persiaEnv.PERSIA_NN_WORKER_PY_ENTRY_PATH.clone(),
                         ..EnvVar::default()
                     });
 
@@ -385,7 +382,7 @@ impl PersiaJobSpec {
                     container.args = Some(
                         vec![
                             "data-loader",
-                            "$(DATALOADER_PY_ENTRY_PATH)",
+                            "$(PERSIA_DATALOADER_PY_ENTRY_PATH)",
                             "--replica-index",
                             "$(REPLICA_INDEX)",
                             "--replica-size",
@@ -416,8 +413,8 @@ impl PersiaJobSpec {
                         ..EnvVar::default()
                     });
                     env.push(EnvVar {
-                        name: String::from("DATALOADER_PY_ENTRY_PATH"),
-                        value: self.dataLoaderPyEntryPath.clone(),
+                        name: String::from("PERSIA_DATALOADER_PY_ENTRY_PATH"),
+                        value: self.persiaEnv.PERSIA_DATALOADER_PY_ENTRY_PATH.clone(),
                         ..EnvVar::default()
                     });
 
@@ -509,4 +506,13 @@ pub struct DataLoaderSpec {
     pub volumeMounts: Option<Vec<VolumeMount>>,
     pub env: Option<Vec<EnvVar>>,
     pub image: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, JsonSchema)]
+#[allow(non_snake_case)]
+pub struct PersiaEnvSpec {
+    pub PERSIA_GLOBAL_CONFIG_PATH: String,
+    pub PERSIA_EMBEDDING_CONFIG_PATH: String,
+    pub PERSIA_NN_WORKER_PY_ENTRY_PATH: Option<String>,
+    pub PERSIA_DATALOADER_PY_ENTRY_PATH: Option<String>,
 }
