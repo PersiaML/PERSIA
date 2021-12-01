@@ -14,7 +14,7 @@ const EMBEDDING_PS_REPLICAS: usize = 2;
 const EMBEDDING_WORKER_REPLICAS: usize = 2;
 const NN_WORKER_REPLICAS: usize = 2;
 const NPROC_PER_NODE: usize = 2;
-const DATALOADER_REPLICAS: usize = 2;
+const DATALOADER_REPLICAS: usize = 1;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
