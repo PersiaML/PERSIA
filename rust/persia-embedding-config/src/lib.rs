@@ -117,7 +117,7 @@ static PERSIA_INSTANCE_INFO: OnceCell<Arc<InstanceInfo>> = OnceCell::new();
 
 static PERSIA_EMBEDDING_CONFIG: OnceCell<Arc<EmbeddingConfig>> = OnceCell::new();
 
-/// get local ip address by specific socket name or 
+/// get local ip address by specific socket name or
 /// request the 8.8.8.8:80 to retrieve the ip address from response.
 fn get_local_ip() -> String {
     let socket_ifname = std::env::var("SOCKET_IFNAME").unwrap_or(String::from("eth0"));
