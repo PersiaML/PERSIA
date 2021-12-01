@@ -75,8 +75,8 @@ class HonchoENV(ENV):
             _, process_idx = honcho_process_name.split(".")
             process_idx = int(process_idx) - 1
 
-            self.REPLICA_INDEX = int(os.environ.get("REPLICA_INDEX"))
-            self.REPLICA_SIZE = int(os.environ.get("REPLICA_SIZE"))
+            self.REPLICA_INDEX = int(os.environ.get("REPLICA_INDEX", 0))
+            self.REPLICA_SIZE = int(os.environ.get("REPLICA_SIZE", 1))
 
 
 class DockerENV(ENV):
