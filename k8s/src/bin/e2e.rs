@@ -191,6 +191,13 @@ async fn wait_for_compelete(
 
         match master_phase.as_str() {
             "Succeeded" => {
+                let log = PersiaJobResources::get_pod_log(
+                    kubernetes_client.clone(),
+                    namespace,
+                    &master_name,
+                )
+                .await?;
+                println!("Master Pod log:\n{}", log);
                 println!("Master Pod Succeeded, start to clean up...");
                 return Ok(());
             }
