@@ -110,6 +110,7 @@ if __name__ == "__main__":
     )
     test_dataset = TestDataset(test_dir, batch_size=128)
     test_interval = 254 / world_size
+    logger.info(f"test_interval = {test_interval}, world_size = {world_size}")
     buffer_size = 10
 
     with TrainCtx(
