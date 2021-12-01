@@ -136,7 +136,9 @@ jobs:
           - "9"
         exclude:
           - use-cuda: "0"
-            cuda-version: ["111", "113"]
+            cuda-version: "111"
+          - use-cuda: "0"
+            cuda-version: "113"
 
 
     runs-on: ${{ matrix.os }}
