@@ -61,9 +61,7 @@ class DataLoader:
                             id_type_feature_idx : id_type_feature_idx + 1
                         ]
                     )
-                id_type_features.append(
-                    IDTypeFeature(feature_name, id_type_feature)
-                )
+                id_type_features.append(IDTypeFeature(feature_name, id_type_feature))
 
             label = label_data[start:end]
             label = Label(label.reshape(len(label), -1))

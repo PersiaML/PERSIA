@@ -17,8 +17,6 @@ train_filepath = os.path.join(
     os.path.dirname(os.path.realpath(__file__)), "data/train.npz"
 )
 
-logger.info("init py client done...")
-
 if __name__ == "__main__":
     with DataCtx() as ctx:
         loader = make_dataloader(train_filepath)

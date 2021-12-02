@@ -15,7 +15,6 @@ setup_seed(3)
 
 train_filepath = os.path.join("/data/", "train.npz")
 
-logger.info("init py client done...")
 if __name__ == "__main__":
     with DataCtx() as ctx:
         loader = make_dataloader(train_filepath)
