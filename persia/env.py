@@ -24,7 +24,7 @@ class _Env:
             self.world_size = int(os.environ["WORLD_SIZE"])
             assert self.rank >= 0, "rank should not be a negative."
             assert self.local_rank >= 0, "local_rank should not be a negative."
-            assert self.world_size >= 0, "world_size should greater than one."
+            assert self.world_size >= 1, "world_size should greater than one."
         else:
             if "REPLICA_INDEX" in os.environ:
                 self.replica_index = int(os.environ["REPLICA_INDEX"])
