@@ -60,7 +60,7 @@ if __name__ == "__main__":
 
         assert len(prediction) == len(
             label
-        ), f"miss results {len(prediction)} vs {len(label)}"
+        ), f"Missing results: prediction length({len(prediction)}) does not match label length({len(label)})"
 
         all_label.append(label.data)
         all_pred.append(prediction)
