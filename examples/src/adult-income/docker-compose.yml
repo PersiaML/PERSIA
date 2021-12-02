@@ -45,7 +45,9 @@ services:
     depends_on:
       - server
     image: persiasml/persia-cuda-runtime:latest
-    command: persia-launcher embedding-worker --embedding-config $$PERSIA_EMBEDDING_CONFIG --global-config $$PERSIA_GLOBAL_CONFIG
+    command: > 
+      bash -c "persia-launcher embedding-worker --embedding-config $$PERSIA_EMBEDDING_CONFIG
+      --global-config $$PERSIA_GLOBAL_CONFIG --replica-index 0 --replica-size 1"
     deploy:
       replicas: 1
       restart_policy:
@@ -60,7 +62,9 @@ services:
       - .docker.env
     environment:
     image: persiasml/persia-cuda-runtime:latest
-    command: persia-launcher embedding-parameter-server --embedding-config $$PERSIA_EMBEDDING_CONFIG--global-config  $$PERSIA_GLOBAL_CONFIG
+    command: > 
+      bash -c "persia-launcher embedding-parameter-server --embedding-config $$PERSIA_EMBEDDING_CONFIG
+      --global-config $$PERSIA_GLOBAL_CONFIG --replica-index 0 --replica-size 1"
     deploy:
       replicas: 1
       restart_policy:

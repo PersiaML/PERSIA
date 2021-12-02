@@ -51,7 +51,7 @@ services:
             - adult_income/.test.env
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
         command: > 
-            bach -c "persia-launcher embedding-parameter-server --embedding-config $$PERSIA_EMBEDDING_CONFIG
+            bash -c "persia-launcher embedding-parameter-server --embedding-config $$PERSIA_EMBEDDING_CONFIG
             --global-config $$PERSIA_GLOBAL_CONFIG --replica-index 0 --replica-size 1"
         volumes:
             - ./adult_income:/workspace
