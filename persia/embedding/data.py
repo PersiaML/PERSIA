@@ -78,8 +78,8 @@ class IDTypeFeature:
     def __init__(self, name: str, data: List[np.ndarray]):
         """
         Arguments:
-            name (str): Name of IDTypeFeaturea.
-            data (List[np.ndarray]): IDTypeFeature data. A Sparse matrix that represents a list of list. Requires np.uint64 as type for its elements.
+            name (str): Name of IDTypeFeature.
+            data (List[np.ndarray]): IDTypeFeature data. A lil sparse matrix. Requires np.uint64 as type for its elements.
         """
         if not SKIP_CHECK_PERSIA_DATA:
             (_id_type_data_check(x, name) for x in data)
@@ -98,8 +98,8 @@ class IDTypeFeatureWithSingleID:
     def __init__(self, name: str, data: np.ndarray):
         """
         Arguments:
-            name (str): Name of IDTypeFeature.
-            id_type_feature (np.ndarray): IDTypeFeature data. A Sparse matrix that represent list of list. Requires np.uint64 as type for its elements.
+            name (str): Name of IDTypeFeatureWithSingleID.
+            data (np.ndarray): IDTypeFeatureWithSingleID data. Requires np.uint64 as type for its elements.
         """
         if not SKIP_CHECK_PERSIA_DATA:
             _id_type_data_check(data, name)
