@@ -148,7 +148,8 @@ class NonIDTypeFeature(_NdarrayDataBase):
 
 
 class PersiaBatch:
-    r"""`PersiaBatch` store the id_type_features, non_id_type_features, labels and meta bytes data。
+    r"""`PersiaBatch` is the type of dataset used internally in Persia.
+    It wraps the id_type_features, non_id_type_features, labels and meta bytes data.
 
     Example:
         >>> import time
