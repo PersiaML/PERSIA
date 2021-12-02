@@ -93,7 +93,7 @@ class IDTypeFeature:
 
 
 class IDTypeFeatureWithSingleID:
-    """IDTypeFeatureWithSingleID special format of IDTypeFeature that only exists one id for every sample in the batch."""
+    """IDTypeFeatureWithSingleID is the special format of IDTypeFeature that only exists one id for every sample in the batch."""
 
     def __init__(self, name: str, data: np.ndarray):
         """

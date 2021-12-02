@@ -4,7 +4,7 @@ import numpy as np
 
 from tqdm import tqdm
 
-from persia.embedding.data import IDTypeFeatureSparse, NonIDTypeFeature, Label
+from persia.embedding.data import IDTypeFeature, NonIDTypeFeature, Label
 
 
 class DataLoader:
@@ -33,7 +33,7 @@ class DataLoader:
 
     def __iter__(
         self,
-    ) -> Iterable[Tuple[NonIDTypeFeature, List[IDTypeFeatureSparse], Label]]:
+    ) -> Iterable[Tuple[NonIDTypeFeature, List[IDTypeFeature], Label]]:
         batch_size = self.batch_size
         skip_last_batch = self.skip_last_batch
         id_type_feature_names = self.id_type_feature_names
@@ -62,7 +62,7 @@ class DataLoader:
                         ]
                     )
                 id_type_features.append(
-                    IDTypeFeatureSparse(feature_name, id_type_feature)
+                    IDTypeFeature(feature_name, id_type_feature)
                 )
 
             label = label_data[start:end]
