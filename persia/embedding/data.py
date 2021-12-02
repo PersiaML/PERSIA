@@ -11,7 +11,7 @@ from persia.logger import get_default_logger
 _logger = get_default_logger()
 
 
-# Maximum batch_size support.
+# Maximum batch_size supported.
 MAX_BATCH_SIZE = 65535
 
 # Skip check for PERSIA data except batch_size check.
@@ -109,7 +109,7 @@ class IDTypeFeature:
 
     @property
     def batch_size(self) -> int:
-        return len(np.id_type_feature)
+        return len(self.id_type_feature)
 
 
 class _NdarrayDataBase:
