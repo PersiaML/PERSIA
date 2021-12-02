@@ -11,18 +11,17 @@ from persia.logger import get_default_logger
 _logger = get_default_logger()
 
 
-# Maximum batch_size support.
+# Maximum batch size supported.
 MAX_BATCH_SIZE = 65535
 
-# Skip check for PERSIA data except batch_size check.
-# Raise RuntimeError when data is not meet requirement such as
-# type, dtype or shape not match.
+# Skip all PERSIA data checks except batch size.
+# Raise RuntimeError when data does not meet requirement, such as
+# type, dtype or shape mismatch.
 SKIP_CHECK_PERSIA_DATA = bool(int(os.environ.get("SKIP_CHECK_PERSIA_DATA", "0")))
 
 _ND_ARRAY_SUPPORT_TYPE = set(
     [np.bool, np.int8, np.int16, np.int32, np.int64, np.float32, np.float64, np.uint8]
 )
-
 
 def _id_type_data_check(id_type_feature: np.ndarray, feature_name: str):
     """Check the type, dimension and dtype for id_type_feature.
@@ -43,10 +42,10 @@ def _id_type_data_check(id_type_feature: np.ndarray, feature_name: str):
 
 
 def _ndarray_check(data: np.ndarray, data_name) -> bool:
-    r"""Check the dtype, shape and batch_size is valid or not.
+    r"""Check if the dtype, shape and batch_size is valid or not.
 
     Arguments:
-        data (np.ndarray): Data that need to check.
+        data (np.ndarray): Data that needs to be checked.
         data_name (str): Name of data.
     """
     assert isinstance(
@@ -63,7 +62,7 @@ def _ndarray_check(data: np.ndarray, data_name) -> bool:
 def _batch_size_check(
     batch_size: int, target_batch_size: int, data_type: str, name: str
 ):
-    """Check batch size that equal to target_batch_size and small and equal than MAX_BATCH_SIZE"""
+    """Check if batch size is equal to target_batch_size and no larger than to MAX_BATCH_SIZE"""
     assert (
         batch_size == target_batch_size
     ), f"expected {data_type}: {name} batch_size equal to {target_batch_size} but got {batch_size}"
@@ -78,8 +77,8 @@ class IDTypeFeatureSparse:
     def __init__(self, feature_name: str, id_type_feature: List[np.ndarray]):
         """
         Arguments:
-            feature_name (str): Name of IDTypeFeature.
-            id_type_feature (List[np.ndarray]): IDTypeFeature data.A Sparse matrix that represent list of list.Only accpet np.uint64 element.
+            feature_name (str): Name of IDTypeFeature
+            id_type_feature (List[np.ndarray]): IDTypeFeature data. A Sparse matrix that represents a list of list. Requires np.uint64 as type for its elements.
         """
         if not SKIP_CHECK_PERSIA_DATA:
             (_id_type_data_check(x, feature_name) for x in id_type_feature)
@@ -99,7 +98,7 @@ class IDTypeFeature:
         """
         Arguments:
             feature_name (str): Name of IDTypeFeature
-            id_type_feature (np.ndarray): IDTypeFeature data.A Sparse matrix that represent list of list.Only accpet np.uint64 element.
+            id_type_feature (np.ndarray): IDTypeFeature data. A Sparse matrix that represent list of list. Requires np.uint64 as type for its elements.
         """
         if not SKIP_CHECK_PERSIA_DATA:
             _id_type_data_check(id_type_feature, feature_name)
@@ -192,10 +191,10 @@ class PersiaBatch:
     ):
         """
         Arguments:
-            id_type_features (List[Union[IDTypeFeatureSparse, IDTypeFeature]]): Categorical data with feature_name which datatype should be uint64.
-            non_id_type_features (List[NonIdTypeFeature], optional): dense data.
-            labels: (List[Label], optional): labels data.
-            batch_size (int, optional): Num of batch_size.IDTypeFeatures, NonIDTypeFeatures and Labels should have same batch_size.
+            id_type_features (List[Union[IDTypeFeatureSparse, IDTypeFeature]]): Categorical data whose datatype should be uint64.
+            non_id_type_features (List[NonIdTypeFeature], optional): Dense data.
+            labels: (List[Label], optional): Labels data.
+            batch_size (int, optional): Number of samples in each batch. IDTypeFeatures, NonIDTypeFeatures and Labels should have the same batch_size.
             requires_grad (bool, optional): Set requires_grad for id_type_features.
             meta (bytes, optional): Binary data.
         """
