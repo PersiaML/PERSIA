@@ -93,7 +93,7 @@ class IDTypeFeature:
 
 
 class IDTypeFeatureWithSingleID:
-    """IDTypeFeatureWithSingleID is the special format of IDTypeFeature that only exists one id for every sample in the batch."""
+    """IDTypeFeatureWithSingleID is a special format of IDTypeFeature where there is only one id for each sample in the batch."""
 
     def __init__(self, name: str, data: np.ndarray):
         """
@@ -148,7 +148,8 @@ class NonIDTypeFeature(_NdarrayDataBase):
 
 
 class PersiaBatch:
-    r"""`PersiaBatch` store the id_type_features, non_id_type_features, labels and meta bytes data。
+    r"""`PersiaBatch` is the type of dataset used internally in Persia.
+    It wraps the id_type_features, non_id_type_features, labels and meta bytes data.
 
     Example:
         >>> import time
