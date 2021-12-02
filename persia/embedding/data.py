@@ -113,7 +113,7 @@ class IDTypeFeatureWithSingleID:
 
 
 class _NdarrayDataBase:
-    CLASS_NAME = "ndarray_base"
+    DEFAULT_NAME = "ndarray_base"
 
     def __init__(self, data: np.ndarray, name: str = None):
         """
@@ -133,18 +133,18 @@ class _NdarrayDataBase:
 
     @property
     def name(self):
-        return self._name or self.CLASS_NAME
+        return self._name or self.DEFAULT_NAME
 
     def __len__(self):
         return len(self.data)
 
 
 class Label(_NdarrayDataBase):
-    CLASS_NAME = "label_anonymous"
+    DEFAULT_NAME = "label_anonymous"
 
 
 class NonIDTypeFeature(_NdarrayDataBase):
-    CLASS_NAME = "non_id_type_feature_anonymous"
+    DEFAULT_NAME = "non_id_type_feature_anonymous"
 
 
 class PersiaBatch:
