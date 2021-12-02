@@ -6,17 +6,13 @@ services:
       replicas: 1
           
   data_loader:
-    env_file:
       - .docker.env
-    environment:
-        TASK_SLOT_ID: "{{.Task.Slot}}"
-        REPLICAS: 1
     depends_on:
       - nn_worker
       - embedding_worker
       - persia_nats_service
     image: persiasml/persia-cuda-runtime:latest
-    command: persia-launcher data-loader /workspace/data_loader.py
+    command: REPLICA_SIZE=1 REPLICA_INDEX=0 python3 /workspace/data_loader.py
     volumes:
       - type: bind
         source: .

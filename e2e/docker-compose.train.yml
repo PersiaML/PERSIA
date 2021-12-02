@@ -7,7 +7,7 @@ services:
                 
     data_loader:
         env_file:
-            - adult_income/.test_env
+            - adult_income/.test.env
         environment:
             TASK_SLOT_ID: 1
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
@@ -19,9 +19,8 @@ services:
 
     nn_worker:
         env_file:
-            - adult_income/.test_env
+            - adult_income/.test.env
         environment:
-            TASK_SLOT_ID: 1
             GPU_NUM: 1
             CUBLAS_WORKSPACE_CONFIG: :4096:8 # Adapt to pytorch deterministic feature
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
@@ -39,22 +38,18 @@ services:
 
     embedding_worker:
         env_file:
-            - adult_income/.test_env
-        environment:
-            TASK_SLOT_ID: 1
+            - adult_income/.test.env
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia-launcher embedding-worker --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
+        command: persia-launcher embedding-worker --embedding-config $$PERSIA_EMBEDDING_CONFIG --global-config $$PERSIA_GLOBAL_CONFIG
         volumes:
             - ./adult_income:/workspace
             - ./cache:/cache
 
     embedding_parameter_server:
         env_file:
-            - adult_income/.test_env
-        environment:
-            TASK_SLOT_ID: 1
+            - adult_income/.test.env
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia-launcher embedding-parameter-server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config_train.yml
+        command: persia-launcher embedding-parameter-server --embedding-config $$PERSIA_EMBEDDING_CONFIG --global-config $$PERSIA_GLOBAL_CONFIG
         volumes:
             - ./adult_income:/workspace
             - ./cache:/cache

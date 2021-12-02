@@ -1,156 +1,91 @@
 import os
 
-try:
-    from functools import cached_property
-except ImportError:
-    from functools import lru_cache
+from persia.logger import get_default_logger
 
-    # fallback implementation of cache_property for Python < 3.8
-    def cached_property(func):
-        return property(lru_cache()(func))
+_logger = get_default_logger()
 
 
-class ENV:
-    REPLICA_SIZE = None
-    REPLICA_INDEX = None
-    WORLD_SIZE = None
-    RANK_ID = None
-    LOCAL_RANK = None
-
-    ENV_LAUNCHER = None
-
-    def env_check(self) -> bool:
-        """Check current environment is valid or not."""
-
-        rank_env = (
-            self.WORLD_SIZE is not None
-            and self.RANK_ID is not None
-            and self.LOCAL_RANK is not None
-        )
-        replica_env = self.REPLICA_INDEX is not None and self.REPLICA_SIZE is not None
-
-        if not (rank_env or replica_env):
-            raise Exception(
-                f"""PersiaEnv check failed, aleast pass rank or replica info to run the persia task,
-                    launcher: {self.ENV_LAUNCHER} world_size: {self.WORLD_SIZE},
-                    rank_id: {self.RANK_ID}, local_rank: {self.LOCAL_RANK}, replica_size: {self.REPLICA_SIZE},
-                    replica_index: {self.REPLICA_INDEX}"""
-            )
-
-    @cached_property
-    def rank(self):
-        # TODO: Check the environment and cache the value.
-        return self.RANK_ID
-
-    @cached_property
-    def local_rank(self):
-        return self.LOCAL_RANK
-
-    @cached_property
-    def replica_index(self):
-        return self.REPLICA_INDEX
-
-    @cached_property
-    def replica_size(self):
-        return self.REPLICA_SIZE
-
-    @cached_property
-    def world_size(self):
-        return self.WORLD_SIZE
-
-
-class HonchoENV(ENV):
-
-    ENV_LAUNCHER = "honcho"
-
+class _Env:
     def __init__(self):
-        """Honcho environment have the basic ability to support local training, typically used at single machine training."""
-        honcho_process_name = os.environ["HONCHO_PROCESS_NAME"]
+        self.replica_size = None
+        self.replica_index = None
+        self.world_size = None
+        self.rank = None
+        self.local_rank = None
+        self.is_init = False
+
+    def init(self):
+        if self.is_init:
+            return
 
         if os.environ.get("RANK", None):
-            self.RANK_ID = int(os.environ["RANK"])
-            self.LOCAL_RANK = int(os.environ["LOCAL_RANK"])
-            self.WORLD_SIZE = int(os.environ.get("WORLD_SIZE"))
+            self.rank = int(os.environ["RANK"])
+            self.local_rank = int(os.environ["LOCAL_RANK"])
+            self.world_size = int(os.environ["WORLD_SIZE"])
+            assert self.rank >= 0, "rank should not be a negative."
+            assert self.local_rank >= 0, "local_rank should not be a negative."
+            assert self.world_size >= 0, "world_size should greater than one."
         else:
-            _, process_idx = honcho_process_name.split(".")
-            process_idx = int(process_idx) - 1
-
-            self.REPLICA_INDEX = int(os.environ.get("REPLICA_INDEX", 0))
-            self.REPLICA_SIZE = int(os.environ.get("REPLICA_SIZE", 1))
-
-
-class DockerENV(ENV):
-
-    ENV_LAUNCHER = "docker"
-
-    def __init__(self):
-        """Docker environment that launch the PersiaML task by docker-compose."""
-        if os.environ.get("RANK", None):
-            self.RANK_ID = int(os.environ["RANK"])
-            self.LOCAL_RANK = int(os.environ["LOCAL_RANK"])
-            self.WORLD_SIZE = int(os.environ.get("WORLD_SIZE"))
-        else:
-            self.REPLICA_INDEX = int(os.environ.get("TASK_SLOT_ID")) - 1
-            self.REPLICA_SIZE = int(os.environ.get("REPLICAS"))
+            if "REPLICA_INDEX" in os.environ:
+                self.replica_index = int(os.environ["REPLICA_INDEX"])
+                self.replica_size = int(os.environ["REPLICA_SIZE"])
+                assert (
+                    self.replica_index >= 0
+                ), "replica_index should not be a negative."
+                assert self.replica_size >= 1, "replica_size should greater than one."
+            else:
+                _logger.warning(
+                    "replica_index not found, use default replica_index=0 and default replica_size=1"
+                )
+                self.replica_size = 1
+                self.replica_index = 0
+        self.is_init = True
 
 
-class DefaultENV(ENV):
-
-    ENV_LAUNCHER = "default"
-
-    def __init__(self):
-        """Default environment that receive the environment by user manually expose to env."""
-        self.WORLD_SIZE = int(os.environ.get("WORLD_SIZE", -1))
-        self.REPLICA_SIZE = int(os.environ.get("REPLICA_SIZE", -1))
-
-        self.REPLICA_INDEX = int(os.environ.get("REPLICA_INDEX", -1))
-        self.LOCAL_RANK = int(os.environ.get("LOCAL_RANK", -1))
-        self.RANK_ID = int(os.environ.get("RANK", -1))
+env = _Env()
 
 
-def parse_env() -> ENV:
-    """Parse the environment by specific environment keyword"""
-    if os.environ.get("HONCHO", None):
-        env = HonchoENV()
-    elif os.environ.get("DOCKER_COMPOSE", None):
-        env = DockerENV()
-    else:
-        env = DefaultENV()
+def _ensure_parse_env(get_func):
+    def func():
+        if not env.is_init:
+            env.init()
+        return get_func()
 
-    env.env_check()
-    return env
+    return func
 
 
-_env = parse_env()
-
-
+@_ensure_parse_env
 def get_world_size() -> int:
     """Get the total number of processes."""
-    return _env.WORLD_SIZE
+    return env.world_size
 
 
+@_ensure_parse_env
 def get_rank() -> int:
     """Get the rank of current process."""
-    return _env.RANK_ID
+    return env.rank
 
 
+@_ensure_parse_env
 def get_local_rank() -> int:
     """Get the local rank of current process.
 
     Local rank is the rank of the process on the local machine."""
-    return _env.LOCAL_RANK
+    return env.local_rank
 
 
+@_ensure_parse_env
 def get_replica_size() -> int:
     """Get the replica size of the current service.
 
     Replica size is the number of services launched by docker service or k8s"""
-    return _env.REPLICA_SIZE
+    return env.replica_size
 
 
+@_ensure_parse_env
 def get_replica_index() -> int:
     """Get the replica index of current service.
 
     The replica index is a unique identifier assigned to each replica. They are assigned following the order of launching.
     """
-    return _env.REPLICA_INDEX
+    return env.replica_index
