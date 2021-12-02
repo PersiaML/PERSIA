@@ -143,7 +143,7 @@ class BaseCtx:
 
 
 class DataCtx(BaseCtx):
-    r"""This data context provides communication functionality to data generator component. 
+    r"""This data context provides communication functionality to data generator component.
     Used for sending a PersiaBatch to the nn worker and embedding worker.
 
     Example:
@@ -272,9 +272,9 @@ class EmbeddingCtx(BaseCtx):
         `PersiaTrainingBatch' contains non_id_type_features, id_type_feature_embeddings and labels.But they can't use directly in
         training before convert the `persia.Tensor` to `torch.Tensor`.
 
-        Arguments:pro
+        Arguments:
             batch (PersiaTrainingBatch): Training data provided by PersiaML upstream including
-                non_id_type_features ,labels, id_type_feature_embeddings and meta info.
+                non_id_type_features, labels, id_type_feature_embeddings and meta info.
 
         Returns:
             the tuple of non_id_type_features, id_type_feature_embeddings and labels.
