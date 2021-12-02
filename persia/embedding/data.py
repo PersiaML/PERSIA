@@ -23,6 +23,7 @@ _ND_ARRAY_SUPPORT_TYPE = set(
     [np.bool, np.int8, np.int16, np.int32, np.int64, np.float32, np.float64, np.uint8]
 )
 
+
 def _id_type_data_check(id_type_feature: np.ndarray, feature_name: str):
     """Check the type, dimension and dtype for id_type_feature.
 
@@ -71,44 +72,44 @@ def _batch_size_check(
     ), f"expected {data_type}:{name} batch_size <= MAX_BATCH_SIZE: {MAX_BATCH_SIZE} but got {batch_size}"
 
 
-class IDTypeFeatureSparse:
-    """IDTypeFeature sparse form"""
+class IDTypeFeature:
+    """IDTypeFeature is a lil sparse matrix."""
 
-    def __init__(self, feature_name: str, id_type_feature: List[np.ndarray]):
+    def __init__(self, name: str, data: List[np.ndarray]):
         """
         Arguments:
-            feature_name (str): Name of IDTypeFeature
-            id_type_feature (List[np.ndarray]): IDTypeFeature data. A Sparse matrix that represents a list of list. Requires np.uint64 as type for its elements.
+            name (str): Name of IDTypeFeaturea.
+            data (List[np.ndarray]): IDTypeFeature data. A Sparse matrix that represents a list of list. Requires np.uint64 as type for its elements.
         """
         if not SKIP_CHECK_PERSIA_DATA:
-            (_id_type_data_check(x, feature_name) for x in id_type_feature)
+            (_id_type_data_check(x, name) for x in data)
 
-        self.feature_name = feature_name
-        self.id_type_feature = id_type_feature
+        self.name = name
+        self.data = data
 
     @property
     def batch_size(self):
-        return len(self.id_type_feature)
+        return len(self.data)
 
 
-class IDTypeFeature:
-    """IDTypeFeature special form that only exists one id for every sample in the batch."""
+class IDTypeFeatureWithSingleID:
+    """IDTypeFeatureWithSingleID special format of IDTypeFeature that only exists one id for every sample in the batch."""
 
-    def __init__(self, feature_name: str, id_type_feature: np.ndarray):
+    def __init__(self, name: str, data: np.ndarray):
         """
         Arguments:
-            feature_name (str): Name of IDTypeFeature
+            name (str): Name of IDTypeFeature.
             id_type_feature (np.ndarray): IDTypeFeature data. A Sparse matrix that represent list of list. Requires np.uint64 as type for its elements.
         """
         if not SKIP_CHECK_PERSIA_DATA:
-            _id_type_data_check(id_type_feature, feature_name)
+            _id_type_data_check(data, name)
 
-        self.feature_name = feature_name
-        self.id_type_feature = id_type_feature
+        self.name = name
+        self.data = data
 
     @property
     def batch_size(self) -> int:
-        return len(self.id_type_feature)
+        return len(self.data)
 
 
 class _NdarrayDataBase:
@@ -155,7 +156,7 @@ class PersiaBatch:
         >>> ...
         >>> import numpy as np
         >>> ...
-        >>> from persia.embedding.data import PersiaBatch, NonIDTypeFeature, IDTypeFeatureSparse, Label
+        >>> from persia.embedding.data import PersiaBatch, NonIDTypeFeature, IDTypeFeature, Label
         >>> ...
         >>> batch_size = 1024
         >>> non_id_type_feature = NonIDTypeFeature(np.zeros((batch_size, 2), dtype=np.float32))
@@ -163,7 +164,7 @@ class PersiaBatch:
         >>> id_type_feature_num = 3
         >>> id_type_feature_max_sample_size = 100
         >>> id_type_features = [
-        ...    IDTypeFeatureSparse(f"feature_{idx}", [np.ones((np.random.randint(id_type_feature_max_sample_size)), dtype=np.uint64)
+        ...    IDTypeFeature(f"feature_{idx}", [np.ones((np.random.randint(id_type_feature_max_sample_size)), dtype=np.uint64)
         ...        for _ in range(batch_size)
         ...    ]), for idx in range(id_type_feature_num))
         ... ]
@@ -182,7 +183,7 @@ class PersiaBatch:
 
     def __init__(
         self,
-        id_type_features: List[Union[IDTypeFeatureSparse, IDTypeFeature]],
+        id_type_features: List[Union[IDTypeFeature, IDTypeFeatureWithSingleID]],
         non_id_type_features: Optional[List[NonIDTypeFeature]] = None,
         labels: Optional[List[Label]] = None,
         batch_size: Optional[int] = None,
@@ -191,7 +192,7 @@ class PersiaBatch:
     ):
         """
         Arguments:
-            id_type_features (List[Union[IDTypeFeatureSparse, IDTypeFeature]]): Categorical data whose datatype should be uint64.
+            id_type_features (List[Union[IDTypeFeatureWithSingleID, IDTypeFeature]]): Categorical data whose datatype should be uint64.
             non_id_type_features (List[NonIdTypeFeature], optional): Dense data.
             labels: (List[Label], optional): Labels data.
             batch_size (int, optional): Number of samples in each batch. IDTypeFeatures, NonIDTypeFeatures and Labels should have the same batch_size.
@@ -208,20 +209,20 @@ class PersiaBatch:
                 id_type_feature.batch_size,
                 batch_size,
                 "id_type_feature",
-                id_type_feature.feature_name,
+                id_type_feature.name,
             )
 
-            if isinstance(id_type_feature, IDTypeFeature):
-                self.batch.add_id_type_feature(
-                    id_type_feature.id_type_feature, id_type_feature.feature_name
+            if isinstance(id_type_feature, IDTypeFeatureWithSingleID):
+                self.batch.add_id_type_feature_with_single_id(
+                    id_type_feature.data, id_type_feature.name
                 )
-            elif isinstance(id_type_feature, IDTypeFeatureSparse):
-                self.batch.add_id_type_feature_sparse(
-                    id_type_feature.id_type_feature, id_type_feature.feature_name
+            elif isinstance(id_type_feature, IDTypeFeature):
+                self.batch.add_id_type_feature(
+                    id_type_feature.data, id_type_feature.name
                 )
             else:
                 raise TypeError(
-                    f"expected type of id_type_feature to be Union[IDTypeFeatureSparse, IDTypeFeature] but got {type(id_type_feature)}"
+                    f"expected type of id_type_feature to be Union[IDTypeFeatureWithSingleID, IDTypeFeature] but got {type(id_type_feature)}"
                 )
 
         if non_id_type_features is not None:

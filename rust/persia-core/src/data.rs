@@ -173,8 +173,8 @@ impl PersiaBatch {
         self.inner.labels.push(tensor_impl);
     }
 
-    /// Add id_type_feature sparse form into [`PersiaBatchImpl`] with required name.
-    pub fn add_id_type_feature_sparse(
+    /// Add id_type_feature which is a sparse matrix into [`PersiaBatchImpl`] with required name.
+    pub fn add_id_type_feature(
         &mut self,
         id_type_feature: Vec<&PyArray1<u64>>,
         id_type_feature_name: String,
@@ -198,8 +198,8 @@ impl PersiaBatch {
             .push(FeatureBatch::new(id_type_feature_name, indices));
     }
 
-    /// Add id_type_feature dense form into [`PersiaBatchImpl`] with required name.
-    pub fn add_id_type_feature(
+    /// Add id_type_feature which is a vector into [`PersiaBatchImpl`] with required name.
+    pub fn add_id_type_feature_with_single_id(
         &mut self,
         id_type_feature: &PyArray1<u64>,
         id_type_feature_name: String,
