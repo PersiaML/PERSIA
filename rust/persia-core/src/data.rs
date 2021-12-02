@@ -194,7 +194,7 @@ impl PersiaBatch {
 
         self.id_type_features
             .as_mut()
-            .unwrap()
+            .expect("id_type_features already been taken")
             .push(FeatureBatch::new(id_type_feature_name, indices));
     }
 
@@ -214,21 +214,22 @@ impl PersiaBatch {
 
         self.id_type_features
             .as_mut()
-            .unwrap()
+            .expect("id_type_features already been taken")
             .push(FeatureBatch::new(id_type_feature_name, indices))
     }
 
-    /// Set requires_grad for [`PersiaBatchImpl`] and check it
-    /// valid or not. Finally convert the IdTypeFeatureBatch to EmbeddingTensor.
-    pub fn check_batch(&mut self, requires_grad: Option<bool>) -> PyResult<()> {
+    // Convert the IdTypeFeatureBatch to EmbeddingTensor.
+    pub fn converted_id_type_features2embedding_tensor(
+        &mut self,
+        requires_grad: Option<bool>,
+    ) -> PyResult<()> {
         let requires_grad = requires_grad.unwrap_or(true);
 
         if requires_grad && self.inner.labels.len() == 0 {
             return Err(PyRuntimeError::new_err(
-                "Add label data when requires_grad set to true.",
+                "add label data when requires_grad set to true.",
             ));
         }
-
         let id_type_feature_batches = self.id_type_features.take().unwrap();
 
         self.inner.id_type_features = EmbeddingTensor::IDTypeFeature(IDTypeFeatureBatch {

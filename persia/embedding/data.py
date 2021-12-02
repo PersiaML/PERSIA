@@ -253,7 +253,7 @@ class PersiaBatch:
                 )
 
         self.batch_size = batch_size
-        self.batch.check_batch(requires_grad)
+        self.batch.converted_id_type_features2embedding_tensor(requires_grad)
 
     @property
     def data(self) -> _PersiaBatch:
