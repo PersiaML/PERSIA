@@ -35,6 +35,9 @@ steps:
           run: torch_serve
           graceful-shutdown: true
 
+  - label: "launch k8s e2e test"
+    command: .buildkite/script/k8s_system_test.sh
+
   - wait
 
   - label: "upload docker image"

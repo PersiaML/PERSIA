@@ -48,7 +48,7 @@ if __name__ == "__main__":
             {
                 "gencrd": "persia.gencrd",
                 "operator": "persia.operator",
-                "server": "persia.server",
+                "e2e": "persia.e2e",
             },
             path="k8s/Cargo.toml",
             binding=Binding.Exec,
@@ -62,6 +62,9 @@ if __name__ == "__main__":
     if name_suffix != "":
         name_suffix = "-cuda" + name_suffix
 
+    with open(os.path.realpath(os.path.join(__file__, "../README.md"))) as file:
+        long_description = file.read()
+
     setup(
         name="persia" + name_suffix,
         use_scm_version={"local_scheme": "no-local-version"},
@@ -71,6 +74,8 @@ if __name__ == "__main__":
         author="Kuaishou AI Platform Persia Team",
         author_email="admin@mail.xrlian.com",
         description="PersiaML Python Library",
+        long_description=long_description,
+        long_description_content_type="text/markdown",
         packages=find_packages(exclude=("tests",)),
         rust_extensions=rust_extensions,
         entry_points={

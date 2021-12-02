@@ -1,0 +1,12 @@
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "persia-nats-service"
+spec:
+  size: 1
+  natsConfig:
+    maxPayload: 52428800
+  resources:
+    limits:
+      memory: "8Gi"
+      cpu: "2" 

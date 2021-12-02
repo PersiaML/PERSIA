@@ -509,6 +509,9 @@ spec:
                   type: array
                 globalConfigPath:
                   type: string
+                imagePullPolicy:
+                  nullable: true
+                  type: string
                 logLevel:
                   nullable: true
                   type: string
@@ -652,6 +655,9 @@ spec:
                     - replicas
                   type: object
                 nnWorkerPyEntryPath:
+                  nullable: true
+                  type: string
+                restartPolicy:
                   nullable: true
                   type: string
                 volumes:
