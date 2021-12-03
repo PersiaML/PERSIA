@@ -27,6 +27,12 @@ def run_command(cmd: List[str]):
     subprocess.check_call(cmd, env=_ENV)
 
 
+def _get_env_by_name(env_name: str) -> str:
+    env_val = os.environ.get(env_name, None)
+    assert env_val, f"set {env_name}, before start the PERSIA training task."
+    return env_val
+
+
 @click.group()
 def cli():
     ...
@@ -74,9 +80,17 @@ def data_loader(filepath: str, replica_index: int, replica_size: int):
 
 @cli.command()
 @click.option("--port", type=int, default=8887, help="Embedding worker listen port")
-@click.option("--embedding-config", type=str, help="Config of embedding definition")
 @click.option(
-    "--global-config", type=str, help="Config of embedding server and embedding worker"
+    "--embedding-config",
+    type=str,
+    default=lambda: _get_env_by_name("PERSIA_EMBEDDING_CONFIG"),
+    help="Config path of embedding definition",
+)
+@click.option(
+    "--global-config",
+    type=str,
+    default=lambda: _get_env_by_name("PERSIA_GLOBAL_CONFIG"),
+    help="Config of embedding server and embedding worker",
 )
 @click.option(
     "--replica-index", type=str, default=0, help="Replica index of embedding worker"
@@ -110,9 +124,17 @@ def embedding_worker(
 
 @cli.command()
 @click.option("--port", type=int, default=8888, help="Embedding server listen port")
-@click.option("--embedding-config", type=str, help="Config of embedding definition")
 @click.option(
-    "--global-config", type=str, help="Config of embedding server and embedding worker"
+    "--embedding-config",
+    type=str,
+    default=lambda: _get_env_by_name("PERSIA_EMBEDDING_CONFIG"),
+    help="Config of embedding definition",
+)
+@click.option(
+    "--global-config",
+    type=str,
+    default=lambda: _get_env_by_name("PERSIA_GLOBAL_CONFIG"),
+    help="Config of embedding server and embedding worker",
 )
 @click.option(
     "--replica-index", type=str, default=0, help="Replica index of embedding server"
