@@ -84,13 +84,15 @@ def data_loader(filepath: str, replica_index: int, replica_size: int):
     "--embedding-config",
     type=str,
     default=lambda: _get_env_by_name("PERSIA_EMBEDDING_CONFIG"),
-    help="Config path of embedding definition",
+    help="Config path of embedding definition. Use PERSIA_EMBEDDING_CONFIG environment \
+        as the default value if not passed the value to CLI command",
 )
 @click.option(
     "--global-config",
     type=str,
     default=lambda: _get_env_by_name("PERSIA_GLOBAL_CONFIG"),
-    help="Config of embedding server and embedding worker",
+    help="Config of embedding server and embedding worker. Use PERSIA_GLOBAL_CONFIG environment \
+        as the default value if not passed the value to CLI command",
 )
 @click.option(
     "--replica-index", type=str, default=0, help="Replica index of embedding worker"
@@ -128,13 +130,15 @@ def embedding_worker(
     "--embedding-config",
     type=str,
     default=lambda: _get_env_by_name("PERSIA_EMBEDDING_CONFIG"),
-    help="Config of embedding definition",
+    help="Config of embedding definition. Use PERSIA_EMBEDDING_CONFIG environment \
+        as the default value if not passed the value to CLI command",
 )
 @click.option(
     "--global-config",
     type=str,
     default=lambda: _get_env_by_name("PERSIA_GLOBAL_CONFIG"),
-    help="Config of embedding server and embedding worker",
+    help="Config of embedding server and embedding worker. Use PERSIA_EMBEDDING_CONFIG environment \
+        as the default value if not passed the value to CLI command",
 )
 @click.option(
     "--replica-index", type=str, default=0, help="Replica index of embedding server"
