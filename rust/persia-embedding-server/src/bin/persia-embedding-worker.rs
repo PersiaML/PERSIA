@@ -30,9 +30,9 @@ struct Cli {
     replica_index: usize,
     #[structopt(long)]
     replica_size: usize,
-    #[structopt(long, env="PERSIA_GLOBAL_CONFIG")]
+    #[structopt(long, env = "PERSIA_GLOBAL_CONFIG")]
     global_config: PathBuf,
-    #[structopt(long, env="PERSIA_EMBEDDING_CONFIG")]
+    #[structopt(long, env = "PERSIA_EMBEDDING_CONFIG")]
     embedding_config: PathBuf,
 }
 
