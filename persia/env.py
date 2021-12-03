@@ -22,17 +22,22 @@ class _Env:
             self.rank = int(os.environ["RANK"])
             self.local_rank = int(os.environ["LOCAL_RANK"])
             self.world_size = int(os.environ["WORLD_SIZE"])
-            assert self.rank >= 0, "RANK should not be a negative."
-            assert self.local_rank >= 0, "LOCAL_RANK should not be a negative."
-            assert self.world_size >= 1, "WORLD_SIZE should greater than one."
+            assert self.rank >= 0, "RANK cannot be negative."
+            assert self.local_rank >= 0, "LOCAL_RANK cannot be negative."
+            assert self.world_size >= 1, "WORLD_SIZE should be greater than one."
         else:
             if "REPLICA_INDEX" in os.environ:
                 self.replica_index = int(os.environ["REPLICA_INDEX"])
-                self.replica_size = int(os.environ["REPLICA_SIZE"])
+                assert self.replica_index >= 0, "REPLICA_IDNEX cannot be negative."
+
+                replica_size = os.environ.get("REPLICA_SIZE", None)
                 assert (
-                    self.replica_index >= 0
-                ), "REPLICA_IDNEX should not be a negative."
-                assert self.replica_size >= 1, "REPLICA_SIZE should greater than one."
+                    replica_size is not None
+                ), "REPLICA_SIZE not found, setting environment variable REPLICA_SIZE before starting the PERSIA training task."
+                self.replica_size = int(replica_size)
+                assert (
+                    self.replica_size >= 1
+                ), "REPLICA_SIZE should be greater than one."
             else:
                 _logger.warning(
                     "REPLICA_INDEX not found, use default replica_index=0 and default replica_size=1"
