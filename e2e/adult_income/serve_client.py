@@ -43,28 +43,31 @@ def infer(stub, model_name, model_input):
 if __name__ == "__main__":
 
     test_filepath = os.path.join("/data/", "test.npz")
-    _, loader = make_dataloader(test_filepath, batch_size=1024)
+    loader = make_dataloader(test_filepath, batch_size=1024)
     all_pred = []
-    all_target = []
+    all_label = []
 
-    for (non_id_type_feature, id_type_features, target) in tqdm(
+    for (non_id_type_feature, id_type_features, label) in tqdm(
         loader, desc="gen batch data..."
     ):
-        batch_data = PersiaBatch(id_type_features, requires_grad=False)
-        batch_data.add_non_id_type_feature(non_id_type_feature)
+        batch_data = PersiaBatch(
+            id_type_features,
+            non_id_type_features=[non_id_type_feature],
+            requires_grad=False,
+        )
         model_input = batch_data.to_bytes()
         prediction = infer(get_inference_stub(), "adult_income", model_input)
 
         assert len(prediction) == len(
-            target
-        ), f"miss results {len(prediction)} vs {len(target)}"
+            label
+        ), f"Missing results: prediction length({len(prediction)}) does not match label length({len(label)})"
 
-        all_target.append(target)
+        all_label.append(label.data)
         all_pred.append(prediction)
 
-    all_pred, all_target = np.concatenate(all_pred), np.concatenate(all_target)
+    all_pred, all_label = np.concatenate(all_pred), np.concatenate(all_label)
 
-    fpr, tpr, th = metrics.roc_curve(all_target, all_pred)
+    fpr, tpr, th = metrics.roc_curve(all_label, all_pred)
     infer_auc = metrics.auc(fpr, tpr)
 
     print(f"infer_auc = {infer_auc}")
