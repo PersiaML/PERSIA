@@ -21,9 +21,6 @@ spec:
           properties:
             spec:
               properties:
-                dataLoaderPyEntryPath:
-                  nullable: true
-                  type: string
                 dataloader:
                   nullable: true
                   properties:
@@ -158,8 +155,6 @@ spec:
                   required:
                     - replicas
                   type: object
-                embeddingConfigPath:
-                  type: string
                 embeddingParameterServer:
                   nullable: true
                   properties:
@@ -507,8 +502,6 @@ spec:
                     type: object
                   nullable: true
                   type: array
-                globalConfigPath:
-                  type: string
                 imagePullPolicy:
                   nullable: true
                   type: string
@@ -654,9 +647,22 @@ spec:
                     - nprocPerNode
                     - replicas
                   type: object
-                nnWorkerPyEntryPath:
-                  nullable: true
-                  type: string
+                persiaEnv:
+                  properties:
+                    PERSIA_DATALOADER_ENTRY:
+                      nullable: true
+                      type: string
+                    PERSIA_EMBEDDING_CONFIG:
+                      type: string
+                    PERSIA_GLOBAL_CONFIG:
+                      type: string
+                    PERSIA_NN_WORKER_ENTRY:
+                      nullable: true
+                      type: string
+                  required:
+                    - PERSIA_EMBEDDING_CONFIG
+                    - PERSIA_GLOBAL_CONFIG
+                  type: object
                 restartPolicy:
                   nullable: true
                   type: string
@@ -1452,8 +1458,7 @@ spec:
                   nullable: true
                   type: array
               required:
-                - embeddingConfigPath
-                - globalConfigPath
+                - persiaEnv
               type: object
           required:
             - spec
