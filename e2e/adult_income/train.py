@@ -34,24 +34,25 @@ GPU_TEST_AUC = 0.8934601372796367
 class TestDataset(PersiaDataset):
     def __init__(self, test_dir: str, batch_size: int = 128):
         super(TestDataset, self).__init__(buffer_size=10)
-        size, loader = make_dataloader(test_dir, batch_size)
-        self.loader = loader
-        self.loader_size = size
+        self.loader = make_dataloader(test_dir, batch_size)
 
-        logger.info(f"test dataset size is {size}")
+        logger.info(f"test dataset size is {len(self.loader)}")
 
     def fetch_data(self, persia_sender_channel: PersiaBatchDataSender):
         logger.info("test loader start to generating data...")
         for _idx, (non_id_type_feature, id_type_features, label) in enumerate(
             tqdm(self.loader, desc="generating data")
         ):
-            persia_batch = PersiaBatch(id_type_features, requires_grad=False)
-            persia_batch.add_non_id_type_feature(non_id_type_feature)
-            persia_batch.add_label(label)
+            persia_batch = PersiaBatch(
+                id_type_features,
+                non_id_type_features=[non_id_type_feature],
+                labels=[label],
+                requires_grad=False,
+            )
             persia_sender_channel.send(persia_batch.data)
 
     def __len__(self):
-        return self.loader_size
+        return len(self.loader)
 
 
 def test(

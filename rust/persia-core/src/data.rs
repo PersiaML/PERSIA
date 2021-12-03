@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use crate::tensor::{CPUStorage, Storage, TensorImpl};
 
 use numpy::{DataType, PyArray, PyArray1, PyArrayDescr, PyArrayDyn};
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::AsPyPointer;
@@ -135,6 +136,7 @@ fn convert_pyarray_object_to_tensor_impl(
 #[pyclass]
 pub struct PersiaBatch {
     pub inner: PersiaBatchImpl,
+    pub id_type_features: Option<Vec<FeatureBatch>>,
 }
 
 #[pymethods]
@@ -143,9 +145,11 @@ impl PersiaBatch {
     pub fn new() -> Self {
         PersiaBatch {
             inner: PersiaBatchImpl::default(),
+            id_type_features: Some(Vec::new()),
         }
     }
 
+    /// Add non_id_type_feature into [`PersiaBatchImpl`] with optional name.
     pub fn add_non_id_type_feature(
         &mut self,
         pyarray_object: &PyAny,
@@ -157,6 +161,7 @@ impl PersiaBatch {
         self.inner.non_id_type_features.push(tensor_impl);
     }
 
+    /// Add label into [`PersiaBatchImpl`] with optional name.
     pub fn add_label(
         &mut self,
         py_object: &PyAny,
@@ -168,40 +173,85 @@ impl PersiaBatch {
         self.inner.labels.push(tensor_impl);
     }
 
-    pub fn add_id_type_features(
+    /// Add id_type_feature which is a sparse matrix into [`PersiaBatchImpl`] with required name.
+    pub fn add_id_type_feature(
         &mut self,
-        id_type_features: Vec<(String, Vec<&PyArray1<u64>>)>,
-        requires_grad: Option<bool>,
+        id_type_feature: Vec<&PyArray1<u64>>,
+        id_type_feature_name: String,
     ) {
-        self.inner.id_type_features = EmbeddingTensor::IDTypeFeature(IDTypeFeatureBatch {
-            requires_grad: requires_grad.unwrap_or(true),
-            batches: id_type_features
-                .into_iter()
-                .map(|(feature_name, batch)| {
-                    let indices = batch
-                        .iter()
-                        .map(|x| {
-                            x.readonly()
-                                .as_slice()
-                                .expect("cannot read np array")
-                                .to_vec()
-                        })
-                        .collect();
-                    FeatureBatch::new(feature_name, indices)
-                })
-                .collect(),
-            ..IDTypeFeatureBatch::default()
-        });
+        let data = vec![1, 2, 3];
+        std::mem::forget(data);
+
+        let indices = id_type_feature
+            .iter()
+            .map(|x| {
+                x.readonly()
+                    .as_slice()
+                    .expect("cannot read np array")
+                    .to_vec()
+            })
+            .collect();
+
+        self.id_type_features
+            .as_mut()
+            .expect("id_type_features already been taken")
+            .push(FeatureBatch::new(id_type_feature_name, indices));
     }
 
+    /// Add id_type_feature which is a vector into [`PersiaBatchImpl`] with required name.
+    pub fn add_id_type_feature_with_single_id(
+        &mut self,
+        id_type_feature: &PyArray1<u64>,
+        id_type_feature_name: String,
+    ) {
+        let indices = id_type_feature
+            .readonly()
+            .as_slice()
+            .expect(format!("cannot read {}", &id_type_feature_name).as_str())
+            .iter()
+            .map(|x| vec![*x])
+            .collect();
+
+        self.id_type_features
+            .as_mut()
+            .expect("id_type_features already been taken")
+            .push(FeatureBatch::new(id_type_feature_name, indices))
+    }
+
+    // Convert the IdTypeFeatureBatch to EmbeddingTensor.
+    pub fn converted_id_type_features2embedding_tensor(
+        &mut self,
+        requires_grad: Option<bool>,
+    ) -> PyResult<()> {
+        let requires_grad = requires_grad.unwrap_or(true);
+
+        if requires_grad && self.inner.labels.len() == 0 {
+            return Err(PyRuntimeError::new_err(
+                "add label data when requires_grad set to true.",
+            ));
+        }
+        let id_type_feature_batches = self.id_type_features.take().unwrap();
+
+        self.inner.id_type_features = EmbeddingTensor::IDTypeFeature(IDTypeFeatureBatch {
+            requires_grad,
+            batches: id_type_feature_batches,
+            ..IDTypeFeatureBatch::default()
+        });
+
+        Ok(())
+    }
+
+    /// Add binary data into [`PersiaBatchImpl`].
     pub fn add_meta(&mut self, data: Option<&PyBytes>) {
         self.inner.meta_data = data.map(|x| x.as_bytes().to_vec());
     }
 
+    /// Serialize the [`PersiaBatchImpl`] to bytes.
     pub fn to_bytes<'a>(&mut self, _py: Python<'a>) -> &'a PyBytes {
         PyBytes::new(_py, self.inner.write_to_vec().unwrap().as_slice())
     }
 
+    /// Get batch_id from[`PersiaBatchImpl`] after data sending to embedding-worker.
     pub fn batch_id(&self) -> usize {
         self.inner
             .batch_id

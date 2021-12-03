@@ -82,7 +82,37 @@ jobs:
         run: |
           pytest
 
-  wheel:
+  pypi-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+      - name: Install Python packaging dependencies
+        run: |
+          python -m pip install --upgrade pip
+          cd persia && pip install build
+      - name: Build package
+        run: python -m build -s
+      - name: Publish a Python distribution to PyPI
+        if: github.ref == 'refs/heads/main' && !startsWith(github.ref, 'refs/tags')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+      - name: Publish package
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+
+  wheel-publish:
     strategy:
       fail-fast: false
       matrix:
@@ -90,6 +120,9 @@ jobs:
           - "113"
           - "111"
           - "102"
+        use-cuda:
+          - "0"
+          - "1"
         arch:
           - x86_64
         os:
@@ -101,6 +134,12 @@ jobs:
           - "7"
           - "8"
           - "9"
+        exclude:
+          - use-cuda: "0"
+            cuda-version: "111"
+          - use-cuda: "0"
+            cuda-version: "113"
+
 
     runs-on: ${{ matrix.os }}
 
@@ -108,7 +147,7 @@ jobs:
       CIBW_BUILD: "${{ format('cp{0}{1}*', matrix.python-major-version, matrix.python-minor-version) || '*' }}"
       CIBW_MANYLINUX_X86_64_IMAGE: "baguasys/manylinux-cuda:${{ matrix.cuda-version }}"
       CIBW_ARCHS_LINUX: "${{ matrix.arch || 'auto' }}"
-      CIBW_ENVIRONMENT: 'AUDITWHEEL_PLAT="manylinux2014_${{ matrix.arch }}" PERSIA_CUDA_VERSION="${{ matrix.cuda-version }}" USE_CUDA=1'
+      CIBW_ENVIRONMENT: 'AUDITWHEEL_PLAT="manylinux2014_${{ matrix.arch }}" PERSIA_CUDA_VERSION="${{ matrix.cuda-version }}" USE_CUDA="${{ matrix.use-cuda }}"'
       CIBW_REPAIR_WHEEL_COMMAND: "auditwheel show {wheel} && auditwheel repair -w {dest_dir} {wheel}"
       CIBW_BEFORE_BUILD: "pip install git+https://github.com/rossant/auditwheel.git@include-exclude"
 
@@ -137,7 +176,7 @@ jobs:
           python -m cibuildwheel .
       - uses: actions/upload-artifact@v2
         with:
-          name: wheels-${{ matrix.name }}
+          name: wheels-package
           path: "wheelhouse/*"
           if-no-files-found: error
 
@@ -148,6 +187,7 @@ jobs:
           user: __token__
           password: ${{ secrets.PYPI_API_TOKEN }}
           packages_dir: wheelhouse/
+          verbose: true
           skip_existing: true
 
       - name: Publish package
@@ -157,3 +197,4 @@ jobs:
           user: __token__
           password: ${{ secrets.PYPI_API_TOKEN }}
           packages_dir: wheelhouse/
+          verbose: true
