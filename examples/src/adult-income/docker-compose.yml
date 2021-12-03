@@ -6,6 +6,7 @@ services:
       replicas: 1
           
   data_loader:
+    env_file:
       - .docker.env
     depends_on:
       - nn_worker
@@ -43,7 +44,7 @@ services:
     env_file:
       - .docker.env
     depends_on:
-      - server
+      - embedding_parameter_server
     image: persiaml/persia-cuda-runtime:latest
     command: > 
       bash -c "persia-launcher embedding-worker --embedding-config $$PERSIA_EMBEDDING_CONFIG
@@ -60,7 +61,6 @@ services:
   embedding_parameter_server:
     env_file:
       - .docker.env
-    environment:
     image: persiaml/persia-cuda-runtime:latest
     command: > 
       bash -c "persia-launcher embedding-parameter-server --embedding-config $$PERSIA_EMBEDDING_CONFIG
