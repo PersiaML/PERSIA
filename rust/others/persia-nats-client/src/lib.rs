@@ -42,7 +42,7 @@ impl NatsClient {
     }
 
     async fn new() -> NatsClient {
-        let nats_url = std::env::var("PERSIA_NATS_IP")
+        let nats_url = std::env::var("PERSIA_NATS_URL")
             .unwrap_or(String::from("nats://persia_nats_service:4222"));
         let mut backoff = ExponentialBackoff::default();
         backoff.max_interval = std::time::Duration::from_millis(500);
