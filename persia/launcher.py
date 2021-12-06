@@ -34,9 +34,9 @@ def cli():
 
 @cli.command()
 @click.argument(
-    "filepath", envvar="PERSIA_NN_WORKER_ENTRY",
-    type=str, help="A python file path for nn_worker, you can also set the environment\
-    PERSIA_NN_WORKER_ENTRY to pass the argument to the CLI command."
+    "filepath",
+    envvar="PERSIA_NN_WORKER_ENTRY",
+    type=str,
 )
 @click.option("--nproc-per-node", type=int, default=1, help="Process num of per node")
 @click.option("--node-rank", type=int, default=0, help="Replica index of nn worker")
@@ -58,9 +58,11 @@ def nn_worker(filepath: str, nproc_per_node: int, node_rank: int, nnodes: int):
 
 
 @cli.command()
-@click.argument("filepath", envvar="PERSIA_DATALOADER_ENTRY", type=str,  
-    help="A python file path for data_loader, you can also set the environment\
-    PERSIA_DATALOADER_ENTRY to pass the argument to the CLI command.")
+@click.argument(
+    "filepath",
+    envvar="PERSIA_DATALOADER_ENTRY",
+    type=str,
+)
 @click.option(
     "--replica-index", type=str, default="0", help="Replica index of data loader"
 )
@@ -129,13 +131,11 @@ def embedding_worker(
     "--embedding-config",
     type=str,
     envvar="PERSIA_EMBEDDING_CONFIG",
-    type=click.Path(exists=True),
     help="Config of embedding definition. Use PERSIA_EMBEDDING_CONFIG environment \
         as the default value if not passed the value to CLI command",
 )
 @click.option(
     "--global-config",
-    type=str,
     envvar="PERSIA_GLOBAL_CONFIG",
     type=str,
     help="Config of embedding server and embedding worker. Use PERSIA_EMBEDDING_CONFIG environment \
