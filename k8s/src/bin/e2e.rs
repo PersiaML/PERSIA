@@ -70,7 +70,7 @@ fn gen_spec() -> PersiaJobSpec {
         enableMetrics: Some(false),
         volumes: None,
         env: Some(vec![EnvVar {
-            name: String::from("PERSIA_NATS_IP"),
+            name: String::from("PERSIA_NATS_URL"),
             value: Some(format!(
                 "nats://persia-nats-service-{}:4222",
                 buildkite_pipeline_id
