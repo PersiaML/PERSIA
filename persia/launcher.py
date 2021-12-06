@@ -27,23 +27,21 @@ def run_command(cmd: List[str]):
     subprocess.check_call(cmd, env=_ENV)
 
 
-def _get_env_by_name(env_name: str) -> str:
-    env_val = os.environ.get(env_name, None)
-    assert env_val, f"set {env_name}, before start the PERSIA training task."
-    return env_val
-
-
 @click.group()
 def cli():
     ...
 
 
 @cli.command()
-@click.argument("filepath", type=str)
+@click.argument(
+    "filepath", envvar="PERSIA_NN_WORKER_ENTRY",
+    type=str, help="A python file path for nn_worker, you can also set the environment\
+    PERSIA_NN_WORKER_ENTRY to pass the argument to the CLI command."
+)
 @click.option("--nproc-per-node", type=int, default=1, help="Process num of per node")
 @click.option("--node-rank", type=int, default=0, help="Replica index of nn worker")
 @click.option("--nnodes", type=int, default=1, help="Replica num of nn owrker")
-def nn_worker(filepath, nproc_per_node: int, node_rank: int, nnodes: int):
+def nn_worker(filepath: str, nproc_per_node: int, node_rank: int, nnodes: int):
     cmd = [
         "python3",
         "-m",
@@ -60,7 +58,9 @@ def nn_worker(filepath, nproc_per_node: int, node_rank: int, nnodes: int):
 
 
 @cli.command()
-@click.argument("filepath", type=str)
+@click.argument("filepath", envvar="PERSIA_DATALOADER_ENTRY", type=str,  
+    help="A python file path for data_loader, you can also set the environment\
+    PERSIA_DATALOADER_ENTRY to pass the argument to the CLI command.")
 @click.option(
     "--replica-index", type=str, default="0", help="Replica index of data loader"
 )
@@ -82,15 +82,14 @@ def data_loader(filepath: str, replica_index: int, replica_size: int):
 @click.option("--port", type=int, default=8887, help="Embedding worker listen port")
 @click.option(
     "--embedding-config",
-    type=str,
-    default=lambda: _get_env_by_name("PERSIA_EMBEDDING_CONFIG"),
+    envvar="PERSIA_EMBEDDING_CONFIG",
     help="Config path of embedding definition. Use PERSIA_EMBEDDING_CONFIG environment \
         as the default value if not passed the value to CLI command",
 )
 @click.option(
     "--global-config",
     type=str,
-    default=lambda: _get_env_by_name("PERSIA_GLOBAL_CONFIG"),
+    envvar="PERSIA_GLOBAL_CONFIG",
     help="Config of embedding server and embedding worker. Use PERSIA_GLOBAL_CONFIG environment \
         as the default value if not passed the value to CLI command",
 )
@@ -129,14 +128,16 @@ def embedding_worker(
 @click.option(
     "--embedding-config",
     type=str,
-    default=lambda: _get_env_by_name("PERSIA_EMBEDDING_CONFIG"),
+    envvar="PERSIA_EMBEDDING_CONFIG",
+    type=click.Path(exists=True),
     help="Config of embedding definition. Use PERSIA_EMBEDDING_CONFIG environment \
         as the default value if not passed the value to CLI command",
 )
 @click.option(
     "--global-config",
     type=str,
-    default=lambda: _get_env_by_name("PERSIA_GLOBAL_CONFIG"),
+    envvar="PERSIA_GLOBAL_CONFIG",
+    type=str,
     help="Config of embedding server and embedding worker. Use PERSIA_EMBEDDING_CONFIG environment \
         as the default value if not passed the value to CLI command",
 )
