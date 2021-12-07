@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use persia_libs::{
     half::{f16, prelude::*},
     ndarray::Array1,
@@ -15,7 +13,7 @@ use persia_speedy::{Readable, Writable};
 
 use crate::eviction_map::EvictionMapValue;
 
-#[derive(Serialize, Deserialize, Readable, Writable, Clone, Debug)]
+#[derive(Serialize, Deserialize, Readable, Writable, Debug)]
 #[serde(crate = "self::serde")]
 pub enum Entry {
     F32(Vec<f32>),
@@ -23,25 +21,49 @@ pub enum Entry {
 }
 
 impl Entry {
-    fn as_mut_ref(&self) -> F32EntryMutSlice {
-        let data = match self {
-            Entry::F16(val) => val.as_slice().convert_to_f32_slice(),
-            Entry::F32(val) => val.as_slice(),
+    fn get_f32_mut(&mut self) -> F32EntryMutSlice {
+        let replica_data = match self {
+            Entry::F16(val) => Some(val.as_slice().to_f32_vec()),
+            Entry::F32(_) => None,
         };
-        F32EntryMutSlice { data, source: self }
+        // let ptr = self.as_mut_ref().ptr;
+        F32EntryMutSlice {
+            replica_data,
+            // ptr: self.().ptr,
+            ptr: self as *mut _,
+        }
     }
 }
-pub struct F32EntryMutSlice<'a, 'b: 'a> {
-    source: &'b Entry,
-    replcia_data: Option<Vec<f32>>
+pub struct F32EntryMutSlice {
+    ptr: *mut Entry,
+    replica_data: Option<Vec<f32>>,
 }
 
-impl<'a> Drop for F32EntryMutSlice<'a> {
+impl F32EntryMutSlice {
+    fn as_slice_mut(&mut self) -> &mut [f32] {
+        match self.replica_data.as_mut() {
+            Some(val) => val.as_mut_slice(),
+            None => {
+                let source = unsafe { &mut *self.ptr };
+
+                match source {
+                    Entry::F16(_) => panic!("f16 data should not replica..."),
+                    Entry::F32(val) => val.as_mut_slice(),
+                }
+            }
+        }
+    }
+}
+
+impl Drop for F32EntryMutSlice {
     fn drop(&mut self) {
-        match &self.source {
+        let source = unsafe { &mut *self.ptr };
+
+        match source {
             Entry::F16(_) => {
-                let mut vec_f16 = Entry::F16(Vec::from_f32_slice(self.data));
-                std::mem::swap(&mut self.source, &mut vec_f16);
+                let f32_vec = self.replica_data.take().unwrap();
+                let f16_entry = Entry::F16(Vec::from_f32_slice(f32_vec.as_slice()));
+                *source = f16_entry;
             }
             Entry::F32(_) => {}
         }
