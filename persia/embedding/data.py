@@ -76,13 +76,14 @@ class IDTypeFeature:
     """IDTypeFeature is a lil sparse matrix.
 
     IDTypeFeature is a tuple that combine the feature_name and lil matrix.
-    code-block:: python
+    # %%
         import numpy as np
 
         from persia.embedding.data import IDTypeFeature
 
         lil_matrix = [np.array([1], np.uint64) for i in range(5)]
         id_type_feature = IDTypeFeature("id_type_feature_demo", lil_matrix)
+    # %%
     """
 
     def __init__(self, name: str, data: List[np.ndarray]):
@@ -186,9 +187,9 @@ class PersiaBatch:
         >>> meta_bytes = json.dumps(meta_info)
         >>> requires_grad = True
         >>> persia_batch = PersiaBatch(id_type_features,
-        ... non_id_type_features=[non_id_type_feature],
-        ... labels=[label] requires_grad=requires_grad,
-        ... meta=meta_bytes
+        ...     non_id_type_features=[non_id_type_feature],
+        ...     labels=[label] requires_grad=requires_grad,
+        ...     meta=meta_bytes
         ... )
     """
 
