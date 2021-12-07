@@ -52,11 +52,11 @@ struct MetricsHolder {
     pub staleness: Gauge,
     pub nan_count: IntCounterVec,
     pub nan_grad_skipped: IntCounterVec,
-    pub lookup_create_requests_time_cost_sec: Gauge,
+    pub lookup_preprocess_time_cost_sec: Gauge,
     pub lookup_rpc_time_cost_sec: Gauge,
     pub update_gradient_time_cost_sec: Gauge,
-    pub summation_time_cost_sec: Gauge,
-    pub lookup_batched_time_cost_sec: Gauge,
+    pub lookup_postprocess_time_cost_sec: Gauge,
+    pub lookup_total_time_cost_sec: Gauge,
 }
 
 impl MetricsHolder {
@@ -80,8 +80,8 @@ impl MetricsHolder {
                 )?,
                 nan_count: m.create_counter_vec("nan_count","nan count of gradient pushed to emb server")?,
                 nan_grad_skipped: m.create_counter_vec("nan_grad_skipped","nan count of gradient filtered by gpu node")?,
-                lookup_create_requests_time_cost_sec: m.create_gauge(
-                    "lookup_create_requests_time_cost_sec", 
+                lookup_preprocess_time_cost_sec: m.create_gauge(
+                    "lookup_preprocess_time_cost_sec", 
                     "lookup preprocess time cost on embedding worker. Include ID hashing, dividing id accroding feature groups and embedding servers."
                 )?,
                 lookup_rpc_time_cost_sec: m.create_gauge(
@@ -90,13 +90,13 @@ impl MetricsHolder {
                 )?,
                 update_gradient_time_cost_sec: m
                     .create_gauge("update_gradient_time_cost_sec", "update gradient time cost on embedding worker for a batch.")?,
-                summation_time_cost_sec: m.create_gauge(
-                    "summation_time_cost_sec",
+                lookup_postprocess_time_cost_sec: m.create_gauge(
+                    "lookup_postprocess_time_cost_sec",
                      "lookup postprocess time cost on embedding worker, mainly is embedding summation."
                 )?,
-                lookup_batched_time_cost_sec: m.create_gauge(
-                    "lookup_batched_time_cost_sec",
-                    "lookup and pre/post process time cost on embedding worker."
+                lookup_total_time_cost_sec: m.create_gauge(
+                    "lookup_total_time_cost_sec",
+                    "lookup and pre/post process total time cost on embedding worker."
                 )?,
             };
             Ok(holder)
@@ -911,7 +911,7 @@ impl EmbeddingWorkerInner {
             start_time.elapsed()
         );
         if let Ok(m) = MetricsHolder::get() {
-            m.lookup_create_requests_time_cost_sec
+            m.lookup_preprocess_time_cost_sec
                 .set(start_time.elapsed().as_secs_f64());
         }
         let start_time = std::time::Instant::now();
@@ -932,9 +932,9 @@ impl EmbeddingWorkerInner {
 
         tracing::debug!("summation time cost {:?}", start_time.elapsed());
         if let Ok(m) = MetricsHolder::get() {
-            m.summation_time_cost_sec
+            m.lookup_postprocess_time_cost_sec
                 .set(start_time.elapsed().as_secs_f64());
-            m.lookup_batched_time_cost_sec
+            m.lookup_total_time_cost_sec
                 .set(start_time_all.elapsed().as_secs_f64());
         }
 

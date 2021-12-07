@@ -31,7 +31,7 @@ struct MetricsHolder {
     pub decode_indices_time_cost_sec: Gauge,
     pub encode_embedding_time_cost_sec: Gauge,
     pub lookup_inference_batch_time_cost_sec: Gauge,
-    pub lookup_mixed_batch_time_cost_sec: Gauge,
+    pub lookup_hashmap_time_cost_sec: Gauge,
     pub gradient_id_miss_count: IntCounter,
 }
 
@@ -64,9 +64,9 @@ impl MetricsHolder {
                     "lookup_inference_batch_time_cost_sec",
                     "lookup time cost for a inference request",
                 )?,
-                lookup_mixed_batch_time_cost_sec: m.create_gauge(
-                    "lookup_mixed_batch_time_cost_sec",
-                    "batched lookup time cost on embedding server when training",
+                lookup_hashmap_time_cost_sec: m.create_gauge(
+                    "lookup_hashmap_time_cost_sec",
+                    "batched lookup time cost from hashmap on embedding server when training",
                 )?,
                 gradient_id_miss_count: m.create_counter(
                     "gradient_id_miss_count",
@@ -349,7 +349,7 @@ impl EmbeddingParameterServiceInner {
         let start_time = std::time::Instant::now();
         let embedding = self.batched_lookup(indices, is_training).await;
         if let Ok(m) = MetricsHolder::get() {
-            m.lookup_mixed_batch_time_cost_sec
+            m.lookup_hashmap_time_cost_sec
                 .set(start_time.elapsed().as_secs_f64());
         }
 
