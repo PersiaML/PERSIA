@@ -675,7 +675,7 @@
           "refId": "A"
         }
       ],
-      "title": "lookup preprocess requests time cost on embedding worker",
+      "title": "lookup preprocess time cost on embedding worker",
       "type": "timeseries"
     },
     {
