@@ -10,7 +10,7 @@ spec:
     PERSIA_NN_WORKER_ENTRY: /home/PERSIA/examples/src/adult-income/train.py
     PERSIA_DATALOADER_ENTRY: /home/PERSIA/examples/src/adult-income/data_loader.py
   env:
-    - name: PERSIA_NATS_IP
+    - name: PERSIA_NATS_URL
       value: nats://persia-nats-service:4222
 
   embeddingParameterServer:
