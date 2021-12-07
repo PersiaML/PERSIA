@@ -61,7 +61,7 @@ if __name__ == "__main__":
         )
         console_scripts.append("persia-k8s-utils=persia.k8s_utils:cli")
 
-    install_requires = ["colorlog", "pyyaml", "click"]
+    install_requires = ["colorlog", "pyyaml", "click", "honcho"]
 
     if USE_CUDA:
         name_suffix = os.getenv("PERSIA_CUDA_VERSION", "")
