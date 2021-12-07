@@ -74,7 +74,7 @@ class DDPOption(DistributedBaseOption):
     """Implements an option to convert torch model to a DDP model.
 
     Current `init_method` in ``persia.distributed.DDPOption`` only support `nccl` and `gloo`. You can set
-    ``init_method=nccl`` if your PERSIA task is training on the cluster with the CUDA device. 
+    ``init_method=nccl`` if your PERSIA task is training on the cluster with the CUDA device.
     Or set ``init_method=gloo`` if your PERSIA task is training on the cluster only with the CPU.
 
     For example:
@@ -238,42 +238,42 @@ def _select_bagua_algorithm(
 
 class BaguaDistributedOption(DistributedBaseOption):
     """Implements an option to convert torch model to a bagua distributed model.
-    
-        Example for `BaguaDistributedOption`:
 
-        .. code-block:: python
+    Example for `BaguaDistributedOption`:
 
-            from persia.distributed import BaguaDistributedOption 
+    .. code-block:: python
 
-            kwargs = {
-                "enable_bagua_net": True
-            }
-            bagua_option = BaguaDistributedOption("gradient_allreduce", **kwargs)
+        from persia.distributed import BaguaDistributedOption
 
-        Algorithm supported in `Bagua`:
+        kwargs = {
+            "enable_bagua_net": True
+        }
+        bagua_option = BaguaDistributedOption("gradient_allreduce", **kwargs)
 
-        +-----------------------------+-------------+
-        |Algorithm Name               |arguments    |
-        +=============================+=============+
-        |gradient_allreduce           |False        |
-        +-----------------------------+-------------+
-        |decentralized                |False        |
-        +-----------------------------+-------------+
-        |low_precision_decentralized  |False        |
-        +-----------------------------+-------------+
-        |qadam                        |True         |
-        +-----------------------------+-------------+
-        |bytegrad                     |False        |
-        +-----------------------------+-------------+
-        |async                        |True         |
-        +-----------------------------+-------------+
+    Algorithm supported in `Bagua`:
 
-        .. note:: 
-            You can review `Bagua Algorithm <https://tutorials.baguasys.com/algorithms/>`_ for more details,
-            especially for those algorithms with `arguments`. 
+    +-----------------------------+-------------+
+    |Algorithm Name               |arguments    |
+    +=============================+=============+
+    |gradient_allreduce           |False        |
+    +-----------------------------+-------------+
+    |decentralized                |False        |
+    +-----------------------------+-------------+
+    |low_precision_decentralized  |False        |
+    +-----------------------------+-------------+
+    |qadam                        |True         |
+    +-----------------------------+-------------+
+    |bytegrad                     |False        |
+    +-----------------------------+-------------+
+    |async                        |True         |
+    +-----------------------------+-------------+
 
-        .. note::
-            `Bagua` only supports PERSIA training task on the cluster with the CUDA device.
+    .. note::
+        You can review `Bagua Algorithm <https://tutorials.baguasys.com/algorithms/>`_ for more details,
+        especially for those algorithms with `arguments`.
+
+    .. note::
+        `Bagua` only supports PERSIA training task on the cluster with the CUDA device.
 
     """
 

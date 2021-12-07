@@ -120,8 +120,10 @@ class IDTypeFeature:
 
 class IDTypeFeatureWithSingleID:
     """``IDTypeFeatureWithSingleID`` is a special format of ``IDTypeFeature`` where there is only one id for each sample in the batch.
+    ``IDTypeFeatureWithSingleID`` only has a one-time type check compared to ``IDTypeFeature``, it can speed up the data preprocessing
+    significantly with large batch size.
 
-    Example for IDTypeFeatureWithSingleID:
+    Exampl for IDTypeFeatureWithSingleID:
 
     .. code-block:: python
 
@@ -137,7 +139,7 @@ class IDTypeFeatureWithSingleID:
         ``IDTypeFeatureWithSingleID`` requires ``np.uint64`` as type for its elements.
 
     .. note::
-        ``IDTypeFeatureWithSingleID`` not allow exists the empty sample in batch data. You should use ``IDTypeFeature`` instead in this case. 
+        ``IDTypeFeatureWithSingleID`` not allow exists the empty sample in batch data. You should use ``IDTypeFeature`` instead in this case.
     """
 
     def __init__(self, name: str, data: np.ndarray):

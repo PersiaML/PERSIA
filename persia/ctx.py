@@ -165,7 +165,7 @@ class DataCtx(BaseCtx):
 
     .. note::
         The examples cannot be run directly, you should launch the `nn_worker`, `embedding-worker`,
-        `embedding-parameter-server` and `nats-server` to ensure the example gets the correct result.
+        `embedding-parameter-server`, and `nats-server` to ensure the example gets the correct result.
     """
 
     def __init__(
@@ -225,8 +225,12 @@ class EmbeddingCtx(BaseCtx):
                 (output, label) = ctx.forward(persia_training_batch)
 
     .. note::
-        The example cannot be run directly, you should launch the `embedding-worker` and `embedding-parameter-server`
-        to ensure the example gets the correct result.
+        The examples cannot be run directly, you should launch the `nn_worker`, `embedding-worker`,
+        `embedding-parameter-server`, and `nats-server` to ensure the example gets the correct result..
+
+    .. note::
+        If you set ``device_id=None``, the training data and the model will place in host memory
+        rather than in `CUDA` device memory in default.
 
     """
 
@@ -561,14 +565,14 @@ class EmbeddingCtx(BaseCtx):
     def get_embedding_from_data(
         self, persia_batch: PersiaBatch, device_id: Optional[int] = None
     ) -> PersiaTrainingBatch:
-        """Get `PersiaTrainingBatch` of the input batch data.
+        """Get embeddings of the serialized input batch data.
 
         Arguments:
-            persia_batch (PersiaBatch): Input data without embeddings.
+            persia_batch (PersiaBatch): Input data without embeddings..
             device_id (int, optional): The CUDA device to use for this process.
 
         Returns:
-            Input data with embeddings.
+            PersiaTrainingBatch that contains id_type_feature_embeddings.
         """
 
         return self.common_context.get_embedding_from_data(
@@ -585,7 +589,7 @@ class EmbeddingCtx(BaseCtx):
             device_id (int, optional): The CUDA device to use for this process.
 
         Returns:
-            Input data with embeddings.
+            PersiaTrainingBatch that contains id_type_feature_embeddings.
         """
 
         return self.common_context.get_embedding_from_bytes(
@@ -626,10 +630,6 @@ class TrainCtx(EmbeddingCtx):
                 output, labels = ctx.forward(persia_training_batch)
                 loss = loss_fn(output, labels[0])
                 scaled_loss = ctx.backward(loss)
-
-    .. note::
-        If you set ``device_id=None``, the default training data will place in host memory
-        rather than in `CUDA` device memory.
 
     If you want to train the PERSIA task in a distributed environment, we have already provided the corresponding distributed
     data-parallel option for you to use. ``TrainCtx`` will use the default `distributed_option` when the environment ``WORLD_SIZE > 1``.
