@@ -73,9 +73,10 @@ def _batch_size_check(
 
 
 class IDTypeFeature:
-    """IDTypeFeature is a lil sparse matrix.
+    """``IDTypeFeature`` is a sparse matrix in `LIL <https://scipy-lectures.org/advanced/scipy_sparse/lil_matrix.html>`_  format
+    which contains categorical ID data.
 
-    Example for IDTypeFeature:
+    Example for `IDTypeFeature`:
 
     .. code-block:: python
 
@@ -98,7 +99,6 @@ class IDTypeFeature:
 
     .. note::
         ``IDTypeFeature`` requires ``np.uint64`` as type for its elements.
-
     """
 
     def __init__(self, name: str, data: List[np.ndarray]):
@@ -135,6 +135,9 @@ class IDTypeFeatureWithSingleID:
 
     .. note::
         ``IDTypeFeatureWithSingleID`` requires ``np.uint64`` as type for its elements.
+
+    .. note::
+        ``IDTypeFeatureWithSingleID`` not allow exists the empty sample in batch data. You should use ``IDTypeFeature`` instead in this case. 
     """
 
     def __init__(self, name: str, data: np.ndarray):
@@ -156,10 +159,10 @@ class IDTypeFeatureWithSingleID:
 
 class NdarrayDataBase:
     """``NdarrayDataBase`` is a data structure that supports various datatype and multiple dimension data. PERSIA needs to convert
-    the ``NdarrayDataBase`` to the ``torch.Tensor`` so the datatype that it support is the intersection of 
-    `NumPy datatype <https://numpy.org/doc/stable/user/basics.types.html#array-types-and-conversions-between-types>`_ 
+    the ``NdarrayDataBase`` to the ``torch.Tensor`` so the datatype that it supports is the intersection of
+    `NumPy datatype <https://numpy.org/doc/stable/user/basics.types.html#array-types-and-conversions-between-types>`_
     and `PyTorch datatype <https://pytorch.org/docs/stable/tensors.html#data-types>`_.
-    
+
     Following datatype is supported for ``NdarrayDataBase``:
 
     +----------+
@@ -215,7 +218,7 @@ class Label(NdarrayDataBase):
     """``Label`` is the ``subclass`` of ``NdarrayDataBase`` that you can add various datatype and multiple dimension
     data.
 
-    Example for Label:
+    Example for `Label`:
 
     .. code-block:: python
 
@@ -253,7 +256,7 @@ class NonIDTypeFeature(NdarrayDataBase):
     """``NonIDTypeFeature`` is the ``subclass`` of ``NdarrayDataBase`` that you can add various datatype and multiple dimension
     data.
 
-    Example for NonIDTypeFeature:
+    Example for `NonIDTypeFeature`:
 
     .. code-block:: python
 
@@ -317,6 +320,9 @@ class PersiaBatch:
             requires_grad=True
             meta=meta_bytes
         )
+
+    .. note::
+        Labels data should be exists if set ``requires_grad=True``.
     """
 
     def __init__(

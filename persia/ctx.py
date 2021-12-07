@@ -165,7 +165,7 @@ class DataCtx(BaseCtx):
 
     .. note::
         The examples cannot be run directly, you should launch the `nn_worker`, `embedding-worker`,
-        `embedding-parameter-server` and `nats-server` to ensure the example gets the correct result. 
+        `embedding-parameter-server` and `nats-server` to ensure the example gets the correct result.
     """
 
     def __init__(
@@ -630,10 +630,10 @@ class TrainCtx(EmbeddingCtx):
     .. note::
         If you set ``device_id=None``, the default training data will place in host memory
         rather than in `CUDA` device memory.
-    
-    If you want to train the PERSIA task in a distributed environment, we have already provided the corresponding distributed 
-    data-parallel option for you to use. ``TrainCtx`` will use the default `distributed_option` when the environment ``WORLD_SIZE > 1``. 
-    The default distributed option is `persia.distributed.DDPOption`. You can configure the ``DDPOption`` to adapt to your 
+
+    If you want to train the PERSIA task in a distributed environment, we have already provided the corresponding distributed
+    data-parallel option for you to use. ``TrainCtx`` will use the default `distributed_option` when the environment ``WORLD_SIZE > 1``.
+    The default distributed option is `persia.distributed.DDPOption`. You can configure the ``DDPOption`` to adapt to your
     requirements. Example for `DDPOption`:
 
     .. code-block::
@@ -657,9 +657,9 @@ class TrainCtx(EmbeddingCtx):
         ) as ctx:
             ...
 
-    `Bagua <https://github.com/BaguaSys/bagua>`_ is the other data-parallel framework that integration with PERSIA. You can use 
+    `Bagua <https://github.com/BaguaSys/bagua>`_ is the other data-parallel framework that integration with PERSIA. You can use
     ``persia.distributed.BaguaDistributedOption`` to replace the ``DDPOption`` to speed up the training. For more details about
-    the ``BaguaDistributedOption``, you can review the `tutorial <https://tutorials.baguasys.com/algorithms/>`_ of `Bagua`.  
+    the ``BaguaDistributedOption``, you can review the `tutorial <https://tutorials.baguasys.com/algorithms/>`_ of `Bagua`.
     Example for `BaguaDistributedOption`:
 
     .. code-block::
@@ -681,7 +681,7 @@ class TrainCtx(EmbeddingCtx):
         ) as ctx:
             ...
 
-    .. note:: 
+    .. note::
         ``BaguaDistributedOption`` only supports the `CUDA` environment, if you want to run PERSIA on the CPU cluster,
         try ``DDPOption`` with `backend=gloo` instead of ``BaguaDistributedOption``.
     """
@@ -1038,9 +1038,9 @@ class InferCtx(EmbeddingCtx):
                 id_type_feature_embedding_tensors,
                 label_tensors
             )= persia_context.prepare_features(batch)
-    
+
     .. note::
-        The example cannot be run directly, you should launch the `embedding-worker` and `embedding-parameter-server` 
+        The example cannot be run directly, you should launch the `embedding-worker` and `embedding-parameter-server`
         to ensure the example gets correct result.
     """
 
