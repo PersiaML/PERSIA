@@ -73,7 +73,17 @@ def _batch_size_check(
 
 
 class IDTypeFeature:
-    """IDTypeFeature is a lil sparse matrix."""
+    """IDTypeFeature is a lil sparse matrix.
+
+    IDTypeFeature is a tuple that combine the feature_name and lil matrix.
+    code-block:: python
+        import numpy as np
+
+        from persia.embedding.data import IDTypeFeature
+
+        lil_matrix = [np.array([1], np.uint64) for i in range(5)]
+        id_type_feature = IDTypeFeature("id_type_feature_demo", lil_matrix)
+    """
 
     def __init__(self, name: str, data: List[np.ndarray]):
         """
