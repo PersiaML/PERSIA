@@ -5,7 +5,7 @@ from persia.prelude import OptimizerBase
 
 
 class Optimizer(ABC):
-    r"""Base optimizer to configurate the sparse embedding update behavior."""
+    r"""Base optimizer to configurate the embedding update behavior."""
 
     def __init__(self):
         self.optimizer_base = OptimizerBase()

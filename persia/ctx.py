@@ -146,16 +146,26 @@ class DataCtx(BaseCtx):
     r"""This data context provides communication functionality to data generator component.
     Used for sending a PersiaBatch to the nn worker and embedding worker.
 
-    Example:
-        >>> from persia.prelude import PersiaBatch
-        >>> loader = make_simple_loader()
-        >>> with DataCtx() as ctx:
-        >>>     for (non_id_type_features, id_type_features, label) in loader:
-        >>>         batch_data = PersiaBatch()
-        >>>         batch_data.add_non_id_type_features(non_id_type_features)
-        >>>         batch_data.add_id_type_features(id_type_features)
-        >>>         batch_data.add_label(label)
-        >>>         ctx.send_data(batch_data)
+    Example for `DataCtx`:
+
+    .. code-block:: python
+
+        from persia.embedding.data import PersiaBatch
+
+        loader = make_simple_loader()
+        with DataCtx() as ctx:
+            for (non_id_type_features, id_type_features, labels) in loader:
+                batch_data = PersiaBatch(
+                    id_type_features=id_type_features,
+                    non_id_type_features,
+                    label,
+                    requires_grad=True
+                )
+                ctx.send_data(persia_batch)
+
+    .. note::
+        The examples cannot be run directly, you should launch the `nn_worker`, `embedding-worker`,
+        `embedding-parameter-server` and `nats-server` to ensure the example gets the correct result. 
     """
 
     def __init__(
@@ -164,13 +174,13 @@ class DataCtx(BaseCtx):
         **kwargs,
     ):
         super(DataCtx, self).__init__(*args, **kwargs)
-        self.prepare()
+        self._prepare()
         _logger.info("Data ctx prepare done.")
 
-    def prepare(self):
+    def _prepare(self):
         """Do some preparation to init `DataCtx`."""
 
-        self.common_context.init_nats_publisher(None)
+        self.common_context.init_nats_publisher()
         self.common_context.wait_servers_ready()
 
     def send_data(self, persia_batch: PersiaBatch):
@@ -188,22 +198,36 @@ class EmbeddingCtx(BaseCtx):
     depending on different preprocess_mode. The simplest way to get this context is by using ``persia.ctx.eval_ctx()``
     to get the ``EmbeddingCtx`` instance.
 
-    Example:
-        >>> from persia.prelude import PersiaBatch
-        >>> model = get_dnn_model()
-        >>> loader = make_dataloader()
-        >>> embedding_config = EmbeddingConfig()
-        >>> with EmbeddingCtx(
-        ...     model=model,
-        ...     PreprocessMode.EVAL,
-        ...     embedding_config
-        ... ) as ctx:
-        >>>     for (non_id_type_feature, id_type_features, label) in loader:
-        >>>         persia_batch = PersiaBatch(id_type_features)
-        >>>         persia_batch.add_non_id_type_feature(non_id_type_feature)
-        >>>         persia_batch.add_label(label)
-        >>>         persia_training_batch = ctx.get_embedding_from_data(persia_batch)
-        >>>         (output, label) = ctx.forward(persia_training_batch)
+    Example for `EmbeddingCtx`:
+
+    .. code-block:: python
+
+        from persia.ctx import EmbeddingCtx, PreprocessMode
+        from persia.embedding.data import PersiaBatch
+
+        model = get_dnn_model()
+        loader = make_dataloader()
+        device_id = 0
+
+        with EmbeddingCtx(
+            PreprocessMode.EVAL,
+            model=model,
+            device_id=device_id
+        ) as ctx:
+            for (non_id_type_features, id_type_features, labels) in loader:
+                persia_batch = PersiaBatch(
+                    id_type_features
+                    non_id_type_features=non_id_type_features,
+                    labels=labels
+                    requires_grad=False
+                )
+                persia_training_batch = ctx.get_embedding_from_data(persia_batch)
+                (output, label) = ctx.forward(persia_training_batch)
+
+    .. note::
+        The example cannot be run directly, you should launch the `embedding-worker` and `embedding-parameter-server`
+        to ensure the example gets the correct result.
+
     """
 
     def __init__(
@@ -236,6 +260,7 @@ class EmbeddingCtx(BaseCtx):
         embedding_config: EmbeddingConfig,
     ):
         """Apply Embedding config to embedding servers.
+
         Arguments:
             embedding_config (EmbeddingConfig): The embedding configuration that will be sent to the embedding server.
         """
@@ -253,7 +278,7 @@ class EmbeddingCtx(BaseCtx):
         """Call `prepare_features` and then do a forward step of the model in context.
 
         Arguments:
-            batch (PersiaTrainingBatch): Training data provided by PersiaML upstream including
+            batch (PersiaTrainingBatch): Training data provided by PERSIA upstream including
                 non_id_type_features ,labels, id_type_feature_embeddings and meta info.
 
         Returns:
@@ -273,7 +298,7 @@ class EmbeddingCtx(BaseCtx):
         training before convert the `persia.Tensor` to `torch.Tensor`.
 
         Arguments:
-            batch (PersiaTrainingBatch): Training data provided by PersiaML upstream including
+            batch (PersiaTrainingBatch): Training data provided by PERSIA upstream including
                 non_id_type_features, labels, id_type_feature_embeddings and meta info.
 
         Returns:
@@ -545,7 +570,10 @@ class EmbeddingCtx(BaseCtx):
         Returns:
             Input data with embeddings.
         """
-        return self.common_context.get_embedding_from_data(persia_batch.data, device_id)
+
+        return self.common_context.get_embedding_from_data(
+            persia_batch.data, device_id or self.device_id
+        )
 
     def get_embedding_from_bytes(
         self, data: bytes, device_id: Optional[int] = None
@@ -559,32 +587,103 @@ class EmbeddingCtx(BaseCtx):
         Returns:
             Input data with embeddings.
         """
-        return self.common_context.get_embedding_from_bytes(data, device_id)
+
+        return self.common_context.get_embedding_from_bytes(
+            data, device_id or self.device_id
+        )
 
 
 class TrainCtx(EmbeddingCtx):
     r"""Subclass of ``EmbeddingCtx`` that provide the backward ability to update the embeddings.
 
-    Example:
-        >>> import torch
-        >>> ...
-        >>> from persia.env import get_local_rank
-        >>> ...
-        >>> device_id = get_local_rank()
-        >>> model = get_dnn_model()
-        >>> model.cuda(device_id)
-        >>> embedding_optimizer = persia.embedding.optim.SGD(lr=1e-3)
-        >>> dense_optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
-        >>> loss_fn = torch.nn.BCELoss(reduction="mean")
-        >>> with TrainCtx(
-        ...     embedding_optimizer,
-        ...     dense_optimizer,
-        ...     device_id=device_id
-        >>> ) as ctx:
-        >>>     for persia_batch in datalaoder:
-        >>>         output, labels = ctx.forward(persia_batch)
-        >>>         loss = loss_fn(output, labels[0])
-        >>>         scaled_loss = ctx.backward(loss)
+    Example for `TrainCtx`:
+
+    .. code-block:: python
+
+        import torch
+        import persia
+        from persia.data import Dataloder, StreamDataset
+
+        device_id = 0
+        model = get_dnn_model()
+        model.cuda(device_id)
+
+        embedding_optimizer = persia.embedding.optim.SGD(lr=1e-3)
+        dense_optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+        loss_fn = torch.nn.BCELoss(reduction="mean")
+
+        prefetch_size = 15
+        stream_dataset = StreamDataset(prefetch_size)
+
+        with TrainCtx(
+            embedding_optimizer,
+            dense_optimizer,
+            model=model,
+            device_id=device_id
+        ) as ctx:
+            dataloader = Dataloder(stream_dataset)
+            for persia_training_batch in datalaoder:
+                output, labels = ctx.forward(persia_training_batch)
+                loss = loss_fn(output, labels[0])
+                scaled_loss = ctx.backward(loss)
+
+    .. note::
+        If you set ``device_id=None``, the default training data will place in host memory
+        rather than in `CUDA` device memory.
+    
+    If you want to train the PERSIA task in a distributed environment, we have already provided the corresponding distributed 
+    data-parallel option for you to use. ``TrainCtx`` will use the default `distributed_option` when the environment ``WORLD_SIZE > 1``. 
+    The default distributed option is `persia.distributed.DDPOption`. You can configure the ``DDPOption`` to adapt to your 
+    requirements. Example for `DDPOption`:
+
+    .. code-block::
+
+        import persia
+        from persia.distributed import DDPOption
+
+        backend = "nccl"
+        # backend = "gloo" # If you want to train the PERSIA on the CPU cluster.
+
+        ddp_option = DDPOption(
+            backend=backend,
+            init_method="tcp"
+        )
+
+        with TrainCtx(
+            embedding_optimizer,
+            dense_optimizer,
+            model=model,
+            distributed_option=ddp_option
+        ) as ctx:
+            ...
+
+    `Bagua <https://github.com/BaguaSys/bagua>`_ is the other data-parallel framework that integration with PERSIA. You can use 
+    ``persia.distributed.BaguaDistributedOption`` to replace the ``DDPOption`` to speed up the training. For more details about
+    the ``BaguaDistributedOption``, you can review the `tutorial <https://tutorials.baguasys.com/algorithms/>`_ of `Bagua`.  
+    Example for `BaguaDistributedOption`:
+
+    .. code-block::
+
+        from persia.distributed import BaguaDistributedOption
+
+        algorithm = "gradient_allreduce"
+        bagua_args = {}
+        bagua_option = BaguaDistributedOption(
+            algorithm,
+            **bagua_args
+        )
+
+        with TrainCtx(
+            embedding_optimizer,
+            dense_optimizer,
+            model=model,
+            distributed_option=bagua_option
+        ) as ctx:
+            ...
+
+    .. note:: 
+        ``BaguaDistributedOption`` only supports the `CUDA` environment, if you want to run PERSIA on the CPU cluster,
+        try ``DDPOption`` with `backend=gloo` instead of ``BaguaDistributedOption``.
     """
 
     def __init__(
@@ -702,7 +801,7 @@ class TrainCtx(EmbeddingCtx):
             self.common_context.init_master_discovery_service(master_addr)
             _logger.info(f"init addr is {master_addr}")
         else:
-            self.common_context.init_master_discovery_service(None)
+            self.common_context.init_master_discovery_service()
             master_addr = self.common_context.master_addr
             _logger.info(f"master addr is {master_addr}")
         return master_addr
@@ -898,7 +997,7 @@ class TrainCtx(EmbeddingCtx):
 
 
 def cnt_ctx() -> Optional[BaseCtx]:
-    """Get the BaseCtx recently entered."""
+    """Get the `BaseCtx` recently entered."""
     return _CURRENT_CXT
 
 
@@ -908,18 +1007,46 @@ def eval_ctx(*args, **kwargs) -> EmbeddingCtx:
 
 
 class InferCtx(EmbeddingCtx):
-    r"""Subclass of ``EmbeddingCtx`` that provide the forward ability without nats servers.
+    r"""Subclass of ``EmbeddingCtx`` that provide the forward ability without nats-servers.
 
-    Example:
-        >>> from persia.ctx import InferCtx
-        >>> persia_context = InferCtx()
-        >>> batch = persia_context.get_embedding_from_bytes(batch, device_id)
-        >>> model_input = persia_context.prepare_features(batch)
+    Example for `InferCtx`:
+
+    .. code-block:: python
+
+        import numpy as np
+        from persia.ctx import InferCtx
+        from persia.embedding.data import PersiaBatch, IDTypeFeatureWithSingleID
+
+        device_id = 0
+        id_type_feature = IDTypeFeatureWithSingleID(
+            "id_type_feature",
+            np.array([1, 2, 3], np.uint64)
+        )
+        persia_batch = PersiaBatch([id_type_feature], requires_grad=False)
+
+        embedding_worker_address_list = [
+            "localhost: 8888",
+            "localhost: 8889",
+            "localhost: 8890"
+        ]
+        with InferCtx(embedding_worker_address_list, device_id=device_id) as infer_ctx:
+            persia_training_batch = persia_context.get_embedding_from_bytes(
+                persia_batch.to_bytes(),
+            )
+            (
+                non_id_type_feature_tensors,
+                id_type_feature_embedding_tensors,
+                label_tensors
+            )= persia_context.prepare_features(batch)
+    
+    .. note::
+        The example cannot be run directly, you should launch the `embedding-worker` and `embedding-parameter-server` 
+        to ensure the example gets correct result.
     """
 
     def __init__(
         self,
-        embedding_worker_addrs: List[str],
+        embedding_worker_address_list: List[str],
         *args,
         **kwargs,
     ):
@@ -929,7 +1056,7 @@ class InferCtx(EmbeddingCtx):
         """
         super(InferCtx, self).__init__(PreprocessMode.INFERENCE, *args, **kwargs)
 
-        for addr in embedding_worker_addrs:
+        for addr in embedding_worker_address_list:
             self.common_context.init_rpc_client_with_addr(addr)
 
     r"""Wait for embedding worker and embedding server ready for serving."""

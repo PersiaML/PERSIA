@@ -20,7 +20,7 @@ MAX_BATCH_SIZE = 65535
 SKIP_CHECK_PERSIA_DATA = bool(int(os.environ.get("SKIP_CHECK_PERSIA_DATA", "0")))
 
 _ND_ARRAY_SUPPORT_TYPE = set(
-    [np.bool, np.int8, np.int16, np.int32, np.int64, np.float32, np.float64, np.uint8]
+    [np.bool_, np.int8, np.int16, np.int32, np.int64, np.float32, np.float64, np.uint8]
 )
 
 
@@ -75,15 +75,30 @@ def _batch_size_check(
 class IDTypeFeature:
     """IDTypeFeature is a lil sparse matrix.
 
-    IDTypeFeature is a tuple that combine the feature_name and lil matrix.
-    # %%
-        import numpy as np
+    Example for IDTypeFeature:
 
+    .. code-block:: python
+
+        import numpy as np
         from persia.embedding.data import IDTypeFeature
 
-        lil_matrix = [np.array([1], np.uint64) for i in range(5)]
-        id_type_feature = IDTypeFeature("id_type_feature_demo", lil_matrix)
-    # %%
+        lil_matrix = [
+            np.array([1], dtype=np.uint64) for i in range(5)
+        ]
+        id_type_feature = IDTypeFeature("id_type_feature_with_single_id", lil_matrix)
+
+        lil_matrix = [
+            np.array([], dtype=np.uint64), # allow empty sample
+            np.array([10001], dtype=np.uint64),
+            np.array([], dtype=np.uint64),
+            np.array([10002], dtype=np.uint64),
+            np.array([10010], dtype=np.uint64)
+        ]
+        id_type_feature = IDTypeFeature("id_type_feature_with_empty_sample", lil_matrix)
+
+    .. note::
+        ``IDTypeFeature`` requires ``np.uint64`` as type for its elements.
+
     """
 
     def __init__(self, name: str, data: List[np.ndarray]):
@@ -104,7 +119,23 @@ class IDTypeFeature:
 
 
 class IDTypeFeatureWithSingleID:
-    """IDTypeFeatureWithSingleID is a special format of IDTypeFeature where there is only one id for each sample in the batch."""
+    """``IDTypeFeatureWithSingleID`` is a special format of ``IDTypeFeature`` where there is only one id for each sample in the batch.
+
+    Example for IDTypeFeatureWithSingleID:
+
+    .. code-block:: python
+
+        import numpy as np
+        from persia.embedding.data import IDTypeFeatureWithSingleID
+
+        batch_with_single_id = np.array(
+            [10001, 10002, 10010, 10020, 10030], np.uint64
+        )
+        id_type_feature = IDTypeFeatureWithSingleID("id_type_feature_demo", batch_with_single_id)
+
+    .. note::
+        ``IDTypeFeatureWithSingleID`` requires ``np.uint64`` as type for its elements.
+    """
 
     def __init__(self, name: str, data: np.ndarray):
         """
@@ -123,7 +154,36 @@ class IDTypeFeatureWithSingleID:
         return len(self.data)
 
 
-class _NdarrayDataBase:
+class NdarrayDataBase:
+    """``NdarrayDataBase`` is a data structure that supports various datatype and multiple dimension data. PERSIA needs to convert
+    the ``NdarrayDataBase`` to the ``torch.Tensor`` so the datatype that it support is the intersection of 
+    `NumPy datatype <https://numpy.org/doc/stable/user/basics.types.html#array-types-and-conversions-between-types>`_ 
+    and `PyTorch datatype <https://pytorch.org/docs/stable/tensors.html#data-types>`_.
+    
+    Following datatype is supported for ``NdarrayDataBase``:
+
+    +----------+
+    |datatype  |
+    +==========+
+    |np.bool   |
+    +----------+
+    |np.int8   |
+    +----------+
+    |np.int16  |
+    +----------+
+    |np.int32  |
+    +----------+
+    |np.int64  |
+    +----------+
+    |np.float32|
+    +----------+
+    |np.float64|
+    +----------+
+    |np.uint8  |
+    +----------+
+
+    """
+
     DEFAULT_NAME = "ndarray_base"
 
     def __init__(self, data: np.ndarray, name: str = None):
@@ -150,11 +210,65 @@ class _NdarrayDataBase:
         return len(self.data)
 
 
-class Label(_NdarrayDataBase):
+class Label(NdarrayDataBase):
+
+    """``Label`` is the ``subclass`` of ``NdarrayDataBase`` that you can add various datatype and multiple dimension
+    data.
+
+    Example for Label:
+
+    .. code-block:: python
+
+        import numpy as np
+        from persia.embedding.data import Label
+
+        label_data = np.array([35000, 36000, 100000, 5000, 10000], dtype=np.float32)
+        label = Label(label_data, name="income_label")
+
+        label_data = np.array([True, False, True, False, True], dtype=np.bool)
+        label = Label(label_data, name="ctr_bool_label")
+
+    Or you can add multiple dimension data to avoid memory fragments and type checks.
+
+    .. code-block:: python
+
+        import numpy as np
+        from persia.embedding.data import Label
+
+        label_data = np.array([
+                [True, False],
+                [False, True],
+                [True, True],
+                [False, False],
+                [False, True]
+            ], dtype=np.bool
+        )
+        label = Label(label_data, "click_with_is_adult")
+    """
+
     DEFAULT_NAME = "label_anonymous"
 
 
-class NonIDTypeFeature(_NdarrayDataBase):
+class NonIDTypeFeature(NdarrayDataBase):
+    """``NonIDTypeFeature`` is the ``subclass`` of ``NdarrayDataBase`` that you can add various datatype and multiple dimension
+    data.
+
+    Example for NonIDTypeFeature:
+
+    .. code-block:: python
+
+        import numpy as np
+        from persia.embedding.data import NonIDTypeFeature
+
+        # float32 data
+        non_id_type_feature_data = np.array([163, 183, 161, 190 ,170], dtype=np.float32)
+        non_id_type_feature = NonIDTypeFeature(non_id_type_feature_data, "height")
+
+        # image data
+        non_id_type_feature_data = np.zeros((5, 3, 32, 32), dtype=np.uint8)
+        non_id_type_feature = NonIDTypeFeature(non_id_type_feature_data, "image_data")
+    """
+
     DEFAULT_NAME = "non_id_type_feature_anonymous"
 
 
@@ -162,35 +276,47 @@ class PersiaBatch:
     r"""`PersiaBatch` is the type of dataset used internally in Persia.
     It wraps the id_type_features, non_id_type_features, labels and meta bytes data.
 
-    Example:
-        >>> import time
-        >>> import json
-        >>> ...
-        >>> import numpy as np
-        >>> ...
-        >>> from persia.embedding.data import PersiaBatch, NonIDTypeFeature, IDTypeFeature, Label
-        >>> ...
-        >>> batch_size = 1024
-        >>> non_id_type_feature = NonIDTypeFeature(np.zeros((batch_size, 2), dtype=np.float32))
-        >>> label = Label(np.ones((batch_size, 2), dtype=np.float32))
-        >>> id_type_feature_num = 3
-        >>> id_type_feature_max_sample_size = 100
-        >>> id_type_features = [
-        ...    IDTypeFeature(f"feature_{idx}", [np.ones((np.random.randint(id_type_feature_max_sample_size)), dtype=np.uint64)
-        ...        for _ in range(batch_size)
-        ...    ]), for idx in range(id_type_feature_num))
-        ... ]
-        >>> meta_info = {
-        ...     timestamp: time.time(),
-        ...     weight: 0.9,
-        ... }
-        >>> meta_bytes = json.dumps(meta_info)
-        >>> requires_grad = True
-        >>> persia_batch = PersiaBatch(id_type_features,
-        ...     non_id_type_features=[non_id_type_feature],
-        ...     labels=[label] requires_grad=requires_grad,
-        ...     meta=meta_bytes
-        ... )
+    Example for `PersiaBatch`:
+
+    .. code-block:: python
+
+        import time
+        import json
+        import numpy as np
+        from persia.embedding.data import PersiaBatch, NonIDTypeFeature, IDTypeFeature, Label
+
+        batch_size = 1024
+
+        non_id_type_feature = NonIDTypeFeature(np.zeros((batch_size, 2), dtype=np.float32))
+
+        label = Label(np.ones((batch_size, 2), dtype=np.float32))
+
+        id_type_feature_num = 3
+        id_type_feature_max_sample_length = 100
+        id_type_features = [
+            IDTypeFeature(f"feature_{idx}",
+                    [
+                        np.ones(
+                            (np.random.randint(id_type_feature_max_sample_length)),
+                            dtype=np.uint64
+                        )
+                        for _ in range(batch_size)
+                    ]
+            ) for idx in range(id_type_feature_num))
+        ]
+
+        meta_info = {
+            timestamp: time.time(),
+            weight: 0.9,
+        }
+        meta_bytes = json.dumps(meta_info)
+
+        persia_batch = PersiaBatch(id_type_features,
+            non_id_type_features=[non_id_type_feature],
+            labels=[label] requires_grad=requires_grad,
+            requires_grad=True
+            meta=meta_bytes
+        )
     """
 
     def __init__(
