@@ -1,13 +1,7 @@
 SERVICE := DEMO
-EXAMPLE := "adult-income"
-IMAGE_PREFIX := ""
-IMAGE_TAG := "dev"
 
 run:
-	make stop && IMAGE_PREFIX="persiaml/" IMAGE_TAG="latest" docker stack deploy -c docker-compose.yml $(SERVICE) && make nn_worker
-
-dev:
-	make stop && IMAGE_PREFIX=$(IMAGE_PREFIX) IMAGE_TAG=$(IMAGE_TAG) docker stack deploy -c docker-compose.yml $(SERVICE) && make nn_worker
+	make stop && docker stack deploy -c docker-compose.yml $(SERVICE) && make nn_worker
 
 stop:
 	docker stack rm $(SERVICE)

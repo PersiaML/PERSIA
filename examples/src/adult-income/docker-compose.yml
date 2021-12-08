@@ -8,15 +8,12 @@ services:
   data_loader:
     env_file:
       - .docker.env
-    environment:
-        TASK_SLOT_ID: "{{.Task.Slot}}"
-        REPLICAS: 1
     depends_on:
       - nn_worker
       - embedding_worker
       - persia_nats_service
-    image: ${IMAGE_PREFIX}persia-cuda-runtime:${IMAGE_TAG}
-    command: persia-launcher data-loader /workspace/data_loader.py
+    image: persiaml/persia-cuda-runtime:latest
+    command: persia-launcher data-loader --replica-index 0 --replica-size 1
     volumes:
       - type: bind
         source: .
@@ -30,12 +27,10 @@ services:
     env_file:
       - .docker.env
     environment:
-      TASK_SLOT_ID: "{{.Task.Slot}}"
       NCCL_SOCKET_IFNAME: eth0
       CUBLAS_WORKSPACE_CONFIG: :4096:8
-      REPLICAS: 1
-    image: ${IMAGE_PREFIX}persia-cuda-runtime:${IMAGE_TAG}
-    command: bash -c "persia-launcher nn-worker /workspace/train.py --nproc-per-node $$NPROC_PER_NODE --node-rank $$(($$TASK_SLOT_ID - 1)) --nnodes 1"
+    image: persiaml/persia-cuda-runtime:latest
+    command: persia-launcher nn-worker --nproc-per-node 1 --nnodes 1 --node-rank 0
     volumes:
       - type: bind
         source: .
@@ -48,13 +43,12 @@ services:
   embedding_worker:
     env_file:
       - .docker.env
-    environment:
-      TASK_SLOT_ID: "{{.Task.Slot}}" 
-      REPLICAS: 1
     depends_on:
-      - server
-    image: ${IMAGE_PREFIX}persia-cuda-runtime:${IMAGE_TAG}
-    command: persia-launcher embedding-worker --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config.yml
+      - embedding_parameter_server
+    image: persiaml/persia-cuda-runtime:latest
+    command: > 
+      bash -c "persia-launcher embedding-worker --embedding-config $$PERSIA_EMBEDDING_CONFIG
+      --global-config $$PERSIA_GLOBAL_CONFIG --replica-index 0 --replica-size 1"
     deploy:
       replicas: 1
       restart_policy:
@@ -64,14 +58,13 @@ services:
         source: .
         target: /workspace
 
-  server:
+  embedding_parameter_server:
     env_file:
       - .docker.env
-    environment:
-      TASK_SLOT_ID: "{{.Task.Slot}}"
-      REPLICAS: 1
-    image: ${IMAGE_PREFIX}persia-cuda-runtime:${IMAGE_TAG}
-    command: persia-launcher embedding-parameter-server --embedding-config /workspace/config/embedding_config.yml --global-config /workspace/config/global_config.yml
+    image: persiaml/persia-cuda-runtime:latest
+    command: > 
+      bash -c "persia-launcher embedding-parameter-server --embedding-config $$PERSIA_EMBEDDING_CONFIG
+      --global-config $$PERSIA_GLOBAL_CONFIG --replica-index 0 --replica-size 1"
     deploy:
       replicas: 1
       restart_policy:
