@@ -19,7 +19,7 @@ _logger = get_default_logger()
 
 
 class IterableDataset(TorchIterableDataset):
-    r"""IterableChannelBase wrap the PersiaBatchDataChannel that provide the channel sender and
+    r"""IterableDataset wrap the PersiaBatchDataChannel that provide the channel sender and
     receiver.
 
     Arguments:
@@ -41,7 +41,7 @@ class IterableDataset(TorchIterableDataset):
 
 
 class StreamingDataset(IterableDataset):
-    r"""NatsStreamingChannel receive data from nats publisher
+    r"""Streaming iterable dataset that receive the `PersiaBatch` from :class:`.DataCtx`.
 
     Arguments:
         buffer_size (int): PersiaBatchDataChannel buffer size
@@ -72,7 +72,7 @@ class PersiaDataset(IterableDataset):
     Not support synchronous data handler temporary.
 
     Arguments:
-        buffer_size (int): PersiaBatchDataChannel buffer size
+        buffer_size (int): :class:`.PersiaBatch` buffer size
         async_iterator (bool, optional): launch the thread to generate the data asynchronous
     """
 

@@ -273,8 +273,8 @@ class BaguaDistributedOption(DistributedBaseOption):
         especially for those algorithms with `arguments`.
 
     .. note::
-        `Bagua` only supports PERSIA training task on the cluster with the CUDA device.
-
+        ``BaguaDistributedOption`` only supports the `CUDA` environment, if you want to run PERSIA task on the CPU cluster,
+        try :class:`.DDPOption` with `backend=gloo` instead of :class:`.BaguaDistributedOption`.
     """
 
     def __init__(self, algorithm: str, **options):
@@ -392,7 +392,8 @@ def get_default_distributed_option(device_id: Optional[int] = None) -> DDPOption
     """Get default distributed option.
 
     Arguments:
-        device_id (int, optional): Cuda device_id.
+        device_id (int, optional): Cuda device_id. Apply ``backend=nccl`` to the ``DDPOption`` If the device_id not None,
+            otherwise use the ``backend=gloo`` for CPU scene.
 
     Returns:
         Default distributed option.
