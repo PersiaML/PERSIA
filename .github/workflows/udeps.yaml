@@ -16,6 +16,8 @@ jobs:
       # get the code
       - uses: actions/checkout@v1
         name: "Repository Checkout"
+        with:
+          submodules: recursive
       # set up rust environment
       - uses: actions-rs/toolchain@v1
         name: "Rust Toolchain Setup"
