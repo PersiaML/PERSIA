@@ -66,7 +66,7 @@ impl MetricsHolder {
                 )?,
                 lookup_hashmap_time_cost_sec: m.create_gauge(
                     "lookup_hashmap_time_cost_sec",
-                    "batched lookup time cost from hashmap on embedding server when training",
+                    "time cost of embedding lookup on embedding server, mainly spent on looking up from hash table.",
                 )?,
                 gradient_id_miss_count: m.create_counter(
                     "gradient_id_miss_count",

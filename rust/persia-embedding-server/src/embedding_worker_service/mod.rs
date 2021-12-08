@@ -82,17 +82,17 @@ impl MetricsHolder {
                 nan_grad_skipped: m.create_counter_vec("nan_grad_skipped","nan count of gradient filtered by gpu node")?,
                 lookup_preprocess_time_cost_sec: m.create_gauge(
                     "lookup_preprocess_time_cost_sec", 
-                    "lookup preprocess time cost on embedding worker. Include ID hashing, dividing id accroding feature groups and embedding servers."
+                    "time cost of preprocess for embedding lookup on embedding worker. Include ID hashing, dividing id accroding feature groups and embedding servers.."
                 )?,
                 lookup_rpc_time_cost_sec: m.create_gauge(
                     "lookup_rpc_time_cost_sec", 
-                    "lookup embedding time cost on embedding worker for a batch, include lookup on embedding server and network transmission."
+                    "time cost of embedding lookup on embedding worker for a batch, include lookup on embedding server (`lookup_hashmap_time_cost_sec`) and network transmission."
                 )?,
                 update_gradient_time_cost_sec: m
                     .create_gauge("update_gradient_time_cost_sec", "update gradient time cost on embedding worker for a batch.")?,
                 lookup_postprocess_time_cost_sec: m.create_gauge(
                     "lookup_postprocess_time_cost_sec",
-                     "lookup postprocess time cost on embedding worker, mainly is embedding summation."
+                    "lookup postprocess time cost on embedding worker, mainly embedding summation."
                 )?,
                 lookup_total_time_cost_sec: m.create_gauge(
                     "lookup_total_time_cost_sec",
