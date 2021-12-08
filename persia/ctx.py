@@ -41,7 +41,7 @@ def _check_finite(tensors: List[torch.Tensor]) -> bool:
 def _cast_dlpack2torch_tensor(
     tensor: Tensor, requires_grad: bool = False
 ) -> torch.Tensor:
-    """Convert the DLPack PythonCapsule to torch tensor
+    """Convert the DLPack PythonCapsule to torch tensor.
 
     Arguments:
         Tensor (Tensor): Tensor wrapper that contains dlpack information.
@@ -99,7 +99,7 @@ class BaseCtx:
 
         # PersiaCommonContext initialize with the rank and world size if
         # it can retrive corresponding information
-        if env.get_rank() is not None and env.get_rank() >= 0:
+        if env.get_rank() is not None:
             replica_index = env.get_rank()
             replica_size = env.get_world_size()
         else:
