@@ -1,0 +1,42 @@
+name: udeps
+
+on: [push, pull_request]
+
+jobs:
+  Test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        # udeps requires nightly
+        rust: [nightly]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      # get the code
+      - uses: actions/checkout@v1
+        name: "Repository Checkout"
+      # set up rust environment
+      - uses: actions-rs/toolchain@v1
+        name: "Rust Toolchain Setup"
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+      # cache build to wait shorter on next builds
+      - uses: actions/cache@v2
+        name: "Cache Setup"
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      # install cargo-udeps
+      - uses: actions-rs/cargo@v1
+        name: "Udeps Installation"
+        with:
+          command: install
+          args: cargo-udeps --locked
+      - name: Run udeps
+        run: cd rust/ && cargo udeps
