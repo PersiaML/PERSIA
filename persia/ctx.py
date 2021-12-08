@@ -41,7 +41,7 @@ def _check_finite(tensors: List[torch.Tensor]) -> bool:
 def _cast_dlpack2torch_tensor(
     tensor: Tensor, requires_grad: bool = False
 ) -> torch.Tensor:
-    """Convert the DLPack PythonCapsule to torch tensor
+    """Convert the DLPack PythonCapsule to torch tensor.
 
     Arguments:
         Tensor (Tensor): Tensor wrapper that contains dlpack information.
@@ -99,7 +99,7 @@ class BaseCtx:
 
         # PersiaCommonContext initialize with the rank and world size if
         # it can retrive corresponding information
-        if env.get_rank() is not None and env.get_rank() >= 0:
+        if env.get_rank() is not None:
             replica_index = env.get_rank()
             replica_size = env.get_world_size()
         else:
@@ -147,14 +147,17 @@ class DataCtx(BaseCtx):
     Used for sending a PersiaBatch to the nn worker and embedding worker.
 
     Example:
-        >>> from persia.prelude import PersiaBatch
+        >>> import numpy as np
+        >>> ...
+        >>> from persia.embedding.data import PersiaBatch, IDTypeFeature
+        >>> ...
+        >>> def make_simple_loader():
+        >>>     yield IDTypeFeature("empty_id_type_feature", [np.array([], np.uint64)])
         >>> loader = make_simple_loader()
+        >>> def fn
         >>> with DataCtx() as ctx:
-        >>>     for (non_id_type_features, id_type_features, label) in loader:
-        >>>         batch_data = PersiaBatch()
-        >>>         batch_data.add_non_id_type_features(non_id_type_features)
-        >>>         batch_data.add_id_type_features(id_type_features)
-        >>>         batch_data.add_label(label)
+        >>>     for id_type_feature in loader:
+        >>>         batch_data = PersiaBatch([id_type_feature], requires_grad=False)
         >>>         ctx.send_data(batch_data)
     """
 
@@ -189,8 +192,12 @@ class EmbeddingCtx(BaseCtx):
     to get the ``EmbeddingCtx`` instance.
 
     Example:
+        >>> import torch
+        >>> import numpy as np
+        >>> ...
         >>> from persia.prelude import PersiaBatch
-        >>> model = get_dnn_model()
+        >>> ...
+        >>> model = torch.nn.Linear(128, 64)
         >>> loader = make_dataloader()
         >>> embedding_config = EmbeddingConfig()
         >>> with EmbeddingCtx(

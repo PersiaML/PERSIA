@@ -1,4 +1,3 @@
-from .env import *
 from .version import __version__
 
 from persia import logger as logger

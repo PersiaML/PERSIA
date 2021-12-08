@@ -27,13 +27,13 @@ struct Cli {
     #[structopt(long)]
     port: u16,
     #[structopt(long)]
-    embedding_config: PathBuf,
-    #[structopt(long)]
-    global_config: PathBuf,
-    #[structopt(long)]
     replica_index: usize,
     #[structopt(long)]
     replica_size: usize,
+    #[structopt(long, env = "PERSIA_GLOBAL_CONFIG")]
+    global_config: PathBuf,
+    #[structopt(long, env = "PERSIA_EMBEDDING_CONFIG")]
+    embedding_config: PathBuf,
 }
 
 #[tokio::main]

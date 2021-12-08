@@ -31,6 +31,8 @@ async fn main() -> anyhow::Result<()> {
     let persia_job =
         PersiaJobResources::new(&job_spec, &job_name, &namespace, kubernetes_client.clone());
 
+    persia_job.delete().await;
+    
     persia_job.apply().await?;
 
     let result = wait_for_compelete(
