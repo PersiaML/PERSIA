@@ -27,6 +27,7 @@ setup_seed(3)
 CPU_TEST_AUC = 0.8936692224423999
 GPU_TEST_AUC = 0.8934601372796367
 
+
 class TestDataset(PersiaDataset):
     def __init__(self, test_dir: str, batch_size: int = 128):
         super(TestDataset, self).__init__(buffer_size=10)
