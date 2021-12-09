@@ -115,7 +115,6 @@ html_show_copyright = True
 
 
 _ignore_methods = [
-    # "bagua.torch_api.contrib.LoadBalancingDistributedSampler.shuffle_chunks",
 ]
 
 _ignore_functions = []

@@ -16,8 +16,7 @@ from persia.embedding.data import PersiaBatch
 from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
 from persia.utils import setup_seed
-from persia.data import Dataloder, PersiaDataset, StreamingDataset
-from persia.prelude import PersiaBatchDataSender
+from persia.data import DataLoader, IterableDataset, StreamingDataset
 
 from model import DNN
 from data_generator import make_dataloader
@@ -31,25 +30,22 @@ CPU_TEST_AUC = 0.8936692224423999
 GPU_TEST_AUC = 0.8934601372796367
 
 
-class TestDataset(PersiaDataset):
+class TestDataset(IterableDataset):
     def __init__(self, test_dir: str, batch_size: int = 128):
         super(TestDataset, self).__init__(buffer_size=10)
         self.loader = make_dataloader(test_dir, batch_size)
 
         logger.info(f"test dataset size is {len(self.loader)}")
 
-    def fetch_data(self, persia_sender_channel: PersiaBatchDataSender):
+    def __iter__(self):
         logger.info("test loader start to generating data...")
-        for _idx, (non_id_type_feature, id_type_features, label) in enumerate(
-            tqdm(self.loader, desc="generating data")
-        ):
-            persia_batch = PersiaBatch(
+        for non_id_type_feature, id_type_features, label in self.loader:
+            yield PersiaBatch(
                 id_type_features,
                 non_id_type_features=[non_id_type_feature],
                 labels=[label],
                 requires_grad=False,
             )
-            persia_sender_channel.send(persia_batch.data)
 
     def __len__(self):
         return len(self.loader)
@@ -68,7 +64,7 @@ def test(
     test_dataset = TestDataset(test_dir, batch_size=128)
 
     with eval_ctx(model=model) as ctx:
-        test_loader = Dataloder(test_dataset, is_training=False)
+        test_loader = DataLoader(test_dataset, is_training=False)
         if checkpoint_dir is not None:
             logger.info(f"loading checkpoint {checkpoint_dir}")
             ctx.load_checkpoint(checkpoint_dir)
@@ -145,9 +141,8 @@ if __name__ == "__main__":
         dense_optimizer=dense_optimizer,
         device_id=device_id,
         mixed_precision=mixed_precision,
-        distributed_option=DDPOption(backend=backend),
     ) as ctx:
-        train_dataloader = Dataloder(
+        train_dataloader = DataLoader(
             StreamingDataset(buffer_size), reproducible=True, embedding_staleness=1
         )
         for (batch_idx, data) in enumerate(train_dataloader):

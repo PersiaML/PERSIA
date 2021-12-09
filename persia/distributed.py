@@ -19,8 +19,8 @@ class DistributedBaseOption(ABC):
     def __init__(self, master_port: int, master_addr: Optional[str] = None):
         """
         Arguments:
-            master_port (int): Master of collective communication ip address.
-            master_addr (str, optional): Master of collective communication service port.
+            master_port (int): master of collective communication ip address.
+            master_addr (str, optional): master of collective communication service port.
         """
         self.master_addr = master_addr
         self.master_port = master_port
@@ -47,12 +47,13 @@ class DistributedBaseOption(ABC):
         """
 
         Arguments:
-            model (torch.nn.Module): The pytorch model that need to converted to dataparallel model.
-            world_size (int): Total number of processes.
-            rank_id (int): Rank of current process.
-            device_id (int, optional): Device id for current process.
-            master_addr (str, optional): Master of collective communication ip address.
-            optimizer (torch.optim.Optimizer, optional): Pytorch optimizer that may need to converted during model converted procedure.
+            model (torch.nn.Module): the PyTorch model that need to converted to dataparallel model.
+            world_size (int): total number of processes.
+            rank_id (int): rank of current process.
+            device_id (int, optional): device id for current process.
+            master_addr (str, optional): master of the collective communication ip address.
+            optimizer (torch.optim.Optimizer, optional): PyTorch optimizer that may need to
+                converted during model converted procedure.
         """
         ...
 
@@ -97,9 +98,9 @@ class DDPOption(DistributedBaseOption):
     def __init__(self, init_method: str = "tcp", backend: str = "nccl", **options):
         """
         Arguments:
-            init_method (str): Pytorch distributed init method, support tcp and file currently.
-            backend (str): Backend of collective communication. Currently support nccl.
-            options (dict): Options that include the master_port or master_addr.
+            init_method (str): PyTorch distributed init method, support tcp and file currently.
+            backend (str): backend of collective communication. Currently support nccl.
+            options (dict): options that include the master_port or master_addr.
         """
         super(DDPOption, self).__init__(
             options.pop("master_port", 23456), options.pop("master_addr", None)
@@ -107,10 +108,12 @@ class DDPOption(DistributedBaseOption):
 
         assert (
             backend in _ddp_backend_support_list
-        ), f"The selected backend: {backend} is not support, current backend only support {_ddp_backend_support_list}"
+        ), f"The selected backend: {backend} is not support, current backend only \
+            support {_ddp_backend_support_list}"
         assert (
             init_method in _ddp_init_method_list
-        ), f"The selected init_method: {init_method} is not support, current init_method only support {_ddp_init_method_list}"
+        ), f"The selected init_method: {init_method} is not support, current init_method \
+            only support {_ddp_init_method_list}"
 
         self.init_method = init_method
         self.backend = backend
@@ -127,28 +130,34 @@ class DDPOption(DistributedBaseOption):
     ):
         """
         Arguments:
-            model (torch.nn.Module): The pytorch model that need to converted to dataparallel model.
-            world_size (int): Total number of processes.
-            rank_id (int): Rank of current process.
-            device_id (int, optional): Device id for current process.
-            master_addr (str, optional): Master of collective communication ip address.
-            optimizer (torch.optim.Optimizer, optional): Pytorch optimizer that may need to converted during model converted procedure.
+            model (torch.nn.Module): the PyTorch model that need to converted to dataparallel model.
+            world_size (int): total number of processes.
+            rank_id (int): rank of current process.
+            device_id (int, optional): device id for current process.
+            master_addr (str, optional): master of collective communication ip address.
+            optimizer (torch.optim.Optimizer, optional): PyTorch optimizer that may need to converted
+                during model converted procedure.
         """
 
         if self.init_method == "tcp":
             assert (
                 master_addr or self.master_addr
-            ) and self.master_port, "Master IP and Port empty, pytorch DDP should pass master addr and master port!"
+            ) and self.master_port, "Master IP and Port empty, pytorch DDP should pass master addr and\
+            master port!"
+
             master_addr = self.master_addr or master_addr
             init_method = f"{self.init_method}://{master_addr}:{self.master_port}"
         elif self.init_method == "file":
             sync_file = self.options.pop("sync_file", None)
             assert (
                 sync_file
-            ), "Launch pytorch ddp with file init_method, should pass the sync_file filepath as argument for constructor function"
+            ), "Launch pytorch ddp with file init_method, should pass the sync_file filepath as argument\
+                for constructor function"
+
             if os.path.exists(sync_file):
                 raise Exception(
-                    f"Pytorch ddp sync file already exists {sync_file}, delete the sync file before launch the persia task!"
+                    f"Pytorch ddp sync file already exists {sync_file}, delete the sync file before launch\
+                    the persia task!"
                 )
 
             init_method = f"{self.init_method}://{sync_file}"
@@ -162,7 +171,8 @@ class DDPOption(DistributedBaseOption):
             world_size=world_size,
         )
         _logger.info(
-            f"Pytorch ddp init process group done, corresponding backend is {self.backend}, init method is {self.init_method}"
+            f"Pytorch ddp init process group done, corresponding backend is {self.backend}, init\
+            method is {self.init_method}"
         )
 
         device_ids = [device_id] if self.backend != "gloo" else None
@@ -189,11 +199,14 @@ def _select_bagua_algorithm(
     model: Optional[torch.nn.Module] = None,
     **options,
 ):
-    """Select corresponding bagua algorithm for current training
+    """Select corresponding bagua algorithm for current training.
+
     Arguments:
-        algorithm (str): Name of Bagua algorithm.
-        model (torch.nn.Model): The pytorch model that need to converted to dataparallel model which is needed when apply bagua QAdam algorithm.
-        options (dict): Options for bagua algorithm.
+        algorithm (str): name of Bagua algorithm.
+        model (torch.nn.Model): the pytorch model that need to converted to dataparallel model which is
+            needed when apply bagua QAdam algorithm.
+        options (dict): options for bagua algorithm.
+
     Returns:
         Bagua distributed training algorithm and corresponding optimizer.
     """
@@ -273,15 +286,16 @@ class BaguaDistributedOption(DistributedBaseOption):
         especially for those algorithms with `arguments`.
 
     .. note::
-        ``BaguaDistributedOption`` only supports the `CUDA` environment, if you want to run PERSIA task on the CPU cluster,
-        try :class:`.DDPOption` with `backend=gloo` instead of :class:`.BaguaDistributedOption`.
+        ``BaguaDistributedOption`` only supports the `CUDA` environment, if you want to run PERSIA task
+        on the CPU cluster, try :class:`.DDPOption` with `backend=gloo` instead of
+        :class:`.BaguaDistributedOption`.
     """
 
     def __init__(self, algorithm: str, **options):
         """
         Arguments:
-            algorithm (str): Name of Bagua algorithm.
-            options (dict): Options for Bagua algorithm
+            algorithm (str): name of Bagua algorithm.
+            options (dict): options for Bagua algorithm
         """
         super(BaguaDistributedOption, self).__init__(
             options.pop("master_port", 23456), options.pop("master_addr", None)
@@ -304,12 +318,13 @@ class BaguaDistributedOption(DistributedBaseOption):
     ):
         """
         Arguments:
-            model (torch.nn.Module): The pytorch model that need to converted to dataparallel model.
-            world_size (int): Total number of processes.
-            rank_id (int): Rank of current process.
-            device_id (int, optional): Device id for current process.
-            master_addr (str, optional): Master of collective communication ip address.
-            optimizer (torch.optim.Optimizer, optional): Pytorch optimizer that may need to converted during model converted procedure.
+            model (torch.nn.Module): the PyTorch model that need to converted to dataparallel model.
+            world_size (int): total number of processes.
+            rank_id (int): rank of current process.
+            device_id (int, optional): device id for current process.
+            master_addr (str, optional): master of collective communication ip address.
+            optimizer (torch.optim.Optimizer, optional): PyTorch optimizer that may need to converted
+                during model converted procedure.
         """
 
         try:
@@ -380,10 +395,10 @@ class BaguaDistributedOption(DistributedBaseOption):
         return model.with_bagua([optimizer], algorithm), optimizer
 
     def init_with_env_file(self) -> bool:
-        """Check current option init with ddp env file or not
+        """Check current option init with ddp env file or not.
 
         Returns:
-            Whether distributed option init with env file
+            Whether distributed option init with env file.
         """
         return False
 
@@ -392,8 +407,8 @@ def get_default_distributed_option(device_id: Optional[int] = None) -> DDPOption
     """Get default distributed option.
 
     Arguments:
-        device_id (int, optional): Cuda device_id. Apply ``backend=nccl`` to the ``DDPOption`` If the device_id not None,
-            otherwise use the ``backend=gloo`` for CPU scene.
+        device_id (int, optional): Cuda device_id. Apply ``backend=nccl`` to the ``DDPOption``
+            If the device_id not None, otherwise use the ``backend=gloo`` for CPU scene.
 
     Returns:
         Default distributed option.

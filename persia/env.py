@@ -33,7 +33,8 @@ class _Env:
                 replica_size = os.environ.get("REPLICA_SIZE", None)
                 assert (
                     replica_size is not None
-                ), "REPLICA_SIZE not found, setting environment variable REPLICA_SIZE before starting the PERSIA training task."
+                ), "REPLICA_SIZE not found, setting environment variable REPLICA_SIZE before \
+                    starting the PERSIA training task."
                 self.replica_size = int(replica_size)
                 assert (
                     self.replica_size >= 1
@@ -91,6 +92,7 @@ def get_replica_size() -> int:
 def get_replica_index() -> int:
     """Get the replica index of current service.
 
-    The replica index is a unique identifier assigned to each replica. They are assigned following the order of launching.
+    The replica index is a unique identifier assigned to each replica. They are assigned following
+    the order of launching.
     """
     return env.replica_index

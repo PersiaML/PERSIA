@@ -12,8 +12,8 @@ def register_submodule(module: ModuleType, root_module_path: str):
     """Register the persia core module to sys module path.
 
     Arguments:
-        module (ModuleType): Root module.
-        root_module_path (str): Root module path.
+        module (ModuleType): root module.
+        root_module_path (str): root module path.
     """
     for attr in dir(module):
         if attr.startswith("__"):
@@ -43,7 +43,7 @@ from persia_core.utils import (
     PersiaBatchDataSender,
     PersiaBatchDataReceiver,
 )
-from persia_core.nats import init_responder  # noqa
+from persia_core.nats import initialize_dataflow  # noqa
 
 from persia_core.backward import Backward  # noqa
 from persia_core.forward import Forward, Tensor, PersiaTrainingBatch  # noqa

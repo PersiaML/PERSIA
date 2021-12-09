@@ -45,7 +45,7 @@ class Adam(Optimizer):
         """
         Arguments:
             lr(float): learning rate.
-            betas(tuple[float,float], optional): caculate the running averages of gradient and its square.
+            betas(tuple[float,float], optional): calculate the running averages of gradient and its square.
             weight_decay(float, optional): parameters L2 penalty factor.
             eps(float, optional): epsilon to avoid div zero.
         """

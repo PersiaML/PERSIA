@@ -29,7 +29,7 @@ def _id_type_data_check(id_type_feature: np.ndarray, feature_name: str):
 
     Arguments:
         id_type_feature (np.ndarray): id_type_feature array.
-        feature_name (str): Name of id_type_feature
+        feature_name (str): name of id_type_feature
     """
     assert isinstance(
         id_type_feature, np.ndarray
@@ -46,8 +46,8 @@ def _ndarray_check(data: np.ndarray, data_name) -> bool:
     r"""Check if the dtype, shape and batch_size is valid or not.
 
     Arguments:
-        data (np.ndarray): Data that needs to be checked.
-        data_name (str): Name of data.
+        data (np.ndarray): data that needs to be checked.
+        data_name (str): name of data.
     """
     assert isinstance(
         data, np.ndarray
@@ -73,8 +73,8 @@ def _batch_size_check(
 
 
 class IDTypeFeature:
-    """``IDTypeFeature`` is a sparse matrix in `LIL <https://scipy-lectures.org/advanced/scipy_sparse/lil_matrix.html>`_  format
-    which contains categorical ID data.
+    """``IDTypeFeature`` is a sparse matrix in `LIL <https://scipy-lectures.org/advanced/scipy_sparse/lil_matrix.html>`_
+    format which contains categorical ID data.
 
     Example for `IDTypeFeature`:
 
@@ -104,8 +104,9 @@ class IDTypeFeature:
     def __init__(self, name: str, data: List[np.ndarray]):
         """
         Arguments:
-            name (str): Name of IDTypeFeature.
-            data (List[np.ndarray]): IDTypeFeature data. A lil sparse matrix. Requires np.uint64 as type for its elements.
+            name (str): name of :class:`IDTypeFeature`.
+            data (List[np.ndarray]): A lil sparse matrix data. Requires np.uint64 as
+                type for its elements.
         """
         if not SKIP_CHECK_PERSIA_DATA:
             (_id_type_data_check(x, name) for x in data)
@@ -119,11 +120,12 @@ class IDTypeFeature:
 
 
 class IDTypeFeatureWithSingleID:
-    """``IDTypeFeatureWithSingleID`` is a special format of ``IDTypeFeature`` where there is only one id for each sample in the batch.
-    ``IDTypeFeatureWithSingleID`` only has a one-time type check compared to ``IDTypeFeature``, it can speed up the data preprocessing
-    significantly with large batch size.
+    """``IDTypeFeatureWithSingleID`` is a special format of :class:`IDTypeFeature` where there
+    is only one id for each sample in the batch. :class:`IDTypeFeatureWithSingleID` only has a
+    one-time type check compared to :class:`IDTypeFeature`, it can speed up the data
+    preprocessing significantly with large batch size.
 
-    Exampl for IDTypeFeatureWithSingleID:
+    Example for IDTypeFeatureWithSingleID:
 
     .. code-block:: python
 
@@ -139,14 +141,16 @@ class IDTypeFeatureWithSingleID:
         ``IDTypeFeatureWithSingleID`` requires ``np.uint64`` as type for its elements.
 
     .. note::
-        ``IDTypeFeatureWithSingleID`` not allow exists the empty sample in batch data. You should use ``IDTypeFeature`` instead in this case.
+        ``IDTypeFeatureWithSingleID`` not allow exists the empty sample in batch data. You
+        should use ``IDTypeFeature`` instead in this case.
     """
 
     def __init__(self, name: str, data: np.ndarray):
         """
         Arguments:
-            name (str): Name of IDTypeFeatureWithSingleID.
-            data (np.ndarray): IDTypeFeatureWithSingleID data. Requires np.uint64 as type for its elements.
+            name (str): name of IDTypeFeatureWithSingleID.
+            data (np.ndarray): IDTypeFeatureWithSingleID data. Requires np.uint64 as type for
+                its elements.
         """
         if not SKIP_CHECK_PERSIA_DATA:
             _id_type_data_check(data, name)
@@ -160,9 +164,10 @@ class IDTypeFeatureWithSingleID:
 
 
 class NdarrayDataBase:
-    """``NdarrayDataBase`` is a data structure that supports various datatype and multiple dimension data. PERSIA needs to convert
-    the ``NdarrayDataBase`` to the ``torch.Tensor`` so the datatype that it supports is the intersection of
-    `NumPy datatype <https://numpy.org/doc/stable/user/basics.types.html#array-types-and-conversions-between-types>`_
+    """``NdarrayDataBase`` is a data structure that supports various datatype and
+    multiple dimension data. PERSIA needs to convert the ``NdarrayDataBase`` to the
+    ``torch.Tensor`` so the datatype that it supports is the intersection of `NumPy
+    datatype <https://numpy.org/doc/stable/user/basics.types.html#array-types-and-conversions-between-types>`_
     and `PyTorch datatype <https://pytorch.org/docs/stable/tensors.html#data-types>`_.
 
     Following datatype is supported for ``NdarrayDataBase``:
@@ -195,7 +200,7 @@ class NdarrayDataBase:
         """
         Arguments:
             data (np.ndarray): Numpy array.
-            name (str, optional): Name of data.
+            name (str, optional): name of data.
         """
         self.data = data
         self._name = name
@@ -217,8 +222,8 @@ class NdarrayDataBase:
 
 class Label(NdarrayDataBase):
 
-    """``Label`` is the ``subclass`` of ``NdarrayDataBase`` that you can add various datatype and multiple dimension
-    data.
+    """``Label`` is the ``subclass`` of ``NdarrayDataBase`` that you can add various
+    datatype and multiple dimension data.
 
     Example for `Label`:
 
@@ -255,8 +260,8 @@ class Label(NdarrayDataBase):
 
 
 class NonIDTypeFeature(NdarrayDataBase):
-    """``NonIDTypeFeature`` is the ``subclass`` of ``NdarrayDataBase`` that you can add various datatype and multiple dimension
-    data.
+    """``NonIDTypeFeature`` is the ``subclass`` of ``NdarrayDataBase`` that you can add
+    various datatype and multiple dimension data.
 
     Example for `NonIDTypeFeature`:
 
@@ -338,12 +343,14 @@ class PersiaBatch:
     ):
         """
         Arguments:
-            id_type_features (List[Union[IDTypeFeatureWithSingleID, IDTypeFeature]]): Categorical data whose datatype should be uint64.
-            non_id_type_features (List[NonIdTypeFeature], optional): Dense data.
-            labels: (List[Label], optional): Labels data.
-            batch_size (int, optional): Number of samples in each batch. IDTypeFeatures, NonIDTypeFeatures and Labels should have the same batch_size.
-            requires_grad (bool, optional): Set requires_grad for id_type_features.
-            meta (bytes, optional): Binary data.
+            id_type_features (List[Union[IDTypeFeatureWithSingleID, IDTypeFeature]]):
+                categorical data whose datatype should be uint64.
+            non_id_type_features (List[NonIdTypeFeature], optional): dense data.
+            labels: (List[Label], optional): labels data.
+            batch_size (int, optional): number of samples in each batch. IDTypeFeatures,
+                NonIDTypeFeatures and Labels should have the same batch_size.
+            requires_grad (bool, optional): set requires_grad for id_type_features.
+            meta (bytes, optional): binary data.
         """
 
         assert len(id_type_features) > 0, "id_type_features should not be empty"
