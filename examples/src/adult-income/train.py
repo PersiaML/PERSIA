@@ -24,8 +24,8 @@ logger = get_default_logger("nn_worker")
 
 setup_seed(3)
 
-CPU_TEST_AUC = 0.8936692224423999
-GPU_TEST_AUC = 0.8934601372796367
+CPU_TEST_AUC = 0.8927145127622554
+GPU_TEST_AUC = 0.8928645493226243
 
 
 class TestDataset(PersiaDataset):
