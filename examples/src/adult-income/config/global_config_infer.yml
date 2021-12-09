@@ -2,7 +2,11 @@ common_config:
   metrics_config:
     enable_metrics: true
     push_interval_sec: 10
-  job_type: Train
+  job_type: Infer
+  infer_config:
+    servers:
+      - embedding_parameter_server:8888
+    embedding_checkpoint: /home/PERSIA/examples/src/adult-income/checkpoint/
   checkpointing_config:
     num_workers: 8
 embedding_parameter_server_config:

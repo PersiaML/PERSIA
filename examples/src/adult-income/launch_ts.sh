@@ -1,6 +1,8 @@
 #!/bin/bash
 set -x
 
+INFER_CHECKPOINT_DIR=/home/PERSIA/examples/src/adult-income/checkpoint/
+
 torch-model-archiver \
     --model-name adult_income \
     --version 1.0 \
@@ -12,11 +14,11 @@ torchserve --start --ncs --model-store $INFER_CHECKPOINT_DIR \
     --models adult_income.mar \
     --ts-config /workspace/config/ts_config.properties &
 
-mkdir /cache/proto/ && python -m grpc_tools.protoc \
+mkdir -p /cache/proto/ && python -m grpc_tools.protoc \
     --proto_path=/workspace/proto/ \
     --python_out=/cache/proto/ \
     --grpc_python_out=/cache/proto/ \
-    /workspace/proto/inference.proto
+    /proto/inference.proto
 
 sleep 10s
 

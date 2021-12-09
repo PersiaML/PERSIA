@@ -90,10 +90,9 @@ if __name__ == "__main__":
     logger.info("init Simple DNN model...")
     rank, device_id, world_size = get_rank(), get_local_rank(), get_world_size()
 
-    cuda = bool(int(os.environ.get("ENABLE_CUDA", 0)))
     mixed_precision = True
 
-    if cuda:
+    if torch.cuda.is_available():
         torch.cuda.set_device(device_id)
         model.cuda(device_id)
     else:

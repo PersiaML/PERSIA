@@ -1,12 +1,8 @@
 common_config:
   metrics_config:
-    enable_metrics: true
+    enable_metrics: false
     push_interval_sec: 10
-  job_type: Infer
-  infer_config:
-    servers:
-      - embedding_parameter_server:8888
-    embedding_checkpoint: /cache/infer_checkpoint
+  job_type: Train
   checkpointing_config:
     num_workers: 8
 embedding_parameter_server_config:
