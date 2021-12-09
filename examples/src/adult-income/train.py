@@ -24,6 +24,8 @@ logger = get_default_logger("nn_worker")
 
 setup_seed(3)
 
+CPU_TEST_AUC = 0.8936692224423999
+GPU_TEST_AUC = 0.8934601372796367
 
 class TestDataset(PersiaDataset):
     def __init__(self, test_dir: str, batch_size: int = 128):
@@ -84,6 +86,8 @@ def test(model: torch.nn.Module, data_loader: Dataloder, cuda: bool):
 
     model.train()
 
+    return test_auc
+
 
 if __name__ == "__main__":
     model = DNN()
@@ -110,6 +114,8 @@ if __name__ == "__main__":
     )
     test_dataset = TestDataset(test_dir, batch_size=128)
     test_interval = 254 // world_size - 1
+    reproducible = bool(int(os.environ.get("REPRODUCIBLE", 0)))
+    embedding_staleness = int(os.environ.get("EMBEDDING_STALENESS", 10))
 
     buffer_size = 10
 
@@ -120,7 +126,11 @@ if __name__ == "__main__":
         mixed_precision=mixed_precision,
         device_id=device_id,
     ) as ctx:
-        train_dataloader = Dataloder(StreamingDataset(buffer_size))
+        train_dataloader = Dataloder(
+            StreamingDataset(buffer_size),
+            reproducible=reproducible,
+            embedding_staleness=embedding_staleness,
+        )
         test_loader = Dataloder(test_dataset, is_training=False)
 
         logger.info("start to training...")
@@ -135,11 +145,23 @@ if __name__ == "__main__":
                 f"current idx: {batch_idx} loss: {float(loss)} scaled_loss: {float(scaled_loss)} accuracy: {float(accuracy)}"
             )
             if batch_idx % test_interval == 0 and batch_idx != 0:
-                test(model, test_loader, torch.cuda.is_available())
+                test_auc = test(model, test_loader, torch.cuda.is_available())
 
                 checkpoint_dir = os.environ.get("PERSIA_CKPT_DIR", None)
                 if checkpoint_dir is not None and rank == 0:
                     logger.info(f"dump checkpoint to {checkpoint_dir}")
                     ctx.dump_checkpoint(checkpoint_dir, with_jit_model=True)
+
+                if world_size == 1 and reproducible and embedding_staleness == 1:
+                    np.testing.assert_equal(
+                        np.array([test_auc]),
+                        np.array(
+                            [
+                                GPU_TEST_AUC
+                                if torch.cuda.is_available()
+                                else CPU_TEST_AUC
+                            ]
+                        ),
+                    )
 
                 break
