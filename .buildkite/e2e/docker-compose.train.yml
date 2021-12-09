@@ -9,9 +9,7 @@ services:
         env_file:
             - .ci.env
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia-launcher data-loader /workspace/data_loader.py --replica-index 0 --replica-size 1
-        volumes:
-            - ../../examples/src/adult-income/:/workspace
+        command: persia-launcher data-loader --replica-index 0 --replica-size 1
 
     nn_worker:
         env_file:
@@ -19,31 +17,21 @@ services:
         environment:
             CUBLAS_WORKSPACE_CONFIG: :4096:8 # Adapt to pytorch deterministic feature
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia-launcher nn-worker /workspace/train.py
+        command: persia-launcher nn-worker
         depends_on:
             - data_loader
             - embedding_worker
             - embedding_parameter_server
             - persia_nats_service
-        volumes:
-            - ../../examples/src/adult-income/:/workspace
 
     embedding_worker:
         env_file:
             - .ci.env
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: > 
-            bash -c "persia-launcher embedding-worker --embedding-config /workspace/config/embedding_config.yml
-            --global-config /workspace/config/global_config_train.yml --replica-index 0 --replica-size 1"
-        volumes:
-            - ../../examples/src/adult-income/:/workspace
+        command: persia-launcher embedding-worker --replica-index 0 --replica-size 1
 
     embedding_parameter_server:
         env_file:
             - .ci.env
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: > 
-            bash -c "persia-launcher embedding-parameter-server --embedding-config /workspace/config/embedding_config.yml
-            --global-config /workspace/config/global_config_train.yml --replica-index 0 --replica-size 1"
-        volumes:
-            - ../../examples/src/adult-income/:/workspace
+        command: persia-launcher embedding-parameter-server --replica-index 0 --replica-size 1

@@ -4,9 +4,8 @@ services:
         env_file:
             - .ci.env
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: bash -c "/workspace/launch_ts.sh"
+        command: bash -c "/home/PERSIA/examples/src/adult-income/launch_ts.sh"
         volumes:
-            - ../../examples/src/adult-income/:/workspace
             - ../../resources/proto/:/proto
         deploy:
             endpoint_mode: dnsrr
@@ -18,11 +17,7 @@ services:
         env_file:
             - .ci.env
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: >
-            bash -c "persia-launcher embedding-worker --embedding-config /workspace/config/embedding_config.yml
-            --global-config /workspace/config/global_config_infer.yml --replica-index 0 --replica-size 1"
-        volumes:
-            - ../../examples/src/adult-income/:/workspace
+        command: persia-launcher embedding-worker --replica-index 0 --replica-size 1
         deploy:
             endpoint_mode: dnsrr
         depends_on:
@@ -32,10 +27,6 @@ services:
         env_file:
             - .ci.env
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: >
-            bash -c "persia-launcher embedding-parameter-server --embedding-config /workspace/config/embedding_config.yml
-            --global-config /workspace/config/global_config_infer.yml --replica-index 0 --replica-size 1"
-        volumes:
-            - ../../examples/src/adult-income/:/workspace
+        command: persia-launcher embedding-parameter-server --replica-index 0 --replica-size 1
         deploy:
             endpoint_mode: dnsrr
