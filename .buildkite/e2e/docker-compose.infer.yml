@@ -7,6 +7,7 @@ services:
         command: bash -c "/home/PERSIA/examples/src/adult-income/launch_ts.sh"
         volumes:
             - ../../resources/proto/:/proto
+            - ./cache:/cache
         deploy:
             endpoint_mode: dnsrr
         depends_on:
@@ -22,6 +23,8 @@ services:
             endpoint_mode: dnsrr
         depends_on:
             - embedding_parameter_server
+        volumes:
+            - ./cache:/cache
 
     embedding_parameter_server:
         env_file:
@@ -30,3 +33,5 @@ services:
         command: persia-launcher embedding-parameter-server --replica-index 0 --replica-size 1
         deploy:
             endpoint_mode: dnsrr
+        volumes:
+            - ./cache:/cache

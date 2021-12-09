@@ -125,4 +125,3 @@ RUN wget https://github.com/nats-io/nats-server/releases/download/v2.6.6/nats-se
 RUN mkdir -p /home/PERSIA/examples
 COPY examples /home/PERSIA/examples
 RUN cd /home/PERSIA/examples/src/adult-income/data/ && ./prepare_data.sh
-RUN cd /home/PERSIA/examples/src/adult-income/ && ./checkpoint/prepare_checkpoint.sh

@@ -1,16 +1,14 @@
 #!/bin/bash
 set -x
 
-INFER_CHECKPOINT_DIR=/home/PERSIA/examples/src/adult-income/checkpoint/
-
 torch-model-archiver \
     --model-name adult_income \
     --version 1.0 \
-    --serialized-file $INFER_CHECKPOINT_DIR/jit_dense.pt \
+    --serialized-file $PERSIA_CKPT_DIR/jit_dense.pt \
     --handler /workspace/serve_handler.py \
-    --export-path $INFER_CHECKPOINT_DIR/ -f
+    --export-path $PERSIA_CKPT_DIR/ -f
 
-torchserve --start --ncs --model-store $INFER_CHECKPOINT_DIR \
+torchserve --start --ncs --model-store $PERSIA_CKPT_DIR \
     --models adult_income.mar \
     --ts-config /workspace/config/ts_config.properties &
 
