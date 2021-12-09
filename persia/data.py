@@ -37,9 +37,8 @@ r"""
 
 """
 from abc import ABC, abstractmethod
-from collections.abc import Iterable as IterableABC
 from threading import Thread
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Iterable
 
 import persia.env as env
 
@@ -55,7 +54,7 @@ from persia.prelude import (
 _logger = get_default_logger()
 
 
-class IterableDatasetBase(ABC, IterableABC[PersiaBatch]):
+class IterableDatasetBase(ABC, Iterable[PersiaBatch]):
     r"""IterableDataSet base wrap the :class:`PersiaBatchDataChannel` that provide the sender
     and receiver of the channel.
 
@@ -209,7 +208,7 @@ class IterableDataset(IterableDatasetBase):
 
         def send_data():
             for preprocess_idx, persia_batch in enumerate(self):
-                self.sender.send(persia_batch)
+                self.sender.send(persia_batch.data)
                 preprocess_queue.put(preprocess_idx)
             preprocess_queue.put(None)  # end the iteration
 
@@ -292,12 +291,10 @@ class DataLoader:
             self.launch = True
 
         try:
-            for preprocess_idx in self.dataset._consume_dataset():
+            for _preprocess_idx in self.dataset.consume_dataset():
                 yield self.forward_engine.get_batch(self.timeout_ms)
         except TimeoutError:
-            _logger.warning(
-                f"get_batch time out, stop iter data, current batch_idx: {preprocess_idx}"
-            )
+            _logger.warning("get_batch time out, stop iter data")
 
     def __del__(self):
         self.forward_engine.shutdown()
