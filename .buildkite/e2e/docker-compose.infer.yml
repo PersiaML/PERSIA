@@ -18,7 +18,7 @@ services:
         env_file:
             - .ci.env
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia-launcher embedding-worker --replica-index 0 --replica-size 1
+        command: bash -c "persia-launcher embedding-worker --replica-index 0 --replica-size 1 --global-config $$PERSIA_INFER_GLOBAL_CONFIG"
         deploy:
             endpoint_mode: dnsrr
         depends_on:
@@ -30,7 +30,7 @@ services:
         env_file:
             - .ci.env
         image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
-        command: persia-launcher embedding-parameter-server --replica-index 0 --replica-size 1
+        command: bash -c "persia-launcher embedding-parameter-server --replica-index 0 --replica-size 1 --global-config $$PERSIA_INFER_GLOBAL_CONFIG"
         deploy:
             endpoint_mode: dnsrr
         volumes:
