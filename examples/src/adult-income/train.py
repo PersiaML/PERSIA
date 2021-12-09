@@ -137,4 +137,10 @@ if __name__ == "__main__":
             )
             if batch_idx % test_interval == 0 and batch_idx != 0:
                 test(model, test_loader, cuda)
+
+                checkpoint_dir = os.environ.get("PERSIA_CKPT_DIR", None)
+                if checkpoint_dir is not None and rank == 0:
+                    logger.info(f"dump checkpoint to {checkpoint_dir}")
+                    ctx.dump_checkpoint(checkpoint_dir)
+
                 break

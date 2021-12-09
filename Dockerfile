@@ -119,3 +119,4 @@ RUN pip3 install *.whl && rm -rf *.whl
 RUN mkdir -p /home/PERSIA/examples
 COPY examples /home/PERSIA/examples
 RUN cd /home/PERSIA/examples/src/adult-income/data/ && ./prepare_data.sh
+RUN cd /home/PERSIA/examples/src/adult-income/ && ./checkpoint/prepare_checkpoint.sh
