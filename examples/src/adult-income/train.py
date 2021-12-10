@@ -112,7 +112,7 @@ if __name__ == "__main__":
         device_id=device_id,
     ) as ctx:
         train_dataloader = DataLoader(StreamingDataset(buffer_size))
-        test_loader = DataLoader(test_dataset, is_training=False)
+        test_loader = DataLoader(test_dataset)
 
         logger.info("start to training...")
         for (batch_idx, data) in enumerate(train_dataloader):

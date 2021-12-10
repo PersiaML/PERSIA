@@ -73,10 +73,10 @@ def _batch_size_check(
 
 
 class IDTypeFeature:
-    """``IDTypeFeature`` is a sparse matrix in `LIL <https://scipy-lectures.org/advanced/scipy_sparse/lil_matrix.html>`_
+    """:class:`IDTypeFeature` is a sparse matrix in `LIL <https://scipy-lectures.org/advanced/scipy_sparse/lil_matrix.html>`_
     format which contains categorical ID data.
 
-    Example for `IDTypeFeature`:
+    Example for :class:`IDTypeFeature`:
 
     .. code-block:: python
 
@@ -120,12 +120,12 @@ class IDTypeFeature:
 
 
 class IDTypeFeatureWithSingleID:
-    """``IDTypeFeatureWithSingleID`` is a special format of :class:`IDTypeFeature` where there
+    """The :class:`IDTypeFeatureWithSingleID` is a special format of :class:`IDTypeFeature` where there
     is only one id for each sample in the batch. :class:`IDTypeFeatureWithSingleID` only has a
     one-time type check compared to :class:`IDTypeFeature`, it can speed up the data
     preprocessing significantly with large batch size.
 
-    Example for IDTypeFeatureWithSingleID:
+    Example for :class:`IDTypeFeatureWithSingleID`:
 
     .. code-block:: python
 
@@ -148,8 +148,8 @@ class IDTypeFeatureWithSingleID:
     def __init__(self, name: str, data: np.ndarray):
         """
         Arguments:
-            name (str): name of IDTypeFeatureWithSingleID.
-            data (np.ndarray): IDTypeFeatureWithSingleID data. Requires np.uint64 as type for
+            name (str): name of :class:`IDTypeFeatureWithSingleID`.
+            data (np.ndarray): :class:`IDTypeFeatureWithSingleID` data. Requires np.uint64 as type for
                 its elements.
         """
         if not SKIP_CHECK_PERSIA_DATA:
@@ -164,13 +164,13 @@ class IDTypeFeatureWithSingleID:
 
 
 class NdarrayDataBase:
-    """``NdarrayDataBase`` is a data structure that supports various datatype and
-    multiple dimension data. PERSIA needs to convert the ``NdarrayDataBase`` to the
+    """The :class:`NdarrayDataBase` is a data structure that supports various datatype and
+    multiple dimension data. PERSIA needs to convert the :class:`NdarrayDataBase` to the
     ``torch.Tensor`` so the datatype that it supports is the intersection of `NumPy
     datatype <https://numpy.org/doc/stable/user/basics.types.html#array-types-and-conversions-between-types>`_
     and `PyTorch datatype <https://pytorch.org/docs/stable/tensors.html#data-types>`_.
 
-    Following datatype is supported for ``NdarrayDataBase``:
+    Following datatype is supported for :class:`NdarrayDataBase`:
 
     +----------+
     |datatype  |
@@ -222,10 +222,10 @@ class NdarrayDataBase:
 
 class Label(NdarrayDataBase):
 
-    """``Label`` is the ``subclass`` of ``NdarrayDataBase`` that you can add various
+    """:class:`Label` is the ``subclass`` of :class:`NdarrayDataBase` that you can add various
     datatype and multiple dimension data.
 
-    Example for `Label`:
+    Example for :class:`Label`:
 
     .. code-block:: python
 
@@ -260,10 +260,10 @@ class Label(NdarrayDataBase):
 
 
 class NonIDTypeFeature(NdarrayDataBase):
-    """``NonIDTypeFeature`` is the ``subclass`` of ``NdarrayDataBase`` that you can add
+    """The :class:`NonIDTypeFeature` is the ``subclass`` of :class:`NdarrayDataBase` that you can add
     various datatype and multiple dimension data.
 
-    Example for `NonIDTypeFeature`:
+    Example for :class:`NonIDTypeFeature`:
 
     .. code-block:: python
 
@@ -283,10 +283,10 @@ class NonIDTypeFeature(NdarrayDataBase):
 
 
 class PersiaBatch:
-    r"""`PersiaBatch` is the type of dataset used internally in Persia.
-    It wraps the id_type_features, non_id_type_features, labels and meta bytes data.
+    r"""The :class:`PersiaBatch` is the type of dataset used internally in Persia.
+    It wraps the :class:`IDTypeFeature`, :class:`NonIDTypeFeature` , :class:`Label` and meta bytes data.
 
-    Example for `PersiaBatch`:
+    Example for :class:`PersiaBatch`:
 
     .. code-block:: python
 
@@ -329,7 +329,7 @@ class PersiaBatch:
         )
 
     .. note::
-        Labels data should be exists if set ``requires_grad=True``.
+        :class:`Label` data should be exists if set ``requires_grad=True``.
     """
 
     def __init__(
@@ -345,10 +345,10 @@ class PersiaBatch:
         Arguments:
             id_type_features (List[Union[IDTypeFeatureWithSingleID, IDTypeFeature]]):
                 categorical data whose datatype should be uint64.
-            non_id_type_features (List[NonIdTypeFeature], optional): dense data.
-            labels: (List[Label], optional): labels data.
-            batch_size (int, optional): number of samples in each batch. IDTypeFeatures,
-                NonIDTypeFeatures and Labels should have the same batch_size.
+            non_id_type_features (List[NonIDTypeFeature], optional): dense data.
+            labels (List[Label], optional): labels data.
+            batch_size (int, optional): number of samples in each batch. :class:`IDTypeFeature`,
+                :class:`NonIDTypeFeature` and :class:`Label` should have the same batch_size.
             requires_grad (bool, optional): set requires_grad for id_type_features.
             meta (bytes, optional): binary data.
         """

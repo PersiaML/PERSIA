@@ -59,13 +59,13 @@ def _cast_dlpack2torch_tensor(
 class PreprocessMode(Enum):
     r"""Mode of preprocessing.
 
-    Used by ``EmbeddingCtx.prepare_features`` to generate features of different datatypes.
+    Used by :meth:`.prepare_features` to generate features of different datatypes.
 
-    When set to ``TRAIN``, ``prepare_features`` will return a torch tensor with
-    ``requires_grad`` attribute set to ``True``. When set to ``EVAL``,
-    ``prepare_features`` will return a torch tensor with ``requires_grad`` attribute
-    set to ``False``. ``INFERENCE`` behaves almost identical to ``PreprocessMode.EVAL``,
-    except that ``INFERENCE`` allows ""EmbeddingCtx`` to process the ``PersiaTrainingBatch``
+    When set to :attr:`.TRAIN`, :meth:`.prepare_features` will return a torch tensor with
+    ``requires_grad`` attribute set to ``True``. When set to :attr:`.EVAL`,
+    :meth:`.prepare_features` will return a torch tensor with ``requires_grad`` attribute
+    set to ``False``. :attr:`.INFERENCE` behaves almost identical to :attr:`.EVAL`,
+    except that :attr:`.INFERENCE` allows :class:`EmbeddingCtx` to process the :class:`PersiaTrainingBatch`
     without a target tensor.
     """
     TRAIN = 1
@@ -74,8 +74,9 @@ class PreprocessMode(Enum):
 
 
 class BaseCtx:
-    r"""Initializes a common context for other persia context, e.g. `DataCtx`,
-    `EmbeddingCtx` and `TrainCtx`. This class should not be instantiated directly.
+    r"""Initializes a common context for other persia context, e.g. :class:`DataCtx`,
+    :class:`EmbeddingCtx` and :class:`TrainCtx`. This class should not be instantiated
+    directly.
     """
 
     def __init__(
@@ -146,10 +147,10 @@ class BaseCtx:
 
 class DataCtx(BaseCtx):
     r"""Data context provides the communication functionality to data generator component.
-    Used for sending a :class:`.PersiaBatch` to the `nn worker` and `embedding worker`.
+    Used for sending a :class:`PersiaBatch` to the `nn worker` and `embedding worker`.
 
-    If you use the :class:`DataCtx` to send the :class:`.PersiaBatch` on `data-loader`, you
-    should use the :class:`.StreamingDataset` to receive the data on `nn-worker`.
+    If you use the :class:`DataCtx` to send the :class:`PersiaBatch` on `data-loader`, you
+    should use the :class:`StreamingDataset` to receive the data on `nn-worker`.
 
     On `data-loader`:
 
@@ -209,19 +210,19 @@ class DataCtx(BaseCtx):
         """Send PersiaBatch from data loader to nn worker and embedding worker side.
 
         Arguments:
-            persia_batch (PersiaBatch): PersiaBatch that haven't been processed.
+            persia_batch (PersiaBatch): :class:`PersiaBatch` that haven't been processed.
         """
         self.common_context.send_id_type_features_to_embedding_worker(persia_batch.data)
         self.common_context.send_non_id_type_features_to_nn_worker(persia_batch.data)
 
 
 class EmbeddingCtx(BaseCtx):
-    r"""Provides the embedding-related functionality. EmbeddingCtx can run offline test
+    r"""Provides the embedding-related functionality. :class:`EmbeddingCtx` can run offline test
     or online inference depending on different preprocess_mode. The simplest way to get
-    this context is by using :func:`.persia.ctx.eval_ctx` to get the
-    :class:`.EmbeddingCtx` instance.
+    this context is by using :func:`eval_ctx` to get the
+    :class:`EmbeddingCtx` instance.
 
-    Example for `EmbeddingCtx`:
+    Example for :class:`EmbeddingCtx`:
 
     .. code-block:: python
 
@@ -269,7 +270,7 @@ class EmbeddingCtx(BaseCtx):
         """
         Arguments:
             preprocess_mode (PreprocessMode): different preprocess mode effect the
-                behavior of ``prepare_features``.
+                behavior of :meth:`.prepare_features`.
             model (torch.nn.Module): PyTorch model matched with embeddings in this context.
             embedding_config (EmbeddingConfig, optional): the embedding configuration that
                 will be sent to the embedding server.
@@ -289,7 +290,7 @@ class EmbeddingCtx(BaseCtx):
         self,
         embedding_config: EmbeddingConfig,
     ):
-        """Apply Embedding config to embedding servers.
+        """Apply :class:`EmbeddingConfig` to embedding servers.
 
         Arguments:
             embedding_config (EmbeddingConfig): the embedding configuration that will
@@ -325,9 +326,9 @@ class EmbeddingCtx(BaseCtx):
     ) -> Tuple[List[torch.Tensor], List[torch.Tensor], Optional[List[torch.Tensor]]]:
         r"""This function convert the data from ``PersiaTrainingBatch`` to ``torch.Tensor``.
 
-        ``PersiaTrainingBatch`` contains non_id_type_features, id_type_feature_embeddings
-            and labels. But they can't use directly in training before convert the
-            ``persia.Tensor`` to ``torch.Tensor``.
+        :class:`PersiaTrainingBatch` contains non_id_type_features, id_type_feature_embeddings
+        and labels. But they can't use directly in training before convert the :class:`Tensor`
+        to ``torch.Tensor``.
 
         Arguments:
             persia_training_batch (PersiaTrainingBatch): training data provided by PERSIA
@@ -516,7 +517,7 @@ class EmbeddingCtx(BaseCtx):
 
     def dump_embedding(self, dst_dir: str, blocking: bool = True):
         """Dump embeddings to the destination directory. Use
-        :meth:`.EmbeddingCtx.wait_for_dump_embedding` to wait until finished if ``blocking=False``.
+        :meth:`.wait_for_dump_embedding` to wait until finished if ``blocking=False``.
 
         Arguments:
             dst_dir (str): destination directory.
@@ -527,8 +528,8 @@ class EmbeddingCtx(BaseCtx):
             self.wait_for_dump_embedding()
 
     def load_embedding(self, src_dir: str, blocking: bool = True):
-        """Load embeddings from ``src_dir``. Use
-        :meth:`.EmbeddingCtx.wait_for_load_embedding` to wait until finished if ``blocking=False``.
+        """Load embeddings from ``src_dir``. Use :meth:`.wait_for_load_embedding`
+        to wait until finished if ``blocking=False``.
 
         Arguments:
             src_dir (str): directory to load embeddings.
@@ -639,16 +640,16 @@ class EmbeddingCtx(BaseCtx):
 
 
 class TrainCtx(EmbeddingCtx):
-    r"""Subclass of ``EmbeddingCtx`` that provide the backward ability to update the
+    r"""Subclass of :class:`EmbeddingCtx` that provide the backward ability to update the
     embeddings.
 
-    Example for `TrainCtx`:
+    Example for :class:`TrainCtx`:
 
     .. code-block:: python
 
         import torch
         import persia
-        from persia.data import Dataloder, StreamingDataset
+        from persia.data import DataLoder, StreamingDataset
 
         device_id = 0
         model = get_dnn_model()
@@ -667,7 +668,7 @@ class TrainCtx(EmbeddingCtx):
             model=model,
             device_id=device_id
         ) as ctx:
-            dataloader = Dataloder(stream_dataset)
+            dataloader = DataLoder(stream_dataset)
             for persia_training_batch in datalaoder:
                 output, labels = ctx.forward(persia_training_batch)
                 loss = loss_fn(output, labels[0])
@@ -675,10 +676,10 @@ class TrainCtx(EmbeddingCtx):
 
     If you want to train the PERSIA task in a distributed environment, we have already
     provided the corresponding distributed data-parallel option for you to use.
-    ``TrainCtx`` will use the :func:`.get_default_distributed_option` as the default
+    :class:`TrainCtx` will use the :func:`.get_default_distributed_option` as the default
     distributed configuration when the environment ``WORLD_SIZE > 1``.
 
-    Or you can configure the :class:`.DDPOption` to adapt to your specific requirements.
+    Or you can configure the :class:`DDPOption` to adapt to your specific requirements.
 
     .. code-block::
 
@@ -702,12 +703,12 @@ class TrainCtx(EmbeddingCtx):
             ...
 
     `Bagua <https://github.com/BaguaSys/bagua>`_ is the other data-parallel framework that
-    integration with PERSIA. You can use :class:`.BaguaDistributedOption` to replace the
-    :class:`.DDPOption` to speed up the training. For more details about the
-    ``BaguaDistributedOption``, you can review the
+    integration with PERSIA. You can use :class:`BaguaDistributedOption` to replace the
+    :class:`DDPOption` to speed up the training. For more details about the
+    :class:`BaguaDistributedOption`, you can review the
     `tutorial <https://tutorials.baguasys.com/algorithms/>`_ of `Bagua`.
 
-    Example for `BaguaDistributedOption`:
+    Example for :class:`BaguaDistributedOption`:
 
     .. code-block::
 
@@ -1050,19 +1051,19 @@ class TrainCtx(EmbeddingCtx):
 
 
 def cnt_ctx() -> Optional[BaseCtx]:
-    """Get the `BaseCtx` recently entered."""
+    """Get the :class:`BaseCtx` recently entered."""
     return _CURRENT_CXT
 
 
 def eval_ctx(*args, **kwargs) -> EmbeddingCtx:
-    """Get the ``EmbeddingCtx`` with the ``PreprocessMode.EVAL`` mode."""
+    """Get the :class:`EmbeddingCtx` with the :attr:`.EVAL` mode."""
     return EmbeddingCtx(PreprocessMode.EVAL, *args, **kwargs)
 
 
 class InferCtx(EmbeddingCtx):
-    r"""Subclass of ``EmbeddingCtx`` that provide the forward ability without `nats-servers`.
+    r"""Subclass of :class:`EmbeddingCtx` that provide the forward ability without `nats-servers`.
 
-    Example for `InferCtx`:
+    Example for :class:`InferCtx`:
 
     .. code-block:: python
 

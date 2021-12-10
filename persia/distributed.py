@@ -74,7 +74,7 @@ _ddp_init_method_list = ["tcp", "file"]
 class DDPOption(DistributedBaseOption):
     """Implements an option to convert torch model to a DDP model.
 
-    Current `init_method` in ``persia.distributed.DDPOption`` only support `nccl` and `gloo`. You can set
+    Current `init_method` in :class:`DDPOption` only support `nccl` and `gloo`. You can set
     ``init_method=nccl`` if your PERSIA task is training on the cluster with the CUDA device.
     Or set ``init_method=gloo`` if your PERSIA task is training on the cluster only with the CPU.
 
@@ -86,7 +86,7 @@ class DDPOption(DistributedBaseOption):
 
         ddp_option = DDPOption(init_method="nccl")
 
-    If you want to change the default `master_port` or `master_addr`, add the ``kwargs`` to ``DDPOption``.
+    If you want to change the default `master_port` or `master_addr`, add the ``kwargs`` to :class:`DDPOption`.
 
     .. code-block:: python
 
@@ -98,7 +98,7 @@ class DDPOption(DistributedBaseOption):
     def __init__(self, init_method: str = "tcp", backend: str = "nccl", **options):
         """
         Arguments:
-            init_method (str): PyTorch distributed init method, support tcp and file currently.
+            init_method (str): the PyTorch distributed init method, support tcp and file currently.
             backend (str): backend of collective communication. Currently support nccl.
             options (dict): options that include the master_port or master_addr.
         """
@@ -252,7 +252,7 @@ def _select_bagua_algorithm(
 class BaguaDistributedOption(DistributedBaseOption):
     """Implements an option to convert torch model to a bagua distributed model.
 
-    Example for `BaguaDistributedOption`:
+    Example for :class:`BaguaDistributedOption`:
 
     .. code-block:: python
 
@@ -263,7 +263,7 @@ class BaguaDistributedOption(DistributedBaseOption):
         }
         bagua_option = BaguaDistributedOption("gradient_allreduce", **kwargs)
 
-    Algorithm supported in `Bagua`:
+    Algorithms supported in `Bagua`:
 
     +-----------------------------+-------------+
     |Algorithm Name               |arguments    |
@@ -286,9 +286,9 @@ class BaguaDistributedOption(DistributedBaseOption):
         especially for those algorithms with `arguments`.
 
     .. note::
-        ``BaguaDistributedOption`` only supports the `CUDA` environment, if you want to run PERSIA task
-        on the CPU cluster, try :class:`.DDPOption` with `backend=gloo` instead of
-        :class:`.BaguaDistributedOption`.
+        The :class:`BaguaDistributedOption` only supports the `CUDA` environment, if you want to run PERSIA task
+        on the CPU cluster, try :class:`DDPOption` with `backend=gloo` instead of
+        :class:`BaguaDistributedOption`.
     """
 
     def __init__(self, algorithm: str, **options):
@@ -323,7 +323,7 @@ class BaguaDistributedOption(DistributedBaseOption):
             rank_id (int): rank of current process.
             device_id (int, optional): device id for current process.
             master_addr (str, optional): master of collective communication ip address.
-            optimizer (torch.optim.Optimizer, optional): PyTorch optimizer that may need to converted
+            optimizer (torch.optim.Optimizer, optional): the PyTorch optimizer that may need to converted
                 during model converted procedure.
         """
 

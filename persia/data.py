@@ -2,38 +2,38 @@ r"""
 
 .. class:: PersiaBatchDataChannel(buffer_size: int)
 
-    This class is a rust_extension pyclass that create the :class:`.PersiaBatchDataReceiver`
-    and the :class:`.PersiaBatchDataSender`. It can transfer the :class:`.PersiaBatch`
+    This class is a rust_extension pyclass that create the :class:`PersiaBatchDataReceiver`
+    and the :class:`PersiaBatchDataSender`. It can transfer the :class:`PersiaBatch`
     from the Python to Rust.
 
-    :param int buffer_size: buffer size of the :class:`.PersiaBatchDataReceiver` and the
-        :class:`.PersiaBatchDataSender`.
+    :param int buffer_size: buffer size of the :class:`PersiaBatchDataReceiver` and the
+        :class:`PersiaBatchDataSender`.
 
     .. method:: get_receiver(self)
 
-        Get the ``PersiaBatchDataReceiver``
+        Get the :class:`PersiaBatchDataReceiver`
 
         :rtype: PersiaBatchDataReceiver
 
     .. method:: get_sender(self)
 
-        Get the ``PersiaBatchDataSender``
+        Get the :class:`PersiaBatchDataSender`
 
         :rtype: PersiaBatchDataSender
 
 .. class:: PersiaBatchDataSender
 
-    This ``class`` cannot be instantiate directly. It can send the ``PersiaBatch`` to
-    the ``PersiaBatchDataReceiver``.
+    This ``class`` cannot be instantiate directly. It can send the :class:`PersiaBatch` to
+    the :class:`PersiaBatchDataReceiver`.
 
     .. method:: send(persia_batch: PersiaBatch)
 
-        Send the ``PersiaBatch`` data to ``PersiaBatchDataReceiver``.
+        Send the :class:`PersiaBatch` data to :class:`PersiaBatchDataReceiver`.
 
 .. class:: PersiaBatchDataReceiver
 
-    This ``class`` cannot be instantiate directly. It can receive the ``PersiaBatch``
-    from the ``PersiaBatchDataSender``.
+    This ``class`` cannot be instantiate directly. It can receive the :class:`PersiaBatch`
+    from the :class:`PersiaBatchDataSender`.
 
 """
 from abc import ABC, abstractmethod
@@ -58,16 +58,16 @@ class IterableDatasetBase(ABC, Iterable[PersiaBatch]):
     r"""IterableDataSet base wrap the :class:`PersiaBatchDataChannel` that provide the sender
     and receiver of the channel.
 
-    The role of this `class` is to transfer the :class:`.PersiaBatch` to the
-    :class:`.DataLoader`. This class cannot be used directly unless it implements
+    The role of this `class` is to transfer the :class:`PersiaBatch` to the
+    :class:`DataLoader`. This class cannot be used directly unless it implements
     the ``__iter__`` and ``consume_dataset`` function to ensure the
-    :class:`.DataLoader` works fine.
+    :class:`DataLoader` works fine.
 
-    Implements the ``__iter__`` function to generate the :class:`.PersiaBatch`. And
-    implements the ``consume_dataset`` to send the :class:`.PersiaBatch` by
-    :class:`.PersiaBatchDataSender`.
+    Implements the ``__iter__`` function to generate the :class:`PersiaBatch`. And
+    implements the :meth:`.consume_dataset` to send the :class:`PersiaBatch` by
+    :class:`PersiaBatchDataSender`.
 
-    Here is an example that implements the synchronously ``IterableDatasetBase``.
+    Here is an example that implements the synchronously :class:`IterableDatasetBase`.
 
     .. code-block:: python
 
@@ -98,9 +98,9 @@ class IterableDatasetBase(ABC, Iterable[PersiaBatch]):
 
     .. note::
         The above example can not meet the performance requirement if you face a large dataset
-        due to it processing the :class:`.PersiaBatch` synchronously. If you want to improve
-        the performance of data processing, try to use the :class:`.IterableDataset` or
-        :class:`.StreamingDataset` instead.
+        due to it processing the :class:`PersiaBatch` synchronously. If you want to improve
+        the performance of data processing, try to use the :class:`IterableDataset` or
+        :class:`StreamingDataset` instead.
 
     Arguments:
         buffer_size (int, optional): buffer size for :class:`PersiaBatchDataChannel`.
@@ -122,14 +122,14 @@ class IterableDatasetBase(ABC, Iterable[PersiaBatch]):
 
 class StreamingDataset(IterableDatasetBase):
     r"""Streaming dataset receives the :class:`PersiaBatch` from the upstream data
-    flow that sent by :class:`.DataCtx`.
+    flow that sent by :class:`DataCtx`.
 
     In the implemented :meth:`.StreamingDataset.consume_dataset`, the
     :class:`PersiaBatchDataSender` instance is bind into the RPC service that receive the
     data automatically. So it is not necessary to implements the
 
     .. warning::
-        :class:`.StreamingDataset` will make the :class:`.DataLoader` raise the
+        :class:`StreamingDataset` will make the :class:`DataLoader` raise the
         ``TimeoutError`` if the upstream data flow drained.
 
     Arguments:
@@ -165,9 +165,9 @@ class StreamingDataset(IterableDatasetBase):
 
 
 class IterableDataset(IterableDatasetBase):
-    r"""``IterableDataset`` can iterate the dataset multiple times compare to
-    :class:`.StreamingDataset`. so you can implement the TestDataset based on
-    ``IterableDataset``.
+    r"""The :class:`IterableDataset` can iterate the dataset multiple times compare to
+    :class:`StreamingDataset`. so you can implement the TestDataset based on
+    :class:`IterableDataset`.
 
     Implements the ``__iter__`` function to define the :class:`PersiaBatch` generation phase.
 
@@ -198,7 +198,7 @@ class IterableDataset(IterableDatasetBase):
         dataloader = DataLoader(dataset)
 
     Arguments:
-        buffer_size (int, optional): :class:`.PersiaBatch` buffer size
+        buffer_size (int, optional): :class:`PersiaBatch` buffer size
     """
 
     def consume_dataset(self) -> Iterator[int]:
@@ -228,13 +228,13 @@ class IterableDataset(IterableDatasetBase):
 class DataLoader:
     r"""Data loader will preprocess the data to the ``PersiaTrainingBatch``.
 
-    The :class:`DataLoader` is a pipeline that preprocess the :class:`.PersiaBatch` in
+    The :class:`DataLoader` is a pipeline that preprocess the :class:`PersiaBatch` in
     several steps. Each step will process the task concurrently with multiple threads
     to improve the efficiency.
 
     .. warning::
         The :class:`DataLoader` cannot stop the iteration unless raise the ``TimeoutError``
-        if you use the :class:`.StreamingDataset`.
+        if you use the :class:`StreamingDataset`.
 
     Arguments:
         dataset (IterableDatasetBase): dataset for DataLoader to retrive replica info
@@ -243,7 +243,7 @@ class DataLoader:
             args effect the gpu memory cost.
         timeout_ms (int, optional): timeout for Forward to fetch data, millisecond unit.
         num_workers (int, optional): spawn thread worker number for Forward to lookup
-            embedding and :class:`.PersiaBatch` prefetch.
+            embedding and :class:`PersiaBatch` prefetch.
         reproducible (bool, optional): iterate the data in fixed order, make the dataflow
             deterministic.
         embedding_staleness (int, optional): max number of batched staleness embedding each

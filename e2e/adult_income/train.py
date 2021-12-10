@@ -64,7 +64,7 @@ def test(
     test_dataset = TestDataset(test_dir, batch_size=128)
 
     with eval_ctx(model=model) as ctx:
-        test_loader = DataLoader(test_dataset, is_training=False)
+        test_loader = DataLoader(test_dataset)
         if checkpoint_dir is not None:
             logger.info(f"loading checkpoint {checkpoint_dir}")
             ctx.load_checkpoint(checkpoint_dir)
