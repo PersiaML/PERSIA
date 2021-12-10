@@ -1,5 +1,4 @@
 import os
-from posixpath import abspath
 
 import torch
 import numpy as np
@@ -12,8 +11,7 @@ from persia.embedding.optim import Adagrad
 from persia.embedding.data import PersiaBatch
 from persia.env import get_rank, get_local_rank, get_world_size
 from persia.logger import get_default_logger
-from persia.data import Dataloder, PersiaDataset, StreamingDataset
-from persia.prelude import PersiaBatchDataSender
+from persia.data import DataLoader, IterableDataset, StreamingDataset
 from persia.utils import setup_seed
 
 from model import DNN
@@ -25,31 +23,23 @@ logger = get_default_logger("nn_worker")
 setup_seed(3)
 
 
-class TestDataset(PersiaDataset):
+class TestDataset(IterableDataset):
     def __init__(self, test_dir: str, batch_size: int = 128):
         super(TestDataset, self).__init__(buffer_size=10)
         self.loader = make_dataloader(test_dir, batch_size)
 
-        logger.info(f"test dataset size is {len(self.loader)}")
-
-    def fetch_data(self, persia_sender_channel: PersiaBatchDataSender):
+    def __iter__(self):
         logger.info("test loader start to generating data...")
-        for _idx, (non_id_type_feature, id_type_features, label) in enumerate(
-            tqdm(self.loader, desc="generating data")
-        ):
-            persia_batch = PersiaBatch(
+        for non_id_type_feature, id_type_features, label in self.loader:
+            yield PersiaBatch(
                 id_type_features,
                 non_id_type_features=[non_id_type_feature],
                 labels=[label],
                 requires_grad=False,
             )
-            persia_sender_channel.send(persia_batch.data)
-
-    def __len__(self):
-        return len(self.loader)
 
 
-def test(model: torch.nn.Module, data_loader: Dataloder, cuda: bool):
+def test(model: torch.nn.Module, data_loader: DataLoader, cuda: bool):
     logger.info("start to test...")
     model.eval()
 
@@ -121,8 +111,8 @@ if __name__ == "__main__":
         mixed_precision=mixed_precision,
         device_id=device_id,
     ) as ctx:
-        train_dataloader = Dataloder(StreamingDataset(buffer_size))
-        test_loader = Dataloder(test_dataset, is_training=False)
+        train_dataloader = DataLoader(StreamingDataset(buffer_size))
+        test_loader = DataLoader(test_dataset, is_training=False)
 
         logger.info("start to training...")
         for (batch_idx, data) in enumerate(train_dataloader):
