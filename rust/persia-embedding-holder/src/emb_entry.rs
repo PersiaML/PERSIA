@@ -26,10 +26,8 @@ impl Entry {
             Entry::F16(val) => Some(val.as_slice().to_f32_vec()),
             Entry::F32(_) => None,
         };
-        // let ptr = self.as_mut_ref().ptr;
         F32EntryMutSlice {
             replica_data,
-            // ptr: self.().ptr,
             ptr: self as *mut _,
         }
     }
