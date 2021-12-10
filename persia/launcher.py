@@ -14,6 +14,7 @@ PERSIA_LAUNCHER_VERBOSE = bool(int(os.environ.get("PERSIA_LAUNCHER_VERBOSE", "0"
 
 # TODO(wangyulong): Add api documentation
 
+
 def resolve_binary_execute_path(binary_name: str) -> str:
     """Resolved executable file under persia package root."""
     return os.path.realpath(os.path.join(__file__, "../", binary_name))
