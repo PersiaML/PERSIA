@@ -587,13 +587,13 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "lookup_mixed_batch_time_cost_sec{}",
+          "expr": "lookup_hashmap_time_cost_sec{}",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "lookup mixed batch time cost",
+      "title": "lookup from hashmap time cost on embedding server",
       "type": "timeseries"
     },
     {
@@ -669,13 +669,13 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "lookup_create_requests_time_cost_sec{}",
+          "expr": "lookup_preprocess_time_cost_sec{}",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "lookup create requests time cost",
+      "title": "lookup preprocess time cost on embedding worker",
       "type": "timeseries"
     },
     {
@@ -915,13 +915,13 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "summation_time_cost_sec{}",
+          "expr": "lookup_postprocess_time_cost_sec{}",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "summation time cost",
+      "title": "lookup postprocess time cost on embedding worker",
       "type": "timeseries"
     },
     {
@@ -997,13 +997,13 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "lookup_batched_time_cost_sec{}",
+          "expr": "lookup_total_time_cost_sec{}",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "lookup batched time cost",
+      "title": "lookup total time cost on embedding worker",
       "type": "timeseries"
     }
   ],

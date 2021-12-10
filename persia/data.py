@@ -241,7 +241,6 @@ class DataLoader:
             and sender channel.
         forward_buffer_size: (int, optional): ``PersiaTrainingBatch`` buffer size, this
             args effect the gpu memory cost.
-        is_training (bool, optional): whether current forward status is training or not.
         timeout_ms (int, optional): timeout for Forward to fetch data, millisecond unit.
         num_workers (int, optional): spawn thread worker number for Forward to lookup
             embedding and :class:`.PersiaBatch` prefetch.
@@ -256,7 +255,6 @@ class DataLoader:
         self,
         dataset: IterableDatasetBase,
         forward_buffer_size: int = 10,
-        is_training: bool = True,
         timeout_ms: int = 1000 * 60 * 10,
         num_workers: int = 10,
         reproducible: bool = False,
@@ -273,7 +271,6 @@ class DataLoader:
 
         self.forward_engine = Forward(
             forward_buffer_size,
-            is_training,
             reproducible,
             embedding_staleness,
         )

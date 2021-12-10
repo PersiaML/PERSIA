@@ -52,11 +52,11 @@ struct MetricsHolder {
     pub staleness: Gauge,
     pub nan_count: IntCounterVec,
     pub nan_grad_skipped: IntCounterVec,
-    pub lookup_create_requests_time_cost_sec: Gauge,
+    pub lookup_preprocess_time_cost_sec: Gauge,
     pub lookup_rpc_time_cost_sec: Gauge,
     pub update_gradient_time_cost_sec: Gauge,
-    pub summation_time_cost_sec: Gauge,
-    pub lookup_batched_time_cost_sec: Gauge,
+    pub lookup_postprocess_time_cost_sec: Gauge,
+    pub lookup_total_time_cost_sec: Gauge,
 }
 
 impl MetricsHolder {
@@ -80,23 +80,23 @@ impl MetricsHolder {
                 )?,
                 nan_count: m.create_counter_vec("nan_count","nan count of gradient pushed to emb server")?,
                 nan_grad_skipped: m.create_counter_vec("nan_grad_skipped","nan count of gradient filtered by gpu node")?,
-                lookup_create_requests_time_cost_sec: m.create_gauge(
-                    "lookup_create_requests_time_cost_sec", 
-                    "lookup preprocess time cost on embedding worker. Include ID hashing, dividing id accroding feature groups and embedding servers."
+                lookup_preprocess_time_cost_sec: m.create_gauge(
+                    "lookup_preprocess_time_cost_sec", 
+                    "time cost of preprocess for embedding lookup on embedding worker. Include ID hashing, dividing id accroding feature groups and embedding servers.."
                 )?,
                 lookup_rpc_time_cost_sec: m.create_gauge(
                     "lookup_rpc_time_cost_sec", 
-                    "lookup embedding time cost on embedding worker for a batch, include lookup on embedding server and network transmission."
+                    "time cost of embedding lookup on embedding worker for a batch, include lookup on embedding server (`lookup_hashmap_time_cost_sec`) and network transmission."
                 )?,
                 update_gradient_time_cost_sec: m
                     .create_gauge("update_gradient_time_cost_sec", "update gradient time cost on embedding worker for a batch.")?,
-                summation_time_cost_sec: m.create_gauge(
-                    "summation_time_cost_sec",
-                     "lookup postprocess time cost on embedding worker, mainly is embedding summation."
+                lookup_postprocess_time_cost_sec: m.create_gauge(
+                    "lookup_postprocess_time_cost_sec",
+                    "lookup postprocess time cost on embedding worker, mainly embedding summation."
                 )?,
-                lookup_batched_time_cost_sec: m.create_gauge(
-                    "lookup_batched_time_cost_sec",
-                    "lookup and pre/post process time cost on embedding worker."
+                lookup_total_time_cost_sec: m.create_gauge(
+                    "lookup_total_time_cost_sec",
+                    "lookup and pre/post process total time cost on embedding worker."
                 )?,
             };
             Ok(holder)
@@ -911,7 +911,7 @@ impl EmbeddingWorkerInner {
             start_time.elapsed()
         );
         if let Ok(m) = MetricsHolder::get() {
-            m.lookup_create_requests_time_cost_sec
+            m.lookup_preprocess_time_cost_sec
                 .set(start_time.elapsed().as_secs_f64());
         }
         let start_time = std::time::Instant::now();
@@ -932,9 +932,9 @@ impl EmbeddingWorkerInner {
 
         tracing::debug!("summation time cost {:?}", start_time.elapsed());
         if let Ok(m) = MetricsHolder::get() {
-            m.summation_time_cost_sec
+            m.lookup_postprocess_time_cost_sec
                 .set(start_time.elapsed().as_secs_f64());
-            m.lookup_batched_time_cost_sec
+            m.lookup_total_time_cost_sec
                 .set(start_time_all.elapsed().as_secs_f64());
         }
 
@@ -1030,13 +1030,12 @@ impl EmbeddingWorkerInner {
 
     pub async fn forward_batch_id(
         &self,
-        req: (IDTypeFeatureRemoteRef, bool),
+        id_type_feature_remote_ref: IDTypeFeatureRemoteRef,
     ) -> Result<EmbeddingBatch, EmbeddingWorkerError> {
-        let (id_type_feature_remote_ref, requires_grad) = req;
         let ref_id = id_type_feature_remote_ref.ref_id;
 
         let inner = self.clone();
-        let mut indices = {
+        let mut id_type_feature = {
             let mut forward_id_buffer = inner.forward_id_buffer.write().await;
             let sub_buffer = forward_id_buffer
                 .get_mut(&id_type_feature_remote_ref.batcher_idx)
@@ -1046,10 +1045,11 @@ impl EmbeddingWorkerInner {
                 .ok_or_else(|| EmbeddingWorkerError::ForwardIdNotFound(ref_id))?
         };
 
+        let requires_grad = id_type_feature.requires_grad;
         tracing::debug!("received forward_batch_id request");
         self.staleness.fetch_add(1, Ordering::AcqRel);
         let result = inner
-            .lookup_batched_all_slots(&mut indices, requires_grad)
+            .lookup_batched_all_slots(&mut id_type_feature, requires_grad)
             .await;
 
         if result.is_err() {
@@ -1058,12 +1058,12 @@ impl EmbeddingWorkerInner {
         let result = result?;
 
         if requires_grad {
-            indices.enter_post_forward_buffer_time = Some(SystemTime::now());
+            id_type_feature.enter_post_forward_buffer_time = Some(SystemTime::now());
             inner
                 .post_forward_buffer
                 .write()
                 .await
-                .insert(ref_id, indices);
+                .insert(ref_id, id_type_feature);
             tracing::debug!("indices inserted into post forward buffer");
         }
 
@@ -1440,9 +1440,9 @@ impl EmbeddingWorker {
 
     pub async fn forward_batch_id(
         &self,
-        req: (IDTypeFeatureRemoteRef, bool),
+        id_type_feature_ref: IDTypeFeatureRemoteRef,
     ) -> Result<EmbeddingBatch, EmbeddingWorkerError> {
-        let resp = self.inner.forward_batch_id(req).await;
+        let resp = self.inner.forward_batch_id(id_type_feature_ref).await;
         if resp.is_err() {
             self.inner.error_handle(resp.as_ref().unwrap_err()).await?;
         }
