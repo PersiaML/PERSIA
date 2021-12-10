@@ -94,3 +94,6 @@ def get_replica_index() -> int:
     The replica index is a unique identifier assigned to each replica. They are assigned following the order of launching.
     """
     return env.replica_index
+
+
+PERSIA_LAUNCHER_VERBOSE = bool(int(os.environ.get("PERSIA_LAUNCHER_VERBOSE", "0")))

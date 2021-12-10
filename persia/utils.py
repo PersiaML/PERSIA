@@ -1,7 +1,15 @@
 import os
 import yaml
+import subprocess
+
+from typing import List, Callable, Optional
+from contextlib import contextmanager
 
 from persia.error import FileNotFoundException
+from persia.logger import get_default_logger
+from persia.env import PERSIA_LAUNCHER_VERBOSE
+
+_logger = get_default_logger()
 
 
 def setup_seed(seed: int):
@@ -36,3 +44,12 @@ def load_yaml(filepath: str) -> dict:
 
     with open(filepath, "r") as file:
         return yaml.load(file, Loader=yaml.FullLoader)
+
+
+def run_command(cmd: List[str], env: os._Environ = None):
+    cmd = list(map(str, cmd))
+    if PERSIA_LAUNCHER_VERBOSE:
+        cmd_str = " ".join(cmd)
+        _logger.info(f"execute command: {cmd_str}")
+
+    subprocess.check_call(cmd, env=env)
