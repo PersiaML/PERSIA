@@ -1440,9 +1440,9 @@ impl EmbeddingWorker {
 
     pub async fn forward_batch_id(
         &self,
-        req: (IDTypeFeatureRemoteRef, bool),
+        id_type_feature_ref: IDTypeFeatureRemoteRef,
     ) -> Result<EmbeddingBatch, EmbeddingWorkerError> {
-        let resp = self.inner.forward_batch_id(req).await;
+        let resp = self.inner.forward_batch_id(id_type_feature_ref).await;
         if resp.is_err() {
             self.inner.error_handle(resp.as_ref().unwrap_err()).await?;
         }
