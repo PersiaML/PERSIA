@@ -132,7 +132,7 @@ if __name__ == "__main__":
             reproducible=reproducible,
             embedding_staleness=embedding_staleness,
         )
-        test_loader = Dataloder(test_dataset, is_training=False)
+        test_loader = Dataloder(test_dataset)
 
         logger.info("start to training...")
         for (batch_idx, data) in enumerate(train_dataloader):
