@@ -2,19 +2,19 @@ r"""
 
 .. class:: PersiaBatchDataChannel(buffer_size: int)
 
-    This class is a rust_extension pyclass that create the :class:`.PersiaBatchDataReceiver` 
-    and the :class:`.PersiaBatchDataSender`. It can transfer the :class:`.PersiaBatch` 
+    This class is a rust_extension pyclass that create the :class:`.PersiaBatchDataReceiver`
+    and the :class:`.PersiaBatchDataSender`. It can transfer the :class:`.PersiaBatch`
     from the Python to Rust.
 
-    :param int buffer_size: buffer size of the :class:`.PersiaBatchDataReceiver` and the 
+    :param int buffer_size: buffer size of the :class:`.PersiaBatchDataReceiver` and the
         :class:`.PersiaBatchDataSender`.
 
-    .. method:: get_receiver(self) 
+    .. method:: get_receiver(self)
 
         Get the ``PersiaBatchDataReceiver``
 
         :rtype: PersiaBatchDataReceiver
-    
+
     .. method:: get_sender(self)
 
         Get the ``PersiaBatchDataSender``
@@ -23,7 +23,7 @@ r"""
 
 .. class:: PersiaBatchDataSender
 
-    This ``class`` cannot be instantiate directly. It can send the ``PersiaBatch``  to 
+    This ``class`` cannot be instantiate directly. It can send the ``PersiaBatch`` to
     the ``PersiaBatchDataReceiver``.
 
     .. method:: send(persia_batch: PersiaBatch)
@@ -31,8 +31,8 @@ r"""
         Send the ``PersiaBatch`` data to ``PersiaBatchDataReceiver``.
 
 .. class:: PersiaBatchDataReceiver
-    
-    This ``class`` cannot be instantiate directly. It can receive the ``PersiaBatch`` 
+
+    This ``class`` cannot be instantiate directly. It can receive the ``PersiaBatch``
     from the ``PersiaBatchDataSender``.
 
 """
