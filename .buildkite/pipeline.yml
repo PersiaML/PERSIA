@@ -13,11 +13,11 @@ steps:
       IMAGE_TYPE: "cuda"
     plugins:
       - docker-compose#v3.8.0:
-          config: "e2e/docker-compose.train.yml"
+          config: ".buildkite/e2e/docker-compose.train.yml"
           run: nn_worker
           graceful-shutdown: true
       - docker-compose#v3.8.0:
-          config: "e2e/docker-compose.infer.yml"
+          config: ".buildkite/e2e/docker-compose.infer.yml"
           run: torch_serve
           graceful-shutdown: true
 
@@ -27,11 +27,11 @@ steps:
       IMAGE_TYPE: "cpu"
     plugins:
       - docker-compose#v3.8.0:
-          config: "e2e/docker-compose.train.yml"
+          config: ".buildkite/e2e/docker-compose.train.yml"
           run: nn_worker
           graceful-shutdown: true
       - docker-compose#v3.8.0:
-          config: "e2e/docker-compose.infer.yml"
+          config: ".buildkite/e2e/docker-compose.infer.yml"
           run: torch_serve
           graceful-shutdown: true
 
