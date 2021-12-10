@@ -483,7 +483,6 @@ struct ForwardImpl {
     )>,
     pub gpu_forwarded_channel_s: flume::Sender<PersiaTrainingBatchImpl>,
     pub gpu_forwarded_channel_r: flume::Receiver<PersiaTrainingBatchImpl>,
-    pub is_training: bool,
     pub launch: bool,
     pub embedding_staleness_semaphore: Option<Arc<Semaphore>>,
     pub std_handles: Vec<std::thread::JoinHandle<()>>,
@@ -494,7 +493,6 @@ struct ForwardImpl {
 impl ForwardImpl {
     fn new(
         forward_buffer_size: usize,
-        is_training: bool,
         reproducible: bool,
         embedding_staleness: Option<usize>,
     ) -> Self {
@@ -521,7 +519,6 @@ impl ForwardImpl {
             forwarded_channel_s,
             gpu_forwarded_channel_r,
             gpu_forwarded_channel_s,
-            is_training,
             launch: false,
             embedding_staleness_semaphore,
             std_handles: Vec::new(),
@@ -653,7 +650,6 @@ impl ForwardImpl {
             };
 
             let rpc_client = context.rpc_client.clone();
-            let is_training = self.is_training;
 
             let running = self.running.clone();
             let embedding_staleness_semaphore = match &self.embedding_staleness_semaphore {
@@ -683,7 +679,6 @@ impl ForwardImpl {
                                 let (embedding_worker_addr, client) =
                                     rpc_client.get_random_client_with_addr();
 
-                                id_type_features.requires_grad = is_training;
                                 let result = client.forward_batched_direct(&id_type_features).await;
 
                                 (result, embedding_worker_addr, None)
@@ -697,9 +692,8 @@ impl ForwardImpl {
                                 let client = rpc_client.get_client_by_addr(
                                     id_type_features_ref.embedding_worker_addr.as_str(),
                                 );
-                                let result = client
-                                    .forward_batch_id(&(id_type_features_ref.clone(), is_training))
-                                    .await;
+                                let result =
+                                    client.forward_batch_id(&id_type_features_ref.clone()).await;
                                 (
                                     result,
                                     id_type_features_ref.embedding_worker_addr.clone(),
@@ -846,17 +840,11 @@ impl Forward {
     #[new]
     fn new(
         forward_buffer_size: usize,
-        is_training: bool,
         reproducible: bool,
         embedding_staleness: Option<usize>,
     ) -> PyResult<Forward> {
         Ok(Forward {
-            inner: ForwardImpl::new(
-                forward_buffer_size,
-                is_training,
-                reproducible,
-                embedding_staleness,
-            ),
+            inner: ForwardImpl::new(forward_buffer_size, reproducible, embedding_staleness),
         })
     }
 

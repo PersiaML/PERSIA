@@ -1030,13 +1030,12 @@ impl EmbeddingWorkerInner {
 
     pub async fn forward_batch_id(
         &self,
-        req: (IDTypeFeatureRemoteRef, bool),
+        id_type_feature_remote_ref: IDTypeFeatureRemoteRef,
     ) -> Result<EmbeddingBatch, EmbeddingWorkerError> {
-        let (id_type_feature_remote_ref, requires_grad) = req;
         let ref_id = id_type_feature_remote_ref.ref_id;
 
         let inner = self.clone();
-        let mut indices = {
+        let mut id_type_feature = {
             let mut forward_id_buffer = inner.forward_id_buffer.write().await;
             let sub_buffer = forward_id_buffer
                 .get_mut(&id_type_feature_remote_ref.batcher_idx)
@@ -1046,10 +1045,11 @@ impl EmbeddingWorkerInner {
                 .ok_or_else(|| EmbeddingWorkerError::ForwardIdNotFound(ref_id))?
         };
 
+        let requires_grad = id_type_feature.requires_grad;
         tracing::debug!("received forward_batch_id request");
         self.staleness.fetch_add(1, Ordering::AcqRel);
         let result = inner
-            .lookup_batched_all_slots(&mut indices, requires_grad)
+            .lookup_batched_all_slots(&mut id_type_feature, requires_grad)
             .await;
 
         if result.is_err() {
@@ -1058,12 +1058,12 @@ impl EmbeddingWorkerInner {
         let result = result?;
 
         if requires_grad {
-            indices.enter_post_forward_buffer_time = Some(SystemTime::now());
+            id_type_feature.enter_post_forward_buffer_time = Some(SystemTime::now());
             inner
                 .post_forward_buffer
                 .write()
                 .await
-                .insert(ref_id, indices);
+                .insert(ref_id, id_type_feature);
             tracing::debug!("indices inserted into post forward buffer");
         }
 
@@ -1440,9 +1440,9 @@ impl EmbeddingWorker {
 
     pub async fn forward_batch_id(
         &self,
-        req: (IDTypeFeatureRemoteRef, bool),
+        id_type_feature_ref: IDTypeFeatureRemoteRef,
     ) -> Result<EmbeddingBatch, EmbeddingWorkerError> {
-        let resp = self.inner.forward_batch_id(req).await;
+        let resp = self.inner.forward_batch_id(id_type_feature_ref).await;
         if resp.is_err() {
             self.inner.error_handle(resp.as_ref().unwrap_err()).await?;
         }
