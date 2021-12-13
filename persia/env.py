@@ -4,6 +4,13 @@ from persia.logger import get_default_logger
 
 _logger = get_default_logger()
 
+PERSIA_LAUNCHER_VERBOSE = bool(int(os.environ.get("PERSIA_LAUNCHER_VERBOSE", "0")))
+
+# Skip all PERSIA data checks except batch size.
+# Raise RuntimeError when data does not meet requirement, such as
+# type, dtype or shape mismatch.
+PERSIA_SKIP_CHECK_DATA = bool(int(os.environ.get("PERSIA_SKIP_CHECK_DATA", "0")))
+
 
 class _Env:
     def __init__(self):
@@ -94,6 +101,3 @@ def get_replica_index() -> int:
     The replica index is a unique identifier assigned to each replica. They are assigned following the order of launching.
     """
     return env.replica_index
-
-
-PERSIA_LAUNCHER_VERBOSE = bool(int(os.environ.get("PERSIA_LAUNCHER_VERBOSE", "0")))

@@ -1,14 +1,9 @@
 import os
 import click
 
-from persia.utils import run_command
+from persia.utils import run_command, resolve_binary_execute_path
 
 _ENV = os.environ.copy()
-
-
-def resolve_binary_execute_path(binary_name: str) -> str:
-    """Resolved executable file under persia package root."""
-    return os.path.realpath(os.path.join(__file__, "../", binary_name))
 
 
 @click.group()

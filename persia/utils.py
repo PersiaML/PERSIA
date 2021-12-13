@@ -2,8 +2,7 @@ import os
 import yaml
 import subprocess
 
-from typing import List, Callable, Optional
-from contextlib import contextmanager
+from typing import List
 
 from persia.error import FileNotFoundException
 from persia.logger import get_default_logger
@@ -46,6 +45,13 @@ def load_yaml(filepath: str) -> dict:
         return yaml.load(file, Loader=yaml.FullLoader)
 
 
+def dump_yaml(content: dict, filepath: str):
+    """Dump the content into filepath."""
+
+    with open(filepath, "w") as file:
+        file.write(yaml.dump(content))
+
+
 def run_command(cmd: List[str], env: os._Environ = None):
     cmd = list(map(str, cmd))
     if PERSIA_LAUNCHER_VERBOSE:
@@ -53,3 +59,8 @@ def run_command(cmd: List[str], env: os._Environ = None):
         _logger.info(f"execute command: {cmd_str}")
 
     subprocess.check_call(cmd, env=env)
+
+
+def resolve_binary_execute_path(binary_name: str) -> str:
+    """Resolved executable file under persia package root."""
+    return os.path.realpath(os.path.join(__file__, "../", binary_name))
