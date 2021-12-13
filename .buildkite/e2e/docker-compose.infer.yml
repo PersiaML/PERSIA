@@ -1,0 +1,37 @@
+version: "3.3"
+services:
+    torch_serve:
+        env_file:
+            - .ci.env
+        image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
+        command: bash -c "/home/PERSIA/examples/src/adult-income/launch_ts.sh"
+        volumes:
+            - ../../resources/proto/:/proto
+            - ./cache:/cache
+        deploy:
+            endpoint_mode: dnsrr
+        depends_on:
+            - embedding_worker
+            - embedding_parameter_server
+
+    embedding_worker:
+        env_file:
+            - .ci.env
+        image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
+        command: bash -c "persia-launcher embedding-worker --replica-index 0 --replica-size 1 --global-config $$PERSIA_INFER_GLOBAL_CONFIG"
+        deploy:
+            endpoint_mode: dnsrr
+        depends_on:
+            - embedding_parameter_server
+        volumes:
+            - ./cache:/cache
+
+    embedding_parameter_server:
+        env_file:
+            - .ci.env
+        image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
+        command: bash -c "persia-launcher embedding-parameter-server --replica-index 0 --replica-size 1 --global-config $$PERSIA_INFER_GLOBAL_CONFIG"
+        deploy:
+            endpoint_mode: dnsrr
+        volumes:
+            - ./cache:/cache

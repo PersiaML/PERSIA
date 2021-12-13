@@ -1,0 +1,43 @@
+version: "3.3"
+services:
+    persia_nats_service:
+        image: nats:latest
+        deploy:
+            replicas: 1
+                
+    data_loader:
+        env_file:
+            - .ci.env
+        image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
+        command: persia-launcher data-loader --replica-index 0 --replica-size 1
+
+    nn_worker:
+        env_file:
+            - .ci.env
+        environment:
+            CUBLAS_WORKSPACE_CONFIG: :4096:8 # Adapt to pytorch deterministic feature
+        image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
+        command: persia-launcher nn-worker
+        depends_on:
+            - data_loader
+            - embedding_worker
+            - embedding_parameter_server
+            - persia_nats_service
+        volumes:
+            - ./cache:/cache
+
+    embedding_worker:
+        env_file:
+            - .ci.env
+        image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
+        command: persia-launcher embedding-worker --replica-index 0 --replica-size 1
+        volumes:
+            - ./cache:/cache
+
+    embedding_parameter_server:
+        env_file:
+            - .ci.env
+        image: persia-${IMAGE_TYPE}-runtime:${BUILDKITE_PIPELINE_ID}
+        command: persia-launcher embedding-parameter-server --replica-index 0 --replica-size 1
+        volumes:
+            - ./cache:/cache
