@@ -169,7 +169,7 @@ if __name__ == "__main__":
         import numpy as np
 
         from persia.ctx import DataCtx
-        from persia.embedding.data import PersiaBatch, IDTypeFeature
+        from persia.embedding.data import PersiaBatch, IDTypeFeature, Label
         from persia.logger import get_default_logger
 
         _logger = get_default_logger()
@@ -188,6 +188,16 @@ if __name__ == "__main__":
                             dtype=np.uint64,
                         )
                     ],
+                )
+            ],
+            labels=[
+                Label(
+                    np.array(
+                        [
+                            1,
+                        ],
+                        dtype=np.float32,
+                    )
                 )
             ],
             requires_grad=False,
