@@ -14,7 +14,7 @@ _logger = get_default_logger()
 MAX_BATCH_SIZE = 65535
 
 _ND_ARRAY_SUPPORT_TYPE = set(
-    [np.bool, np.int8, np.int16, np.int32, np.int64, np.float32, np.float64, np.uint8]
+    [np.bool_, np.int8, np.int16, np.int32, np.int64, np.float32, np.float64, np.uint8]
 )
 
 

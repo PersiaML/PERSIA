@@ -1,10 +1,12 @@
 import os
 import yaml
 import subprocess
+import time
 import tempfile
 import cloudpickle
 
 from typing import List, Callable, Optional
+from threading import Thread
 from contextlib import contextmanager
 
 from persia.utils import resolve_binary_execute_path
@@ -68,6 +70,29 @@ def _launch_nn_worker(nproc_per_node: int, env: os._Environ) -> subprocess.Popen
 
 def _launch_nats_server() -> List[subprocess.Popen]:
     return [subprocess.Popen(["nats-server"])]
+
+
+def _kill_processes(process_group: List[subprocess.Popen]):
+    for process in process_group:
+        process.kill()
+
+    for process in process_group:
+        process.wait()
+
+
+def _detect_subprocess_terminate(
+    process_group: List[subprocess.Popen], check_interval: int = 5
+):
+    while True:
+        for process in process_group:
+            status = process.poll()
+            if status:
+                # Raise Exception if the subprocess is
+                _kill_processes(process_group)
+                raise Exception(
+                    "detect subprocess crash down.., crash down the main thread"
+                )
+        time.sleep(check_interval)
 
 
 @contextmanager
@@ -153,14 +178,15 @@ def ensure_persia_service(
             )
         )
 
+        # monitoring the subprocess group status.
+        Thread(
+            target=_detect_subprocess_terminate, args=(process_group,), daemon=True
+        ).start()
+
         """Launch three service, embedding_server, """
         yield
 
-        for process in process_group:
-            process.kill()
-
-        for process in process_group:
-            process.wait()
+        _kill_processes(process_group)
 
 
 if __name__ == "__main__":
@@ -223,8 +249,6 @@ if __name__ == "__main__":
     from persia.env import get_world_size
     from persia.logger import get_default_logger
 
-    _logger = get_default_logger()
-
     with ensure_persia_service(
         data_loader_func=data_loader,
         embedding_config=embedding_config,
@@ -243,8 +267,8 @@ if __name__ == "__main__":
             )
             ctx.common_context.wait_servers_ready()
 
-            data_loader = Dataloder(StreamingDataset(buffer_size=15))
+            data_loader = Dataloder(
+                StreamingDataset(buffer_size=15), timeout_ms=1000 * 30
+            )
             data_generator = iter(data_loader)
             data = next(data_generator)
-
-            _logger.info("get data done...")
