@@ -5,13 +5,10 @@ from tqdm import tqdm
 from persia.embedding.data import PersiaBatch
 from persia.logger import get_logger
 from persia.ctx import DataCtx
-from persia.utils import setup_seed
 
 from data_generator import make_dataloader
 
 logger = get_logger("data_loader")
-
-setup_seed(3)
 
 train_filepath = os.path.join(
     os.path.dirname(os.path.realpath(__file__)), "data/train.npz"
