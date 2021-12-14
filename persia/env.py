@@ -1,4 +1,6 @@
 import os
+from threading import local
+from typing import Optional
 
 from persia.logger import get_default_logger
 
@@ -53,6 +55,22 @@ class _Env:
                 self.replica_index = 0
         self.is_init = True
 
+    def set(
+        self,
+        replica_size: Optional[int] = None,
+        replica_index: Optional[int] = None,
+        world_size: Optional[int] = None,
+        rank: Optional[int] = None,
+        local_rank: Optional[int] = None,
+    ):
+        self.replica_index = replica_index
+        self.replica_size = replica_size
+        self.world_size = world_size
+        self.rank = rank
+        self.local_rank = local_rank
+
+        self.is_init = True
+
 
 env = _Env()
 
@@ -60,6 +78,11 @@ env = _Env()
 def reload_env():
     """Reload the environment."""
     env.init(force=True)
+
+
+def set_env(**kwargs):
+    """Set environment without any sanity check."""
+    env.set(**kwargs)
 
 
 def _ensure_parse_env(get_func):
