@@ -2,7 +2,7 @@ r"""
 ``persia.launcher`` is a module that provides the functionality to help user launch the PERSIA
 service. It will install the cli command script ``persia-launcher`` automatically after
 installing the PERSIA. You can launch the launch the ``data-loader``, ``nn-worker``,
-``embedding-worker``, and ``embedding-parameter-server``by invoke the subcommand from
+``embedding-worker``, and ``embedding-parameter-server`` by invoke the subcommand from
 ``persia-launcher``.
 
 .. code-block:: bash
