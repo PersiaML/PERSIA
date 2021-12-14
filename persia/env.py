@@ -1,5 +1,4 @@
 import os
-from threading import local
 from typing import Optional
 
 from persia.logger import get_default_logger

@@ -4,6 +4,10 @@ from persia.helper import ensure_persia_service
 from persia.ctx import BaseCtx, DataCtx
 
 EMBEDDING_CONFIG = {"slots_config": {"age": {"dim": 8}}}
+RAW_EMBEDDING_CONFIG = {
+    "slots_config": {"age": {"dim": 8, "embedding_summation": False}}
+}
+
 GLOBAL_CONFIG = {
     "embedding_worker_config": {"forward_buffer_size": 1000},
     "common_config": {"metrics_config": {"enable_metrics": False}},
