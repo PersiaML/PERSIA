@@ -1,3 +1,97 @@
+r"""
+``persia.launcher`` is a module that provides the functionality to help user launch the PERSIA
+service. It will install the cli command script ``persia-launcher`` automatically after
+installing the PERSIA. You can launch the launch the ``data-loader``, ``nn-worker``,
+``embedding-worker``, and ``embedding-parameter-server``by invoke the subcommand from
+``persia-launcher``.
+
+.. code-block:: bash
+
+    persia-launcher --help
+
+Or
+
+.. code-block:: bash
+
+    python3 -m persia.launcher --help
+
+=================
+NN Worker And Data Loader
+=================
+
+If you want to launch the ``nn-worker`` and ``data-loader``, you can use:
+
+.. code-block:: bash
+
+    # Launch the nn-worker
+    persia-launcher nn-worker train.py --nproc-per-node 1 --node-rank 0 --nnodes 1
+
+    # Launch the data_load
+    persia-launcher data-loader data_loader.py --replica-size 1 --replica-index 0
+
+
+=================
+Embedding Worker And Embedding Parameter Server
+=================
+
+To launch the ``embedding-worker`` and ``embedding-parameter-server``, you can use:
+
+.. code-block:: bash
+
+    # Launch the embedding-worker
+    persia-launcher embedding-worker \
+        --global-config global_config.yml \
+        --embedding-config embedding_config.yml \
+        --replica-index 0 --replica-size 1
+
+    # Launch the embedding-parameter-server
+    persia-launcher embedding-parameter-server\
+        --global-config global_config.yml \
+        --embedding-config embedding_config.yml \
+        --replica-index 0 --replica-size 1
+
+=================
+Arguments from Environment Variables
+=================
+
+The ``persia-launcher`` will retrieve the arguments from the environment variable if the
+arguments are not found. Environment variables mapping:
+
+    +-----------------------------+-----------------------+
+    |Environment Variable Name    |arguments definnition  |
+    +=============================+=======================+
+    |PERSIA_DATALOADER_ENTRY      |data loader entry path |
+    +-----------------------------+-----------------------+
+    |PERSIA_NN_WORKER_ENTRY       |model entry path       |
+    +-----------------------------+-----------------------+
+    |PERSIA_EMBEDDING_CONFIG      |embedding config path  |
+    +-----------------------------+-----------------------+
+    |PERSIA_GLOBAL_CONFIG         |common general path    |
+    +-----------------------------+-----------------------+
+
+.. code-block::
+
+    export PERSIA_NN_WORKER_ENTRY=train.py
+    export PERSIA_DATALOADER_ENTRY=data_loader.py
+    export PERSIA_EMBEDDING_CONFIG=embedding_config.yml
+    export PERSIA_GLOBAL_CONFIG=global_config.yml
+
+    # Launch the nn-worker
+    persia-launcher nn-worker --nproc-per-node 1 --node-rank 0 --nnodes 1
+
+    # Launch the data_load
+    persia-launcher data-loader --replica-index 0 --replica-size 1
+
+    # Launch the embedding-worker
+    persia-launcher embedding-worker \
+        --replica-index 0 --replica-size 1
+
+    # Launch the embedding-parameter-server
+    persia-launcher embedding-parameter-server \
+        --replica-index 0 --replica-size 1
+
+"""
+
 import os
 import click
 import subprocess
@@ -10,19 +104,19 @@ _logger = get_logger(__file__)
 
 _ENV = os.environ.copy()
 
-PERSIA_LAUNCHER_VERBOSE = bool(int(os.environ.get("PERSIA_LAUNCHER_VERBOSE", "0")))
+_PERSIA_LAUNCHER_VERBOSE = bool(int(os.environ.get("PERSIA_LAUNCHER_VERBOSE", "0")))
 
 # TODO(wangyulong): Add api documentation
 
 
-def resolve_binary_execute_path(binary_name: str) -> str:
+def _resolve_binary_execute_path(binary_name: str) -> str:
     """Resolved executable file under persia package root."""
     return os.path.realpath(os.path.join(__file__, "../", binary_name))
 
 
-def run_command(cmd: List[str]):
+def _run_command(cmd: List[str]):
     cmd = list(map(str, cmd))
-    if PERSIA_LAUNCHER_VERBOSE:
+    if _PERSIA_LAUNCHER_VERBOSE:
         cmd_str = " ".join(cmd)
         _logger.info(f"execute command: {cmd_str}")
 
@@ -56,7 +150,7 @@ def nn_worker(filepath: str, nproc_per_node: int, node_rank: int, nnodes: int):
         node_rank,
         filepath,
     ]
-    run_command(cmd)
+    _run_command(cmd)
 
 
 @cli.command()
@@ -79,7 +173,7 @@ def data_loader(filepath: str, replica_index: int, replica_size: int):
         "python3",
         filepath,
     ]
-    run_command(cmd)
+    _run_command(cmd)
 
 
 @cli.command()
@@ -110,7 +204,7 @@ def embedding_worker(
     replica_index: int,
     replica_size: int,
 ):
-    executable_path = resolve_binary_execute_path("persia-embedding-worker")
+    executable_path = _resolve_binary_execute_path("persia-embedding-worker")
     cmd = [
         executable_path,
         "--port",
@@ -124,7 +218,7 @@ def embedding_worker(
         "--replica-size",
         replica_size,
     ]
-    run_command(cmd)
+    _run_command(cmd)
 
 
 @cli.command()
@@ -156,7 +250,7 @@ def embedding_parameter_server(
     replica_index: int,
     replica_size: int,
 ):
-    executable_path = resolve_binary_execute_path("persia-embedding-parameter-server")
+    executable_path = _resolve_binary_execute_path("persia-embedding-parameter-server")
     cmd = [
         executable_path,
         "--port",
@@ -170,7 +264,7 @@ def embedding_parameter_server(
         "--replica-size",
         replica_size,
     ]
-    run_command(cmd)
+    _run_command(cmd)
 
 
 if __name__ == "__main__":
