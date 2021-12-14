@@ -47,13 +47,13 @@ class DistributedBaseOption(ABC):
         """
 
         Arguments:
-            model (torch.nn.Module): the PyTorch model that need to converted to dataparallel model.
+            model (torch.nn.Module): the PyTorch model that needs to be converted to data-parallel model.
             world_size (int): total number of processes.
             rank_id (int): rank of current process.
             device_id (int, optional): device id for current process.
             master_addr (str, optional): master of the collective communication ip address.
-            optimizer (torch.optim.Optimizer, optional): PyTorch optimizer that may need to
-                converted during model converted procedure.
+            optimizer (torch.optim.Optimizer, optional): the PyTorch optimizer
+                that may need to be converted alongside the model.
         """
         ...
 
@@ -75,8 +75,8 @@ class DDPOption(DistributedBaseOption):
     """Implements an option to convert torch model to a DDP model.
 
     Current `init_method` in :class:`DDPOption` only support `nccl` and `gloo`. You can set
-    ``init_method=nccl`` if your PERSIA task is training on the cluster with the CUDA device.
-    Or set ``init_method=gloo`` if your PERSIA task is training on the cluster only with the CPU.
+    ``init_method="nccl"`` if your PERSIA task is training on the cluster with the CUDA device.
+    Or set ``init_method="gloo"`` if your PERSIA task is training on the cluster only with the CPU.
 
     For example:
 
@@ -130,13 +130,13 @@ class DDPOption(DistributedBaseOption):
     ):
         """
         Arguments:
-            model (torch.nn.Module): the PyTorch model that need to converted to dataparallel model.
+            model (torch.nn.Module): the PyTorch model that needs to be converted to data-parallel model.
             world_size (int): total number of processes.
             rank_id (int): rank of current process.
             device_id (int, optional): device id for current process.
             master_addr (str, optional): master of collective communication ip address.
-            optimizer (torch.optim.Optimizer, optional): PyTorch optimizer that may need to converted
-                during model converted procedure.
+            optimizer (torch.optim.Optimizer, optional): the PyTorch optimizer
+                that may need to be converted alongside the model.
         """
 
         if self.init_method == "tcp":
@@ -287,7 +287,7 @@ class BaguaDistributedOption(DistributedBaseOption):
 
     .. note::
         The :class:`BaguaDistributedOption` only supports the `CUDA` environment, if you want to run PERSIA task
-        on the CPU cluster, try :class:`DDPOption` with `backend=gloo` instead of
+        on the CPU cluster, try :class:`DDPOption` with `backend='gloo'` instead of
         :class:`BaguaDistributedOption`.
     """
 
@@ -318,13 +318,13 @@ class BaguaDistributedOption(DistributedBaseOption):
     ):
         """
         Arguments:
-            model (torch.nn.Module): the PyTorch model that need to converted to dataparallel model.
+            model (torch.nn.Module): the PyTorch model that needs to be converted to data-parallel model.
             world_size (int): total number of processes.
             rank_id (int): rank of current process.
             device_id (int, optional): device id for current process.
             master_addr (str, optional): master of collective communication ip address.
-            optimizer (torch.optim.Optimizer, optional): the PyTorch optimizer that may need to converted
-                during model converted procedure.
+            optimizer (torch.optim.Optimizer, optional): the PyTorch optimizer
+                that may need to be converted alongside the model.
         """
 
         try:
@@ -395,7 +395,7 @@ class BaguaDistributedOption(DistributedBaseOption):
         return model.with_bagua([optimizer], algorithm), optimizer
 
     def init_with_env_file(self) -> bool:
-        """Check current option init with ddp env file or not.
+        """Check if the current option is initiad with a ddp environment file.
 
         Returns:
             Whether distributed option init with env file.
@@ -407,8 +407,8 @@ def get_default_distributed_option(device_id: Optional[int] = None) -> DDPOption
     """Get default distributed option.
 
     Arguments:
-        device_id (int, optional): Cuda device_id. Apply ``backend=nccl`` to the ``DDPOption``
-            If the device_id not None, otherwise use the ``backend=gloo`` for CPU scene.
+        device_id (int, optional): CUDA device_id. Apply ``backend="nccl"`` to the ``DDPOption``
+            if the `device_id` not None, otherwise use the ``backend="gloo"`` for CPU scene.
 
     Returns:
         Default distributed option.

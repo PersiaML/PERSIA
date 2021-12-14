@@ -1,8 +1,8 @@
 r"""
 ``persia.launcher`` is a module that provides the functionality to help user launch the PERSIA
-service. It will install the cli command script ``persia-launcher`` automatically after
-installing the PERSIA. You can launch the launch the ``data-loader``, ``nn-worker``,
-``embedding-worker``, and ``embedding-parameter-server`` by invoke the subcommand from
+service. A command line interface ``persia-launcher`` is installed automatically
+when you install PERSIA. You can launch the PERSIA modules ``data-loader``, ``nn-worker``,
+``embedding-worker``, and ``embedding-parameter-server`` by invoking the subcommand from
 ``persia-launcher``.
 
 .. code-block:: bash
@@ -54,8 +54,9 @@ To launch the ``embedding-worker`` and ``embedding-parameter-server``, you can u
 Arguments from Environment Variables
 =================
 
-The ``persia-launcher`` will retrieve the arguments from the environment variable if the
-arguments are not found. Environment variables mapping:
+Some arguments will fallback to the environment variable if the
+arguments are not provided when running the ``persia-launcher``.
+Environment variables mapping:
 
     +-----------------------------+-----------------------+
     |Environment Variable Name    |arguments definnition  |
