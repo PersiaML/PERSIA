@@ -61,11 +61,26 @@ def _launch_data_loader(replica_num: int, env: os._Environ) -> List[subprocess.P
     return processes
 
 
-def _launch_nn_worker(nproc_per_node: int, env: os._Environ) -> subprocess.Popen:
-    return subprocess.Popen(
-        ["persia-launcher", "nn-worker", "--nproc-per-node", str(nproc_per_node)],
-        env=env,
-    )
+def _launch_nn_worker(nproc_per_node: int, env: os._Environ) -> List[subprocess.Popen]:
+    assert 1 <= nproc_per_node <= 8
+
+    processes = []
+    for replica_index in range(nproc_per_node):
+        current_env = env.copy()
+        current_env["WORLD_SIZE"] = str(nproc_per_node)
+        current_env["RANK"] = str(replica_index)
+        current_env["LOCAL_RANK"] = str(replica_index)
+
+        processes.append(
+            subprocess.Popen(
+                [
+                    "python3",
+                    os.environ["PERSIA_NN_WORKER_ENTRY"],
+                ],
+                env=current_env,
+            )
+        )
+    return processes
 
 
 def _launch_nats_server() -> List[subprocess.Popen]:
@@ -95,12 +110,25 @@ def _detect_subprocess_terminate(
         time.sleep(check_interval)
 
 
+# TODO: use PersiaService to replace the contextmanger to ensure
+# exit the process when meet the exception
+# class PersiaService:
+#     def __init__(self) -> None:
+#         ...
+
+#     def __enter__(self):
+#         ...
+
+#     def __exit__(self, _exc_type, _exc_val, _exc_tb):
+#         ...
+
+
 @contextmanager
 def ensure_persia_service(
     data_loader_func: Optional[Callable] = None,
     nn_worker_func: Optional[Callable] = None,
     embedding_config: Optional[dict] = None,
-    embedding_config_path: str = None,
+    embedding_config_path: Optional[str] = None,
     global_config: Optional[dict] = None,
     global_config_path: Optional[str] = None,
     data_laoder_replica_num: Optional[int] = 1,
@@ -149,14 +177,16 @@ def ensure_persia_service(
             cloudpickle_file.flush()
             python_file.flush()
             process_group.extend(_launch_data_loader(data_laoder_replica_num, _ENV))
-        else:
+
+        # TODO: ensure only one cloudpickle function.
+        if nn_worker_func is not None:
             pickle_nn_worker = cloudpickle.dumps(nn_worker_func)
             cloudpickle_file.write(pickle_nn_worker)
 
             python_file.write(_CLOUD_PICKLE_TEMPLATE.format(cloudpickle_file.name))
 
             _ENV["PERSIA_NN_WORKER_ENTRY"] = python_file.name
-            process_group.append(_launch_nn_worker(nproc_per_node, _ENV))
+            process_group.extend(_launch_nn_worker(nproc_per_node, _ENV))
 
         process_group.extend(_launch_nats_server())
         # add embedding-worker
@@ -247,7 +277,6 @@ if __name__ == "__main__":
     from persia.data import Dataloder, StreamingDataset
     from persia.embedding import get_default_embedding_config
     from persia.env import get_world_size
-    from persia.logger import get_default_logger
 
     with ensure_persia_service(
         data_loader_func=data_loader,

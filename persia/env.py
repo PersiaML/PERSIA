@@ -21,8 +21,8 @@ class _Env:
         self.local_rank = None
         self.is_init = False
 
-    def init(self):
-        if self.is_init:
+    def init(self, force: bool = False):
+        if self.is_init and not force:
             return
 
         if os.environ.get("RANK", None):
@@ -55,6 +55,11 @@ class _Env:
 
 
 env = _Env()
+
+
+def reload_env():
+    """Reload the environment."""
+    env.init(force=True)
 
 
 def _ensure_parse_env(get_func):

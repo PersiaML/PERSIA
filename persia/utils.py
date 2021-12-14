@@ -2,7 +2,7 @@ import os
 import yaml
 import subprocess
 
-from typing import List
+from typing import List, Optional
 
 from persia.error import FileNotFoundException
 from persia.logger import get_default_logger
@@ -52,7 +52,7 @@ def dump_yaml(content: dict, filepath: str):
         file.write(yaml.dump(content))
 
 
-def run_command(cmd: List[str], env: os._Environ = None):
+def run_command(cmd: List[str], env: Optional[dict] = None):
     cmd = list(map(str, cmd))
     if PERSIA_LAUNCHER_VERBOSE:
         cmd_str = " ".join(cmd)

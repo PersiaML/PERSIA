@@ -109,7 +109,7 @@ class IDTypeFeatureWithSingleID:
 class _NdarrayDataBase:
     DEFAULT_NAME = "ndarray_base"
 
-    def __init__(self, data: np.ndarray, name: str = None):
+    def __init__(self, data: np.ndarray, name: Optional[str] = None):
         """
         Arguments:
             data (np.ndarray): Numpy array.
