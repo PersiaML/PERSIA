@@ -254,8 +254,8 @@ class EmbeddingCtx(BaseCtx):
         ensure the example gets the correct result.
 
     .. note::
-        If you set ``device_id=None``, the training data and the model will place
-        in host memory rather than in `CUDA` device memory in default.
+        If you set ``device_id=None``, the training data and the model will be placed
+        in host memory rather than in `CUDA` device memory by default.
 
     """
 
@@ -324,7 +324,7 @@ class EmbeddingCtx(BaseCtx):
     def prepare_features(
         self, persia_training_batch: PersiaTrainingBatch
     ) -> Tuple[List[torch.Tensor], List[torch.Tensor], Optional[List[torch.Tensor]]]:
-        r"""This function convert the data from ``PersiaTrainingBatch`` to ``torch.Tensor``.
+        r"""This function converts data from ``PersiaTrainingBatch`` to ``torch.Tensor``.
 
         :class:`PersiaTrainingBatch` contains non_id_type_features, id_type_feature_embeddings
         and labels. But they can't use directly in training before convert the :class:`Tensor`
@@ -472,7 +472,7 @@ class EmbeddingCtx(BaseCtx):
         blocking: bool = True,
         with_jit_model: bool = False,
     ):
-        """Dump the dense and embedding checkpoint to destination directory.
+        """Save the model checkpoint (both dense and embedding) to the destination directory.
 
         Arguments:
             dst_dir (str): destination directory.
@@ -497,7 +497,7 @@ class EmbeddingCtx(BaseCtx):
         dense_filename: str = "dense.pt",
         blocking: bool = True,
     ):
-        """Load the dense and embedding checkpoint from source directory.
+        """Load the dense and embedding checkpoint from the source directory.
 
         Arguments:
             src_dir (str): source directory.
@@ -516,7 +516,12 @@ class EmbeddingCtx(BaseCtx):
         self.load_embedding(src_dir, blocking=blocking)
 
     def dump_embedding(self, dst_dir: str, blocking: bool = True):
-        """Dump embeddings to the destination directory. Use
+        """Dump embeddings to the destination directory.
+        By default, this function is synchronous and will wait for the completion
+        of embedding loading before returning. This is done internally through
+        a call to :meth:`.wait_for_dump_embedding`.
+        Set ``blocking=False`` to allow asyncronous computation,
+        in which case the function will return immediately.
         :meth:`.wait_for_dump_embedding` to wait until finished if ``blocking=False``.
 
         Arguments:
@@ -528,8 +533,12 @@ class EmbeddingCtx(BaseCtx):
             self.wait_for_dump_embedding()
 
     def load_embedding(self, src_dir: str, blocking: bool = True):
-        """Load embeddings from ``src_dir``. Use :meth:`.wait_for_load_embedding`
-        to wait until finished if ``blocking=False``.
+        """Load embeddings from ``src_dir``.
+        By default, this function is synchronous and will wait for the completion
+        of embedding loading before returning. This is done internally through
+        a call to :meth:`.wait_for_load_embedding`.
+        Set ``blocking=False`` to allow asyncronous computation,
+        in which case the function will return immediately.
 
         Arguments:
             src_dir (str): directory to load embeddings.
@@ -546,7 +555,7 @@ class EmbeddingCtx(BaseCtx):
         file_name: str,
         is_jit: bool = False,
     ):
-        """Dump  model or optimizer of the PyTorch to the destination directory.
+        """Dump a Pytorch model or optimizer's state dict to the destination directory.
 
         Arguments:
             torch_instance (torch.nn.Module or torch.optim.Optimizer): dense model or
@@ -574,7 +583,7 @@ class EmbeddingCtx(BaseCtx):
         src_dir: str,
         map_location: Optional[str] = None,
     ):
-        """Load the torch state dict from the source directory.
+        """Load a Pytorch state dict from the source directory and apply to `torch_instance`.
 
         Arguments:
             torch_instance (torch.nn.Module or torch.optim.Optimizer): dense model or
@@ -640,7 +649,7 @@ class EmbeddingCtx(BaseCtx):
 
 
 class TrainCtx(EmbeddingCtx):
-    r"""Subclass of :class:`EmbeddingCtx` that provide the backward ability to update the
+    r"""Subclass of :class:`EmbeddingCtx` that implements a `backward` function to update the
     embeddings.
 
     Example for :class:`TrainCtx`:
@@ -674,12 +683,14 @@ class TrainCtx(EmbeddingCtx):
                 loss = loss_fn(output, labels[0])
                 scaled_loss = ctx.backward(loss)
 
-    If you want to train the PERSIA task in a distributed environment, we have already
-    provided the corresponding distributed data-parallel option for you to use.
-    :class:`TrainCtx` will use the :func:`.get_default_distributed_option` as the default
-    distributed configuration when the environment ``WORLD_SIZE > 1``.
+    If you want to train the PERSIA task in a distributed environment, you can
+    set `distributed_option` to the corresponding option you want to use.
+    Currently support Pytorch DDP (distributed data-parallel) (:class:`DDPOption`)
+    and Bagua (:class:`BaguaDistributedOption`). The default is Pytorch DDP.
+    The default configuration is determined by :func:`.get_default_distributed_option`
+     when the environment ``WORLD_SIZE > 1``.
 
-    Or you can configure the :class:`DDPOption` to adapt to your specific requirements.
+    You can configure the :class:`DDPOption` to your specific requirements.
 
     .. code-block::
 
@@ -702,11 +713,15 @@ class TrainCtx(EmbeddingCtx):
         ) as ctx:
             ...
 
-    `Bagua <https://github.com/BaguaSys/bagua>`_ is the other data-parallel framework that
-    integration with PERSIA. You can use :class:`BaguaDistributedOption` to replace the
-    :class:`DDPOption` to speed up the training. For more details about the
-    :class:`BaguaDistributedOption`, you can review the
-    `tutorial <https://tutorials.baguasys.com/algorithms/>`_ of `Bagua`.
+    We also integrated Bagua to PERSIA as an alternative to PytorchDDP.
+    `Bagua <https://github.com/BaguaSys/bagua>`_ is an advanced data-parallel framework,
+    also developed by AI Platform @ Kuaishou.
+    Using :class:`BaguaDistributedOption` in place of
+    :class:`DDPOption` can significantly speed up the training (See
+    `Bagua Benchmark <https://tutorials.baguasys.com/benchmark/>`_).
+    For more details on the algorithms used by and available options of
+    :class:`BaguaDistributedOption`, please refer to
+    `Bagua tutorials <https://tutorials.baguasys.com/algorithms/>`_.
 
     Example for :class:`BaguaDistributedOption`:
 
@@ -751,16 +766,16 @@ class TrainCtx(EmbeddingCtx):
                 embedding parameters.
             dense_optimizer (torch.optim.Optimizer): optimizer for dense parameters.
             grad_scalar_update_factor (float, optional): update factor of ``Gradscalar``
-                to ensure loss scale finitely if set ``mixed_precision=True``.
-            backward_buffer_size (int, optional): max number of not updated gradients queued.
+                to ensure that loss scale is finite if set ``mixed_precision=True``.
+            backward_buffer_size (int, optional): maximum number of gradients
+                queued in the buffer between two backward steps.
             backward_workers_size (int, optional): number of workers sending embedding gradients
                 in parallel.
             grad_update_buffer_size (int, optional): number of gradient buffer. The buffer will cache the
                 gradient tensor until the embedding update is finished.
-            lookup_emb_directly (bool, optional): lookup embedding directly without isolation data loader.
-            mixed_precision (bool): enable mixed_precision or not.
-            distributed_option (DistributedBaseOption, optional): distributedOption to converted
-                model to dataparallel model.
+            lookup_emb_directly (bool, optional): lookup embedding directly without a separate data loader.
+            mixed_precision (bool): whether to enable mixed_precision.
+            distributed_option (DistributedBaseOption, optional): option for distributed training.
         """
         super(TrainCtx, self).__init__(PreprocessMode.TRAIN, *args, **kwargs)
 
@@ -866,7 +881,7 @@ class TrainCtx(EmbeddingCtx):
         return len(embedding_worker_addr_list)
 
     def wait_servers_ready(self):
-        """Wait until embedding servers ready to serve."""
+        """Wait until embedding servers are ready to serve."""
 
         self.common_context.init_nats_publisher(self.world_size)
         self.common_context.wait_servers_ready()
@@ -1056,7 +1071,7 @@ def eval_ctx(*args, **kwargs) -> EmbeddingCtx:
 
 
 class InferCtx(EmbeddingCtx):
-    r"""Subclass of :class:`EmbeddingCtx` that provide the forward ability without `nats-servers`.
+    r"""Subclass of :class:`EmbeddingCtx` that provides the inference functionality without `nats-servers`.
 
     Example for :class:`InferCtx`:
 
