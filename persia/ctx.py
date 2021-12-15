@@ -271,7 +271,7 @@ class EmbeddingCtx(BaseCtx):
         Arguments:
             preprocess_mode (PreprocessMode): different preprocess mode effect the
                 behavior of :meth:`.prepare_features`.
-            model (torch.nn.Module): PyTorch model matched with embeddings in this context.
+            model (torch.nn.Module): denese neural network PyTorch model.
             embedding_config (EmbeddingConfig, optional): the embedding configuration that
                 will be sent to the embedding server.
         """
@@ -755,9 +755,8 @@ class TrainCtx(EmbeddingCtx):
             backward_buffer_size (int, optional): max number of not updated gradients queued.
             backward_workers_size (int, optional): number of workers sending embedding gradients
                 in parallel.
-            grad_update_buffer_size (int, optional): number of reference cache , hold the
-                gradient tensor reference to avoid meet dangle data in gradient backward
-                phase.
+            grad_update_buffer_size (int, optional): number of gradient buffer. The buffer will cache the
+                gradient tensor until the embedding update is finished.
             lookup_emb_directly (bool, optional): lookup embedding directly without isolation data loader.
             mixed_precision (bool): enable mixed_precision or not.
             distributed_option (DistributedBaseOption, optional): distributedOption to converted
@@ -875,11 +874,7 @@ class TrainCtx(EmbeddingCtx):
     def backward(
         self, loss: torch.Tensor, embedding_gradient_check_frequency: int = 20
     ) -> torch.Tensor:
-        """Update the gradient of current dense and embedding tensors.
-
-        This method supports mixed precision training. Depending on whether the current
-        embedding gradient is finite or not, ``GradScalar`` can update the scale
-        automatically to restrict to parameters in finite range.
+        """Update the parameters of the current dense model and embedding model.
 
         Arguments:
             loss (torch.Tensor): loss of current batch.

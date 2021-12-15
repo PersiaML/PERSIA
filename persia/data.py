@@ -1,5 +1,11 @@
 r"""
 
+.. graphviz::
+
+.. image:: ../../../_static/image/ persia_dataflow.svg
+    :width: 800
+    :alt: Image not found
+
 .. class:: PersiaBatchDataChannel(buffer_size: int)
 
     This class is a rust_extension pyclass that create the :class:`PersiaBatchDataReceiver`

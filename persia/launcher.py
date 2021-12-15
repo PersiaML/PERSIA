@@ -58,7 +58,7 @@ The ``persia-launcher`` will retrieve the arguments from the environment variabl
 arguments are not found. Environment variables mapping:
 
     +-----------------------------+-----------------------+
-    |Environment Variable Name    |arguments definnition  |
+    |Environment Variable Name    |arguments definition  |
     +=============================+=======================+
     |PERSIA_DATALOADER_ENTRY      |data loader entry path |
     +-----------------------------+-----------------------+
