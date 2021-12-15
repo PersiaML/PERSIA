@@ -35,6 +35,15 @@ steps:
           run: torch_serve
           graceful-shutdown: true
 
+  - label: "pytest"
+    command: 
+      - cd /test/ && pytest
+    plugins:
+      - docker#v3.9.0:
+          image: "persia-cuda-runtime:${BUILDKITE_PIPELINE_ID}"
+          volumes:
+            - ./test/:/test
+
   - label: "launch k8s e2e test"
     command: .buildkite/script/k8s_system_test.sh
 
@@ -47,6 +56,6 @@ steps:
       - .buildkite/script/docker_image_process.sh upload
 
   - wait
-  
+
   - label: "remove docker image"
     command: .buildkite/script/docker_image_process.sh remove
