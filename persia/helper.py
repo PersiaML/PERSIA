@@ -5,7 +5,7 @@ import time
 import tempfile
 import cloudpickle
 
-from typing import List, Callable, Optional, Tuple
+from typing import List, Callable, Optional, Tuple, IO, Union
 from threading import Thread, Lock
 
 from persia.utils import resolve_binary_execute_path, find_free_port
@@ -23,7 +23,7 @@ if __name__ == "__main__":
 
 def dump_function_into_tempfile(
     func: Callable,
-) -> Tuple[tempfile._TemporaryFileWrapper, tempfile._TemporaryFileWrapper]:
+) -> Tuple[IO[bytes], IO[str]]:
     cloudpickle_file, python_file = (
         tempfile.NamedTemporaryFile("wb"),
         tempfile.NamedTemporaryFile("w"),
@@ -37,7 +37,7 @@ def dump_function_into_tempfile(
     return cloudpickle_file, python_file
 
 
-def dump_config_into_tempfile(config: dict) -> tempfile._TemporaryFileWrapper:
+def dump_config_into_tempfile(config: dict) -> IO[str]:
     temp_file = tempfile.NamedTemporaryFile("w")
     temp_file.write(yaml.dump(config))
     temp_file.flush()
@@ -136,7 +136,7 @@ class PersiaServiceCtx:
     ):
 
         self.process_group: List[subprocess.Popen] = []
-        self.temp_files: List[tempfile._TemporaryFileWrapper] = []
+        self.temp_files: List[IO[Union[str, bytes]]] = []
 
         self.nats_server_port = find_free_port(nats_server_port)
         os.environ["PERSIA_NATS_URL"] = f"localhost:{self.nats_server_port}"
