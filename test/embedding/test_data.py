@@ -42,9 +42,12 @@ def test_id_type_feature():
 def test_sparse_id_type_feature():
     id_type_feature_name = "test_name"
 
-    assert IDTypeFeatureWithSingleID(
-        id_type_feature_name, np.array([1], dtype=np.uint64)
-    ).batch_size
+    assert (
+        IDTypeFeatureWithSingleID(
+            id_type_feature_name, np.array([1], dtype=np.uint64)
+        ).batch_size
+        == 1
+    )
 
 
 def test_persia_batch():

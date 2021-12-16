@@ -5,11 +5,10 @@ import time
 import tempfile
 import cloudpickle
 
-from typing import List, Callable, Optional
-from threading import Thread
-from contextlib import contextmanager
+from typing import List, Callable, Optional, Tuple
+from threading import Thread, Lock
 
-from persia.utils import resolve_binary_execute_path
+from persia.utils import resolve_binary_execute_path, find_free_port
 
 
 _CLOUD_PICKLE_TEMPLATE = """
@@ -20,6 +19,29 @@ def main():
 if __name__ == "__main__":
     main()
 """
+
+
+def dump_function_into_tempfile(
+    func: Callable,
+) -> Tuple[tempfile._TemporaryFileWrapper, tempfile._TemporaryFileWrapper]:
+    cloudpickle_file, python_file = (
+        tempfile.NamedTemporaryFile("wb"),
+        tempfile.NamedTemporaryFile("w"),
+    )
+    pickle_data_loader = cloudpickle.dumps(func)
+    cloudpickle_file.write(pickle_data_loader)
+    python_file.write(_CLOUD_PICKLE_TEMPLATE.format(cloudpickle_file.name))
+    cloudpickle_file.flush()
+    python_file.flush()
+
+    return cloudpickle_file, python_file
+
+
+def dump_config_into_tempfile(config: dict) -> tempfile._TemporaryFileWrapper:
+    temp_file = tempfile.NamedTemporaryFile("w")
+    temp_file.write(yaml.dump(config))
+    temp_file.flush()
+    return temp_file
 
 
 def _launch_serve(
@@ -36,7 +58,7 @@ def _launch_serve(
             "--replica-index",
             str(replica_idx),
             "--port",
-            str(port + replica_idx),
+            str(find_free_port(port + replica_idx)),
         ]
         processes.append(subprocess.Popen(cmd, env=env))
 
@@ -83,8 +105,8 @@ def _launch_nn_worker(nproc_per_node: int, env: os._Environ) -> List[subprocess.
     return processes
 
 
-def _launch_nats_server() -> List[subprocess.Popen]:
-    return [subprocess.Popen(["nats-server"])]
+def _launch_nats_server(port: int) -> subprocess.Popen:
+    return subprocess.Popen(["nats-server", "-p", str(port)])
 
 
 def _kill_processes(process_group: List[subprocess.Popen]):
@@ -95,128 +117,140 @@ def _kill_processes(process_group: List[subprocess.Popen]):
         process.wait()
 
 
-def _detect_subprocess_terminate(
-    process_group: List[subprocess.Popen], check_interval: int = 5
-):
-    while True:
-        for process in process_group:
-            status = process.poll()
-            if status:
-                # Raise Exception if the subprocess is
-                _kill_processes(process_group)
-                raise Exception(
-                    "detect subprocess crash down.., crash down the main thread"
-                )
-        time.sleep(check_interval)
+class PersiaServiceCtx:
+    def __init__(
+        self,
+        data_loader_func: Optional[Callable] = None,
+        nn_worker_func: Optional[Callable] = None,
+        embedding_config: Optional[dict] = None,
+        embedding_config_path: Optional[str] = None,
+        global_config: Optional[dict] = None,
+        global_config_path: Optional[str] = None,
+        data_laoder_replica_num: Optional[int] = 1,
+        nproc_per_node: Optional[int] = 1,
+        embedding_worker_replica_num: Optional[int] = 1,
+        embedding_parameter_replica_num: Optional[int] = 1,
+        embedding_worker_port: Optional[int] = 7777,
+        embedding_parameter_server_port: Optional[int] = 8888,
+        nats_server_port: Optional[int] = 4222,
+    ):
 
+        self.process_group: List[subprocess.Popen] = []
+        self.temp_files: List[tempfile._TemporaryFileWrapper] = []
 
-# TODO: use PersiaService to replace the contextmanger to ensure
-# exit the process when meet the exception
-# class PersiaService:
-#     def __init__(self) -> None:
-#         ...
+        self.nats_server_port = find_free_port(nats_server_port)
+        os.environ["PERSIA_NATS_URL"] = f"localhost:{self.nats_server_port}"
+        os.environ["LOG_LEVEL"] = "info"
+        self.current_env = os.environ.copy()
 
-#     def __enter__(self):
-#         ...
+        self.data_loader_func = data_loader_func
+        self.nn_worker_func = nn_worker_func
+        self.data_laoder_replica_num = data_laoder_replica_num
+        self.nproc_per_node = nproc_per_node
+        self.embedding_config = embedding_config
+        self.global_config = global_config
+        self.embedding_config_path = embedding_config_path
+        self.global_config_path = global_config_path
+        self.embedding_worker_replica_num = embedding_worker_replica_num
+        self.embedding_parameter_replica_num = embedding_parameter_replica_num
+        self.embedding_worker_port = embedding_worker_port
+        self.embedding_parameter_server_port = embedding_parameter_server_port
 
-#     def __exit__(self, _exc_type, _exc_val, _exc_tb):
-#         ...
+        self.context_lock = Lock()
+        self.thread_worker: Optional[Thread] = None
+        self.running: bool = False
 
+    def __enter__(self):
+        self.process_group.append(_launch_nats_server(self.nats_server_port))
 
-@contextmanager
-def ensure_persia_service(
-    data_loader_func: Optional[Callable] = None,
-    nn_worker_func: Optional[Callable] = None,
-    embedding_config: Optional[dict] = None,
-    embedding_config_path: Optional[str] = None,
-    global_config: Optional[dict] = None,
-    global_config_path: Optional[str] = None,
-    data_laoder_replica_num: Optional[int] = 1,
-    nproc_per_node: Optional[int] = 1,
-    embedding_worker_replica_num: Optional[int] = 1,
-    embedding_parameter_replica_num: Optional[int] = 1,
-    embedding_worker_port: Optional[int] = 7777,
-    embedding_parameter_server_port: Optional[int] = 8888,
-    persia_nats_url: Optional[str] = None,
-):
-    process_group: List[subprocess.Popen] = []
+        if not self.embedding_config_path:
+            assert self.embedding_config is not None
+            temp_file = dump_config_into_tempfile(self.embedding_config)
+            embedding_config_path = temp_file.name
+            self.temp_files.append(temp_file)
 
-    with tempfile.NamedTemporaryFile(
-        "w"
-    ) as embedding_config_file, tempfile.NamedTemporaryFile(
-        "w"
-    ) as global_config_file, tempfile.NamedTemporaryFile(
-        "wb"
-    ) as cloudpickle_file, tempfile.NamedTemporaryFile(
-        "w"
-    ) as python_file:
-        if not embedding_config_path:
-            assert embedding_config is not None
-            embedding_config_file.write(yaml.dump(embedding_config))
-            embedding_config_file.flush()
-            embedding_config_path = embedding_config_file.name
+        if not self.global_config_path:
+            assert self.global_config is not None
+            temp_file = dump_config_into_tempfile(self.global_config)
+            global_config_path = temp_file.name
+            self.temp_files.append(temp_file)
 
-        if not global_config_path:
-            assert global_config is not None
-            global_config_file.write(yaml.dump(global_config))
-            global_config_file.flush()
-            global_config_path = global_config_file.name
+        self.current_env["PERSIA_EMBEDDING_CONFIG"] = embedding_config_path
+        self.current_env["PERSIA_GLOBAL_CONFIG"] = global_config_path
 
-        _ENV = os.environ
-        _ENV["PERSIA_EMBEDDING_CONFIG"] = embedding_config_path
-        _ENV["PERSIA_GLOBAL_CONFIG"] = global_config_path
-        _ENV["PERSIA_NATS_URL"] = persia_nats_url or "localhost:4222"
-        _ENV["LOG_LEVEL"] = "info"
-
-        if data_loader_func is not None:
-            pickle_data_loader = cloudpickle.dumps(data_loader_func)
-            cloudpickle_file.write(pickle_data_loader)
-            python_file.write(_CLOUD_PICKLE_TEMPLATE.format(cloudpickle_file.name))
-
-            _ENV["PERSIA_DATALOADER_ENTRY"] = python_file.name
-            cloudpickle_file.flush()
-            python_file.flush()
-            process_group.extend(_launch_data_loader(data_laoder_replica_num, _ENV))
-
-        # TODO: ensure only one cloudpickle function.
-        if nn_worker_func is not None:
-            pickle_nn_worker = cloudpickle.dumps(nn_worker_func)
-            cloudpickle_file.write(pickle_nn_worker)
-
-            python_file.write(_CLOUD_PICKLE_TEMPLATE.format(cloudpickle_file.name))
-
-            _ENV["PERSIA_NN_WORKER_ENTRY"] = python_file.name
-            process_group.extend(_launch_nn_worker(nproc_per_node, _ENV))
-
-        process_group.extend(_launch_nats_server())
-        # add embedding-worker
-        process_group.extend(
+        # Add embedding-worker
+        self.process_group.extend(
             _launch_serve(
                 "persia-embedding-worker",
-                replica_num=embedding_worker_replica_num,
-                env=_ENV,
-                port=embedding_worker_port,
+                replica_num=self.embedding_worker_replica_num,
+                env=self.current_env,
+                port=self.embedding_worker_port,
             )
         )
-        # add embedding-parameter-server
-        process_group.extend(
+        # Add embedding-parameter-server
+        self.process_group.extend(
             _launch_serve(
                 "persia-embedding-parameter-server",
-                replica_num=embedding_parameter_replica_num,
-                env=_ENV,
-                port=embedding_parameter_server_port,
+                replica_num=self.embedding_parameter_replica_num,
+                env=self.current_env,
+                port=self.embedding_parameter_server_port,
             )
         )
 
+        # Add dataloader
+        if self.data_loader_func is not None:
+            temp_files = dump_function_into_tempfile(self.data_loader_func)
+            self.current_env["PERSIA_DATALOADER_ENTRY"] = temp_files[1].name
+            self.temp_files.extend(temp_files)
+            self.process_group.extend(
+                _launch_data_loader(self.data_laoder_replica_num, self.current_env)
+            )
+
+        # Add nn-worker
+        if self.nn_worker_func is not None:
+            temp_files = dump_function_into_tempfile(self.nn_worker_func)
+            self.current_env["PERSIA_NN_WORKER_ENTRY"] = temp_files[1].name
+            self.temp_files.extend(temp_files)
+            self.process_group.extend(
+                _launch_nn_worker(self.nproc_per_node, self.current_env)
+            )
+
+        self.running = True
+
+        def _detect_subprocess_terminate(check_interval: int = 5):
+            while True:
+                with self.context_lock:
+                    if self.running:
+                        for process in self.process_group:
+                            status = process.poll()
+                            if status:
+                                # Raise Exception if the subprocess is
+                                _kill_processes(self.process_group)
+                                raise Exception(
+                                    f"detect subprocess crash down.., crash down the main thread, \
+                                        crash process: {process.args}"
+                                )
+                    else:
+                        break
+                time.sleep(check_interval)
+
         # monitoring the subprocess group status.
-        Thread(
-            target=_detect_subprocess_terminate, args=(process_group,), daemon=True
+        self.thread_worker = Thread(
+            target=_detect_subprocess_terminate, daemon=True
         ).start()
 
-        """Launch three service, embedding_server, """
-        yield
+    def __exit__(self, _exc_type, _exc_val, _exc_tb):
+        # release resource
+        for temp_file in self.temp_files:
+            temp_file.close()
 
-        _kill_processes(process_group)
+        self.running = False
+        with self.context_lock:
+            _kill_processes(self.process_group)
+
+
+def ensure_persia_service(*args, **kwargs) -> PersiaServiceCtx:
+    return PersiaServiceCtx(*args, **kwargs)
 
 
 if __name__ == "__main__":
@@ -282,6 +316,9 @@ if __name__ == "__main__":
         data_loader_func=data_loader,
         embedding_config=embedding_config,
         global_config=global_config,
+        embedding_worker_port=10001,
+        embedding_parameter_server_port=10002,
+        nats_server_port=10003,
     ):
         embedding_config = get_default_embedding_config()
 

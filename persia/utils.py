@@ -64,3 +64,28 @@ def run_command(cmd: List[str], env: Optional[dict] = None):
 def resolve_binary_execute_path(binary_name: str) -> str:
     """Resolved executable file under persia package root."""
     return os.path.realpath(os.path.join(__file__, "../", binary_name))
+
+
+def _is_port_available(port: int):
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(("", port))
+            return True
+        except OSError:
+            return False
+
+
+MAXIMUM_LOCAL_PORT_NUM: int = 65535
+
+
+def find_free_port(port: int = 10000, interval: int = 1) -> int:
+    """Check current input port is available or not. It will add the interval to input port utils the
+    the new port is available."""
+
+    while not _is_port_available(port):
+        port += interval
+        if port > MAXIMUM_LOCAL_PORT_NUM:
+            raise ValueError("free port not found.")
+    return port

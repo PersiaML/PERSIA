@@ -71,6 +71,124 @@ class PreprocessMode(Enum):
     INFERENCE = 3
 
 
+def _prepare_feature(
+    batch: PersiaTrainingBatch, preprocess_mode: PreprocessMode = PreprocessMode.TRAIN
+) -> Tuple[List[torch.Tensor], List[torch.Tensor], Optional[List[torch.Tensor]]]:
+    if preprocess_mode == PreprocessMode.INFERENCE:
+        batch.label_torch_tensors = None
+    else:
+        # pytype: disable=attribute-error
+        batch.label_tensors = batch.consume_all_label_tensors()
+        # pytype: enable=attribute-error
+        batch.label_torch_tensors = [
+            _cast_dlpack2torch_tensor(label_tensor)
+            for label_tensor in batch.label_tensors
+        ]
+
+    is_training = preprocess_mode == PreprocessMode.TRAIN  # cache property
+
+    # pytype: disable=attribute-error
+    batch.non_id_type_feature_tensors = batch.consume_all_non_id_type_feature_tensors()
+    # pytype: enable=attribute-error
+    batch.non_id_type_feature_torch_tensors = [
+        _cast_dlpack2torch_tensor(non_id_type_feature_tensor)
+        for non_id_type_feature_tensor in batch.non_id_type_feature_tensors
+    ]
+
+    # pytype: disable=attribute-error
+    batch.id_type_feature_embedding_tensors = (
+        batch.consume_all_id_type_feature_embedding_tensors()
+    )
+    # pytype: enable=attribute-error
+
+    batch.emb_slots = []  # cache embedding to prevent tensor expired
+    id_type_feature_embedding_cache_torch_tensors = (
+        []
+    )  # cache origin embedding for later backward procedure
+    id_type_feature_embedding_torch_tensors = (
+        []
+    )  # id type tensos for later forward procedure
+
+    for id_type_feature_embedding_tensor in batch.id_type_feature_embedding_tensors:
+        if id_type_feature_embedding_tensor.is_raw_embedding():
+            # no duplicate id in raw_id_tensor
+            (
+                raw_embedding,
+                index,
+                non_empty_index,
+                sample_id_num,
+            ) = id_type_feature_embedding_tensor.get_raw_embedding()
+
+            batch.emb_slots.append([raw_embedding, index, non_empty_index])
+            distinct_id_tensor = _cast_dlpack2torch_tensor(raw_embedding)
+            index_tensor = _cast_dlpack2torch_tensor(
+                index
+            )  # tensor shape (1, batch_size * sample_fixed_size)
+            max_index = index_tensor.max()
+            size_of_distinct_id_tensor = distinct_id_tensor.shape[0]
+
+            assert (
+                max_index < size_of_distinct_id_tensor
+            ), "raw embedding select index larger than tensor"
+
+            non_empty_index_tensor = _cast_dlpack2torch_tensor(
+                non_empty_index
+            )  # tensor shape (-1), variable length
+
+            batch_size = len(sample_id_num)
+            dim = distinct_id_tensor.shape[-1]
+            sample_fixed_size = index_tensor.shape[-1] // batch_size
+            index_select_raw_tensor = distinct_id_tensor.index_select(
+                0, index_tensor.view(-1)
+            )
+            index_select_raw_tensor.requires_grad = is_training
+
+            raw_fixed_size_tensor = index_select_raw_tensor.view(
+                -1, sample_fixed_size, dim
+            )
+            mask = (
+                index_tensor.view(batch_size, sample_fixed_size, 1) != 0
+            ).half()  # generate mask
+            raw_fixed_size_tensor_with_mask = torch.cat(
+                [raw_fixed_size_tensor, mask], dim=2
+            )
+            id_type_feature_embedding_cache_torch_tensors.append(
+                (
+                    raw_embedding.name,
+                    distinct_id_tensor,
+                    index_tensor,
+                    non_empty_index_tensor,
+                    index_select_raw_tensor,
+                )
+            )
+            id_type_feature_embedding_torch_tensors.append(
+                raw_fixed_size_tensor_with_mask
+            )
+        else:
+            embedding = id_type_feature_embedding_tensor.get_sum_embedding()
+            batch.emb_slots.append([embedding])
+            attention_sum_tensor = _cast_dlpack2torch_tensor(
+                embedding, requires_grad=is_training
+            )
+            id_type_feature_embedding_torch_tensors.append(attention_sum_tensor)
+            id_type_feature_embedding_cache_torch_tensors.append(
+                (embedding.name, None, None, None, attention_sum_tensor)
+            )
+
+    batch.id_type_feature_embedding_torch_tensors = (
+        id_type_feature_embedding_torch_tensors
+    )
+    batch.id_type_feature_embedding_cache_torch_tensors = (
+        id_type_feature_embedding_cache_torch_tensors
+    )
+
+    return (
+        batch.non_id_type_feature_torch_tensors,
+        batch.id_type_feature_embedding_torch_tensors,
+        batch.label_torch_tensors,
+    )
+
+
 class BaseCtx:
     r"""Initializes a common context for other persia context, e.g. `DataCtx`, `EmbeddingCtx` and `TrainCtx`.
     This class should not be instantiated directly.
@@ -286,122 +404,8 @@ class EmbeddingCtx(BaseCtx):
         Returns:
             the tuple of non_id_type_features, id_type_feature_embeddings and labels.
         """
-        if self.preprocess_mode == PreprocessMode.INFERENCE:
-            batch.label_torch_tensors = None
-        else:
-            # pytype: disable=attribute-error
-            batch.label_tensors = batch.consume_all_label_tensors()
-            # pytype: enable=attribute-error
-            batch.label_torch_tensors = [
-                _cast_dlpack2torch_tensor(label_tensor)
-                for label_tensor in batch.label_tensors
-            ]
-
-        is_training = self.preprocess_mode == PreprocessMode.TRAIN  # cache property
-
-        # pytype: disable=attribute-error
-        batch.non_id_type_feature_tensors = (
-            batch.consume_all_non_id_type_feature_tensors()
-        )
-        # pytype: enable=attribute-error
-        batch.non_id_type_feature_torch_tensors = [
-            _cast_dlpack2torch_tensor(non_id_type_feature_tensor)
-            for non_id_type_feature_tensor in batch.non_id_type_feature_tensors
-        ]
-
-        # pytype: disable=attribute-error
-        batch.id_type_feature_embedding_tensors = (
-            batch.consume_all_id_type_feature_embedding_tensors()
-        )
-        # pytype: enable=attribute-error
-
-        batch.emb_slots = []  # cache embedding to prevent tensor expired
-        id_type_feature_embedding_cache_torch_tensors = (
-            []
-        )  # cache origin embedding for later backward procedure
-        id_type_feature_embedding_torch_tensors = (
-            []
-        )  # id type tensos for later forward procedure
-
-        for id_type_feature_embedding_tensor in batch.id_type_feature_embedding_tensors:
-            if id_type_feature_embedding_tensor.is_raw_embedding():
-                # no duplicate id in raw_id_tensor
-                (
-                    raw_embedding,
-                    index,
-                    non_empty_index,
-                    sample_id_num,
-                ) = id_type_feature_embedding_tensor.get_raw_embedding()
-
-                batch.emb_slots.append([raw_embedding, index, non_empty_index])
-                distinct_id_tensor = _cast_dlpack2torch_tensor(raw_embedding)
-                index_tensor = _cast_dlpack2torch_tensor(
-                    index
-                )  # tensor shape (1, batch_size * sample_fixed_size)
-                max_index = index_tensor.max()
-                size_of_distinct_id_tensor = distinct_id_tensor.shape[0]
-
-                assert (
-                    max_index < size_of_distinct_id_tensor
-                ), "raw embedding select index larger than tensor"
-
-                non_empty_index_tensor = _cast_dlpack2torch_tensor(
-                    non_empty_index
-                )  # tensor shape (-1), variable length
-
-                batch_size = len(sample_id_num)
-                dim = distinct_id_tensor.shape[-1]
-                sample_fixed_size = index_tensor.shape[-1] // batch_size
-                index_select_raw_tensor = distinct_id_tensor.index_select(
-                    0, index_tensor.view(-1)
-                )
-                index_select_raw_tensor.requires_grad = is_training
-
-                raw_fixed_size_tensor = index_select_raw_tensor.view(
-                    -1, sample_fixed_size, dim
-                )
-                mask = (
-                    index_tensor.view(batch_size, sample_fixed_size, 1) != 0
-                ).half()  # generate mask
-                raw_fixed_size_tensor_with_mask = torch.cat(
-                    [raw_fixed_size_tensor, mask], dim=2
-                )
-                id_type_feature_embedding_cache_torch_tensors.append(
-                    (
-                        raw_embedding.name,
-                        distinct_id_tensor,
-                        index_tensor,
-                        non_empty_index_tensor,
-                        index_select_raw_tensor,
-                    )
-                )
-                id_type_feature_embedding_torch_tensors.append(
-                    raw_fixed_size_tensor_with_mask
-                )
-            else:
-                embedding = id_type_feature_embedding_tensor.get_sum_embedding()
-                batch.emb_slots.append([embedding])
-                attention_sum_tensor = _cast_dlpack2torch_tensor(
-                    embedding, requires_grad=is_training
-                )
-                id_type_feature_embedding_torch_tensors.append(attention_sum_tensor)
-                id_type_feature_embedding_cache_torch_tensors.append(
-                    (embedding.name, None, None, None, attention_sum_tensor)
-                )
-
-        batch.id_type_feature_embedding_torch_tensors = (
-            id_type_feature_embedding_torch_tensors
-        )
-        batch.id_type_feature_embedding_cache_torch_tensors = (
-            id_type_feature_embedding_cache_torch_tensors
-        )
         self.current_batch = batch
-
-        return (
-            batch.non_id_type_feature_torch_tensors,
-            batch.id_type_feature_embedding_torch_tensors,
-            batch.label_torch_tensors,
-        )
+        return _prepare_feature(batch, self.preprocess_mode)
 
     def dump_checkpoint(
         self,

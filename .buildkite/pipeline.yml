@@ -37,7 +37,7 @@ steps:
 
   - label: "pytest"
     command: 
-      - cd /test/ && pytest
+      - cd /test/ && pytest . -o log_cli=true
     plugins:
       - docker#v3.9.0:
           image: "persia-cuda-runtime:${BUILDKITE_PIPELINE_ID}"
