@@ -45,7 +45,7 @@ def dump_config_into_tempfile(config: dict) -> tempfile._TemporaryFileWrapper:
 
 
 def _launch_serve(
-    server_type: str, replica_num: int, env: os._Environ, port: int = 8888
+    server_type: str, replica_num: int, env: dict, port: int = 8888
 ) -> List[subprocess.Popen]:
 
     processes = []
@@ -65,7 +65,7 @@ def _launch_serve(
     return processes
 
 
-def _launch_data_loader(replica_num: int, env: os._Environ) -> List[subprocess.Popen]:
+def _launch_data_loader(replica_num: int, env: dict) -> List[subprocess.Popen]:
     processes = []
     for replica_index in range(replica_num):
         current_env = env.copy()
@@ -83,7 +83,7 @@ def _launch_data_loader(replica_num: int, env: os._Environ) -> List[subprocess.P
     return processes
 
 
-def _launch_nn_worker(nproc_per_node: int, env: os._Environ) -> List[subprocess.Popen]:
+def _launch_nn_worker(nproc_per_node: int, env: dict) -> List[subprocess.Popen]:
     assert 1 <= nproc_per_node <= 8
 
     processes = []
@@ -178,7 +178,7 @@ class PersiaServiceCtx:
         self.current_env["PERSIA_EMBEDDING_CONFIG"] = embedding_config_path
         self.current_env["PERSIA_GLOBAL_CONFIG"] = global_config_path
 
-        # Add embedding-worker
+        # Launch embedding-worker
         self.process_group.extend(
             _launch_serve(
                 "persia-embedding-worker",
@@ -187,7 +187,7 @@ class PersiaServiceCtx:
                 port=self.embedding_worker_port,
             )
         )
-        # Add embedding-parameter-server
+        # Launch embedding-parameter-server
         self.process_group.extend(
             _launch_serve(
                 "persia-embedding-parameter-server",
@@ -197,7 +197,7 @@ class PersiaServiceCtx:
             )
         )
 
-        # Add dataloader
+        # Launch dataloader
         if self.data_loader_func is not None:
             temp_files = dump_function_into_tempfile(self.data_loader_func)
             self.current_env["PERSIA_DATALOADER_ENTRY"] = temp_files[1].name
@@ -206,7 +206,7 @@ class PersiaServiceCtx:
                 _launch_data_loader(self.data_laoder_replica_num, self.current_env)
             )
 
-        # Add nn-worker
+        # Launch nn-worker
         if self.nn_worker_func is not None:
             temp_files = dump_function_into_tempfile(self.nn_worker_func)
             self.current_env["PERSIA_NN_WORKER_ENTRY"] = temp_files[1].name
@@ -217,7 +217,7 @@ class PersiaServiceCtx:
 
         self.running = True
 
-        def _detect_subprocess_terminate(check_interval: int = 5):
+        def _detect_subprocess_terminate(check_interval: int = 2):
             while True:
                 with self.context_lock:
                     if self.running:
@@ -235,18 +235,20 @@ class PersiaServiceCtx:
                 time.sleep(check_interval)
 
         # monitoring the subprocess group status.
-        self.thread_worker = Thread(
-            target=_detect_subprocess_terminate, daemon=True
-        ).start()
+        self.thread_worker = Thread(target=_detect_subprocess_terminate, daemon=True)
+        self.thread_worker.start()
 
     def __exit__(self, _exc_type, _exc_val, _exc_tb):
         # release resource
         for temp_file in self.temp_files:
             temp_file.close()
 
-        self.running = False
         with self.context_lock:
             _kill_processes(self.process_group)
+            self.running = False
+
+        if self.thread_worker:
+            self.thread_worker.join()
 
 
 def ensure_persia_service(*args, **kwargs) -> PersiaServiceCtx:
