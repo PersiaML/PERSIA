@@ -6,6 +6,7 @@ use numpy::{DataType, PyArray, PyArray1, PyArrayDescr, PyArrayDyn};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use pyo3::wrap_pyfunction;
 use pyo3::AsPyPointer;
 
 use persia_common::{FeatureBatch, IDTypeFeatureBatch, IDTypeFeatureRemoteRef};
@@ -131,6 +132,11 @@ fn convert_pyarray_object_to_tensor_impl(
             (u64, Uint64, U64)
         )
     }
+}
+
+#[pyfunction]
+fn check_pyarray_dtype_valid(py_object: &PyAny, dtype: &PyAny, name: Option<String>, py: Python) {
+    convert_pyarray_object_to_tensor_impl(py_object, dtype, name, py);
 }
 
 #[pyclass]
@@ -262,6 +268,7 @@ impl PersiaBatch {
 pub fn init_module(super_module: &PyModule, py: Python) -> PyResult<()> {
     let module = PyModule::new(py, "data")?;
     module.add_class::<PersiaBatch>()?;
+    module.add_function(wrap_pyfunction!(check_pyarray_dtype_valid, module)?)?;
     super_module.add_submodule(module)?;
     Ok(())
 }

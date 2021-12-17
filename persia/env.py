@@ -1,8 +1,16 @@
 import os
+from typing import Optional
 
 from persia.logger import get_default_logger
 
 _logger = get_default_logger()
+
+PERSIA_LAUNCHER_VERBOSE = bool(int(os.environ.get("PERSIA_LAUNCHER_VERBOSE", "0")))
+
+# Skip all PERSIA data checks except batch size.
+# Raise RuntimeError when data does not meet requirement, such as
+# type, dtype or shape mismatch.
+PERSIA_SKIP_CHECK_DATA = bool(int(os.environ.get("PERSIA_SKIP_CHECK_DATA", "0")))
 
 
 class _Env:
@@ -14,8 +22,8 @@ class _Env:
         self.local_rank = None
         self.is_init = False
 
-    def init(self):
-        if self.is_init:
+    def init(self, force: bool = False):
+        if self.is_init and not force:
             return
 
         if os.environ.get("RANK", None):
@@ -46,8 +54,34 @@ class _Env:
                 self.replica_index = 0
         self.is_init = True
 
+    def set(
+        self,
+        replica_size: Optional[int] = None,
+        replica_index: Optional[int] = None,
+        world_size: Optional[int] = None,
+        rank: Optional[int] = None,
+        local_rank: Optional[int] = None,
+    ):
+        self.replica_index = replica_index
+        self.replica_size = replica_size
+        self.world_size = world_size
+        self.rank = rank
+        self.local_rank = local_rank
+
+        self.is_init = True
+
 
 env = _Env()
+
+
+def reload_env():
+    """Reload the environment."""
+    env.init(force=True)
+
+
+def set_env(**kwargs):
+    """Set environment without any sanity check."""
+    env.set(**kwargs)
 
 
 def _ensure_parse_env(get_func):
