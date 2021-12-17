@@ -4,7 +4,7 @@ import pytest
 
 from persia.embedding.data import (
     _ND_ARRAY_SUPPORT_TYPE,
-    _NdarrayDataBase,
+    NdarrayDataBase,
     IDTypeFeature,
     IDTypeFeatureWithSingleID,
     PersiaBatch,
@@ -21,11 +21,11 @@ def test_ndarray_base_dtype_convert_to_tensor():
 def test_ndarray_base_data():
     # test dtype support
     for dtype in _ND_ARRAY_SUPPORT_TYPE:
-        _NdarrayDataBase(np.zeros(1, dtype=dtype))
+        NdarrayDataBase(np.zeros(1, dtype=dtype))
 
     # test batch_size and name
     ndarray_base_name = "test_name"
-    data = _NdarrayDataBase(np.array([1]), ndarray_base_name)
+    data = NdarrayDataBase(np.array([1]), ndarray_base_name)
     assert data.batch_size == 1
     assert data.name == ndarray_base_name
 

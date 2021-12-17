@@ -8,8 +8,7 @@ from typing import List, Tuple, Optional, Union
 
 import torch
 
-import persia.env as env
-
+from persia import env
 from persia.logger import get_default_logger
 from persia.embedding.optim import Optimizer
 from persia.embedding import EmbeddingConfig, get_default_embedding_config
