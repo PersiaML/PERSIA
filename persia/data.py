@@ -1,49 +1,12 @@
 r"""
 
-In below graph, PERSIA provide two type of dataset. 
-
-.. graphviz::
-
-.. image:: ../../../_static/image/persia_dataflow.svg
-    :width: 800
-    :alt: Image not found
-
-.. class:: PersiaBatchDataChannel(buffer_size: int)
-
-    This class is a rust_extension pyclass that create the :class:`PersiaBatchDataReceiver`
-    and the :class:`PersiaBatchDataSender`. It can transfer the :class:`PersiaBatch`
-    from the Python to Rust.
-
-    :param int buffer_size: buffer size of the :class:`PersiaBatchDataReceiver` and the
-        :class:`PersiaBatchDataSender`.
-
-    .. method:: get_receiver(self)
-
-        Get the :class:`PersiaBatchDataReceiver`
-
-        :rtype: PersiaBatchDataReceiver
-
-    .. method:: get_sender(self)
-
-        Get the :class:`PersiaBatchDataSender`
-
-        :rtype: PersiaBatchDataSender
-
-.. class:: PersiaBatchDataSender
-
-    This ``class`` cannot be instantiate directly. It can send the :class:`PersiaBatch` to
-    the :class:`PersiaBatchDataReceiver`.
-
-    .. method:: send(persia_batch: PersiaBatch)
-
-        Send the :class:`PersiaBatch` data to :class:`PersiaBatchDataReceiver`.
-
-.. class:: PersiaBatchDataReceiver
-
-    This ``class`` cannot be instantiate directly. It can receive the :class:`PersiaBatch`
-    from the :class:`PersiaBatchDataSender`.
+In PERSIA, we provides the :class:`DataLoader` class to load the data.  The :class:`DataLoader` will preprocess
+the :class:`.PersiaBatch` and lookup the embedding for **id_type_features**. DataLoader need a iterable dataset.
+You can use the :class:`StreamingDataset` to fetch the :class:`.PersiaBatch` from the dataflow. Or use the 
+:class:`IterableDataset` to generate the :class:`PersiaBatch` locally.
 
 """
+
 from abc import ABC, abstractmethod
 from threading import Thread
 from typing import Iterator, Optional, Iterable
@@ -71,8 +34,8 @@ class IterableDatasetBase(ABC, Iterable[PersiaBatch]):
     the ``__iter__`` and ``consume_dataset`` function to ensure the
     :class:`DataLoader` works fine.
 
-    Implements the ``__iter__`` function to generate the :class:`PersiaBatch`. And
-    implements the :meth:`.consume_dataset` to send the :class:`PersiaBatch` by
+    Implements the ``__iter__`` function to generate the :class:`.PersiaBatch`. And
+    implements the :meth:`.consume_dataset` to send the :class:`.PersiaBatch` by
     :class:`PersiaBatchDataSender`.
 
     Here is an example that implements the synchronously :class:`IterableDatasetBase`.
@@ -236,7 +199,7 @@ class IterableDataset(IterableDatasetBase):
 class DataLoader:
     r"""Data loader will preprocess the data to the ``PersiaTrainingBatch``.
 
-    The :class:`DataLoader` is a pipeline that preprocess the :class:`PersiaBatch` in
+    The :class:`DataLoader` is a pipeline that preprocess the :class:`.PersiaBatch` in
     several steps. Each step will process the task concurrently with multiple threads
     to improve the efficiency.
 
