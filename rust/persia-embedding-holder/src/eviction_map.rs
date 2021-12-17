@@ -3,6 +3,120 @@ use std::convert::TryFrom;
 use std::hash::Hash;
 
 use crate::array_linked_list::ArrayLinkedList;
+// use crate::emb_entry::PersiaEmbeddingEntry;
+
+// pub trait PersiaEvictionMap<K, V>
+// where
+//     K: Hash + Eq + Clone,
+//     V: PersiaEmbeddingEntry,
+// {
+//     fn with_capacity(capacity: usize) -> Self;
+
+//     fn get(&self, key: &K) -> Option<&V>;
+// }
+
+// pub struct PersiaEmbeddingRef<'a> {
+//     pub inner: &'a [f32],
+//     pub embedding_dim: usize,
+//     pub sign: u64,
+// }
+
+// impl PersiaEmbeddingEntry for PersiaEmbeddingRef {
+
+// }
+
+// pub struct PersiaEmbeddingMut<'a> {
+//     pub inner: &'a mut [f32],
+//     pub embedding_dim: usize,
+//     pub sign: u64,
+// }
+
+// impl PersiaEmbeddingEntry for PersiaEmbeddingMut {
+
+// }
+
+// pub struct PersiaEvictionMaps {
+//     pub inner: HashMap<String, Box<dyn PersiaEvictionMap<u64, PersiaEmbeddingEntry>>>
+// }
+
+// pub trait PersiaEvictionMap {
+//     fn with_capacity(capacity: usize) -> Self where Self: Sized;
+
+//     fn get(&self, key: u64) -> Option<PersiaEmbeddingRef>;
+
+//     fn get_mut(&mut self, key: &u64) -> Option<PersiaEmbeddingMut>;
+
+//     fn get_refresh(&mut self, key: &u64) -> Option<PersiaEmbeddingRef>;
+
+//     fn get_refresh_mut(&mut self, key: &u64) -> Option<PersiaEmbeddingMut>;
+
+//     fn insert(&mut self, key: u64, value: Vec<f32>) -> (PersiaEmbeddingRef, PersiaEmbeddingRef);  // not zero copy
+
+//     fn clear(&mut self);
+
+//     fn capacity(&self) -> usize;
+
+//     fn len(&self) -> usize;
+// }
+
+// pub struct LruEvictionMap<K, V> 
+// where
+//     K: Hash + Eq + Clone,
+//     V: PersiaEmbeddingEntry,
+// {
+//     pub hashmap: HashMap<K, u32>,
+//     pub linkedlist: ArrayLinkedList<V>,
+//     pub capacity: usize,
+// }
+
+// impl<K, V> PersiaEvictionMap for LruEvictionMap<K, V>
+// where
+//     K: Hash + Eq + Clone,
+//     V: PersiaEmbeddingEntry,
+// {
+//     fn with_capacity(capacity: usize) -> Self
+//     where Self: Sized {
+//         match V::type_size() {
+//             1 => {todo!()},
+//             2 => {todo!()},
+//             _ => {todo!()},
+//             // gen arms by TokenStream
+//         }
+//     }
+
+//     fn get(&self, key: u64) -> Option<PersiaEmbeddingRef> {
+//         match self.hashmap.get(&key) {
+//             Some(idx) => {
+//                 match self.linkedlist[*idx as usize].as_ref() {
+//                     Some(entry) => PersiaEmbeddingRef {
+//                         inner: entry.inner(),
+//                         embedding_dim: entry.dim(),
+//                         sign: entry.sign(),
+//                     },
+//                     None => None,
+//                 }
+//             },
+//             None => None,
+//         }
+//     }
+// }
+
+// trait ArrayLinkedList<T> {
+//     fn get(k: u64) -> &[f32];
+// }
+
+// pub struct FeatureEvictionMap
+// {
+//     pub hashmap: HashMap<u64, (u32, u32)>,
+//     pub linkedlists: Vec<Box<dyn ArrayLinkedList>,
+//     pub capacity: Vec<usize>,
+// }
+
+// enum ArrayLinkedList {
+//     Dim1(ArrayLinkedList<1>),
+//     Dim2(ArrayLinkedList<2>),
+// }
+
 
 pub trait EvictionMapValue<K> {
     fn hashmap_key(&self) -> K;

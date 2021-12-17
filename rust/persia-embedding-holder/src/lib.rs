@@ -2,6 +2,7 @@ pub mod array_linked_list;
 pub mod emb_entry;
 pub mod eviction_map;
 pub mod sharded;
+pub mod persia_array_linked_list;
 
 use std::sync::Arc;
 

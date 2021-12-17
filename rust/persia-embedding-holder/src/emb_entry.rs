@@ -8,9 +8,108 @@ use persia_libs::{
 };
 
 use persia_embedding_config::InitializationMethod;
-use persia_speedy::{Readable, Writable};
+use persia_speedy::{Context, Readable, Writable};
+use smallvec::SmallVec;
 
 use crate::eviction_map::EvictionMapValue;
+
+pub trait PersiaEmbeddingEntry<T> {
+    fn new(dim: usize, sign: u64) -> Self where Self: Sized;
+
+    fn size() -> usize where Self: Sized;
+
+    fn dim(&self) -> usize;
+
+    fn inner(&self) -> &[T];
+
+    fn inner_mut(&mut self) -> &mut [T];
+
+    fn sign(&self) -> u64;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(crate = "self::serde")]
+pub struct ArrayEmbeddingEntry<T, const L: usize> {
+    pub inner: SmallVec<[T; L]>,
+    pub embedding_dim: usize,
+    pub sign: u64,
+}
+
+impl<T, const L: usize> PersiaEmbeddingEntry<T> for ArrayEmbeddingEntry<T, L> {
+    fn new(dim: usize, sign: u64) -> Self {
+        Self {
+            inner: SmallVec::<[T; L]>::new(),
+            embedding_dim: dim,
+            sign,
+        }
+    }
+
+    fn size() -> usize {
+        L
+    }
+
+    fn dim(&self) -> usize {
+        self.embedding_dim
+    }
+
+    fn sign(&self) -> u64 {
+        self.sign
+    }
+
+    fn inner(&self) -> &[T] {
+        &self.inner[..]
+    }
+
+    fn inner_mut(&mut self) -> &mut [T] {
+        &mut self.inner[..]
+    }
+}
+
+impl<C, T, const L: usize> Writable<C> for ArrayEmbeddingEntry<T, L> 
+where
+    C: Context,
+    T: Writable<C>,
+{
+    #[inline]
+    fn write_to<W: ?Sized + persia_speedy::Writer<C>>(
+        &self,
+        writer: &mut W,
+    ) -> Result<(), C::Error> {
+        self.embedding_dim.write_to(writer)?;
+        self.sign.write_to(writer)?;
+        self.inner.as_slice().write_to(writer)
+    }
+}
+
+impl<'a, C, T, const L: usize> Readable<'a, C> for ArrayEmbeddingEntry<T, L>
+where
+    C: Context,
+    T: Readable<'a, C>,
+{
+    #[inline]
+    fn read_from<R: persia_speedy::Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+        let embedding_dim: usize = reader.read_value()?;
+        let sign: u64 = reader.read_value()?;
+
+        let v: Vec<T> = Readable::read_from(reader)?;
+        let inner: SmallVec<[T; L]> = SmallVec::from_vec(v);
+
+        Ok(Self {
+            inner,
+            embedding_dim,
+            sign,
+        })
+    }
+
+    #[inline]
+    fn minimum_bytes_needed() -> usize {
+        let mut out = 0;
+        out += <usize as persia_speedy::Readable<'a, C>>::minimum_bytes_needed();
+        out += <u64 as persia_speedy::Readable<'a, C>>::minimum_bytes_needed();
+        out += <f32 as persia_speedy::Readable<'a, C>>::minimum_bytes_needed() * L;
+        out
+    }
+}
 
 #[derive(Serialize, Deserialize, Readable, Writable, Clone, Debug)]
 #[serde(crate = "self::serde")]
