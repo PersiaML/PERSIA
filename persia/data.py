@@ -2,7 +2,7 @@ r"""
 
 In PERSIA, we provides the :class:`DataLoader` class to load the data.  The :class:`DataLoader` will preprocess
 the :class:`.PersiaBatch` and lookup the embedding for **id_type_features**. DataLoader need a iterable dataset.
-You can use the :class:`StreamingDataset` to fetch the :class:`.PersiaBatch` from the dataflow. Or use the 
+You can use the :class:`StreamingDataset` to fetch the :class:`.PersiaBatch` from the dataflow. Or use the
 :class:`IterableDataset` to generate the :class:`PersiaBatch` locally.
 
 """

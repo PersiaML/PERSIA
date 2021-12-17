@@ -466,8 +466,8 @@ class EmbeddingCtx(BaseCtx):
             the tuple of non_id_type_feature_tensors, id_type_feature_embedding_tensors and
             label_tensors.
         """
-        self.current_batch = batch
-        return _prepare_feature(batch, self.preprocess_mode)
+        self.current_batch = persia_training_batch
+        return _prepare_feature(persia_training_batch, self.preprocess_mode)
 
     def dump_checkpoint(
         self,

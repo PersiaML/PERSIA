@@ -116,7 +116,7 @@ def test_data_ctx(use_cuda: bool):
     os.environ["LOCAL_RANK"] = str(0)
 
     from persia.ctx import PreprocessMode, _prepare_feature
-    from persia.data import Dataloder, StreamingDataset
+    from persia.data import DataLoader, StreamingDataset
     from persia.embedding import get_default_embedding_config
     from persia.env import get_world_size
 
@@ -143,7 +143,7 @@ def test_data_ctx(use_cuda: bool):
             )
             ctx.common_context.wait_servers_ready()
 
-            data_loader = Dataloder(
+            data_loader = DataLoader(
                 StreamingDataset(buffer_size=10), timeout_ms=1000 * 30
             )
             data_generator = iter(data_loader)
