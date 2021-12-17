@@ -14,9 +14,13 @@ use smallvec::SmallVec;
 use crate::eviction_map::EvictionMapValue;
 
 pub trait PersiaEmbeddingEntry<T> {
-    fn new(dim: usize, sign: u64) -> Self where Self: Sized;
+    fn new(dim: usize, sign: u64) -> Self
+    where
+        Self: Sized;
 
-    fn size() -> usize where Self: Sized;
+    fn size() -> usize
+    where
+        Self: Sized;
 
     fn dim(&self) -> usize;
 
@@ -65,7 +69,7 @@ impl<T, const L: usize> PersiaEmbeddingEntry<T> for ArrayEmbeddingEntry<T, L> {
     }
 }
 
-impl<C, T, const L: usize> Writable<C> for ArrayEmbeddingEntry<T, L> 
+impl<C, T, const L: usize> Writable<C> for ArrayEmbeddingEntry<T, L>
 where
     C: Context,
     T: Writable<C>,

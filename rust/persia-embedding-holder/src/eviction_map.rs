@@ -59,7 +59,7 @@ use crate::array_linked_list::ArrayLinkedList;
 //     fn len(&self) -> usize;
 // }
 
-// pub struct LruEvictionMap<K, V> 
+// pub struct LruEvictionMap<K, V>
 // where
 //     K: Hash + Eq + Clone,
 //     V: PersiaEmbeddingEntry,
@@ -116,7 +116,6 @@ use crate::array_linked_list::ArrayLinkedList;
 //     Dim1(ArrayLinkedList<1>),
 //     Dim2(ArrayLinkedList<2>),
 // }
-
 
 pub trait EvictionMapValue<K> {
     fn hashmap_key(&self) -> K;

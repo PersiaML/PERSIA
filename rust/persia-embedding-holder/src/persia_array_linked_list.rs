@@ -1,8 +1,8 @@
+use crate::emb_entry::{ArrayEmbeddingEntry, PersiaEmbeddingEntry};
 use persia_libs::half::f16;
-use std::mem;
-use crate::emb_entry::{PersiaEmbeddingEntry, ArrayEmbeddingEntry};
 use persia_libs::serde::{self, Deserialize, Serialize};
 use persia_speedy::{Context, Readable, Writable};
+use std::mem;
 
 pub enum PersiaEmbeddingEntryWithType {
     F32(Box<dyn PersiaEmbeddingEntry<f32>>),
@@ -48,7 +48,6 @@ pub trait PersiaArrayLinkedList {
 
     fn len(&self) -> usize;
 }
-
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(crate = "self::serde")]
@@ -158,7 +157,6 @@ where
     }
 }
 
-
 /// The `ArrayLinkedList` type, which combines the advantages of dynamic arrays and linked lists.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(crate = "self::serde")]
@@ -236,7 +234,6 @@ impl<T, const L: usize> ArrayLinkedList<T, L> {
         *self.prev_of_next(next_index, active) = prev_index;
         *self.next_of_prev(prev_index, active) = next_index;
     }
-
 }
 
 impl<const L: usize> PersiaArrayLinkedList for ArrayLinkedList<f32, L> {
@@ -249,13 +246,11 @@ impl<const L: usize> PersiaArrayLinkedList for ArrayLinkedList<f32, L> {
 
     fn get(&self, key: u32) -> Option<PersiaEmbeddingEntryRef> {
         match &self.elements[key as usize].data {
-            Some(entry) => {
-                Some(PersiaEmbeddingEntryRef {
-                    inner: PersiaEmbeddingRef::F32(entry.inner()),
-                    embedding_dim: entry.dim(),
-                    sign: entry.sign(),
-                })
-            },
+            Some(entry) => Some(PersiaEmbeddingEntryRef {
+                inner: PersiaEmbeddingRef::F32(entry.inner()),
+                embedding_dim: entry.dim(),
+                sign: entry.sign(),
+            }),
             None => None,
         }
     }
@@ -270,7 +265,7 @@ impl<const L: usize> PersiaArrayLinkedList for ArrayLinkedList<f32, L> {
                     embedding_dim,
                     sign,
                 })
-            },
+            }
             None => None,
         }
     }
@@ -308,19 +303,18 @@ impl<const L: usize> PersiaArrayLinkedList for ArrayLinkedList<f32, L> {
             PersiaEmbeddingEntryWithType::F32(entry) => {
                 let value = *entry;
                 let element = LinkedListNode::back(self.last_index as _, value);
-        
+
                 let prev_index = self.insert_free_element(element);
-        
+
                 *self.next_of_prev(self.last_index as _, true) = prev_index;
-        
+
                 self.last_index = prev_index;
                 self.count += 1;
-        
+
                 prev_index - 1
-            },
+            }
             PersiaEmbeddingEntryWithType::F16(_) => unreachable!(),
         }
-
     }
 
     fn pop_front(&mut self) -> PersiaEmbeddingEntryWithType {
