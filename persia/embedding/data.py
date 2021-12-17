@@ -1,11 +1,10 @@
-import os
-
 from typing import Optional, Union, List
 
 import numpy as np
 
-from persia.prelude import _PersiaBatch
+from persia.env import PERSIA_SKIP_CHECK_DATA
 from persia.logger import get_default_logger
+from persia.prelude import _PersiaBatch
 
 
 _logger = get_default_logger()
@@ -13,11 +12,6 @@ _logger = get_default_logger()
 
 # Maximum batch_size supported.
 MAX_BATCH_SIZE = 65535
-
-# Skip all PERSIA data checks except batch size.
-# Raise RuntimeError when data does not meet requirement, such as
-# type, dtype or shape mismatch.
-SKIP_CHECK_PERSIA_DATA = bool(int(os.environ.get("SKIP_CHECK_PERSIA_DATA", "0")))
 
 _ND_ARRAY_SUPPORT_TYPE = set(
     [np.bool_, np.int8, np.int16, np.int32, np.int64, np.float32, np.float64, np.uint8]
@@ -108,7 +102,7 @@ class IDTypeFeature:
             data (List[np.ndarray]): A lil sparse matrix data. Requires np.uint64 as
                 type for its elements.
         """
-        if not SKIP_CHECK_PERSIA_DATA:
+        if not PERSIA_SKIP_CHECK_DATA:
             (_id_type_data_check(x, name) for x in data)
 
         self.name = name
@@ -152,7 +146,7 @@ class IDTypeFeatureWithSingleID:
             data (np.ndarray): :class:`IDTypeFeatureWithSingleID` data. Requires np.uint64 as type for
                 its elements.
         """
-        if not SKIP_CHECK_PERSIA_DATA:
+        if not PERSIA_SKIP_CHECK_DATA:
             _id_type_data_check(data, name)
 
         self.name = name
@@ -205,7 +199,7 @@ class NdarrayDataBase:
         self.data = data
         self._name = name
 
-        if not SKIP_CHECK_PERSIA_DATA:
+        if not PERSIA_SKIP_CHECK_DATA:
             _ndarray_check(self.data, name)
 
     @property

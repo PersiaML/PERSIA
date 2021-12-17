@@ -95,33 +95,10 @@ Environment variables mapping:
 
 import os
 import click
-import subprocess
 
-from typing import List
-
-from persia.logger import get_logger
-
-_logger = get_logger(__file__)
+from persia.utils import run_command, resolve_binary_execute_path
 
 _ENV = os.environ.copy()
-
-_PERSIA_LAUNCHER_VERBOSE = bool(int(os.environ.get("PERSIA_LAUNCHER_VERBOSE", "0")))
-
-# TODO(wangyulong): Add api documentation
-
-
-def _resolve_binary_execute_path(binary_name: str) -> str:
-    """Resolved executable file under persia package root."""
-    return os.path.realpath(os.path.join(__file__, "../", binary_name))
-
-
-def _run_command(cmd: List[str]):
-    cmd = list(map(str, cmd))
-    if _PERSIA_LAUNCHER_VERBOSE:
-        cmd_str = " ".join(cmd)
-        _logger.info(f"execute command: {cmd_str}")
-
-    subprocess.check_call(cmd, env=_ENV)
 
 
 @click.group()
@@ -151,7 +128,7 @@ def nn_worker(filepath: str, nproc_per_node: int, node_rank: int, nnodes: int):
         node_rank,
         filepath,
     ]
-    _run_command(cmd)
+    run_command(cmd, _ENV)
 
 
 @cli.command()
@@ -174,7 +151,7 @@ def data_loader(filepath: str, replica_index: int, replica_size: int):
         "python3",
         filepath,
     ]
-    _run_command(cmd)
+    run_command(cmd, _ENV)
 
 
 @cli.command()
@@ -205,7 +182,7 @@ def embedding_worker(
     replica_index: int,
     replica_size: int,
 ):
-    executable_path = _resolve_binary_execute_path("persia-embedding-worker")
+    executable_path = resolve_binary_execute_path("persia-embedding-worker")
     cmd = [
         executable_path,
         "--port",
@@ -219,7 +196,7 @@ def embedding_worker(
         "--replica-size",
         replica_size,
     ]
-    _run_command(cmd)
+    run_command(cmd, _ENV)
 
 
 @cli.command()
@@ -251,7 +228,7 @@ def embedding_parameter_server(
     replica_index: int,
     replica_size: int,
 ):
-    executable_path = _resolve_binary_execute_path("persia-embedding-parameter-server")
+    executable_path = resolve_binary_execute_path("persia-embedding-parameter-server")
     cmd = [
         executable_path,
         "--port",
@@ -265,7 +242,7 @@ def embedding_parameter_server(
         "--replica-size",
         replica_size,
     ]
-    _run_command(cmd)
+    run_command(cmd, _ENV)
 
 
 if __name__ == "__main__":
