@@ -34,7 +34,6 @@ extensions = [
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",
-    "sphinx.ext.graphviz",
     "sphinx_multiversion",
 ]
 
