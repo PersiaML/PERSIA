@@ -77,12 +77,12 @@ _env = _Env()
 
 def reload_env():
     """Reload the environment."""
-    env.init(force=True)
+    _env.init(force=True)
 
 
 def set_env(**kwargs):
     """Set environment without any sanity check."""
-    env.set(**kwargs)
+    _env.set(**kwargs)
 
 
 def _ensure_parse_env(get_func):
