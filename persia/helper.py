@@ -224,9 +224,9 @@ class PersiaServiceCtx:
         self.data_loader_replica_num = data_loader_replica_num
         self.nproc_per_node = nproc_per_node
         self.embedding_config = embedding_config
-        self.global_config = global_config
+        self.global_config = global_config or _DEFAULT_GLOBAL_CONFIG
         self.embedding_config_path = embedding_config_path
-        self.global_config_path = global_config_path or _DEFAULT_GLOBAL_CONFIG
+        self.global_config_path = global_config_path
         self.embedding_worker_replica_num = embedding_worker_replica_num
         self.embedding_parameter_replica_num = embedding_parameter_replica_num
         self.embedding_worker_port = embedding_worker_port
