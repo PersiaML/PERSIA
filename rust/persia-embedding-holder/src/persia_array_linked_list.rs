@@ -1,35 +1,10 @@
-use crate::emb_entry::{ArrayEmbeddingEntry, PersiaEmbeddingEntry};
-use persia_libs::half::f16;
+use crate::emb_entry::{
+    DynamicEmbeddingEntry, PersiaEmbeddingEntry, PersiaEmbeddingEntryMut,
+    PersiaEmbeddingEntryRef,
+};
 use persia_libs::serde::{self, Deserialize, Serialize};
 use persia_speedy::{Context, Readable, Writable};
-use std::mem;
-
-pub enum PersiaEmbeddingEntryWithType {
-    F32(Box<dyn PersiaEmbeddingEntry<f32>>),
-    F16(Box<dyn PersiaEmbeddingEntry<f16>>),
-}
-
-pub enum PersiaEmbeddingRef<'a> {
-    F32(&'a [f32]),
-    F16(&'a [f16]),
-}
-
-pub enum PersiaEmbeddingMut<'a> {
-    F32(&'a mut [f32]),
-    F16(&'a mut [f16]),
-}
-
-pub struct PersiaEmbeddingEntryRef<'a> {
-    pub inner: PersiaEmbeddingRef<'a>,
-    pub embedding_dim: usize,
-    pub sign: u64,
-}
-
-pub struct PersiaEmbeddingEntryMut<'a> {
-    pub inner: PersiaEmbeddingMut<'a>,
-    pub embedding_dim: usize,
-    pub sign: u64,
-}
+use std::{hint, mem};
 
 pub trait PersiaArrayLinkedList {
     fn with_capacity(capacity: usize) -> Self;
@@ -38,60 +13,62 @@ pub trait PersiaArrayLinkedList {
 
     fn get_mut(&mut self, key: u32) -> Option<PersiaEmbeddingEntryMut>;
 
-    fn remove(&mut self, index: u32) -> Option<PersiaEmbeddingEntryWithType>;
+    fn move_to_back(&mut self, index: u32) -> u32;
 
-    fn push_back(&mut self, value: PersiaEmbeddingEntryWithType) -> u32;
+    fn remove(&mut self, index: u32) -> Option<u64>;
 
-    fn pop_front(&mut self) -> Option<PersiaEmbeddingEntryWithType>;
+    fn push_back(&mut self, value: DynamicEmbeddingEntry) -> u32;
+
+    fn pop_front(&mut self) -> Option<u64>;
 
     fn clear(&mut self);
 
     fn len(&self) -> usize;
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 #[serde(crate = "self::serde")]
-pub struct LinkedListNode<T, const L: usize> {
+pub struct LinkedListNode<T> {
     next_index: u32,
     prev_index: u32,
-    data: Option<ArrayEmbeddingEntry<T, L>>,
+    data: Option<T>,
 }
 
-impl<T, const L: usize> LinkedListNode<T, L> {
-    fn new(prev_index: u32, next_index: u32, data: ArrayEmbeddingEntry<T, L>) -> Self {
+impl<T> LinkedListNode<T> {
+    fn _new(prev_index: u32, next_index: u32, data: T) -> Self {
         Self {
-            next_index: next_index,
-            prev_index: prev_index,
+            next_index: next_index as _,
+            prev_index: prev_index as _,
             data: Some(data),
         }
     }
 
-    fn front(first_index: u32, data: ArrayEmbeddingEntry<T, L>) -> Self {
+    fn _front(first_index: u32, data: T) -> Self {
         Self {
-            next_index: first_index,
+            next_index: first_index as _,
             prev_index: 0,
             data: Some(data),
         }
     }
 
-    fn back(last_index: u32, data: ArrayEmbeddingEntry<T, L>) -> Self {
+    fn back(last_index: u32, data: T) -> Self {
         Self {
             next_index: 0,
-            prev_index: last_index,
+            prev_index: last_index as _,
             data: Some(data),
         }
     }
 
     fn deleted(free_index: u32) -> Self {
         Self {
-            next_index: free_index,
+            next_index: free_index as _,
             prev_index: 0,
             data: None,
         }
     }
 }
 
-impl<'a, C, T, const L: usize> Readable<'a, C> for LinkedListNode<T, L>
+impl<'a, C, T> Readable<'a, C> for LinkedListNode<T>
 where
     C: Context,
     T: Readable<'a, C>,
@@ -100,7 +77,7 @@ where
     fn read_from<R: persia_speedy::Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
         let next_index: u32 = reader.read_value()?;
         let prev_index: u32 = reader.read_value()?;
-        let data: Option<ArrayEmbeddingEntry<T, L>> = {
+        let data: Option<T> = {
             reader.read_u8().and_then(|_flag_| {
                 if _flag_ != 0 {
                     Ok(Some(Readable::read_from(reader)?))
@@ -129,7 +106,7 @@ where
     }
 }
 
-impl<C, T, const L: usize> Writable<C> for LinkedListNode<T, L>
+impl<C, T> Writable<C> for LinkedListNode<T>
 where
     C: Context,
     T: Writable<C>,
@@ -157,19 +134,18 @@ where
     }
 }
 
-/// The `ArrayLinkedList` type, which combines the advantages of dynamic arrays and linked lists.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(crate = "self::serde")]
-pub struct ArrayLinkedList<T, const L: usize> {
+pub struct ArrayLinkedList<T> {
     count: usize,
     first_index: u32,
     last_index: u32,
     free_index: u32,
     end_index: u32,
-    elements: Vec<LinkedListNode<T, L>>,
+    elements: Vec<LinkedListNode<T>>,
 }
 
-impl<T, const L: usize> ArrayLinkedList<T, L> {
+impl<T> ArrayLinkedList<T> {
     pub fn new() -> Self {
         Self {
             count: 0,
@@ -195,7 +171,7 @@ impl<T, const L: usize> ArrayLinkedList<T, L> {
         self.end_index = capacity;
     }
 
-    fn insert_free_element(&mut self, element: LinkedListNode<T, L>) -> u32 {
+    fn insert_free_element(&mut self, element: LinkedListNode<T>) -> u32 {
         if self.free_index == 0 {
             self.elements.push(element);
             self.elements.len() as _
@@ -234,43 +210,8 @@ impl<T, const L: usize> ArrayLinkedList<T, L> {
         *self.prev_of_next(next_index, active) = prev_index;
         *self.next_of_prev(prev_index, active) = next_index;
     }
-}
 
-impl<const L: usize> PersiaArrayLinkedList for ArrayLinkedList<f32, L> {
-    fn with_capacity(capacity: usize) -> Self {
-        let mut result = Self::new();
-        result.elements = Vec::with_capacity(capacity as _);
-        result.fill_elements(capacity as _);
-        result
-    }
-
-    fn get(&self, key: u32) -> Option<PersiaEmbeddingEntryRef> {
-        match &self.elements[key as usize].data {
-            Some(entry) => Some(PersiaEmbeddingEntryRef {
-                inner: PersiaEmbeddingRef::F32(entry.inner()),
-                embedding_dim: entry.dim(),
-                sign: entry.sign(),
-            }),
-            None => None,
-        }
-    }
-
-    fn get_mut(&mut self, key: u32) -> Option<PersiaEmbeddingEntryMut> {
-        match &mut self.elements[key as usize].data {
-            Some(entry) => {
-                let embedding_dim = entry.dim();
-                let sign = entry.sign();
-                Some(PersiaEmbeddingEntryMut {
-                    inner: PersiaEmbeddingMut::F32(entry.inner_mut()),
-                    embedding_dim,
-                    sign,
-                })
-            }
-            None => None,
-        }
-    }
-
-    fn remove(&mut self, index: u32) -> Option<PersiaEmbeddingEntryWithType> {
+    fn remove_index(&mut self, index: u32) -> Option<T> {
         let LinkedListNode {
             next_index,
             prev_index,
@@ -292,40 +233,121 @@ impl<const L: usize> PersiaArrayLinkedList for ArrayLinkedList<f32, L> {
         }
         self.free_index = index + 1;
 
-        match data {
-            Some(entry) => Some(PersiaEmbeddingEntryWithType::F32(Box::new(entry))),
+        data
+    }
+
+    pub fn push_back_value(&mut self, value: T) -> u32 {
+        let element = LinkedListNode::back(self.last_index as _, value);
+
+        let prev_index = self.insert_free_element(element);
+
+        *self.next_of_prev(self.last_index as _, true) = prev_index;
+
+        self.last_index = prev_index;
+        self.count += 1;
+
+        prev_index - 1
+    }
+
+    pub fn pop_front_value(&mut self) -> Option<T> {
+        if self.first_index == 0 {
+            return None;
+        }
+        let index = self.first_index - 1;
+        let LinkedListNode {
+            next_index, data, ..
+        } = mem::replace(
+            &mut self.elements[index as usize],
+            LinkedListNode::deleted(self.free_index),
+        );
+
+        *self.prev_of_next(next_index, true) = 0;
+        self.first_index = next_index;
+
+        self.count -= 1;
+        if self.free_index > 0 {
+            self.elements[self.free_index as usize - 1].prev_index = index;
+        }
+        self.free_index = index;
+        Some(data.unwrap_or_else(|| unsafe { hint::unreachable_unchecked() }))
+    }
+}
+
+impl<T: PersiaEmbeddingEntry> PersiaArrayLinkedList for ArrayLinkedList<T> {
+    fn with_capacity(capacity: usize) -> Self {
+        let mut result = Self::new();
+        result.elements = Vec::with_capacity(capacity as _);
+        result.fill_elements(capacity as _);
+        result
+    }
+
+    fn get(&self, key: u32) -> Option<PersiaEmbeddingEntryRef> {
+        match &self.elements[key as usize].data {
+            Some(entry) => Some(PersiaEmbeddingEntryRef {
+                inner: entry.get_ref(),
+                embedding_dim: entry.dim(),
+                sign: entry.sign(),
+            }),
             None => None,
         }
     }
 
-    fn push_back(&mut self, value: PersiaEmbeddingEntryWithType) -> u32 {
-        match value {
-            PersiaEmbeddingEntryWithType::F32(entry) => {
-                let value = *entry;
-                let element = LinkedListNode::back(self.last_index as _, value);
-
-                let prev_index = self.insert_free_element(element);
-
-                *self.next_of_prev(self.last_index as _, true) = prev_index;
-
-                self.last_index = prev_index;
-                self.count += 1;
-
-                prev_index - 1
+    fn get_mut(&mut self, key: u32) -> Option<PersiaEmbeddingEntryMut> {
+        match &mut self.elements[key as usize].data {
+            Some(entry) => {
+                let embedding_dim = entry.dim();
+                let sign = entry.sign();
+                Some(PersiaEmbeddingEntryMut {
+                    inner: entry.get_mut(),
+                    embedding_dim,
+                    sign,
+                })
             }
-            PersiaEmbeddingEntryWithType::F16(_) => unreachable!(),
+            None => None,
         }
     }
 
-    fn pop_front(&mut self) -> PersiaEmbeddingEntryWithType {
-        todo!();
+    fn move_to_back(&mut self, index: u32) -> u32 {
+        match self.remove_index(index) {
+            Some(value) => self.push_back_value(value),
+            None => unreachable!("move_to_back index not exsit"),
+        }
+    }
+
+    fn remove(&mut self, index: u32) -> Option<u64> {
+        let data = self.remove_index(index);
+
+        match data {
+            Some(entry) => Some(entry.sign()),
+            None => None,
+        }
+    }
+
+    fn push_back(&mut self, value: DynamicEmbeddingEntry) -> u32 {
+        let entry = T::from_dynamic(value);
+        self.push_back_value(entry)
+    }
+
+    fn pop_front(&mut self) -> Option<u64> {
+        match self.pop_front_value() {
+            Some(entry) => Some(entry.sign()),
+            None => None,
+        }
     }
 
     fn clear(&mut self) {
-        todo!();
+        self.count = 0;
+        self.first_index = 0;
+        self.last_index = 0;
+        self.free_index = 0;
+        self.end_index = 0;
+
+        let capacity = self.elements.len();
+        self.elements.clear();
+        self.fill_elements(capacity as _);
     }
 
     fn len(&self) -> usize {
-        todo!();
+        self.count as _
     }
 }

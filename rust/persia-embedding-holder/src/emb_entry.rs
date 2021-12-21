@@ -13,22 +13,42 @@ use smallvec::SmallVec;
 
 use crate::eviction_map::EvictionMapValue;
 
-pub trait PersiaEmbeddingEntry<T> {
-    fn new(dim: usize, sign: u64) -> Self
-    where
-        Self: Sized;
+pub struct DynamicEmbeddingEntry {
+    pub inner: Vec<f32>,
+    pub embedding_dim: usize,
+    pub sign: u64,
+}
 
-    fn size() -> usize
-    where
-        Self: Sized;
+pub struct PersiaEmbeddingEntryRef<'a> {
+    pub inner: &'a [f32],
+    pub embedding_dim: usize,
+    pub sign: u64,
+}
+
+pub struct PersiaEmbeddingEntryMut<'a> {
+    pub inner: &'a mut [f32],
+    pub embedding_dim: usize,
+    pub sign: u64,
+}
+
+pub trait PersiaEmbeddingEntry {
+    // fn new(dim: usize, sign: u64) -> Self;
+
+    // fn size() -> usize where Self: Sized;
+
+    fn from_dynamic(dynamic_entry: DynamicEmbeddingEntry) -> Self;
 
     fn dim(&self) -> usize;
 
-    fn inner(&self) -> &[T];
+    fn get_ref(&self) -> &[f32];
 
-    fn inner_mut(&mut self) -> &mut [T];
+    fn get_mut(&mut self) -> &mut [f32];
+
+    fn get_vec(&self) -> Vec<f32>;
 
     fn sign(&self) -> u64;
+
+    fn len(&self) -> usize;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -39,17 +59,28 @@ pub struct ArrayEmbeddingEntry<T, const L: usize> {
     pub sign: u64,
 }
 
-impl<T, const L: usize> PersiaEmbeddingEntry<T> for ArrayEmbeddingEntry<T, L> {
-    fn new(dim: usize, sign: u64) -> Self {
-        Self {
-            inner: SmallVec::<[T; L]>::new(),
-            embedding_dim: dim,
-            sign,
-        }
-    }
+impl<const L: usize> PersiaEmbeddingEntry for ArrayEmbeddingEntry<f32, L> {
+    // fn new(dim: usize, sign: u64) -> Self {
+    //     Self {
+    //         inner: SmallVec::<[f32; L]>::new(),
+    //         embedding_dim: dim,
+    //         sign,
+    //     }
+    // }
 
-    fn size() -> usize {
-        L
+    // fn size() -> usize {
+    //     L
+    // }
+
+    fn from_dynamic(dynamic_entry: DynamicEmbeddingEntry) -> Self {
+        assert_eq!(dynamic_entry.inner.len(), L);
+        let sign = dynamic_entry.sign;
+        let embedding_dim = dynamic_entry.embedding_dim;
+        Self {
+            sign,
+            embedding_dim,
+            inner: SmallVec::<[f32; L]>::from_vec(dynamic_entry.inner),
+        }
     }
 
     fn dim(&self) -> usize {
@@ -60,12 +91,20 @@ impl<T, const L: usize> PersiaEmbeddingEntry<T> for ArrayEmbeddingEntry<T, L> {
         self.sign
     }
 
-    fn inner(&self) -> &[T] {
+    fn get_ref(&self) -> &[f32] {
         &self.inner[..]
     }
 
-    fn inner_mut(&mut self) -> &mut [T] {
+    fn get_mut(&mut self) -> &mut [f32] {
         &mut self.inner[..]
+    }
+
+    fn get_vec(&self) -> Vec<f32> {
+        self.inner.to_vec()
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
     }
 }
 
