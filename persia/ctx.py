@@ -692,7 +692,7 @@ class TrainCtx(EmbeddingCtx):
     Currently support Pytorch DDP (distributed data-parallel) (:class:`DDPOption`)
     and Bagua (:class:`BaguaDistributedOption`). The default is Pytorch DDP.
     The default configuration is determined by :func:`.get_default_distributed_option`
-     when the environment ``WORLD_SIZE > 1``.
+    when the environment ``WORLD_SIZE > 1``.
 
     You can configure the :class:`DDPOption` to your specific requirements.
 

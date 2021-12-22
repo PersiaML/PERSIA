@@ -265,25 +265,25 @@ class BaguaDistributedOption(DistributedBaseOption):
 
     Algorithms supported in `Bagua`:
 
-    +-----------------------------+-------------+
-    |Algorithm Name               |arguments    |
-    +=============================+=============+
-    |gradient_allreduce           |False        |
-    +-----------------------------+-------------+
-    |decentralized                |False        |
-    +-----------------------------+-------------+
-    |low_precision_decentralized  |False        |
-    +-----------------------------+-------------+
-    |qadam                        |True         |
-    +-----------------------------+-------------+
-    |bytegrad                     |False        |
-    +-----------------------------+-------------+
-    |async                        |True         |
-    +-----------------------------+-------------+
+    +-----------------------------+
+    |Algorithm Name               |
+    +=============================+
+    |gradient_allreduce           |
+    +-----------------------------+
+    |decentralized                |
+    +-----------------------------+
+    |low_precision_decentralized  |
+    +-----------------------------+
+    |qadam                        |
+    +-----------------------------+
+    |bytegrad                     |
+    +-----------------------------+
+    |async                        |
+    +-----------------------------+
 
     .. note::
         You can review `Bagua Algorithm <https://tutorials.baguasys.com/algorithms/>`_ for more details,
-        especially for those algorithms with `arguments`.
+        especially the arguments of algorithm.
 
     .. note::
         The :class:`BaguaDistributedOption` only supports the `CUDA` environment, if you want to run PERSIA task
