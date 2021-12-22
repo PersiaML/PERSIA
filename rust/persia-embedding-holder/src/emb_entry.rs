@@ -11,8 +11,6 @@ use persia_embedding_config::InitializationMethod;
 use persia_speedy::{Context, Readable, Writable};
 use smallvec::SmallVec;
 
-use crate::eviction_map::EvictionMapValue;
-
 pub struct DynamicEmbeddingEntry {
     pub inner: Vec<f32>,
     pub embedding_dim: usize,
@@ -299,8 +297,8 @@ impl HashMapEmbeddingEntry {
     }
 }
 
-impl EvictionMapValue<u64> for HashMapEmbeddingEntry {
-    fn hashmap_key(&self) -> u64 {
-        self.sign
-    }
-}
+// impl EvictionMapValue<u64> for HashMapEmbeddingEntry {
+//     fn hashmap_key(&self) -> u64 {
+//         self.sign
+//     }
+// }

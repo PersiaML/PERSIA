@@ -7,8 +7,6 @@ use persia_speedy::{Context, Readable, Writable};
 use std::{hint, mem};
 
 pub trait PersiaArrayLinkedList {
-    fn with_capacity(capacity: usize) -> Self;
-
     fn get(&self, key: u32) -> Option<PersiaEmbeddingEntryRef>;
 
     fn get_mut(&mut self, key: u32) -> Option<PersiaEmbeddingEntryMut>;
@@ -157,6 +155,14 @@ impl<T> ArrayLinkedList<T> {
         }
     }
 
+    pub fn with_capacity(capacity: usize) -> Self {
+        let mut result = Self::new();
+        result.elements = Vec::with_capacity(capacity as _);
+        result.fill_elements(capacity as _);
+        result
+    }
+
+
     #[inline]
     fn fill_elements(&mut self, capacity: u32) {
         if capacity == 0 {
@@ -274,13 +280,6 @@ impl<T> ArrayLinkedList<T> {
 }
 
 impl<T: PersiaEmbeddingEntry> PersiaArrayLinkedList for ArrayLinkedList<T> {
-    fn with_capacity(capacity: usize) -> Self {
-        let mut result = Self::new();
-        result.elements = Vec::with_capacity(capacity as _);
-        result.fill_elements(capacity as _);
-        result
-    }
-
     fn get(&self, key: u32) -> Option<PersiaEmbeddingEntryRef> {
         match &self.elements[key as usize].data {
             Some(entry) => Some(PersiaEmbeddingEntryRef {
