@@ -30,9 +30,14 @@ pub struct PersiaEmbeddingEntryMut<'a> {
 }
 
 pub trait PersiaEmbeddingEntry {
-    // fn new(dim: usize, sign: u64) -> Self;
+    fn size() -> usize;
 
-    // fn size() -> usize where Self: Sized;
+    fn new(
+        initialization_method: &InitializationMethod,
+        embedding_dim: usize,
+        seed: u64,
+        sign: u64,
+    ) -> Self;
 
     fn from_dynamic(dynamic_entry: DynamicEmbeddingEntry) -> Self;
 
@@ -58,17 +63,50 @@ pub struct ArrayEmbeddingEntry<T, const L: usize> {
 }
 
 impl<const L: usize> PersiaEmbeddingEntry for ArrayEmbeddingEntry<f32, L> {
-    // fn new(dim: usize, sign: u64) -> Self {
-    //     Self {
-    //         inner: SmallVec::<[f32; L]>::new(),
-    //         embedding_dim: dim,
-    //         sign,
-    //     }
-    // }
+    fn size() -> usize {
+        L
+    }
 
-    // fn size() -> usize {
-    //     L
-    // }
+    fn new(
+        initialization_method: &InitializationMethod,
+        embedding_dim: usize,
+        seed: u64,
+        sign: u64,
+    ) -> Self {
+        let emb = {
+            let mut rng = SmallRng::seed_from_u64(seed);
+            match initialization_method {
+                InitializationMethod::BoundedUniform(x) => {
+                    Array1::random_using((embedding_dim,), Uniform::new(x.lower, x.upper), &mut rng)
+                }
+                InitializationMethod::BoundedGamma(x) => {
+                    Array1::random_using((embedding_dim,), Gamma::new(x.shape, x.scale).unwrap(), &mut rng)
+                }
+                InitializationMethod::BoundedPoisson(x) => {
+                    Array1::random_using((embedding_dim,), Poisson::new(x.lambda).unwrap(), &mut rng)
+                }
+                InitializationMethod::BoundedNormal(x) => Array1::random_using(
+                    (embedding_dim,),
+                    Normal::new(x.mean, x.standard_deviation).unwrap(),
+                    &mut rng,
+                ),
+                _ => panic!(
+                    "unsupported initialization method for hashmap impl: {:?}",
+                    initialization_method
+                ),
+            }
+        };
+
+        let mut inner = emb.into_raw_vec();
+        if L > embedding_dim {
+            inner.resize(L, 0.0_f32);
+        }
+        Self {
+            inner: SmallVec::<[f32; L]>::from_vec(inner),
+            embedding_dim,
+            sign,
+        }
+    }
 
     fn from_dynamic(dynamic_entry: DynamicEmbeddingEntry) -> Self {
         assert_eq!(dynamic_entry.inner.len(), L);

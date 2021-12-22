@@ -3,19 +3,41 @@ use std::convert::TryFrom;
 use std::hash::Hash;
 
 use crate::emb_entry::{
-    DynamicEmbeddingEntry, PersiaEmbeddingEntry, PersiaEmbeddingEntryMut, PersiaEmbeddingEntryRef,
+    DynamicEmbeddingEntry, PersiaEmbeddingEntry, PersiaEmbeddingEntryMut, PersiaEmbeddingEntryRef, ArrayEmbeddingEntry
 };
 use crate::array_linked_list::{ArrayLinkedList, PersiaArrayLinkedList};
 use persia_embedding_config::EmbeddingConfig;
+use persia_common::optim::Optimizer;
+
+pub struct NodeIndex {
+    pub linkedlist_index: u32,
+    pub array_index: u32,
+}
 
 pub struct EvictionMap {
-    pub hashmap: HashMap<u64, (u32, u32)>,
-    pub linkedlist: Vec<Box<dyn PersiaArrayLinkedList>>,
+    pub hashmap: HashMap<u64, NodeIndex>,
+    pub linkedlists: Vec<Box<dyn PersiaArrayLinkedList>>,
     pub capacity: Vec<usize>,
 }
 
 impl EvictionMap {
-    pub fn from_config(embedding_config: &EmbeddingConfig) -> Self {}
+    pub fn new() -> Self {
+        Self {
+            hashmap: HashMap::new(),
+            linkedlists: Vec::new(),
+            capacity: Vec::new(),
+        }
+    }
+
+    pub fn initialize(&mut self, embedding_config: &EmbeddingConfig, optimizer_space: usize) {
+        let linkedlists = embedding_config.slots_config.iter().map(|(slot_name, slot_config)|{
+            let capacity = slot_config.capacity;
+
+            let linkedlist = match slot_config.dim + optimizer_space {
+                1 => Box::new(ArrayLinkedList::<ArrayEmbeddingEntry::<f32, 1>>::with_capacity(capacity)),
+            };
+        });
+    }
 }
 
 // pub trait EvictionMapValue<K> {
