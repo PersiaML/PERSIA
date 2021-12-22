@@ -79,12 +79,16 @@ impl<const L: usize> PersiaEmbeddingEntry for ArrayEmbeddingEntry<f32, L> {
                 InitializationMethod::BoundedUniform(x) => {
                     Array1::random_using((embedding_dim,), Uniform::new(x.lower, x.upper), &mut rng)
                 }
-                InitializationMethod::BoundedGamma(x) => {
-                    Array1::random_using((embedding_dim,), Gamma::new(x.shape, x.scale).unwrap(), &mut rng)
-                }
-                InitializationMethod::BoundedPoisson(x) => {
-                    Array1::random_using((embedding_dim,), Poisson::new(x.lambda).unwrap(), &mut rng)
-                }
+                InitializationMethod::BoundedGamma(x) => Array1::random_using(
+                    (embedding_dim,),
+                    Gamma::new(x.shape, x.scale).unwrap(),
+                    &mut rng,
+                ),
+                InitializationMethod::BoundedPoisson(x) => Array1::random_using(
+                    (embedding_dim,),
+                    Poisson::new(x.lambda).unwrap(),
+                    &mut rng,
+                ),
                 InitializationMethod::BoundedNormal(x) => Array1::random_using(
                     (embedding_dim,),
                     Normal::new(x.mean, x.standard_deviation).unwrap(),
