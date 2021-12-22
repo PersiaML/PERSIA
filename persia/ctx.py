@@ -775,7 +775,7 @@ class TrainCtx(EmbeddingCtx):
                 queued in the buffer between two backward steps.
             backward_workers_size (int, optional): number of workers sending embedding gradients
                 in parallel.
-            grad_update_buffer_size (int, optional): number of gradient buffer. The buffer will cache the
+            grad_update_buffer_size (int, optional): the size of gradient buffers. The buffer will cache the
                 gradient tensor until the embedding update is finished.
             lookup_emb_directly (bool, optional): lookup embedding directly without a separate data loader.
             mixed_precision (bool): whether to enable mixed_precision.

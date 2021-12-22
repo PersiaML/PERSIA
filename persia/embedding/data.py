@@ -57,7 +57,7 @@ def _ndarray_check(data: np.ndarray, data_name) -> bool:
 def _batch_size_check(
     batch_size: int, target_batch_size: int, data_type: str, name: str
 ):
-    """Check if batch size is equal to target_batch_size and no larger than to MAX_BATCH_SIZE"""
+    """Check if batch size is equal to target_batch_size and no larger than to MAX_BATCH_SIZE."""
     assert (
         batch_size == target_batch_size
     ), f"expected {data_type}: {name} batch_size equal to {target_batch_size} but got {batch_size}"
