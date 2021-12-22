@@ -3,11 +3,10 @@ use std::convert::TryFrom;
 use std::hash::Hash;
 
 // use crate::array_linked_list::ArrayLinkedList;
-use crate::persia_array_linked_list::{ArrayLinkedList, PersiaArrayLinkedList};
 use crate::emb_entry::{
-    DynamicEmbeddingEntry, PersiaEmbeddingEntry, PersiaEmbeddingEntryMut,
-    PersiaEmbeddingEntryRef,
+    DynamicEmbeddingEntry, PersiaEmbeddingEntry, PersiaEmbeddingEntryMut, PersiaEmbeddingEntryRef,
 };
+use crate::persia_array_linked_list::{ArrayLinkedList, PersiaArrayLinkedList};
 use persia_embedding_config::EmbeddingConfig;
 
 pub struct EvictionMap {
@@ -17,9 +16,7 @@ pub struct EvictionMap {
 }
 
 impl EvictionMap {
-    pub fn from_config(embedding_config: &EmbeddingConfig) -> Self {
-        
-    }
+    pub fn from_config(embedding_config: &EmbeddingConfig) -> Self {}
 }
 
 // pub trait EvictionMapValue<K> {

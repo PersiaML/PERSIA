@@ -1,6 +1,5 @@
 use crate::emb_entry::{
-    DynamicEmbeddingEntry, PersiaEmbeddingEntry, PersiaEmbeddingEntryMut,
-    PersiaEmbeddingEntryRef,
+    DynamicEmbeddingEntry, PersiaEmbeddingEntry, PersiaEmbeddingEntryMut, PersiaEmbeddingEntryRef,
 };
 use persia_libs::serde::{self, Deserialize, Serialize};
 use persia_speedy::{Context, Readable, Writable};
@@ -161,7 +160,6 @@ impl<T> ArrayLinkedList<T> {
         result.fill_elements(capacity as _);
         result
     }
-
 
     #[inline]
     fn fill_elements(&mut self, capacity: u32) {
