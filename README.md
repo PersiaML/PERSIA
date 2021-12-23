@@ -22,6 +22,8 @@
 *Disclaimer: The program is usable and has served several important businesses. However, the official English documentation and tutorials are still under heavy construction and they are a bit raw now. We encourage adventurers to try out PERSIA and contribute!*
 
 ## News
+
+* [参数量卷到一百万亿！华人团队开源史上最大的推荐训练系统 PERSIA](https://archive.md/FbocB) (In Chinese. Title: PERSIA, the Largest Recommended Training System in the History of Open Source by Far)
 * AI Engines in the "Short-video" Era: Eating 100 Trillion Parameters, Invited talk, Facebook, 2021.
 * 单机训练速度提升 640 倍！独家解读快手商业广告模型 GPU 训练平台 PERSIA (In Chinese. Title: 640x Faster GPU Based Learning System for Ad Recommendation)
    * [[AI Front]](https://archive.is/2ii2L) [[中国日报]](https://archive.is/N8fK2) [[InfoQ]](https://archive.is/JESDU) [[CSDN]](https://archive.is/tpvkN) [[Tencent Cloud News]](https://archive.is/kLuaT) [[AcFun]](https://archive.md/vuPmb)
