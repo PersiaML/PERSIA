@@ -34,7 +34,8 @@ pub trait PersiaEmbeddingEntry {
 
     fn new(
         initialization_method: &InitializationMethod,
-        embedding_dim: usize,
+        embedding_space: usize,
+        optimizer_space: usize,
         seed: u64,
         sign: u64,
     ) -> Self;
@@ -69,28 +70,31 @@ impl<const L: usize> PersiaEmbeddingEntry for ArrayEmbeddingEntry<f32, L> {
 
     fn new(
         initialization_method: &InitializationMethod,
-        embedding_dim: usize,
+        embedding_space: usize,
+        optimizer_space: usize,
         seed: u64,
         sign: u64,
     ) -> Self {
         let emb = {
             let mut rng = SmallRng::seed_from_u64(seed);
             match initialization_method {
-                InitializationMethod::BoundedUniform(x) => {
-                    Array1::random_using((embedding_dim,), Uniform::new(x.lower, x.upper), &mut rng)
-                }
+                InitializationMethod::BoundedUniform(x) => Array1::random_using(
+                    (embedding_space,),
+                    Uniform::new(x.lower, x.upper),
+                    &mut rng,
+                ),
                 InitializationMethod::BoundedGamma(x) => Array1::random_using(
-                    (embedding_dim,),
+                    (embedding_space,),
                     Gamma::new(x.shape, x.scale).unwrap(),
                     &mut rng,
                 ),
                 InitializationMethod::BoundedPoisson(x) => Array1::random_using(
-                    (embedding_dim,),
+                    (embedding_space,),
                     Poisson::new(x.lambda).unwrap(),
                     &mut rng,
                 ),
                 InitializationMethod::BoundedNormal(x) => Array1::random_using(
-                    (embedding_dim,),
+                    (embedding_space,),
                     Normal::new(x.mean, x.standard_deviation).unwrap(),
                     &mut rng,
                 ),
@@ -102,18 +106,17 @@ impl<const L: usize> PersiaEmbeddingEntry for ArrayEmbeddingEntry<f32, L> {
         };
 
         let mut inner = emb.into_raw_vec();
-        if L > embedding_dim {
-            inner.resize(L, 0.0_f32);
+        if optimizer_space > 0 {
+            inner.resize(embedding_space + optimizer_space, 0.0_f32);
         }
         Self {
             inner: SmallVec::<[f32; L]>::from_vec(inner),
-            embedding_dim,
+            embedding_dim: embedding_space,
             sign,
         }
     }
 
     fn from_dynamic(dynamic_entry: DynamicEmbeddingEntry) -> Self {
-        assert_eq!(dynamic_entry.inner.len(), L);
         let sign = dynamic_entry.sign;
         let embedding_dim = dynamic_entry.embedding_dim;
         Self {

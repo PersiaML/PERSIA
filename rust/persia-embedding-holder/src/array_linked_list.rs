@@ -10,6 +10,8 @@ pub trait PersiaArrayLinkedList {
 
     fn get_mut(&mut self, key: u32) -> Option<PersiaEmbeddingEntryMut>;
 
+    fn back(&self) -> Option<PersiaEmbeddingEntryRef>;
+
     fn move_to_back(&mut self, index: u32) -> u32;
 
     fn remove(&mut self, index: u32) -> Option<u64>;
@@ -275,6 +277,19 @@ impl<T> ArrayLinkedList<T> {
         self.free_index = index;
         Some(data.unwrap_or_else(|| unsafe { hint::unreachable_unchecked() }))
     }
+
+    pub fn get_back_value(&self) -> Option<&T> {
+        if self.last_index > 0 {
+            Some(
+                self.elements[self.last_index as usize - 1]
+                    .data
+                    .as_ref()
+                    .unwrap_or_else(|| unsafe { hint::unreachable_unchecked() }),
+            )
+        } else {
+            None
+        }
+    }
 }
 
 impl<T: PersiaEmbeddingEntry> PersiaArrayLinkedList for ArrayLinkedList<T> {
@@ -300,6 +315,17 @@ impl<T: PersiaEmbeddingEntry> PersiaArrayLinkedList for ArrayLinkedList<T> {
                     sign,
                 })
             }
+            None => None,
+        }
+    }
+
+    fn back(&self) -> Option<PersiaEmbeddingEntryRef> {
+        match self.get_back_value() {
+            Some(back) => Some(PersiaEmbeddingEntryRef {
+                inner: back.get_ref(),
+                embedding_dim: back.dim(),
+                sign: back.sign(),
+            }),
             None => None,
         }
     }

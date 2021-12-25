@@ -303,7 +303,7 @@ fn get_default_infer_config() -> InferConfig {
     InferConfig::default()
 }
 
-fn get_default_hashstack_config() -> HashStackConfig {
+pub fn get_default_hashstack_config() -> HashStackConfig {
     HashStackConfig {
         hash_stack_rounds: 0,
         embedding_size: 0,
