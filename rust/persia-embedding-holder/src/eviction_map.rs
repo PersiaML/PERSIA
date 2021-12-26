@@ -1,7 +1,3 @@
-use persia_libs::hashbrown::HashMap;
-use std::convert::TryFrom;
-use std::hash::Hash;
-
 use crate::array_linked_list::{ArrayLinkedList, PersiaArrayLinkedList};
 use crate::emb_entry::{
     ArrayEmbeddingEntry, DynamicEmbeddingEntry, PersiaEmbeddingEntry, PersiaEmbeddingEntryMut,
@@ -9,6 +5,9 @@ use crate::emb_entry::{
 };
 use persia_common::optim::Optimizer;
 use persia_embedding_config::{EmbeddingConfig, EmbeddingParameterServerConfig, PersiaReplicaInfo};
+use persia_libs::hashbrown::HashMap;
+use std::convert::TryFrom;
+use std::hash::Hash;
 
 pub struct NodeIndex {
     pub linkedlist_index: u32,
