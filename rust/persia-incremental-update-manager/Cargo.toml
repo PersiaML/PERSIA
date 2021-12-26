@@ -10,7 +10,7 @@ version = "0.1.0"
 griddle = "0.4"
 persia-embedding-config = {path = "../persia-embedding-config"}
 persia-common = {path = "../persia-common"}
-persia-embedding-holder = {path = "../persia-embedding-holder"}
+persia-embedding-map = {path = "../persia-embedding-map"}
 persia-libs = {path = "../persia-libs"}
 persia-metrics = {path = "../persia-metrics"}
 persia-storage = {path = "../persia-storage"}

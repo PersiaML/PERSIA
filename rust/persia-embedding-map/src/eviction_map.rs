@@ -4,7 +4,9 @@ use crate::emb_entry::{
     PersiaEmbeddingEntryRef,
 };
 use persia_common::optim::Optimizer;
-use persia_embedding_config::{EmbeddingConfig, EmbeddingParameterServerConfig, PersiaReplicaInfo};
+use persia_embedding_config::{
+    EmbeddingConfig, EmbeddingParameterServerConfig, InitializationMethod, PersiaReplicaInfo,
+};
 use persia_libs::hashbrown::HashMap;
 use std::convert::TryFrom;
 use std::hash::Hash;
@@ -115,8 +117,8 @@ impl EvictionMap {
         }
     }
 
-    pub fn insert(&mut self, key: &u64, value: DynamicEmbeddingEntry, slot_name: &String) {
-        if let Some(idx) = self.hashmap.get_mut(key) {
+    pub fn insert(&mut self, key: u64, value: DynamicEmbeddingEntry, slot_name: &String) {
+        if let Some(idx) = self.hashmap.get_mut(&key) {
             self.linkedlists[idx.linkedlist_index as usize].remove(idx.array_index);
             let new_idx = self.linkedlists[idx.linkedlist_index as usize].push_back(value);
             idx.array_index = new_idx;
@@ -135,19 +137,38 @@ impl EvictionMap {
                 },
             );
 
-            if self.linkedlists[linkedlist_index].len()
-                > self
-                    .embedding_config
-                    .slots_config
-                    .get_index(linkedlist_index)
-                    .unwrap()
-                    .1
-                    .capacity
-            {
-                if let Some(evicted) = self.linkedlists[linkedlist_index].pop_front() {
-                    self.hashmap.remove(&evicted);
-                }
-            }
+            self.evict(linkedlist_index);
+        }
+    }
+
+    pub fn insert_init(
+        &mut self,
+        key: u64,
+        initialization_method: &InitializationMethod,
+        embedding_space: usize,
+        optimizer_space: usize,
+        slot_name: &String,
+    ) {
+        if self.hashmap.get(&key).is_none() {
+            let linkedlist_index = self
+                .embedding_config
+                .slots_config
+                .get_index_of(slot_name)
+                .unwrap();
+            let array_index = self.linkedlists[linkedlist_index].push_back_init(
+                initialization_method,
+                embedding_space,
+                optimizer_space,
+                key,
+                key,
+            );
+            self.hashmap.insert(
+                key,
+                NodeIndex {
+                    linkedlist_index: linkedlist_index as u32,
+                    array_index,
+                },
+            );
         }
     }
 
@@ -158,6 +179,22 @@ impl EvictionMap {
 
     pub fn len(&self) -> usize {
         self.hashmap.len()
+    }
+
+    fn evict(&mut self, linkedlist_index: usize) {
+        if self.linkedlists[linkedlist_index].len()
+            > self
+                .embedding_config
+                .slots_config
+                .get_index(linkedlist_index)
+                .unwrap()
+                .1
+                .capacity
+        {
+            if let Some(evicted) = self.linkedlists[linkedlist_index].pop_front() {
+                self.hashmap.remove(&evicted);
+            }
+        }
     }
 }
 

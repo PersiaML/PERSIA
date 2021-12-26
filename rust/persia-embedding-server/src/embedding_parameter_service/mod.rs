@@ -12,7 +12,7 @@ use persia_embedding_config::{
     PersiaCommonConfig, PersiaEmbeddingModelHyperparameters, PersiaGlobalConfigError,
     PersiaReplicaInfo,
 };
-use persia_embedding_holder::{emb_entry::HashMapEmbeddingEntry, PersiaEmbeddingHolder};
+use persia_embedding_map::{emb_entry::DynamicEmbeddingEntry, EmbeddingShardedMap};
 use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
 
 use persia_metrics::{Gauge, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError};

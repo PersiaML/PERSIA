@@ -1832,7 +1832,7 @@ dependencies = [
  "numpy",
  "persia-common",
  "persia-embedding-config",
- "persia-embedding-holder",
+ "persia-embedding-map",
  "persia-embedding-server",
  "persia-libs",
  "persia-metrics",
@@ -1859,7 +1859,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "persia-embedding-holder"
+name = "persia-embedding-map"
 version = "0.1.0"
 dependencies = [
  "ahash 0.7.6",
@@ -1883,7 +1883,7 @@ dependencies = [
  "farmhash",
  "persia-common",
  "persia-embedding-config",
- "persia-embedding-holder",
+ "persia-embedding-map",
  "persia-incremental-update-manager",
  "persia-libs",
  "persia-metrics",
@@ -1909,7 +1909,7 @@ dependencies = [
  "griddle",
  "persia-common",
  "persia-embedding-config",
- "persia-embedding-holder",
+ "persia-embedding-map",
  "persia-libs",
  "persia-metrics",
  "persia-speedy",
@@ -1968,7 +1968,7 @@ name = "persia-model-manager"
 version = "0.1.0"
 dependencies = [
  "persia-embedding-config",
- "persia-embedding-holder",
+ "persia-embedding-map",
  "persia-libs",
  "persia-speedy",
  "persia-storage",

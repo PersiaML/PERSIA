@@ -1,6 +1,7 @@
 use crate::emb_entry::{
     DynamicEmbeddingEntry, PersiaEmbeddingEntry, PersiaEmbeddingEntryMut, PersiaEmbeddingEntryRef,
 };
+use persia_embedding_config::InitializationMethod;
 use persia_libs::serde::{self, Deserialize, Serialize};
 use persia_speedy::{Context, Readable, Writable};
 use std::{hint, mem};
@@ -23,6 +24,15 @@ pub trait PersiaArrayLinkedList {
     fn clear(&mut self);
 
     fn len(&self) -> usize;
+
+    fn push_back_init(
+        &mut self,
+        initialization_method: &InitializationMethod,
+        embedding_space: usize,
+        optimizer_space: usize,
+        seed: u64,
+        sign: u64,
+    ) -> u32;
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
@@ -344,6 +354,24 @@ impl<T: PersiaEmbeddingEntry> PersiaArrayLinkedList for ArrayLinkedList<T> {
             Some(entry) => Some(entry.sign()),
             None => None,
         }
+    }
+
+    fn push_back_init(
+        &mut self,
+        initialization_method: &InitializationMethod,
+        embedding_space: usize,
+        optimizer_space: usize,
+        seed: u64,
+        sign: u64,
+    ) -> u32 {
+        let entry = T::new(
+            initialization_method,
+            embedding_space,
+            optimizer_space,
+            seed,
+            sign,
+        );
+        self.push_back_value(entry)
     }
 
     fn push_back(&mut self, value: DynamicEmbeddingEntry) -> u32 {

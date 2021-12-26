@@ -10,7 +10,6 @@ use persia_speedy::{Readable, Writable};
 
 #[derive(Readable, Writable, Debug, Clone)]
 pub enum OptimizerConfig {
-    Adam(AdamConfig),
     SGD(NaiveSGDConfig),
     Adagrad(AdagradConfig),
 }
@@ -40,7 +39,6 @@ pub struct AdagradConfig {
 }
 
 pub enum Optimizer {
-    Adam(Adam),
     SGD(NaiveSGD),
     Adagrad(Adagrad),
 }
@@ -50,7 +48,6 @@ impl Optimizer {
         match config {
             OptimizerConfig::SGD(config) => Self::SGD(NaiveSGD { config }),
             OptimizerConfig::Adagrad(config) => Self::Adagrad(Adagrad { config }),
-            OptimizerConfig::Adam(config) => Self::Adam(Adam::new(config)),
         }
     }
 
@@ -58,7 +55,6 @@ impl Optimizer {
         match self {
             Optimizer::Adagrad(val) => Box::new(val) as Box<dyn Optimizable + Send + Sync>,
             Optimizer::SGD(val) => Box::new(val) as Box<dyn Optimizable + Send + Sync>,
-            Optimizer::Adam(val) => Box::new(val) as Box<dyn Optimizable + Send + Sync>,
         }
     }
 }
@@ -72,14 +68,6 @@ pub trait Optimizable {
         emb_opt_state: &Option<Vec<f32>>,
     );
 
-    fn get_emb_state(&self, _state: &Option<Vec<f32>>, _idx: usize) -> Option<Vec<f32>> {
-        None
-    }
-
-    fn get_batch_level_state(&self, _signs: &[u64]) -> Option<Vec<f32>> {
-        None
-    }
-
     #[inline]
     fn require_space(&self, _dim: usize) -> usize {
         0
@@ -89,140 +77,6 @@ pub trait Optimizable {
     fn update_lr(&mut self, _lr: f32) {}
 
     fn state_initialization(&self, _state: &mut [f32], _dim: usize) {}
-}
-
-struct AdamPowerOfBetas {
-    beta1: f32,
-    beta2: f32,
-}
-
-pub struct Adam {
-    config: AdamConfig,
-    embedding_config: Arc<EmbeddingConfig>,
-    accum_betas: HashMap<u64, RwLock<AdamPowerOfBetas>>,
-}
-
-impl Adam {
-    pub fn new(config: AdamConfig) -> Self {
-        todo!();
-        // let embedding_config = EmbeddingConfig::get().expect("embedding config not found");
-        // let mut accum_betas = HashMap::with_capacity(embedding_config.feature_groups.len());
-
-        // embedding_config
-        //     .feature_groups
-        //     .iter()
-        //     .for_each(|(_group_name, slots_name)| {
-        //         let prefix = embedding_config
-        //             .slots_config
-        //             .get(slots_name.first().expect("slot not found"))
-        //             .expect("slot not found")
-        //             .index_prefix;
-
-        //         let initially_betas = AdamPowerOfBetas {
-        //             beta1: config.beta1.clone(),
-        //             beta2: config.beta2.clone(),
-        //         };
-        //         accum_betas.insert(prefix.clone(), RwLock::new(initially_betas));
-        //     });
-
-        // Self {
-        //     config,
-        //     embedding_config,
-        //     accum_betas,
-        // }
-    }
-}
-
-impl Optimizable for Adam {
-    #[inline]
-    fn require_space(&self, dim: usize) -> usize {
-        todo!();
-        // dim * 2
-    }
-
-    #[inline]
-    fn get_emb_state(&self, opt_state: &Option<Vec<f32>>, idx: usize) -> Option<Vec<f32>> {
-        todo!();
-        // if let Some(opt_state) = opt_state {
-        //     Some(vec![opt_state[idx], opt_state[opt_state.len() / 2 + idx]])
-        // } else {
-        //     None
-        // }
-    }
-
-    #[inline]
-    fn get_batch_level_state(&self, signs: &[u64]) -> Option<Vec<f32>> {
-        todo!();
-        // let mut betas_power = vec![0.0_f32; signs.len() * 2];
-        // let (beta1_power, beta2_power) = betas_power.as_mut_slice().split_at_mut(signs.len());
-
-        // let mask =
-        //     !((1u64 << (u64::BITS - self.embedding_config.feature_index_prefix_bit as u32)) - 1);
-        // let mut steped: HashMap<u64, AdamPowerOfBetas> = HashMap::with_capacity(signs.len());
-
-        // signs.iter().enumerate().for_each(|(idx, sign)| {
-        //     let masked_sign: u64 = sign & mask;
-        //     if let Some(betas) = steped.get(&masked_sign) {
-        //         beta1_power[idx] = betas.beta1;
-        //         beta2_power[idx] = betas.beta2;
-        //     } else {
-        //         {
-        //             let mut accum_betas = self
-        //                 .accum_betas
-        //                 .get(&masked_sign)
-        //                 .expect("feature group not found")
-        //                 .write();
-
-        //             accum_betas.beta1 = accum_betas.beta1 * self.config.beta1;
-        //             accum_betas.beta2 = accum_betas.beta2 * self.config.beta2;
-
-        //             beta1_power[idx] = accum_betas.beta1;
-        //             beta2_power[idx] = accum_betas.beta2;
-        //         }
-
-        //         steped.insert(
-        //             masked_sign,
-        //             AdamPowerOfBetas {
-        //                 beta1: beta1_power[idx],
-        //                 beta2: beta2_power[idx],
-        //             },
-        //         );
-        //     }
-        // });
-
-        // Some(betas_power)
-    }
-
-    #[inline]
-    fn update(
-        &self,
-        emb_entry: &mut [f32],
-        grad: &[f32],
-        dim: usize,
-        emb_opt_state: &Option<Vec<f32>>,
-    ) {
-        todo!();
-        // let emb_opt_state = emb_opt_state.as_deref().unwrap();
-        // let beta1_power = emb_opt_state[0];
-        // let beta2_power = emb_opt_state[1];
-        // let (emb, opt) = emb_entry.split_at_mut(dim);
-        // let (adam_m, adam_v) = opt.split_at_mut(dim);
-
-        // unsafe {
-        //     adam_avx2(
-        //         adam_m,
-        //         adam_v,
-        //         beta1_power,
-        //         beta2_power,
-        //         emb,
-        //         grad,
-        //         self.config.lr,
-        //         self.config.beta1,
-        //         self.config.beta2,
-        //         self.config.eps,
-        //     )
-        // }
-    }
 }
 
 pub struct NaiveSGD {

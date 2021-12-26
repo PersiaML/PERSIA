@@ -9,7 +9,7 @@ members = [
   "persia-libs",
   "persia-model-manager",
   "persia-storage",
-  "persia-embedding-holder",
+  "persia-embedding-map",
   "persia-metrics",
   "persia-speedy",
   "others/persia-common-benchmark",
