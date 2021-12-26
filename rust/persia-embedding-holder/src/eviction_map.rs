@@ -8,7 +8,7 @@ use crate::emb_entry::{
     PersiaEmbeddingEntryRef,
 };
 use persia_common::optim::Optimizer;
-use persia_embedding_config::EmbeddingConfig;
+use persia_embedding_config::{EmbeddingConfig, EmbeddingParameterServerConfig, PersiaReplicaInfo};
 
 pub struct NodeIndex {
     pub linkedlist_index: u32,
@@ -17,18 +17,26 @@ pub struct NodeIndex {
 
 pub struct EvictionMap {
     pub hashmap: HashMap<u64, NodeIndex>,
-    pub linkedlists: Vec<Box<dyn PersiaArrayLinkedList>>,
+    pub linkedlists: Vec<Box<dyn PersiaArrayLinkedList + Send>>,
     pub embedding_config: EmbeddingConfig,
 }
 
 impl EvictionMap {
-    pub fn new(embedding_config: &EmbeddingConfig, optimizer_space: usize) -> Self {
+    pub fn new(
+        embedding_config: &EmbeddingConfig,
+        embedding_parameter_server_config: &EmbeddingParameterServerConfig,
+        replica_info: &PersiaReplicaInfo,
+        optimizer_space: usize,
+    ) -> Self {
+        let bucket_size = embedding_parameter_server_config.num_hashmap_internal_shards;
+        let replica_size = replica_info.replica_size;
+
         let linkedlists = embedding_config
             .slots_config
             .iter()
             .map(|(_, slot_config)| {
-                let capacity = slot_config.capacity;
-                let linkedlist: Box<dyn PersiaArrayLinkedList> = match slot_config.dim
+                let capacity = slot_config.capacity / bucket_size / replica_size;
+                let linkedlist: Box<dyn PersiaArrayLinkedList + Send> = match slot_config.dim
                     + optimizer_space
                 {
                     1 => Box::new(
@@ -149,7 +157,7 @@ impl EvictionMap {
         self.linkedlists.iter_mut().for_each(|list| list.clear());
     }
 
-    pub fn len(&mut self) -> usize {
+    pub fn len(&self) -> usize {
         self.hashmap.len()
     }
 }
