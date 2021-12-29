@@ -74,9 +74,9 @@ _ddp_init_method_list = ["tcp", "file"]
 class DDPOption(DistributedBaseOption):
     """Implements an option to convert torch model to a DDP model.
 
-    Current `init_method` in :class:`DDPOption` only support `nccl` and `gloo`. You can set
-    ``init_method="nccl"`` if your PERSIA task is training on the cluster with the CUDA device.
-    Or set ``init_method="gloo"`` if your PERSIA task is training on the cluster only with the CPU.
+    Current backend in :class:`DDPOption` only support `nccl` and `gloo`. You can set
+    ``backend="nccl"`` if your PERSIA task is training on the cluster with the CUDA device.
+    Or set ``backend="gloo"`` if your PERSIA task is training on the cluster only with the CPU.
 
     For example:
 
@@ -84,7 +84,7 @@ class DDPOption(DistributedBaseOption):
 
         from persia.distributed.DDPOption
 
-        ddp_option = DDPOption(init_method="nccl")
+        ddp_option = DDPOption(backend="nccl")
 
     If you want to change the default `master_port` or `master_addr`, add the ``kwargs`` to :class:`DDPOption`.
 
@@ -92,13 +92,16 @@ class DDPOption(DistributedBaseOption):
 
         from persia.distributed.DDPOption
 
-        ddp_option = DDPOption(init_method="nccl", master_port=23333, master_addr="localhost")
+        ddp_option = DDPOption(backend="nccl", master_port=23333, master_addr="localhost")
     """
 
-    def __init__(self, init_method: str = "tcp", backend: str = "nccl", **options):
+    def __init__(self, initialization_method: str = "tcp", backend: str = "nccl", **options):
         """
         Arguments:
-            init_method (str): the PyTorch distributed init method, support tcp and file currently.
+            initialization_method (str): the PyTorch distributed initialization_method method, 
+                support tcp and file currently. See 
+                `PyTorch initialization <https://pytorch.org/docs/stable/distributed.html#initialization>`_
+                for more details.
             backend (str): backend of collective communication. Currently support nccl.
             options (dict): options that include the master_port or master_addr.
         """
@@ -111,11 +114,11 @@ class DDPOption(DistributedBaseOption):
         ), f"The selected backend: {backend} is not support, current backend only \
             support {_ddp_backend_support_list}"
         assert (
-            init_method in _ddp_init_method_list
-        ), f"The selected init_method: {init_method} is not support, current init_method \
+            initialization_method in _ddp_init_method_list
+        ), f"The selected init_method: {initialization_method} is not support, current init_method \
             only support {_ddp_init_method_list}"
 
-        self.init_method = init_method
+        self.initialization_method = initialization_method
         self.backend = backend
         self.options = options
 
@@ -139,15 +142,15 @@ class DDPOption(DistributedBaseOption):
                 that may need to be converted alongside the model.
         """
 
-        if self.init_method == "tcp":
+        if self.initialization_method == "tcp":
             assert (
                 master_addr or self.master_addr
             ) and self.master_port, "Master IP and Port empty, pytorch DDP should pass master addr and\
             master port!"
 
             master_addr = self.master_addr or master_addr
-            init_method = f"{self.init_method}://{master_addr}:{self.master_port}"
-        elif self.init_method == "file":
+            init_method = f"{self.initialization_method}://{master_addr}:{self.master_port}"
+        elif self.initialization_method == "file":
             sync_file = self.options.pop("sync_file", None)
             assert (
                 sync_file
@@ -160,7 +163,7 @@ class DDPOption(DistributedBaseOption):
                     the persia task!"
                 )
 
-            init_method = f"{self.init_method}://{sync_file}"
+            init_method = f"{self.initialization_method}://{sync_file}"
         else:
             raise NotImplementedError
 
@@ -172,7 +175,7 @@ class DDPOption(DistributedBaseOption):
         )
         _logger.info(
             f"Pytorch ddp init process group done, corresponding backend is {self.backend}, init\
-            method is {self.init_method}"
+            method is {self.initialization_method}"
         )
 
         device_ids = [device_id] if self.backend != "gloo" else None
@@ -191,7 +194,7 @@ class DDPOption(DistributedBaseOption):
         Returns:
             ``True`` if the current option was initialized with a ddp env file
         """
-        return self.init_method == "file"
+        return self.initialization_method == "file"
 
 
 def _select_bagua_algorithm(

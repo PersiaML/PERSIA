@@ -56,32 +56,34 @@ Arguments from Environment Variables
 
 Some arguments will fallback to the environment variable if the
 arguments are not provided when running the ``persia-launcher``.
-Environment variables mapping:
+It is useful to control the environment when you deploy the PERSIA 
+job in container management tool.
 
-    +-----------------------------+-----------------------+
-    |Environment Variable Name    |arguments definition  |
-    +=============================+=======================+
-    |PERSIA_DATALOADER_ENTRY      |data loader entry path |
-    +-----------------------------+-----------------------+
-    |PERSIA_NN_WORKER_ENTRY       |model entry path       |
-    +-----------------------------+-----------------------+
-    |PERSIA_EMBEDDING_CONFIG      |embedding config path  |
-    +-----------------------------+-----------------------+
-    |PERSIA_GLOBAL_CONFIG         |common general path    |
-    +-----------------------------+-----------------------+
+For ``nn-worker``, you can export the environment variable 
+``PERSIA_NN_WORKER_ENTRY`` to avoid pass the filepath argument when launch the
+`nn-worker`. And the environment variable ``PERSIA_DATALOADER_ENTRY`` is for 
+``data-loader``.
 
 .. code-block::
 
-    export PERSIA_NN_WORKER_ENTRY=train.py
     export PERSIA_DATALOADER_ENTRY=data_loader.py
-    export PERSIA_EMBEDDING_CONFIG=embedding_config.yml
-    export PERSIA_GLOBAL_CONFIG=global_config.yml
+
+    # Launch the data_load
+    persia-launcher data-loader --replica-index 0 --replica-size 1
+
+    export PERSIA_NN_WORKER_ENTRY=train.py
 
     # Launch the nn-worker
     persia-launcher nn-worker --nproc-per-node 1 --node-rank 0 --nnodes 1
 
-    # Launch the data_load
-    persia-launcher data-loader --replica-index 0 --replica-size 1
+For ``embedding-worker`` and ``embedding-parameter-server``, you can export the environment 
+variable ``PERSIA_EMBEDDING_CONFIG`` and ``PERSIA_GLOBAL_CONFIG`` to avoid pass the 
+config filepath to cli command.
+
+.. code-block::
+
+    export PERSIA_EMBEDDING_CONFIG=embedding_config.yml
+    export PERSIA_GLOBAL_CONFIG=global_config.yml
 
     # Launch the embedding-worker
     persia-launcher embedding-worker \
