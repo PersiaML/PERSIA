@@ -56,12 +56,12 @@ Arguments from Environment Variables
 
 Some arguments will fallback to the environment variable if the
 arguments are not provided when running the ``persia-launcher``.
-It is useful to control the environment when you deploy the PERSIA 
+It is useful to control the environment when you deploy the PERSIA
 job in container management tool.
 
-For ``nn-worker``, you can export the environment variable 
+For ``nn-worker``, you can export the environment variable
 ``PERSIA_NN_WORKER_ENTRY`` to avoid pass the filepath argument when launch the
-`nn-worker`. And the environment variable ``PERSIA_DATALOADER_ENTRY`` is for 
+`nn-worker`. And the environment variable ``PERSIA_DATALOADER_ENTRY`` is for
 ``data-loader``.
 
 .. code-block::
@@ -76,8 +76,8 @@ For ``nn-worker``, you can export the environment variable
     # Launch the nn-worker
     persia-launcher nn-worker --nproc-per-node 1 --node-rank 0 --nnodes 1
 
-For ``embedding-worker`` and ``embedding-parameter-server``, you can export the environment 
-variable ``PERSIA_EMBEDDING_CONFIG`` and ``PERSIA_GLOBAL_CONFIG`` to avoid pass the 
+For ``embedding-worker`` and ``embedding-parameter-server``, you can export the environment
+variable ``PERSIA_EMBEDDING_CONFIG`` and ``PERSIA_GLOBAL_CONFIG`` to avoid pass the
 config filepath to cli command.
 
 .. code-block::

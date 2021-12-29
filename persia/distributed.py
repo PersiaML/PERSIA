@@ -98,8 +98,8 @@ class DDPOption(DistributedBaseOption):
     def __init__(self, initialization_method: str = "tcp", backend: str = "nccl", **options):
         """
         Arguments:
-            initialization_method (str): the PyTorch distributed initialization_method method, 
-                support tcp and file currently. See 
+            initialization_method (str): the PyTorch distributed initialization_method method,
+                support tcp and file currently. See
                 `PyTorch initialization <https://pytorch.org/docs/stable/distributed.html#initialization>`_
                 for more details.
             backend (str): backend of collective communication. Currently support nccl.
