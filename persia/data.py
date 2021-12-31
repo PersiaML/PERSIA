@@ -1,6 +1,6 @@
 r"""
 
-In PERSIA, we provides the :class:`DataLoader` class to load the data.  The :class:`DataLoader` will preprocess
+In PERSIA, we provide the :class:`DataLoader` class to load the data. The :class:`DataLoader` will preprocess
 the :class:`.PersiaBatch` and lookup the embedding for **id_type_features**. DataLoader need a iterable dataset.
 You can use the :class:`StreamingDataset` to fetch the :class:`.PersiaBatch` from the dataflow. Or use the
 :class:`IterableDataset` to generate the :class:`PersiaBatch` locally.
@@ -26,19 +26,20 @@ _logger = get_default_logger()
 
 
 class IterableDatasetBase(ABC, Iterable[PersiaBatch]):
-    r"""IterableDataSet base wrap the :class:`PersiaBatchDataChannel` that provide the sender
-    and receiver of the channel.
+    r"""The role of IterableDatasetBase is to transfer the :class:`PersiaBatch` to the
+    :class:`DataLoader`. It wraps the :class:`PersiaBatchDataChannel` which
+    provides the ability to send data to :class:`DataLoader`.
+    It has a sender (:class:`PersiaBatchDataSender`) and a
+    receiver (:class:`PersiaBatchDataSender`), whose functionalities are
+    illustrated in the example below.
 
-    The role of this `class` is to transfer the :class:`PersiaBatch` to the
-    :class:`DataLoader`. This class cannot be used directly unless it implements
-    the ``__iter__`` and ``consume_dataset`` function to ensure the
-    :class:`DataLoader` works fine.
+    This class cannot be used directly unless it implements
+    the ``__iter__`` and ``consume_dataset`` functions to be compatible with the
+    :class:`DataLoader`. ``__iter__`` function
+    generates the :class:`.PersiaBatch`, and :meth:`.consume_dataset` sends
+    the :class:`.PersiaBatch` by :class:`PersiaBatchDataSender`.
 
-    Implements the ``__iter__`` function to generate the :class:`.PersiaBatch`. And
-    implements the :meth:`.consume_dataset` to send the :class:`.PersiaBatch` by
-    :class:`PersiaBatchDataSender`.
-
-    Here is an example that implements the synchronously :class:`IterableDatasetBase`.
+    Here is an example that implements a synchronous :class:`IterableDatasetBase`.
 
     .. code-block:: python
 
@@ -68,8 +69,9 @@ class IterableDatasetBase(ABC, Iterable[PersiaBatch]):
                     yield preprocess_idx
 
     .. note::
-        The above example can not meet the performance requirement if you face a large dataset
-        due to it processing the :class:`PersiaBatch` synchronously. If you want to improve
+        `MyPersiaIterableDataset` implemented in the above example will be slow
+        if you are dealing with a large dataset,
+        since it processes the :class:`PersiaBatch` synchronously. If you want to improve
         the performance of data processing, try to use the :class:`IterableDataset` or
         :class:`StreamingDataset` instead.
 
@@ -96,8 +98,8 @@ class StreamingDataset(IterableDatasetBase):
     flow that sent by :class:`DataCtx`.
 
     In the implemented :meth:`.StreamingDataset.consume_dataset`, the
-    :class:`PersiaBatchDataSender` instance is bind into the RPC service that receive the
-    data automatically. So it is not necessary to implements the
+    :class:`PersiaBatchDataSender` instance is bind into the RPC service that
+    receives the data automatically. So it is not necessary to implements the
 
     .. warning::
         :class:`StreamingDataset` will make the :class:`DataLoader` raise the
@@ -136,11 +138,11 @@ class StreamingDataset(IterableDatasetBase):
 
 
 class IterableDataset(IterableDatasetBase):
-    r"""The :class:`IterableDataset` can iterate the dataset multiple times compare to
-    :class:`StreamingDataset`. so you can implement the TestDataset based on
-    :class:`IterableDataset`.
+    r"""The :class:`IterableDataset` can iterate through the dataset multiple times,
+    whereas in :class:`StreamingDataset` the dataset is only iterated once.
+    It is advised that you implement the TestDataset using :class:`IterableDataset`.
 
-    Implements the ``__iter__`` function to define the :class:`PersiaBatch` generation phase.
+    Implement the ``__iter__`` function to define the :class:`PersiaBatch` generation phase.
 
     .. code-block:: python
 
@@ -148,7 +150,7 @@ class IterableDataset(IterableDatasetBase):
         from persia.data import IterableDataset, DataLoader
         from persia.embedding.data import PersiaBatch, IDTypeFeature
 
-        class TestDataset(IterableDataset):
+        class MyTestDataset(IterableDataset):
             def __init__(self):
                 super(MyTestDataset, self).__init__()
                 self.data = data
