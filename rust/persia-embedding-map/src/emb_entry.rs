@@ -41,7 +41,7 @@ pub struct PersiaEmbeddingEntryMut<'a> {
 }
 
 impl<'a> PersiaEmbeddingEntryMut<'a> {
-    pub fn emb(&'a mut self) -> &'a mut[f32] {
+    pub fn emb(&'a mut self) -> &'a mut [f32] {
         &mut self.inner[..self.embedding_dim]
     }
 

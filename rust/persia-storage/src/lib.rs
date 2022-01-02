@@ -1,10 +1,10 @@
-use enum_dispatch::enum_dispatch;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use persia_libs::anyhow::{anyhow, Result};
+use persia_libs::enum_dispatch::enum_dispatch;
 use persia_speedy::{LittleEndian, Readable, Writable};
 
 const INIT_BUFFER_SIZE: usize = 1000;

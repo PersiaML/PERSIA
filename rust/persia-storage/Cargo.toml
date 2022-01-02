@@ -9,4 +9,3 @@ version = "0.1.0"
 [dependencies]
 persia-libs = {path = "../persia-libs"}
 persia-speedy = { path = "../persia-speedy" }
-enum_dispatch = "0.3.7"

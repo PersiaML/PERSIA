@@ -1,12 +1,33 @@
 use crate::emb_entry::{
-    DynamicEmbeddingEntry, PersiaEmbeddingEntry, PersiaEmbeddingEntryMut, PersiaEmbeddingEntryRef,
+    ArrayEmbeddingEntry, DynamicEmbeddingEntry, PersiaEmbeddingEntry, PersiaEmbeddingEntryMut,
+    PersiaEmbeddingEntryRef,
 };
 use persia_embedding_config::InitializationMethod;
+use persia_libs::enum_dispatch::enum_dispatch;
 use persia_libs::serde::{self, Deserialize, Serialize};
 use persia_speedy::{Context, Readable, Writable};
 use std::{hint, mem};
 
-pub trait PersiaArrayLinkedList {
+#[enum_dispatch]
+#[derive(Clone, Debug, Readable, Writable)]
+pub enum PersiaArrayLinkedList {
+    Array1(ArrayLinkedList<ArrayEmbeddingEntry<f32, 1>>),
+    Array2(ArrayLinkedList<ArrayEmbeddingEntry<f32, 2>>),
+    Array4(ArrayLinkedList<ArrayEmbeddingEntry<f32, 4>>),
+    Array8(ArrayLinkedList<ArrayEmbeddingEntry<f32, 8>>),
+    Array12(ArrayLinkedList<ArrayEmbeddingEntry<f32, 12>>),
+    Array16(ArrayLinkedList<ArrayEmbeddingEntry<f32, 16>>),
+    Array24(ArrayLinkedList<ArrayEmbeddingEntry<f32, 24>>),
+    Array32(ArrayLinkedList<ArrayEmbeddingEntry<f32, 32>>),
+    Array48(ArrayLinkedList<ArrayEmbeddingEntry<f32, 48>>),
+    Array64(ArrayLinkedList<ArrayEmbeddingEntry<f32, 64>>),
+    Array96(ArrayLinkedList<ArrayEmbeddingEntry<f32, 96>>),
+    Array128(ArrayLinkedList<ArrayEmbeddingEntry<f32, 128>>),
+    ArrayDyn(ArrayLinkedList<ArrayEmbeddingEntry<f32, 0>>),
+}
+
+#[enum_dispatch(PersiaArrayLinkedList)]
+pub trait PersiaArrayLinkedListImpl {
     fn get(&self, key: u32) -> Option<PersiaEmbeddingEntryRef>;
 
     fn get_mut(&mut self, key: u32) -> Option<PersiaEmbeddingEntryMut>;
@@ -302,7 +323,7 @@ impl<T> ArrayLinkedList<T> {
     }
 }
 
-impl<T: PersiaEmbeddingEntry> PersiaArrayLinkedList for ArrayLinkedList<T> {
+impl<T: PersiaEmbeddingEntry> PersiaArrayLinkedListImpl for ArrayLinkedList<T> {
     fn get(&self, key: u32) -> Option<PersiaEmbeddingEntryRef> {
         match &self.elements[key as usize].data {
             Some(entry) => Some(PersiaEmbeddingEntryRef {

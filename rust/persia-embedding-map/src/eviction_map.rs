@@ -1,4 +1,4 @@
-use crate::array_linked_list::{ArrayLinkedList, PersiaArrayLinkedList};
+use crate::array_linked_list::{ArrayLinkedList, PersiaArrayLinkedList, PersiaArrayLinkedListImpl};
 use crate::emb_entry::{
     ArrayEmbeddingEntry, DynamicEmbeddingEntry, PersiaEmbeddingEntry, PersiaEmbeddingEntryMut,
     PersiaEmbeddingEntryRef,
@@ -9,17 +9,20 @@ use persia_embedding_config::{
     PersiaEmbeddingModelHyperparameters, PersiaReplicaInfo,
 };
 use persia_libs::hashbrown::HashMap;
+use persia_speedy::{Context, Readable, Writable};
 use std::convert::TryFrom;
 use std::hash::Hash;
 
+#[derive(Clone, Readable, Writable, Debug)]
 pub struct NodeIndex {
     pub linkedlist_index: u32,
     pub array_index: u32,
 }
 
+#[derive(Readable, Writable)]
 pub struct EvictionMap {
     pub hashmap: HashMap<u64, NodeIndex>,
-    pub linkedlists: Vec<Box<dyn PersiaArrayLinkedList + Send>>,
+    pub linkedlists: Vec<PersiaArrayLinkedList>,
     pub embedding_config: EmbeddingConfig,
     pub hyperparameters: PersiaEmbeddingModelHyperparameters,
 }
@@ -40,48 +43,72 @@ impl EvictionMap {
             .iter()
             .map(|(_, slot_config)| {
                 let capacity = slot_config.capacity / bucket_size / replica_size;
-                let linkedlist: Box<dyn PersiaArrayLinkedList + Send> = match slot_config.dim
-                    + optimizer_space
-                {
-                    1 => Box::new(
-                        ArrayLinkedList::<ArrayEmbeddingEntry<f32, 1>>::with_capacity(capacity),
-                    ),
-                    2 => Box::new(
-                        ArrayLinkedList::<ArrayEmbeddingEntry<f32, 2>>::with_capacity(capacity),
-                    ),
-                    4 => Box::new(
-                        ArrayLinkedList::<ArrayEmbeddingEntry<f32, 4>>::with_capacity(capacity),
-                    ),
-                    8 => Box::new(
-                        ArrayLinkedList::<ArrayEmbeddingEntry<f32, 8>>::with_capacity(capacity),
-                    ),
-                    12 => Box::new(
-                        ArrayLinkedList::<ArrayEmbeddingEntry<f32, 12>>::with_capacity(capacity),
-                    ),
-                    16 => Box::new(
-                        ArrayLinkedList::<ArrayEmbeddingEntry<f32, 16>>::with_capacity(capacity),
-                    ),
-                    24 => Box::new(
-                        ArrayLinkedList::<ArrayEmbeddingEntry<f32, 24>>::with_capacity(capacity),
-                    ),
-                    32 => Box::new(
-                        ArrayLinkedList::<ArrayEmbeddingEntry<f32, 32>>::with_capacity(capacity),
-                    ),
-                    48 => Box::new(
-                        ArrayLinkedList::<ArrayEmbeddingEntry<f32, 48>>::with_capacity(capacity),
-                    ),
-                    64 => Box::new(
-                        ArrayLinkedList::<ArrayEmbeddingEntry<f32, 64>>::with_capacity(capacity),
-                    ),
-                    96 => Box::new(
-                        ArrayLinkedList::<ArrayEmbeddingEntry<f32, 96>>::with_capacity(capacity),
-                    ),
-                    128 => Box::new(
-                        ArrayLinkedList::<ArrayEmbeddingEntry<f32, 128>>::with_capacity(capacity),
-                    ),
-                    _ => Box::new(
-                        ArrayLinkedList::<ArrayEmbeddingEntry<f32, 0>>::with_capacity(capacity),
-                    ),
+                let linkedlist: PersiaArrayLinkedList = match slot_config.dim + optimizer_space {
+                    1 => {
+                        PersiaArrayLinkedList::Array1(
+                            ArrayLinkedList::<ArrayEmbeddingEntry<f32, 1>>::with_capacity(capacity),
+                        )
+                    }
+                    2 => {
+                        PersiaArrayLinkedList::Array2(
+                            ArrayLinkedList::<ArrayEmbeddingEntry<f32, 2>>::with_capacity(capacity),
+                        )
+                    }
+                    4 => {
+                        PersiaArrayLinkedList::Array4(
+                            ArrayLinkedList::<ArrayEmbeddingEntry<f32, 4>>::with_capacity(capacity),
+                        )
+                    }
+                    8 => {
+                        PersiaArrayLinkedList::Array8(
+                            ArrayLinkedList::<ArrayEmbeddingEntry<f32, 8>>::with_capacity(capacity),
+                        )
+                    }
+                    12 => PersiaArrayLinkedList::Array12(ArrayLinkedList::<
+                        ArrayEmbeddingEntry<f32, 12>,
+                    >::with_capacity(
+                        capacity
+                    )),
+                    16 => PersiaArrayLinkedList::Array16(ArrayLinkedList::<
+                        ArrayEmbeddingEntry<f32, 16>,
+                    >::with_capacity(
+                        capacity
+                    )),
+                    24 => PersiaArrayLinkedList::Array24(ArrayLinkedList::<
+                        ArrayEmbeddingEntry<f32, 24>,
+                    >::with_capacity(
+                        capacity
+                    )),
+                    32 => PersiaArrayLinkedList::Array32(ArrayLinkedList::<
+                        ArrayEmbeddingEntry<f32, 32>,
+                    >::with_capacity(
+                        capacity
+                    )),
+                    48 => PersiaArrayLinkedList::Array48(ArrayLinkedList::<
+                        ArrayEmbeddingEntry<f32, 48>,
+                    >::with_capacity(
+                        capacity
+                    )),
+                    64 => PersiaArrayLinkedList::Array64(ArrayLinkedList::<
+                        ArrayEmbeddingEntry<f32, 64>,
+                    >::with_capacity(
+                        capacity
+                    )),
+                    96 => PersiaArrayLinkedList::Array96(ArrayLinkedList::<
+                        ArrayEmbeddingEntry<f32, 96>,
+                    >::with_capacity(
+                        capacity
+                    )),
+                    128 => PersiaArrayLinkedList::Array128(ArrayLinkedList::<
+                        ArrayEmbeddingEntry<f32, 128>,
+                    >::with_capacity(
+                        capacity
+                    )),
+                    _ => PersiaArrayLinkedList::ArrayDyn(ArrayLinkedList::<
+                        ArrayEmbeddingEntry<f32, 0>,
+                    >::with_capacity(
+                        capacity
+                    )),
                 };
                 linkedlist
             })
@@ -105,7 +132,9 @@ impl EvictionMap {
     pub fn get_dyn(&self, key: &u64) -> Option<DynamicEmbeddingEntry> {
         match self.hashmap.get(key) {
             Some(idx) => {
-                let entry_ref = self.linkedlists[idx.linkedlist_index as usize].get(idx.array_index).unwrap();
+                let entry_ref = self.linkedlists[idx.linkedlist_index as usize]
+                    .get(idx.array_index)
+                    .unwrap();
                 let entry_dyn = DynamicEmbeddingEntry {
                     inner: entry_ref.inner.to_vec(),
                     embedding_dim: entry_ref.embedding_dim,
@@ -113,7 +142,7 @@ impl EvictionMap {
                     slot_index: idx.linkedlist_index as usize,
                 };
                 Some(entry_dyn)
-            },
+            }
             None => None,
         }
     }
@@ -185,8 +214,7 @@ impl EvictionMap {
             self.linkedlists[linkedlist_index]
                 .get_mut(array_index)
                 .unwrap()
-        }
-        else {
+        } else {
             self.get_mut(&key).unwrap()
         }
     }
@@ -266,7 +294,7 @@ mod eviction_map_tests {
                 inner: vec![0.0_f32; 16],
                 embedding_dim: 16,
                 sign: i,
-                slot_index: 1
+                slot_index: 1,
             };
             map.insert_dyn(&i, entry);
         }

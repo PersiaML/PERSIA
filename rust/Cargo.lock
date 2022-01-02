@@ -1926,6 +1926,7 @@ dependencies = [
  "bytes",
  "chrono",
  "color-eyre",
+ "enum_dispatch",
  "flume",
  "futures",
  "half",
@@ -2044,7 +2045,6 @@ dependencies = [
 name = "persia-storage"
 version = "0.1.0"
 dependencies = [
- "enum_dispatch",
  "persia-libs",
  "persia-speedy",
 ]

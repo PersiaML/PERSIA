@@ -4,6 +4,7 @@ pub use backoff;
 pub use bytes;
 pub use chrono;
 pub use color_eyre;
+pub use enum_dispatch;
 pub use flume;
 pub use futures;
 pub use half;
