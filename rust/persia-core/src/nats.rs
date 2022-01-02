@@ -14,7 +14,7 @@ use pyo3::wrap_pyfunction;
 use persia_common::IDTypeFeatureRemoteRef;
 use persia_embedding_config::PersiaReplicaInfo;
 use persia_embedding_config::{
-    BoundedUniformInitialization, InitializationMethod, PersiaEmbeddingModelHyperparameters,
+    BoundedUniformInitialization, EmbeddinHyperparameters, InitializationMethod,
 };
 use persia_embedding_server::embedding_worker_service::EmbeddingWorkerNatsServicePublisher;
 use persia_nats_client::NatsError;
@@ -364,7 +364,7 @@ impl PersiaDataFlowComponent {
             (0. <= admit_probability) && (admit_probability <= 1.),
             "admit probability should be within 0 ~ 1"
         );
-        let config = PersiaEmbeddingModelHyperparameters {
+        let config = EmbeddinHyperparameters {
             initialization_method: InitializationMethod::BoundedUniform(
                 BoundedUniformInitialization {
                     lower: initialize_lower,

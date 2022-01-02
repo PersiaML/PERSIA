@@ -31,8 +31,8 @@ use persia_common::{
     IDTypeFeatureBatch, IDTypeFeatureRemoteRef, SingleSignInFeatureBatch,
 };
 use persia_embedding_config::{
-    EmbeddingConfig, EmbeddingWorkerConfig, InstanceInfo, PersiaCommonConfig,
-    PersiaEmbeddingModelHyperparameters, PersiaGlobalConfigError, PersiaReplicaInfo, SlotConfig,
+    EmbeddinHyperparameters, EmbeddingConfig, EmbeddingWorkerConfig, InstanceInfo,
+    PersiaCommonConfig, PersiaGlobalConfigError, PersiaReplicaInfo, SlotConfig,
 };
 
 use persia_embedding_map::emb_entry::DynamicEmbeddingEntry;
@@ -1231,7 +1231,7 @@ impl EmbeddingWorkerInner {
 
     pub async fn configure_embedding_parameter_servers(
         &self,
-        req: PersiaEmbeddingModelHyperparameters,
+        req: EmbeddinHyperparameters,
     ) -> Result<(), EmbeddingWorkerError> {
         let inner = self.clone();
         let req = req;
@@ -1448,7 +1448,7 @@ impl EmbeddingWorker {
 
     pub async fn configure_embedding_parameter_servers(
         &self,
-        req: PersiaEmbeddingModelHyperparameters,
+        req: EmbeddinHyperparameters,
     ) -> Result<(), EmbeddingWorkerError> {
         self.inner.configure_embedding_parameter_servers(req).await
     }
@@ -1510,7 +1510,7 @@ impl EmbeddingWorkerNatsService {
 
     pub async fn configure_embedding_parameter_servers(
         &self,
-        req: PersiaEmbeddingModelHyperparameters,
+        req: EmbeddinHyperparameters,
     ) -> Result<(), EmbeddingWorkerError> {
         self.inner.configure_embedding_parameter_servers(req).await
     }

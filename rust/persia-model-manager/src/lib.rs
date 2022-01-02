@@ -16,9 +16,8 @@ use persia_libs::{
 };
 
 use persia_embedding_config::{PersiaCommonConfig, PersiaGlobalConfigError, PersiaReplicaInfo};
-use persia_embedding_holder::{
-    array_linked_list::ArrayLinkedList, emb_entry::HashMapEmbeddingEntry, PersiaEmbeddingHolder,
-    PersiaEmbeddingHolderError,
+use persia_embedding_map::{
+    eviction_map::EvictionMap, EmbeddingShardedMap, EmbeddingShardedMapError,
 };
 use persia_speedy::{Readable, Writable};
 use persia_storage::{PersiaPath, PersiaPathImpl};
@@ -27,8 +26,8 @@ use persia_storage::{PersiaPath, PersiaPathImpl};
 pub enum EmbeddingModelManagerError {
     #[error("storage error {0}")]
     StorageError(String),
-    #[error("embedding holder error: {0}")]
-    PersiaEmbeddingHolderError(#[from] PersiaEmbeddingHolderError),
+    #[error("embedding map error: {0}")]
+    EmbeddingShardedMapError(#[from] EmbeddingShardedMapError),
     #[error("global config error: {0}")]
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
     #[error("wait for other server time out when dump embedding")]
@@ -243,16 +242,14 @@ impl EmbeddingModelManager {
         &self,
         internal_shard_idx: usize,
         dst_dir: PathBuf,
-        embedding_holder: PersiaEmbeddingHolder,
+        embedding_map: EmbeddingShardedMap,
     ) -> Result<(), EmbeddingModelManagerError> {
-        let shard = embedding_holder
-            .get_shard_by_index(internal_shard_idx)
-            .read();
+        let shard = embedding_map.get_shard_by_index(internal_shard_idx).read();
 
         let file_name = self.get_internam_shard_filename(internal_shard_idx);
         let emb_path = PersiaPath::from_vec(vec![&dst_dir, &file_name]);
 
-        emb_path.write_all_speedy(&shard.linkedlist)?;
+        emb_path.write_all_speedy(&shard)?;
 
         Ok(())
     }
@@ -260,39 +257,37 @@ impl EmbeddingModelManager {
     pub fn load_internal_shard_embeddings(
         &self,
         file_path: PathBuf,
-        embedding_holder: PersiaEmbeddingHolder,
+        embedding_map: EmbeddingShardedMap,
     ) -> Result<(), EmbeddingModelManagerError> {
-        let decoded = self.load_array_linked_list(file_path)?;
+        let decoded = self.load_eviction_map(file_path)?;
+        let shard_idx = decoded.shard_idx;
 
-        decoded.into_iter().for_each(|entry| {
-            let sign = entry.sign();
-            let mut shard = embedding_holder.shard(&sign).write();
-            shard.insert(sign, entry);
-        });
+        let mut shard = embedding_map.get_shard_by_index(shard_idx).write();
+        *shard = decoded;
 
         Ok(())
     }
 
-    pub fn load_array_linked_list(
+    pub fn load_eviction_map(
         &self,
         file_path: PathBuf,
-    ) -> Result<ArrayLinkedList<HashMapEmbeddingEntry>, EmbeddingModelManagerError> {
+    ) -> Result<EvictionMap, EmbeddingModelManagerError> {
         tracing::debug!("loading embedding linked list from {:?}", file_path);
         let emb_path = PersiaPath::from_pathbuf(file_path);
-        let decoded: ArrayLinkedList<HashMapEmbeddingEntry> = emb_path.read_to_end_speedy()?;
+        let decoded: EvictionMap = emb_path.read_to_end_speedy()?;
         Ok(decoded)
     }
 
     pub fn dump_embedding(
         &self,
         dst_dir: PathBuf,
-        embedding_holder: PersiaEmbeddingHolder,
+        embedding_map: EmbeddingShardedMap,
     ) -> Result<(), EmbeddingModelManagerError> {
         *self.status.write() = EmbeddingModelManagerStatus::Dumping(0.0);
         tracing::info!("start to dump embedding to {:?}", dst_dir);
 
         let shard_dir = self.get_shard_dir(&dst_dir);
-        let num_internal_shards = embedding_holder.num_internal_shards();
+        let num_internal_shards = embedding_map.num_internal_shards();
         let num_dumped_shards = Arc::new(AtomicUsize::new(0));
         let manager = Self::get()?;
 
@@ -300,14 +295,14 @@ impl EmbeddingModelManager {
             let dst_dir = shard_dir.clone();
             let num_dumped_shards = num_dumped_shards.clone();
             let manager = manager.clone();
-            let embedding_holder = embedding_holder.clone();
+            let embedding_map = embedding_map.clone();
 
             self.thread_pool.spawn(move || {
                 let closure = || -> Result<(), EmbeddingModelManagerError> {
                     manager.dump_internal_shard_embeddings(
                         internal_shard_idx,
                         dst_dir.clone(),
-                        embedding_holder,
+                        embedding_map,
                     )?;
 
                     let dumped = num_dumped_shards.fetch_add(1, Ordering::AcqRel) + 1;
@@ -375,7 +370,7 @@ impl EmbeddingModelManager {
     pub fn load_embedding_from_dir(
         &self,
         dir: PathBuf,
-        embedding_holder: PersiaEmbeddingHolder,
+        embedding_map: EmbeddingShardedMap,
     ) -> Result<(), EmbeddingModelManagerError> {
         tracing::info!("start to load embedding from dir {:?}", dir);
 
@@ -391,12 +386,11 @@ impl EmbeddingModelManager {
             self.thread_pool.spawn({
                 let manager = manager.clone();
                 let num_loaded_files = num_loaded_files.clone();
-                let embedding_holder = embedding_holder.clone();
+                let embedding_map = embedding_map.clone();
                 move || {
                     let closure = || -> Result<(), EmbeddingModelManagerError> {
                         tracing::debug!("start to execute load embedding from {:?}", file_path);
-                        manager
-                            .load_internal_shard_embeddings(file_path.clone(), embedding_holder)?;
+                        manager.load_internal_shard_embeddings(file_path.clone(), embedding_map)?;
 
                         let loaded = num_loaded_files.fetch_add(1, Ordering::AcqRel) + 1;
                         let loading_progress = (loaded as f32) / (num_total_files as f32);

@@ -3,15 +3,16 @@ use crate::emb_entry::{
     ArrayEmbeddingEntry, DynamicEmbeddingEntry, PersiaEmbeddingEntry, PersiaEmbeddingEntryMut,
     PersiaEmbeddingEntryRef,
 };
-use persia_common::optim::Optimizer;
+use persia_common::optim::{Optimizable, Optimizer};
 use persia_embedding_config::{
-    EmbeddingConfig, EmbeddingParameterServerConfig, InitializationMethod,
-    PersiaEmbeddingModelHyperparameters, PersiaReplicaInfo,
+    EmbeddinHyperparameters, EmbeddingConfig, EmbeddingParameterServerConfig, InitializationMethod,
+    PersiaReplicaInfo,
 };
 use persia_libs::hashbrown::HashMap;
 use persia_speedy::{Context, Readable, Writable};
 use std::convert::TryFrom;
 use std::hash::Hash;
+use std::sync::Arc;
 
 #[derive(Clone, Readable, Writable, Debug)]
 pub struct NodeIndex {
@@ -24,7 +25,8 @@ pub struct EvictionMap {
     pub hashmap: HashMap<u64, NodeIndex>,
     pub linkedlists: Vec<PersiaArrayLinkedList>,
     pub embedding_config: EmbeddingConfig,
-    pub hyperparameters: PersiaEmbeddingModelHyperparameters,
+    pub hyperparameters: EmbeddinHyperparameters,
+    pub shard_idx: usize,
 }
 
 impl EvictionMap {
@@ -32,8 +34,9 @@ impl EvictionMap {
         embedding_config: &EmbeddingConfig,
         embedding_parameter_server_config: &EmbeddingParameterServerConfig,
         replica_info: &PersiaReplicaInfo,
-        optimizer_space: usize,
-        hyperparameters: PersiaEmbeddingModelHyperparameters,
+        optimizer: Arc<Box<dyn Optimizable + Send + Sync>>,
+        hyperparameters: EmbeddinHyperparameters,
+        shard_idx: usize,
     ) -> Self {
         let bucket_size = embedding_parameter_server_config.num_hashmap_internal_shards;
         let replica_size = replica_info.replica_size;
@@ -43,6 +46,7 @@ impl EvictionMap {
             .iter()
             .map(|(_, slot_config)| {
                 let capacity = slot_config.capacity / bucket_size / replica_size;
+                let optimizer_space = optimizer.require_space(slot_config.dim);
                 let linkedlist: PersiaArrayLinkedList = match slot_config.dim + optimizer_space {
                     1 => {
                         PersiaArrayLinkedList::Array1(
@@ -119,6 +123,7 @@ impl EvictionMap {
             linkedlists,
             embedding_config: embedding_config.clone(),
             hyperparameters: hyperparameters.clone(),
+            shard_idx,
         }
     }
 

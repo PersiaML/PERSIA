@@ -2,15 +2,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use persia_libs::{
-    bytes, bytes::Bytes, hyper, lz4, once_cell, rand, rand::Rng, thiserror, tokio, tracing,
+    async_lock, bytes, bytes::Bytes, hyper, lz4, once_cell, rand, rand::Rng, thiserror, tokio,
+    tracing,
 };
 use snafu::ResultExt;
 
 use persia_common::optim::{Optimizable, Optimizer, OptimizerConfig};
 use persia_embedding_config::{
-    EmbeddingConfig, EmbeddingParameterServerConfig, InstanceInfo, PerisaJobType,
-    PersiaCommonConfig, PersiaEmbeddingModelHyperparameters, PersiaGlobalConfigError,
-    PersiaReplicaInfo,
+    EmbeddinHyperparameters, EmbeddingConfig, EmbeddingParameterServerConfig, InstanceInfo,
+    PerisaJobType, PersiaCommonConfig, PersiaGlobalConfigError, PersiaReplicaInfo,
 };
 use persia_embedding_map::{emb_entry::DynamicEmbeddingEntry, EmbeddingShardedMap};
 use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
@@ -96,11 +96,9 @@ pub enum EmbeddingParameterServerError {
 }
 
 pub struct EmbeddingParameterServiceInner {
-    pub embedding: EmbeddingShardedMap,
-    pub optimizer: persia_libs::async_lock::RwLock<Option<Arc<Box<dyn Optimizable + Send + Sync>>>>,
-    pub hyperparameter_config:
-        persia_libs::async_lock::RwLock<Option<Arc<PersiaEmbeddingModelHyperparameters>>>,
-    pub hyperparameter_configured: persia_libs::async_lock::Mutex<bool>,
+    pub optimizer: async_lock::RwLock<Option<Arc<Box<dyn Optimizable + Send + Sync>>>>,
+    pub hyperparameter_config: async_lock::RwLock<Option<Arc<EmbeddinHyperparameters>>>,
+    pub hyperparameter_configured: async_lock::Mutex<bool>,
     pub server_config: Arc<EmbeddingParameterServerConfig>,
     pub common_config: Arc<PersiaCommonConfig>,
     pub embedding_config: Arc<EmbeddingConfig>,
@@ -111,7 +109,6 @@ pub struct EmbeddingParameterServiceInner {
 
 impl EmbeddingParameterServiceInner {
     pub fn new(
-        embedding: EmbeddingShardedMap,
         server_config: Arc<EmbeddingParameterServerConfig>,
         common_config: Arc<PersiaCommonConfig>,
         embedding_config: Arc<EmbeddingConfig>,
@@ -120,10 +117,9 @@ impl EmbeddingParameterServiceInner {
         replica_index: usize,
     ) -> Self {
         Self {
-            embedding,
-            optimizer: persia_libs::async_lock::RwLock::new(None),
-            hyperparameter_config: persia_libs::async_lock::RwLock::new(None),
-            hyperparameter_configured: persia_libs::async_lock::Mutex::new(false),
+            optimizer: async_lock::RwLock::new(None),
+            hyperparameter_config: async_lock::RwLock::new(None),
+            hyperparameter_configured: async_lock::Mutex::new(false),
             server_config,
             common_config,
             embedding_config,
@@ -144,7 +140,7 @@ impl EmbeddingParameterServiceInner {
 
     pub async fn get_configuration(
         &self,
-    ) -> Result<Arc<PersiaEmbeddingModelHyperparameters>, EmbeddingParameterServerError> {
+    ) -> Result<Arc<EmbeddinHyperparameters>, EmbeddingParameterServerError> {
         let conf = self.hyperparameter_config.read().await;
         let conf = conf.as_ref();
         if let Some(conf) = conf {
@@ -170,6 +166,7 @@ impl EmbeddingParameterServiceInner {
         };
 
         let optimizer = self.optimizer.read().await;
+        let embedding_map = EmbeddingShardedMap::get()?;
 
         tokio::task::block_in_place(|| match is_training {
             true => {
@@ -182,7 +179,7 @@ impl EmbeddingParameterServiceInner {
                     let conf = conf.as_ref().unwrap();
                     let slot_config = self.embedding_config.get_slot_by_index(*slot_index);
 
-                    let mut shard = self.embedding.shard(sign).write();
+                    let mut shard = embedding_map.shard(sign).write();
 
                     match shard.get_refresh(&sign) {
                         None => {
@@ -211,7 +208,7 @@ impl EmbeddingParameterServiceInner {
             }
             false => {
                 req.iter().for_each(|(sign, dim)| {
-                    let shard = self.embedding.shard(sign).read();
+                    let shard = embedding_map.shard(sign).read();
                     match shard.get(sign) {
                         Some(entry) => {
                             embeddings.extend_from_slice(entry.emb());
@@ -263,11 +260,12 @@ impl EmbeddingParameterServiceInner {
         embeddings: Vec<DynamicEmbeddingEntry>,
     ) -> Result<(), EmbeddingParameterServerError> {
         let start_time = std::time::Instant::now();
+        let embedding_map = EmbeddingShardedMap::get()?;
 
         tokio::task::block_in_place(|| {
             embeddings.into_iter().for_each(|entry| {
                 let sign = entry.sign;
-                let mut shard = self.embedding.shard(&sign).write();
+                let mut shard = embedding_map.shard(&sign).write();
                 shard.insert_dyn(sign, entry);
             });
         });
@@ -310,10 +308,11 @@ impl EmbeddingParameterServiceInner {
         }
 
         let optimizer = optimizer.as_ref().unwrap();
+        let embedding_map = EmbeddingShardedMap::get()?;
 
         tokio::task::block_in_place(|| {
             for sign in signs.iter() {
-                let mut shard = self.embedding.shard(sign).write();
+                let mut shard = embedding_map.shard(sign).write();
                 if let Some(entry) = shard.get_mut(sign) {
                     let entry_dim = entry.dim();
                     let (grad, r) = remaining_gradients.split_at(entry_dim);
@@ -365,34 +364,47 @@ impl EmbeddingParameterServiceInner {
             let mut optimizer_ = self.optimizer.write().await;
             *optimizer_ = Some(Arc::new(Optimizer::new(optimizer).to_optimizable()));
         }
+
+        let optimizer = self.optimizer.read().await.as_ref().unwrap().clone();
+
+        if let Some(config) = self.hyperparameter_config.read().await.as_ref() {
+            let _ = EmbeddingShardedMap::set(optimizer, *config.clone());
+        }
         Ok(())
     }
 
     pub async fn configure(
         &self,
-        config: PersiaEmbeddingModelHyperparameters,
+        config: EmbeddinHyperparameters,
     ) -> Result<(), EmbeddingParameterServerError> {
         {
             let mut conf_guard = self.hyperparameter_config.write().await;
-            *conf_guard = Some(Arc::new(config));
+            *conf_guard = Some(Arc::new(config.clone()));
         }
         *self.hyperparameter_configured.lock().await = true;
         tracing::info!("embedding server configured");
+
+        if let Some(optimizer) = self.optimizer.read().await.as_ref() {
+            let _ = EmbeddingShardedMap::set(optimizer.clone(), config);
+        }
+
         Ok(())
     }
 
     pub async fn dump(&self, dir: String) -> Result<(), EmbeddingParameterServerError> {
+        let embedding_map = EmbeddingShardedMap::get()?;
         let dst_dir = PathBuf::from(dir);
         self.embedding_model_manager
-            .dump_embedding(dst_dir, self.embedding.clone())?;
+            .dump_embedding(dst_dir, embedding_map)?;
         Ok(())
     }
 
     pub async fn load(&self, dir: String) -> Result<(), EmbeddingParameterServerError> {
+        let embedding_map = EmbeddingShardedMap::get()?;
         let dst_dir = PathBuf::from(dir);
         let shard_dir = self.embedding_model_manager.get_shard_dir(&dst_dir);
         self.embedding_model_manager
-            .load_embedding_from_dir(shard_dir, self.embedding.clone())?;
+            .load_embedding_from_dir(shard_dir, embedding_map)?;
         Ok(())
     }
 
@@ -411,19 +423,20 @@ impl EmbeddingParameterServiceInner {
     }
 
     pub async fn get_embedding_size(&self) -> Result<usize, EmbeddingParameterServerError> {
-        Ok(self.embedding.num_total_signs())
+        let embedding_map = EmbeddingShardedMap::get()?;
+        Ok(embedding_map.num_total_signs())
     }
 
     pub async fn clear_embeddings(&self) -> Result<(), EmbeddingParameterServerError> {
-        Ok(self.embedding.clear())
+        let embedding_map = EmbeddingShardedMap::get()?;
+        Ok(embedding_map.clear())
     }
 }
 
 #[derive(Clone)]
 pub struct EmbeddingParameterService {
     pub inner: Arc<EmbeddingParameterServiceInner>,
-    pub shutdown_channel:
-        Arc<persia_libs::async_lock::RwLock<Option<tokio::sync::oneshot::Sender<()>>>>,
+    pub shutdown_channel: Arc<async_lock::RwLock<Option<tokio::sync::oneshot::Sender<()>>>>,
 }
 
 #[persia_rpc_macro::service]
@@ -463,7 +476,7 @@ impl EmbeddingParameterService {
 
     pub async fn configure(
         &self,
-        config: PersiaEmbeddingModelHyperparameters,
+        config: EmbeddinHyperparameters,
     ) -> Result<(), EmbeddingParameterServerError> {
         self.inner.configure(config).await
     }
@@ -537,7 +550,7 @@ impl EmbeddingParameterNatsService {
 
     pub async fn configure(
         &self,
-        config: PersiaEmbeddingModelHyperparameters,
+        config: EmbeddinHyperparameters,
     ) -> Result<(), EmbeddingParameterServerError> {
         self.inner.configure(config).await
     }

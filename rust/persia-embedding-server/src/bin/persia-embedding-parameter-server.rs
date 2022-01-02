@@ -68,13 +68,11 @@ async fn main() -> Result<()> {
     let embedding_config = EmbeddingConfig::get()?;
     let common_config = PersiaCommonConfig::get()?;
     let server_config = EmbeddingParameterServerConfig::get()?;
-    let embedding_holder = PersiaEmbeddingHolder::get()?;
     let inc_update_manager = PerisaIncrementalUpdateManager::get()?;
     let embedding_model_manager = EmbeddingModelManager::get()?;
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
 
     let inner = Arc::new(EmbeddingParameterServiceInner::new(
-        embedding_holder,
         server_config,
         common_config,
         embedding_config,

@@ -3,28 +3,31 @@ pub mod emb_entry;
 pub mod eviction_map;
 pub mod sharded;
 
-use std::sync::Arc;
-
-use persia_libs::{once_cell, parking_lot::RwLock, thiserror};
-
 use eviction_map::EvictionMap;
+use persia_common::optim::Optimizable;
 use persia_embedding_config::{
-    EmbeddingConfig, EmbeddingParameterServerConfig, PersiaEmbeddingModelHyperparameters,
+    EmbeddinHyperparameters, EmbeddingConfig, EmbeddingParameterServerConfig,
     PersiaGlobalConfigError, PersiaReplicaInfo,
 };
+use persia_libs::{once_cell, parking_lot::RwLock, thiserror};
 use persia_speedy::{Readable, Writable};
 use sharded::Sharded;
+use std::sync::Arc;
 
 #[derive(Clone, Readable, Writable, thiserror::Error, Debug)]
 pub enum EmbeddingShardedMapError {
+    #[error("set embedding map mutiple times error")]
+    EmbeddingShardedMapMutiSetError,
+    #[error("embedding map not set error")]
+    NotSetError,
     #[error("global config error: {0}")]
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
     #[error("id not fonud")]
     IdNotFound,
 }
 
-// static EMBEDDING_SHARDED_MAP: once_cell::sync::OnceCell<<EmbeddingShardedMap>> =
-//     once_cell::sync::OnceCell::new();
+static EMBEDDING_SHARDED_MAP: once_cell::sync::OnceCell<EmbeddingShardedMap> =
+    once_cell::sync::OnceCell::new();
 
 #[derive(Clone)]
 pub struct EmbeddingShardedMap {
@@ -32,9 +35,25 @@ pub struct EmbeddingShardedMap {
 }
 
 impl EmbeddingShardedMap {
-    pub fn new(
-        optimizer_space: usize,
-        hyperparameters: PersiaEmbeddingModelHyperparameters,
+    pub fn set(
+        optimizer: Arc<Box<dyn Optimizable + Send + Sync>>,
+        hyperparameters: EmbeddinHyperparameters,
+    ) -> Result<(), EmbeddingShardedMapError> {
+        let map = EmbeddingShardedMap::new(optimizer, hyperparameters)?;
+        let _ = EMBEDDING_SHARDED_MAP.set(map);
+        Ok(())
+    }
+
+    pub fn get() -> Result<Self, EmbeddingShardedMapError> {
+        EMBEDDING_SHARDED_MAP
+            .get()
+            .cloned()
+            .ok_or(EmbeddingShardedMapError::NotSetError)
+    }
+
+    fn new(
+        optimizer: Arc<Box<dyn Optimizable + Send + Sync>>,
+        hyperparameters: EmbeddinHyperparameters,
     ) -> Result<Self, EmbeddingShardedMapError> {
         let embedding_parameter_server_config = EmbeddingParameterServerConfig::get()?;
         let embedding_config = EmbeddingConfig::get()?;
@@ -42,19 +61,22 @@ impl EmbeddingShardedMap {
 
         let bucket_size = embedding_parameter_server_config.num_hashmap_internal_shards;
         let handles: Vec<std::thread::JoinHandle<_>> = (0..bucket_size)
-            .map(|_| {
+            .map(|shard_idx| {
                 let embedding_config = embedding_config.clone();
                 let embedding_parameter_server_config = embedding_parameter_server_config.clone();
                 let hyperparameters = hyperparameters.clone();
                 let replica_info = replica_info.clone();
+                let shard_idx = shard_idx.clone();
+                let optimizer = optimizer.clone();
 
                 std::thread::spawn(move || {
                     EvictionMap::new(
                         embedding_config.as_ref(),
                         embedding_parameter_server_config.as_ref(),
                         replica_info.as_ref(),
-                        optimizer_space,
+                        optimizer,
                         hyperparameters,
+                        shard_idx,
                     )
                 })
             })
