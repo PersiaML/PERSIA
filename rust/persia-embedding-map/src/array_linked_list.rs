@@ -2,11 +2,13 @@ use crate::emb_entry::{
     ArrayEmbeddingEntry, DynamicEmbeddingEntry, PersiaEmbeddingEntry, PersiaEmbeddingEntryMut,
     PersiaEmbeddingEntryRef,
 };
+use persia_common::optim::Optimizable;
 use persia_embedding_config::InitializationMethod;
 use persia_libs::enum_dispatch::enum_dispatch;
 use persia_libs::serde::{self, Deserialize, Serialize};
 use persia_speedy::{Context, Readable, Writable};
 use std::{hint, mem};
+use std::sync::Arc;
 
 #[enum_dispatch]
 #[derive(Clone, Debug, Readable, Writable)]
@@ -50,7 +52,7 @@ pub trait PersiaArrayLinkedListImpl {
         &mut self,
         initialization_method: &InitializationMethod,
         embedding_space: usize,
-        optimizer_space: usize,
+        optimizer: Arc<Box<dyn Optimizable + Send + Sync>>,
         seed: u64,
         sign: u64,
     ) -> u32;
@@ -381,14 +383,14 @@ impl<T: PersiaEmbeddingEntry> PersiaArrayLinkedListImpl for ArrayLinkedList<T> {
         &mut self,
         initialization_method: &InitializationMethod,
         embedding_space: usize,
-        optimizer_space: usize,
+        optimizer: Arc<Box<dyn Optimizable + Send + Sync>>,
         seed: u64,
         sign: u64,
     ) -> u32 {
         let entry = T::new(
             initialization_method,
             embedding_space,
-            optimizer_space,
+            optimizer,
             seed,
             sign,
         );

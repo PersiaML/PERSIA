@@ -12,7 +12,9 @@ use persia_embedding_config::{
     EmbeddinHyperparameters, EmbeddingConfig, EmbeddingParameterServerConfig, InstanceInfo,
     PerisaJobType, PersiaCommonConfig, PersiaGlobalConfigError, PersiaReplicaInfo,
 };
-use persia_embedding_map::{emb_entry::DynamicEmbeddingEntry, EmbeddingShardedMap};
+use persia_embedding_map::{
+    emb_entry::DynamicEmbeddingEntry, EmbeddingShardedMap, EmbeddingShardedMapError,
+};
 use persia_incremental_update_manager::PerisaIncrementalUpdateManager;
 
 use persia_metrics::{Gauge, IntCounter, PersiaMetricsManager, PersiaMetricsManagerError};
@@ -93,6 +95,8 @@ pub enum EmbeddingParameterServerError {
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
     #[error("embedding dim not match")]
     EmbeddingDimNotMatch,
+    #[error("embedding map error: {0}")]
+    EmbeddingShardedMapError(#[from] EmbeddingShardedMapError),
 }
 
 pub struct EmbeddingParameterServiceInner {
@@ -184,14 +188,8 @@ impl EmbeddingParameterServiceInner {
                     match shard.get_refresh(&sign) {
                         None => {
                             if rand::thread_rng().gen_range(0f32..1f32) < conf.admit_probability {
-                                let emb_mut = shard.insert_init(
-                                    *sign,
-                                    optimizer.require_space(slot_config.dim),
-                                    slot_name,
-                                );
-
-                                optimizer.state_initialization(emb_mut.opt(), slot_config.dim);
-                                embeddings.extend_from_slice(emb_mut.emb());
+                                let emb = shard.insert_init(*sign, *slot_index, optimizer.clone());
+                                embeddings.extend_from_slice(emb.emb());
 
                                 index_miss_count += 1;
                             } else {
@@ -313,8 +311,8 @@ impl EmbeddingParameterServiceInner {
         tokio::task::block_in_place(|| {
             for sign in signs.iter() {
                 let mut shard = embedding_map.shard(sign).write();
-                if let Some(entry) = shard.get_mut(sign) {
-                    let entry_dim = entry.dim();
+                if let Some(mut entry) = shard.get_mut(sign) {
+                    let entry_dim = entry.embedding_dim;
                     let (grad, r) = remaining_gradients.split_at(entry_dim);
                     remaining_gradients = r;
 
@@ -368,7 +366,7 @@ impl EmbeddingParameterServiceInner {
         let optimizer = self.optimizer.read().await.as_ref().unwrap().clone();
 
         if let Some(config) = self.hyperparameter_config.read().await.as_ref() {
-            let _ = EmbeddingShardedMap::set(optimizer, *config.clone());
+            let _ = EmbeddingShardedMap::set(optimizer, config.as_ref().clone());
         }
         Ok(())
     }
@@ -451,7 +449,7 @@ impl EmbeddingParameterService {
 
     pub async fn set_embedding(
         &self,
-        req: Vec<HashMapEmbeddingEntry>,
+        req: Vec<DynamicEmbeddingEntry>,
     ) -> Result<(), EmbeddingParameterServerError> {
         self.inner.set_embedding(req).await
     }

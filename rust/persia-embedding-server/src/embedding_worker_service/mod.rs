@@ -406,6 +406,7 @@ pub struct SignWithConfig {
     sign_idx: usize,
     feature_idx: usize,
     slot_index: usize,
+    dim: usize,
 }
 
 impl SignWithConfig {
@@ -430,6 +431,7 @@ pub fn lookup_batched_all_slots_preprocess(
         let mut results = vec![Vec::new(); replica_size as usize];
         for (feature_idx, feature_batch) in indices.batches.iter().enumerate() {
             let slot_index = config.get_index_by_name(&feature_batch.feature_name);
+            let slot_config = config.get_slot_by_index(slot_index);
             for (sign_idx, single_sign) in feature_batch.index_batch.iter().enumerate() {
                 let replica_index = sign_to_shard_modulo(single_sign.sign, replica_size);
                 unsafe {
@@ -440,6 +442,7 @@ pub fn lookup_batched_all_slots_preprocess(
                             sign_idx,
                             feature_idx,
                             slot_index,
+                            dim: slot_config.dim,
                         });
                 }
             }
@@ -935,8 +938,8 @@ impl EmbeddingWorkerInner {
         let futs: Vec<_> = tokio::task::block_in_place(|| {
             let grouped_entries = req
                 .into_iter()
-                .sorted_by_key(|e| sign_to_shard_modulo(e.sign(), replica_size))
-                .group_by(|e| sign_to_shard_modulo(e.sign(), replica_size));
+                .sorted_by_key(|e| sign_to_shard_modulo(e.sign, replica_size))
+                .group_by(|e| sign_to_shard_modulo(e.sign, replica_size));
 
             grouped_entries
                 .into_iter()
@@ -1209,10 +1212,16 @@ impl EmbeddingWorkerInner {
                 let loaded = loaded.clone();
                 async move {
                     for file_path in file_list.into_iter() {
-                        let array_linked_list = tokio::task::block_in_place(|| {
-                            embedding_model_manager.load_array_linked_list(file_path)
+                        let eviction_map = tokio::task::block_in_place(|| {
+                            embedding_model_manager.load_eviction_map(file_path)
                         })?;
-                        let entries = Vec::from_iter(array_linked_list.into_iter());
+
+                        let entries = eviction_map
+                            .hashmap
+                            .iter()
+                            .map(|(sign, _)| eviction_map.get_dyn(&sign).unwrap())
+                            .collect();
+
                         embedding_worker_inner.set_embedding(entries).await?;
                         let cur_loaded = loaded.fetch_add(1, Ordering::AcqRel) + 1;
                         let progress = (cur_loaded as f32 / num_files as f32) * 100.0_f32;
@@ -1359,7 +1368,7 @@ impl EmbeddingWorker {
 
     pub async fn set_embedding(
         &self,
-        req: Vec<HashMapEmbeddingEntry>,
+        req: Vec<DynamicEmbeddingEntry>,
     ) -> Result<(), EmbeddingWorkerError> {
         self.inner.set_embedding(req).await
     }

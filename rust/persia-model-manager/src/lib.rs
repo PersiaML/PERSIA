@@ -244,12 +244,12 @@ impl EmbeddingModelManager {
         dst_dir: PathBuf,
         embedding_map: EmbeddingShardedMap,
     ) -> Result<(), EmbeddingModelManagerError> {
-        let shard = embedding_map.get_shard_by_index(internal_shard_idx).read();
+        let shard = &*embedding_map.get_shard_by_index(internal_shard_idx).read();
 
         let file_name = self.get_internam_shard_filename(internal_shard_idx);
         let emb_path = PersiaPath::from_vec(vec![&dst_dir, &file_name]);
 
-        emb_path.write_all_speedy(&shard)?;
+        emb_path.write_all_speedy(shard)?;
 
         Ok(())
     }

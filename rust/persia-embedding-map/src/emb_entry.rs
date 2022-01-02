@@ -1,3 +1,4 @@
+use persia_common::optim::Optimizable;
 use persia_libs::{
     ndarray::Array1,
     ndarray_rand::rand_distr::{Gamma, Normal, Poisson, Uniform},
@@ -6,11 +7,13 @@ use persia_libs::{
     rand::SeedableRng,
     serde::{self, Deserialize, Serialize},
 };
-
+use std::sync::Arc;
 use persia_embedding_config::InitializationMethod;
 use persia_speedy::{Context, Readable, Writable};
 use smallvec::SmallVec;
 
+#[derive(Serialize, Deserialize, Readable, Writable, Clone, Debug)]
+#[serde(crate = "self::serde")]
 pub struct DynamicEmbeddingEntry {
     pub inner: Vec<f32>,
     pub embedding_dim: usize,
@@ -56,7 +59,7 @@ pub trait PersiaEmbeddingEntry {
     fn new(
         initialization_method: &InitializationMethod,
         embedding_space: usize,
-        optimizer_space: usize,
+        optimizer: Arc<Box<dyn Optimizable + Send + Sync>>,
         seed: u64,
         sign: u64,
     ) -> Self;
@@ -92,7 +95,7 @@ impl<const L: usize> PersiaEmbeddingEntry for ArrayEmbeddingEntry<f32, L> {
     fn new(
         initialization_method: &InitializationMethod,
         embedding_space: usize,
-        optimizer_space: usize,
+        optimizer: Arc<Box<dyn Optimizable + Send + Sync>>,
         seed: u64,
         sign: u64,
     ) -> Self {
@@ -127,9 +130,13 @@ impl<const L: usize> PersiaEmbeddingEntry for ArrayEmbeddingEntry<f32, L> {
         };
 
         let mut inner = emb.into_raw_vec();
+        let optimizer_space = optimizer.require_space(embedding_space);
         if optimizer_space > 0 {
             inner.resize(embedding_space + optimizer_space, 0.0_f32);
         }
+
+        optimizer.state_initialization(inner.as_mut(), optimizer_space);
+
         Self {
             inner: SmallVec::<[f32; L]>::from_vec(inner),
             embedding_dim: embedding_space,

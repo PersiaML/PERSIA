@@ -20,7 +20,9 @@ use persia_embedding_config::{
     EmbeddingParameterServerConfig, PerisaJobType, PersiaCommonConfig, PersiaGlobalConfigError,
     PersiaReplicaInfo,
 };
-use persia_embedding_map::{emb_entry::DynamicEmbeddingEntry, EmbeddingShardedMapError};
+use persia_embedding_map::{
+    emb_entry::DynamicEmbeddingEntry, EmbeddingShardedMap, EmbeddingShardedMapError,
+};
 use persia_metrics::{Gauge, PersiaMetricsManager, PersiaMetricsManagerError};
 use persia_speedy::{Readable, Writable};
 use persia_storage::{PersiaPath, PersiaPathImpl};
@@ -75,7 +77,7 @@ static INCREMENTAL_UPDATE_MANAGER: OnceCell<Arc<PerisaIncrementalUpdateManager>>
 const INCREMENTAL_UPDATE_CHANNEL_CAPACITY: usize = 1000;
 
 pub struct PerisaIncrementalUpdateManager {
-    embedding_holder: PersiaEmbeddingHolder,
+    embedding_map: EmbeddingShardedMap,
     executors: Arc<ThreadPool>,
     replica_index: usize,
     incremental_buffer_size: usize,
@@ -89,11 +91,11 @@ impl PerisaIncrementalUpdateManager {
         let singleton = INCREMENTAL_UPDATE_MANAGER.get_or_try_init(|| {
             let server_config = EmbeddingParameterServerConfig::get()?;
             let common_config = PersiaCommonConfig::get()?;
-            let embedding_holder = PersiaEmbeddingHolder::get()?;
+            let embedding_map = EmbeddingShardedMap::get()?;
             let replica_info = PersiaReplicaInfo::get()?;
 
             let singleton = Self::new(
-                embedding_holder,
+                embedding_map,
                 common_config.job_type.clone(),
                 common_config.checkpointing_config.num_workers,
                 replica_info.replica_index,
@@ -110,7 +112,7 @@ impl PerisaIncrementalUpdateManager {
     }
 
     fn new(
-        embedding_holder: PersiaEmbeddingHolder,
+        embedding_map: EmbeddingShardedMap,
         cur_task: PerisaJobType,
         num_executors: usize,
         replica_index: usize,
@@ -134,7 +136,7 @@ impl PerisaIncrementalUpdateManager {
             .collect();
 
         let instance = Arc::new(Self {
-            embedding_holder,
+            embedding_map,
             executors,
             replica_index,
             incremental_buffer_size,
@@ -183,7 +185,7 @@ impl PerisaIncrementalUpdateManager {
     ) -> () {
         let mut entries = Vec::with_capacity(signs.len());
         signs.iter().for_each(|sign| {
-            let shard = self.embedding_holder.shard(sign).read();
+            let shard = self.embedding_map.shard(sign).read();
             if let Some(entry) = shard.get_dyn(sign) {
                 entries.push(entry);
             }
@@ -229,7 +231,7 @@ impl PerisaIncrementalUpdateManager {
         tracing::debug!("loading inc packet, delay is {}s", delay);
         packet.content.into_iter().for_each(|entry| {
             let sign = entry.sign;
-            let mut shard = self.embedding_holder.shard(&sign).write();
+            let mut shard = self.embedding_map.shard(&sign).write();
             shard.insert_dyn(sign, entry);
         });
     }

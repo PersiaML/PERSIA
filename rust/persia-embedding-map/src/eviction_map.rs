@@ -194,17 +194,16 @@ impl EvictionMap {
     pub fn insert_init(
         &mut self,
         key: u64,
-        optimizer_space: usize,
-        slot_name: &String,
-    ) -> PersiaEmbeddingEntryMut {
+        slot_index: usize,
+        optimizer: Arc<Box<dyn Optimizable + Send + Sync>>,
+    ) -> PersiaEmbeddingEntryRef {
+        let slot_config = self.embedding_config.get_slot_by_index(slot_index);
         if self.hashmap.get(&key).is_none() {
-            let linkedlist_index = self.embedding_config.get_index_by_name(slot_name);
-            let slot_config = self.embedding_config.get_slot_by_name(slot_name);
-
+            let linkedlist_index = slot_index;
             let array_index = self.linkedlists[linkedlist_index].push_back_init(
                 &self.hyperparameters.initialization_method,
                 slot_config.dim,
-                optimizer_space,
+                optimizer,
                 key,
                 key,
             );
@@ -217,10 +216,10 @@ impl EvictionMap {
             );
 
             self.linkedlists[linkedlist_index]
-                .get_mut(array_index)
+                .get(array_index)
                 .unwrap()
         } else {
-            self.get_mut(&key).unwrap()
+            self.get(&key).unwrap()
         }
     }
 

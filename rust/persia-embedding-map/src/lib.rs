@@ -116,4 +116,8 @@ impl EmbeddingShardedMap {
     pub fn get_shard_by_index(&self, index: usize) -> &RwLock<EvictionMap> {
         self.inner.get_shard_by_index(index)
     }
+
+    pub fn num_internal_shards(&self) -> usize {
+        self.inner.inner.len()
+    }
 }
