@@ -5,7 +5,8 @@ use crate::emb_entry::{
 };
 use persia_common::optim::Optimizer;
 use persia_embedding_config::{
-    EmbeddingConfig, EmbeddingParameterServerConfig, InitializationMethod, PersiaReplicaInfo,
+    EmbeddingConfig, EmbeddingParameterServerConfig, InitializationMethod,
+    PersiaEmbeddingModelHyperparameters, PersiaReplicaInfo,
 };
 use persia_libs::hashbrown::HashMap;
 use std::convert::TryFrom;
@@ -20,6 +21,7 @@ pub struct EvictionMap {
     pub hashmap: HashMap<u64, NodeIndex>,
     pub linkedlists: Vec<Box<dyn PersiaArrayLinkedList + Send>>,
     pub embedding_config: EmbeddingConfig,
+    pub hyperparameters: PersiaEmbeddingModelHyperparameters,
 }
 
 impl EvictionMap {
@@ -28,6 +30,7 @@ impl EvictionMap {
         embedding_parameter_server_config: &EmbeddingParameterServerConfig,
         replica_info: &PersiaReplicaInfo,
         optimizer_space: usize,
+        hyperparameters: PersiaEmbeddingModelHyperparameters,
     ) -> Self {
         let bucket_size = embedding_parameter_server_config.num_hashmap_internal_shards;
         let replica_size = replica_info.replica_size;
@@ -88,12 +91,29 @@ impl EvictionMap {
             hashmap: HashMap::new(),
             linkedlists,
             embedding_config: embedding_config.clone(),
+            hyperparameters: hyperparameters.clone(),
         }
     }
 
     pub fn get(&self, key: &u64) -> Option<PersiaEmbeddingEntryRef> {
         match self.hashmap.get(key) {
             Some(idx) => self.linkedlists[idx.linkedlist_index as usize].get(idx.array_index),
+            None => None,
+        }
+    }
+
+    pub fn get_dyn(&self, key: &u64) -> Option<DynamicEmbeddingEntry> {
+        match self.hashmap.get(key) {
+            Some(idx) => {
+                let entry_ref = self.linkedlists[idx.linkedlist_index as usize].get(idx.array_index).unwrap();
+                let entry_dyn = DynamicEmbeddingEntry {
+                    inner: entry_ref.inner.to_vec(),
+                    embedding_dim: entry_ref.embedding_dim,
+                    sign: entry_ref.sign,
+                    slot_index: idx.linkedlist_index as usize,
+                };
+                Some(entry_dyn)
+            },
             None => None,
         }
     }
@@ -117,17 +137,13 @@ impl EvictionMap {
         }
     }
 
-    pub fn insert(&mut self, key: u64, value: DynamicEmbeddingEntry, slot_name: &String) {
+    pub fn insert_dyn(&mut self, key: u64, value: DynamicEmbeddingEntry) {
         if let Some(idx) = self.hashmap.get_mut(&key) {
             self.linkedlists[idx.linkedlist_index as usize].remove(idx.array_index);
             let new_idx = self.linkedlists[idx.linkedlist_index as usize].push_back(value);
             idx.array_index = new_idx;
         } else {
-            let linkedlist_index = self
-                .embedding_config
-                .slots_config
-                .get_index_of(slot_name)
-                .unwrap();
+            let linkedlist_index = value.slot_index;
             let array_index = self.linkedlists[linkedlist_index].push_back(value);
             self.hashmap.insert(
                 key.clone(),
@@ -144,20 +160,16 @@ impl EvictionMap {
     pub fn insert_init(
         &mut self,
         key: u64,
-        initialization_method: &InitializationMethod,
-        embedding_space: usize,
         optimizer_space: usize,
         slot_name: &String,
-    ) {
+    ) -> PersiaEmbeddingEntryMut {
         if self.hashmap.get(&key).is_none() {
-            let linkedlist_index = self
-                .embedding_config
-                .slots_config
-                .get_index_of(slot_name)
-                .unwrap();
+            let linkedlist_index = self.embedding_config.get_index_by_name(slot_name);
+            let slot_config = self.embedding_config.get_slot_by_name(slot_name);
+
             let array_index = self.linkedlists[linkedlist_index].push_back_init(
-                initialization_method,
-                embedding_space,
+                &self.hyperparameters.initialization_method,
+                slot_config.dim,
                 optimizer_space,
                 key,
                 key,
@@ -169,6 +181,13 @@ impl EvictionMap {
                     array_index,
                 },
             );
+
+            self.linkedlists[linkedlist_index]
+                .get_mut(array_index)
+                .unwrap()
+        }
+        else {
+            self.get_mut(&key).unwrap()
         }
     }
 
@@ -235,19 +254,21 @@ mod eviction_map_tests {
                 inner: vec![0.0_f32; 8],
                 embedding_dim: 8,
                 sign: i,
+                slot_index: 0,
             };
-            map.insert(&i, entry, &String::from("first_slot"));
+            map.insert_dyn(&i, entry);
         }
 
         assert_eq!(map.len(), 4);
 
         for i in 10..18 {
             let entry = DynamicEmbeddingEntry {
-                inner: vec![0.0_f32; 8],
-                embedding_dim: 8,
+                inner: vec![0.0_f32; 16],
+                embedding_dim: 16,
                 sign: i,
+                slot_index: 1
             };
-            map.insert(&i, entry, &String::from("second_slot"));
+            map.insert_dyn(&i, entry);
         }
 
         assert_eq!(map.len(), 12);
@@ -257,22 +278,23 @@ mod eviction_map_tests {
                 inner: vec![0.0_f32; 8],
                 embedding_dim: 8,
                 sign: i,
+                slot_index: 0,
             };
-            map.insert(&i, entry, &String::from("first_slot"));
+            map.insert_dyn(&i, entry);
         }
 
         assert_eq!(map.len(), 12);
         assert_eq!(map.get_refresh(&3).is_none(), true);
         assert_eq!(map.get_refresh(&4).is_some(), true);
 
-        map.insert(
+        map.insert_dyn(
             &8,
             DynamicEmbeddingEntry {
                 inner: vec![0.0_f32; 8],
                 embedding_dim: 8,
                 sign: 8,
+                slot_index: 0,
             },
-            &String::from("first_slot"),
         );
 
         assert_eq!(map.len(), 12);

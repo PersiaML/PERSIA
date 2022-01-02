@@ -584,61 +584,22 @@ impl EmbeddingConfig {
         }
     }
 
-    pub fn get_slot_by_feature_name(&self, feature_name: &str) -> &SlotConfig {
+    pub fn get_slot_by_name(&self, slot_name: &str) -> &SlotConfig {
         self.slots_config
-            .get(feature_name)
-            .expect(format!("slot: {} not found", feature_name).as_str())
+            .get(slot_name)
+            .expect(format!("slot: {} not found", slot_name).as_str())
+    }
+
+    pub fn get_index_by_name(&self, slot_name: &str) -> usize {
+        self.slots_config
+            .get_index_of(slot_name)
+            .expect(format!("slot: {} not found", slot_name).as_str())
+    }
+
+    pub fn get_slot_by_index(&self, index: usize) -> &SlotConfig {
+        self.slots_config
+            .get_index(index)
+            .expect(format!("slot index: {} not found", index).as_str())
+            .1
     }
 }
-
-// pub fn parse_embedding_config(config: EmbeddingConfig) -> EmbeddingConfig {
-//     let mut config = config;
-//     let slots_config = &mut config.slots_config;
-//     let feature_groups = &mut config.feature_groups;
-//     let mut slot_name_to_feature_group = HashMap::new();
-
-//     feature_groups
-//         .iter()
-//         .for_each(|(feature_group_name, slot_names)| {
-//             slot_names.iter().for_each(|slot_name| {
-//                 slot_name_to_feature_group.insert(slot_name.clone(), feature_group_name.clone());
-//             })
-//         });
-
-//     slots_config.iter().for_each(|(slot_name, _)| {
-//         if !slot_name_to_feature_group.contains_key(slot_name) {
-//             let res = feature_groups.insert(slot_name.clone(), vec![slot_name.clone()]);
-//             if res.is_some() {
-//                 panic!("a slot name can not same with feature group name");
-//             }
-//             slot_name_to_feature_group.insert(slot_name.clone(), slot_name.clone());
-//         }
-//     });
-
-//     assert_ne!(
-//         config.feature_index_prefix_bit, 0,
-//         "feature_index_prefix_bit must > 0"
-//     );
-//     let feature_prefix_bias = u64::BITS - config.feature_index_prefix_bit as u32;
-//     slots_config
-//         .iter_mut()
-//         .for_each(|(slot_name, slot_config)| {
-//             assert_eq!(
-//                 slot_config.index_prefix, 0,
-//                 "please do not set index_prefix manually"
-//             );
-//             let feature_group_name = slot_name_to_feature_group
-//                 .get(slot_name)
-//                 .expect("feature group not found");
-//             let feature_group_index = feature_groups
-//                 .get_index_of(feature_group_name)
-//                 .expect("feature group not found");
-//             slot_config.index_prefix = num_traits::CheckedShl::checked_shl(
-//                 &(feature_group_index as u64 + 1),
-//                 feature_prefix_bias,
-//             )
-//             .expect("slot index_prefix overflow, please try a bigger feature_index_prefix_bit");
-//         });
-
-//     config
-// }

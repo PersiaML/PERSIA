@@ -60,13 +60,7 @@ impl Optimizer {
 }
 
 pub trait Optimizable {
-    fn update(
-        &self,
-        emb_entry: &mut [f32],
-        grad: &[f32],
-        dim: usize,
-        emb_opt_state: &Option<Vec<f32>>,
-    );
+    fn update(&self, emb_entry: &mut [f32], grad: &[f32], dim: usize);
 
     #[inline]
     fn require_space(&self, _dim: usize) -> usize {
@@ -85,13 +79,7 @@ pub struct NaiveSGD {
 
 impl Optimizable for NaiveSGD {
     #[inline]
-    fn update(
-        &self,
-        emb_entry: &mut [f32],
-        grad: &[f32],
-        _dim: usize,
-        _batch_level_status: &Option<Vec<f32>>,
-    ) {
+    fn update(&self, emb_entry: &mut [f32], grad: &[f32], _dim: usize) {
         unsafe {
             decayed_sgd_avx2(emb_entry, grad, self.config.wd, self.config.lr);
         }
@@ -116,13 +104,7 @@ impl Optimizable for Adagrad {
     }
 
     #[inline]
-    fn update(
-        &self,
-        emb_entry: &mut [f32],
-        grad: &[f32],
-        dim: usize,
-        _batch_level_status: &Option<Vec<f32>>,
-    ) {
+    fn update(&self, emb_entry: &mut [f32], grad: &[f32], dim: usize) {
         let (emb, adagrad_state) = emb_entry.split_at_mut(dim);
         if self.config.vectorwise_shared {
             let adagrad_state = adagrad_state.first_mut().expect("adagrad state is empty");

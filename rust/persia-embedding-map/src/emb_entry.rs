@@ -15,6 +15,7 @@ pub struct DynamicEmbeddingEntry {
     pub inner: Vec<f32>,
     pub embedding_dim: usize,
     pub sign: u64,
+    pub slot_index: usize,
 }
 
 pub struct PersiaEmbeddingEntryRef<'a> {
@@ -23,10 +24,30 @@ pub struct PersiaEmbeddingEntryRef<'a> {
     pub sign: u64,
 }
 
+impl<'a> PersiaEmbeddingEntryRef<'a> {
+    pub fn emb(&'a self) -> &'a [f32] {
+        &self.inner[..self.embedding_dim]
+    }
+
+    pub fn opt(&'a self) -> &'a [f32] {
+        &self.inner[self.embedding_dim..]
+    }
+}
+
 pub struct PersiaEmbeddingEntryMut<'a> {
     pub inner: &'a mut [f32],
     pub embedding_dim: usize,
     pub sign: u64,
+}
+
+impl<'a> PersiaEmbeddingEntryMut<'a> {
+    pub fn emb(&'a mut self) -> &'a mut[f32] {
+        &mut self.inner[..self.embedding_dim]
+    }
+
+    pub fn opt(&'a mut self) -> &'a mut [f32] {
+        &mut self.inner[self.embedding_dim..]
+    }
 }
 
 pub trait PersiaEmbeddingEntry {

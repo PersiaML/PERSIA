@@ -9,7 +9,7 @@ use persia_libs::{once_cell, parking_lot::RwLock, thiserror};
 
 use eviction_map::EvictionMap;
 use persia_embedding_config::{
-    EmbeddingConfig, EmbeddingParameterServerConfig, PersiaGlobalConfigError, PersiaReplicaInfo,
+    EmbeddingConfig, EmbeddingParameterServerConfig, PersiaGlobalConfigError, PersiaReplicaInfo,PersiaEmbeddingModelHyperparameters,
 };
 use persia_speedy::{Readable, Writable};
 use sharded::Sharded;
@@ -31,7 +31,7 @@ pub struct EmbeddingShardedMap {
 }
 
 impl EmbeddingShardedMap {
-    pub fn new(optimizer_space: usize) -> Result<Self, EmbeddingShardedMapError> {
+    pub fn new(optimizer_space: usize, hyperparameters: PersiaEmbeddingModelHyperparameters,) -> Result<Self, EmbeddingShardedMapError> {
         let embedding_parameter_server_config = EmbeddingParameterServerConfig::get()?;
         let embedding_config = EmbeddingConfig::get()?;
         let replica_info = PersiaReplicaInfo::get()?;
@@ -41,6 +41,7 @@ impl EmbeddingShardedMap {
             .map(|_| {
                 let embedding_config = embedding_config.clone();
                 let embedding_parameter_server_config = embedding_parameter_server_config.clone();
+                let hyperparameters = hyperparameters.clone();
                 let replica_info = replica_info.clone();
 
                 std::thread::spawn(move || {
@@ -49,6 +50,7 @@ impl EmbeddingShardedMap {
                         embedding_parameter_server_config.as_ref(),
                         replica_info.as_ref(),
                         optimizer_space,
+                        hyperparameters,
                     )
                 })
             })

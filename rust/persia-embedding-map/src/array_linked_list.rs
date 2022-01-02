@@ -143,7 +143,7 @@ where
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Readable, Writable)]
 #[serde(crate = "self::serde")]
 pub struct ArrayLinkedList<T> {
     count: usize,

@@ -13,7 +13,6 @@ use persia_embedding_config::{
     EmbeddingConfig, EmbeddingParameterServerConfig, PerisaJobType, PersiaCommonConfig,
     PersiaGlobalConfig,
 };
-use persia_embedding_holder::PersiaEmbeddingHolder;
 use persia_embedding_server::embedding_parameter_service::{
     EmbeddingParameterNatsService, EmbeddingParameterNatsServiceResponder,
     EmbeddingParameterService, EmbeddingParameterServiceInner,

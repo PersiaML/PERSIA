@@ -20,23 +20,21 @@ use persia_embedding_config::{
     EmbeddingParameterServerConfig, PerisaJobType, PersiaCommonConfig, PersiaGlobalConfigError,
     PersiaReplicaInfo,
 };
-use persia_embedding_holder::{
-    emb_entry::HashMapEmbeddingEntry, PersiaEmbeddingHolder, PersiaEmbeddingHolderError,
-};
+use persia_embedding_map::{emb_entry::DynamicEmbeddingEntry, EmbeddingShardedMapError};
 use persia_metrics::{Gauge, PersiaMetricsManager, PersiaMetricsManagerError};
 use persia_speedy::{Readable, Writable};
 use persia_storage::{PersiaPath, PersiaPathImpl};
 
 #[derive(Readable, Writable, Debug)]
 pub struct PerisaIncrementalPacket {
-    pub content: Vec<HashMapEmbeddingEntry>,
+    pub content: Vec<DynamicEmbeddingEntry>,
     pub timestamps: u64,
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum IncrementalUpdateError {
-    #[error("embedding holder error: {0}")]
-    PersiaEmbeddingHolderError(#[from] PersiaEmbeddingHolderError),
+    #[error("embedding map error: {0}")]
+    EmbeddingShardedMapError(#[from] EmbeddingShardedMapError),
     #[error("global config error: {0}")]
     PersiaGlobalConfigError(#[from] PersiaGlobalConfigError),
     #[error("embedding holder not found error")]
@@ -186,8 +184,8 @@ impl PerisaIncrementalUpdateManager {
         let mut entries = Vec::with_capacity(signs.len());
         signs.iter().for_each(|sign| {
             let shard = self.embedding_holder.shard(sign).read();
-            if let Some(entry) = shard.get(sign) {
-                entries.push(entry.clone());
+            if let Some(entry) = shard.get_dyn(sign) {
+                entries.push(entry);
             }
         });
 
@@ -230,9 +228,9 @@ impl PerisaIncrementalUpdateManager {
         }
         tracing::debug!("loading inc packet, delay is {}s", delay);
         packet.content.into_iter().for_each(|entry| {
-            let sign = entry.sign();
+            let sign = entry.sign;
             let mut shard = self.embedding_holder.shard(&sign).write();
-            shard.insert(sign, entry);
+            shard.insert_dyn(sign, entry);
         });
     }
 

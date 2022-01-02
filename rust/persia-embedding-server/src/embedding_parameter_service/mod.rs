@@ -30,7 +30,6 @@ struct MetricsHolder {
     pub set_embedding_time_cost_sec: Gauge,
     pub decode_indices_time_cost_sec: Gauge,
     pub encode_embedding_time_cost_sec: Gauge,
-    pub lookup_inference_batch_time_cost_sec: Gauge,
     pub lookup_hashmap_time_cost_sec: Gauge,
     pub gradient_id_miss_count: IntCounter,
 }
@@ -59,10 +58,6 @@ impl MetricsHolder {
                 encode_embedding_time_cost_sec: m.create_gauge(
                     "encode_embedding_time_cost_sec",
                     "encode time cost for a inference bytes response on embedding server",
-                )?,
-                lookup_inference_batch_time_cost_sec: m.create_gauge(
-                    "lookup_inference_batch_time_cost_sec",
-                    "lookup time cost for a inference request",
                 )?,
                 lookup_hashmap_time_cost_sec: m.create_gauge(
                     "lookup_hashmap_time_cost_sec",
@@ -101,7 +96,7 @@ pub enum EmbeddingParameterServerError {
 }
 
 pub struct EmbeddingParameterServiceInner {
-    pub embedding: PersiaEmbeddingHolder,
+    pub embedding: EmbeddingShardedMap,
     pub optimizer: persia_libs::async_lock::RwLock<Option<Arc<Box<dyn Optimizable + Send + Sync>>>>,
     pub hyperparameter_config:
         persia_libs::async_lock::RwLock<Option<Arc<PersiaEmbeddingModelHyperparameters>>>,
@@ -116,7 +111,7 @@ pub struct EmbeddingParameterServiceInner {
 
 impl EmbeddingParameterServiceInner {
     pub fn new(
-        embedding: PersiaEmbeddingHolder,
+        embedding: EmbeddingShardedMap,
         server_config: Arc<EmbeddingParameterServerConfig>,
         common_config: Arc<PersiaCommonConfig>,
         embedding_config: Arc<EmbeddingConfig>,
@@ -183,49 +178,35 @@ impl EmbeddingParameterServiceInner {
                 }
                 let optimizer = optimizer.as_ref().unwrap();
 
-                req.iter().for_each(|(sign, dim)| {
-                        let conf = conf.as_ref().unwrap();
-                        let mut shard = self.embedding.shard(sign).write();
-                        let e = shard.get_refresh(&sign);
-                        match e {
-                            None => {
-                                if rand::thread_rng().gen_range(0f32..1f32) < conf.admit_probability {
-                                    let mut emb_entry = HashMapEmbeddingEntry::new(
-                                        &conf.initialization_method,
-                                        *dim,
-                                        optimizer.require_space(*dim),
-                                        *sign,
-                                        *sign,
-                                    );
+                req.iter().for_each(|(sign, slot_index)| {
+                    let conf = conf.as_ref().unwrap();
+                    let slot_config = self.embedding_config.get_slot_by_index(*slot_index);
 
-                                    optimizer.state_initialization(emb_entry.as_mut_emb_entry_slice(), *dim);
-                                    embeddings.extend_from_slice(&emb_entry.as_emb_entry_slice()[..*dim]);
-                                    let _ = shard.insert(*sign, emb_entry);
+                    let mut shard = self.embedding.shard(sign).write();
 
-                                    index_miss_count += 1;
-                                } else {
-                                    embeddings.extend_from_slice(vec![0f32; *dim].as_slice());
-                                }
-                            }
-                            Some(entry) => {
-                                let entry_dim = entry.dim();
-                                if entry_dim != *dim {
-                                    tracing::error!("dimension not match on sign {}. Expected dimension {}, got dimension {}.", sign, entry_dim, dim);
-                                    let entry = HashMapEmbeddingEntry::new(
-                                        &conf.initialization_method,
-                                        *dim,
-                                        optimizer.require_space(*dim),
-                                        *sign,
-                                        *sign,
-                                    );
-                                    embeddings.extend_from_slice(entry.emb());
-                                    let _ = shard.insert(*sign, entry);
-                                } else {
-                                    embeddings.extend_from_slice(entry.emb());
-                                }
+                    match shard.get_refresh(&sign) {
+                        None => {
+                            if rand::thread_rng().gen_range(0f32..1f32) < conf.admit_probability {
+                                let emb_mut = shard.insert_init(
+                                    *sign,
+                                    optimizer.require_space(slot_config.dim),
+                                    slot_name,
+                                );
+
+                                optimizer.state_initialization(emb_mut.opt(), slot_config.dim);
+                                embeddings.extend_from_slice(emb_mut.emb());
+
+                                index_miss_count += 1;
+                            } else {
+                                embeddings
+                                    .extend_from_slice(vec![0f32; slot_config.dim].as_slice());
                             }
                         }
-                    });
+                        Some(entry) => {
+                            embeddings.extend_from_slice(entry.emb());
+                        }
+                    }
+                });
                 Ok(())
             }
             false => {
@@ -233,19 +214,12 @@ impl EmbeddingParameterServiceInner {
                     let shard = self.embedding.shard(sign).read();
                     match shard.get(sign) {
                         Some(entry) => {
-                            let entry_dim = entry.dim();
-                            if entry_dim != *dim {
-                                tracing::error!("dimension not match on sign {}. Expected dimension {}, got dimension {}.",
-                                    sign, entry_dim, dim);
-                                embeddings.extend_from_slice(vec![0f32; *dim].as_slice());
-                            } else {
-                                embeddings.extend_from_slice(entry.emb());
-                            }
+                            embeddings.extend_from_slice(entry.emb());
                         }
                         None => {
                             embeddings.extend_from_slice(vec![0f32; *dim].as_slice());
                             index_miss_count += 1;
-                        },
+                        }
                     }
                 });
                 Ok(())
@@ -286,15 +260,15 @@ impl EmbeddingParameterServiceInner {
 
     pub async fn set_embedding(
         &self,
-        embeddings: Vec<HashMapEmbeddingEntry>,
+        embeddings: Vec<DynamicEmbeddingEntry>,
     ) -> Result<(), EmbeddingParameterServerError> {
         let start_time = std::time::Instant::now();
 
         tokio::task::block_in_place(|| {
             embeddings.into_iter().for_each(|entry| {
-                let id = entry.sign();
-                let mut shard = self.embedding.shard(&id).write();
-                let _ = shard.insert(id, entry);
+                let sign = entry.sign;
+                let mut shard = self.embedding.shard(&sign).write();
+                shard.insert_dyn(sign, entry);
             });
         });
 
@@ -303,42 +277,6 @@ impl EmbeddingParameterServiceInner {
                 .set(start_time.elapsed().as_secs_f64());
         }
         Ok(())
-    }
-
-    pub async fn lookup_inference(
-        &self,
-        req: Bytes,
-    ) -> Result<Bytes, EmbeddingParameterServerError> {
-        let start_time = std::time::Instant::now();
-        let indices =
-            tokio::task::block_in_place(|| Vec::<(u64, usize)>::read_from_buffer(req.as_ref()));
-        if indices.is_err() {
-            return Err(EmbeddingParameterServerError::RpcError(
-                "fail to deserialize lookup inference request".to_string(),
-            ));
-        }
-        let indices = indices.unwrap();
-        if let Ok(m) = MetricsHolder::get() {
-            m.decode_indices_time_cost_sec
-                .set(start_time.elapsed().as_secs_f64());
-        }
-
-        let embedding = self.batched_lookup(indices, false).await;
-        if let Ok(emb) = embedding {
-            let encode_start_time = std::time::Instant::now();
-            let buffer = tokio::task::block_in_place(|| emb.write_to_vec().unwrap());
-            if let Ok(m) = MetricsHolder::get() {
-                m.encode_embedding_time_cost_sec
-                    .set(encode_start_time.elapsed().as_secs_f64());
-                m.lookup_inference_batch_time_cost_sec
-                    .set(start_time.elapsed().as_secs_f64());
-            }
-            Ok(Bytes::from(buffer))
-        } else {
-            Err(EmbeddingParameterServerError::RpcError(
-                "fail to lookup embedding".to_string(),
-            ))
-        }
     }
 
     pub async fn lookup_mixed(
@@ -372,27 +310,20 @@ impl EmbeddingParameterServiceInner {
         }
 
         let optimizer = optimizer.as_ref().unwrap();
-        let batch_level_state = optimizer.get_batch_level_state(signs.as_slice());
 
         tokio::task::block_in_place(|| {
-            for (idx, sign) in signs.iter().enumerate() {
+            for sign in signs.iter() {
                 let mut shard = self.embedding.shard(sign).write();
                 if let Some(entry) = shard.get_mut(sign) {
                     let entry_dim = entry.dim();
                     let (grad, r) = remaining_gradients.split_at(entry_dim);
                     remaining_gradients = r;
-                    let emb_opt_state = optimizer.get_emb_state(&batch_level_state, idx);
 
                     {
-                        let emb_entry_slice = entry.as_mut_emb_entry_slice();
-                        optimizer.update(emb_entry_slice, grad, entry_dim, &emb_opt_state);
-
+                        optimizer.update(entry.inner, grad, entry_dim);
                         if conf.enable_weight_bound {
                             unsafe {
-                                persia_simd::weight_bound(
-                                    &mut emb_entry_slice[..entry_dim],
-                                    conf.weight_bound,
-                                );
+                                persia_simd::weight_bound(entry.emb(), conf.weight_bound);
                             }
                         }
                     }
@@ -510,13 +441,6 @@ impl EmbeddingParameterService {
         req: Vec<HashMapEmbeddingEntry>,
     ) -> Result<(), EmbeddingParameterServerError> {
         self.inner.set_embedding(req).await
-    }
-
-    pub async fn lookup_inference(
-        &self,
-        req: Bytes,
-    ) -> Result<Bytes, EmbeddingParameterServerError> {
-        self.inner.lookup_inference(req).await
     }
 
     pub async fn lookup_mixed(
