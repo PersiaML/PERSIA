@@ -2,8 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use persia_libs::{
-    async_lock, bytes, hyper, lz4, once_cell, rand, rand::Rng, thiserror, tokio,
-    tracing,
+    async_lock, bytes, hyper, lz4, once_cell, rand, rand::Rng, thiserror, tokio, tracing,
 };
 use snafu::ResultExt;
 

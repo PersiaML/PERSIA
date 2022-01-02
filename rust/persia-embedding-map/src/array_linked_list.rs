@@ -7,8 +7,8 @@ use persia_embedding_config::InitializationMethod;
 use persia_libs::enum_dispatch::enum_dispatch;
 use persia_libs::serde::{self, Deserialize, Serialize};
 use persia_speedy::{Context, Readable, Writable};
-use std::{hint, mem};
 use std::sync::Arc;
+use std::{hint, mem};
 
 #[enum_dispatch]
 #[derive(Clone, Debug, Readable, Writable)]

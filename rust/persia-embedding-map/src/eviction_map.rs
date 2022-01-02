@@ -1,12 +1,10 @@
 use crate::array_linked_list::{ArrayLinkedList, PersiaArrayLinkedList, PersiaArrayLinkedListImpl};
 use crate::emb_entry::{
-    ArrayEmbeddingEntry, DynamicEmbeddingEntry, PersiaEmbeddingEntryMut,
-    PersiaEmbeddingEntryRef,
+    ArrayEmbeddingEntry, DynamicEmbeddingEntry, PersiaEmbeddingEntryMut, PersiaEmbeddingEntryRef,
 };
 use persia_common::optim::Optimizable;
 use persia_embedding_config::{
-    EmbeddinHyperparameters, EmbeddingConfig, EmbeddingParameterServerConfig,
-    PersiaReplicaInfo,
+    EmbeddinHyperparameters, EmbeddingConfig, EmbeddingParameterServerConfig, PersiaReplicaInfo,
 };
 use persia_libs::hashbrown::HashMap;
 use persia_speedy::{Readable, Writable};
@@ -213,9 +211,7 @@ impl EvictionMap {
                 },
             );
 
-            self.linkedlists[linkedlist_index]
-                .get(array_index)
-                .unwrap()
+            self.linkedlists[linkedlist_index].get(array_index).unwrap()
         } else {
             self.get(&key).unwrap()
         }

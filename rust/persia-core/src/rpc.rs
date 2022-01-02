@@ -1,13 +1,13 @@
 use crate::PersiaError;
 
-use std::sync::Arc;
-use std::time::Duration;
+use persia_embedding_server::embedding_worker_service::EmbeddingWorkerClient;
 use persia_libs::{
     anyhow::Result, futures, indexmap::IndexMap, itertools::Itertools, parking_lot::RwLock, rand,
     tracing,
 };
-use persia_embedding_server::embedding_worker_service::EmbeddingWorkerClient;
 use persia_model_manager::EmbeddingModelManagerStatus;
+use std::sync::Arc;
+use std::time::Duration;
 
 pub struct PersiaRpcClient {
     pub clients: RwLock<IndexMap<String, Arc<EmbeddingWorkerClient>>>,

@@ -1,4 +1,5 @@
 use persia_common::optim::Optimizable;
+use persia_embedding_config::InitializationMethod;
 use persia_libs::{
     ndarray::Array1,
     ndarray_rand::rand_distr::{Gamma, Normal, Poisson, Uniform},
@@ -7,10 +8,9 @@ use persia_libs::{
     rand::SeedableRng,
     serde::{self, Deserialize, Serialize},
 };
-use std::sync::Arc;
-use persia_embedding_config::InitializationMethod;
 use persia_speedy::{Context, Readable, Writable};
 use smallvec::SmallVec;
+use std::sync::Arc;
 
 #[derive(Serialize, Deserialize, Readable, Writable, Clone, Debug)]
 #[serde(crate = "self::serde")]

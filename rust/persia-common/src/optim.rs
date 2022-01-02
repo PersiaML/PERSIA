@@ -1,7 +1,5 @@
 use persia_libs::ndarray;
-use persia_simd::{
-    decayed_adagrad_avx2, decayed_adagrad_vectorwise_shared_avx2, decayed_sgd_avx2,
-};
+use persia_simd::{decayed_adagrad_avx2, decayed_adagrad_vectorwise_shared_avx2, decayed_sgd_avx2};
 use persia_speedy::{Readable, Writable};
 
 #[derive(Readable, Writable, Debug, Clone)]
