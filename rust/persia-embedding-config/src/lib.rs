@@ -406,8 +406,6 @@ impl EmbeddingWorkerConfig {
 #[serde(crate = "self::serde")]
 pub struct EmbeddingParameterServerConfig {
     // Eviction map config
-    #[serde(default = "get_billion")]
-    pub capacity: usize,
     #[serde(default = "get_hundred")]
     pub num_hashmap_internal_shards: usize,
     // incremental dump config
@@ -424,8 +422,7 @@ pub struct EmbeddingParameterServerConfig {
 impl Default for EmbeddingParameterServerConfig {
     fn default() -> Self {
         Self {
-            capacity: 1_000_000_000,
-            num_hashmap_internal_shards: 1000,
+            num_hashmap_internal_shards: 100,
             enable_incremental_update: false,
             incremental_buffer_size: 1_000_000,
             incremental_dir: get_default_incremental_dir(),
@@ -524,6 +521,7 @@ pub struct HashStackConfig {
 #[serde(crate = "self::serde")]
 pub struct SlotConfig {
     pub dim: usize,
+    #[serde(default = "get_billion")]
     pub capacity: usize,
     #[serde(default = "get_ten")]
     pub sample_fixed_size: usize, // raw embedding placeholder size to fill 3d tensor -> (bs, sample_fix_sized, dim)
