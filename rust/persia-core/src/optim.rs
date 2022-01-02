@@ -3,7 +3,7 @@ use crate::PersiaCommonContextImpl;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
-use persia_common::optim::{AdagradConfig, AdamConfig, NaiveSGDConfig, OptimizerConfig};
+use persia_common::optim::{AdagradConfig, NaiveSGDConfig, OptimizerConfig};
 
 #[pyclass]
 pub struct OptimizerBase {

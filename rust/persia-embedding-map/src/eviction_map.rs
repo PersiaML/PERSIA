@@ -1,17 +1,15 @@
 use crate::array_linked_list::{ArrayLinkedList, PersiaArrayLinkedList, PersiaArrayLinkedListImpl};
 use crate::emb_entry::{
-    ArrayEmbeddingEntry, DynamicEmbeddingEntry, PersiaEmbeddingEntry, PersiaEmbeddingEntryMut,
+    ArrayEmbeddingEntry, DynamicEmbeddingEntry, PersiaEmbeddingEntryMut,
     PersiaEmbeddingEntryRef,
 };
-use persia_common::optim::{Optimizable, Optimizer};
+use persia_common::optim::Optimizable;
 use persia_embedding_config::{
-    EmbeddinHyperparameters, EmbeddingConfig, EmbeddingParameterServerConfig, InitializationMethod,
+    EmbeddinHyperparameters, EmbeddingConfig, EmbeddingParameterServerConfig,
     PersiaReplicaInfo,
 };
 use persia_libs::hashbrown::HashMap;
-use persia_speedy::{Context, Readable, Writable};
-use std::convert::TryFrom;
-use std::hash::Hash;
+use persia_speedy::{Readable, Writable};
 use std::sync::Arc;
 
 #[derive(Clone, Readable, Writable, Debug)]

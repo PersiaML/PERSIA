@@ -1,10 +1,6 @@
-use std::sync::Arc;
-
-use persia_libs::{hashbrown::HashMap, ndarray, parking_lot::RwLock};
-
-use persia_embedding_config::EmbeddingConfig;
+use persia_libs::ndarray;
 use persia_simd::{
-    adam_avx2, decayed_adagrad_avx2, decayed_adagrad_vectorwise_shared_avx2, decayed_sgd_avx2,
+    decayed_adagrad_avx2, decayed_adagrad_vectorwise_shared_avx2, decayed_sgd_avx2,
 };
 use persia_speedy::{Readable, Writable};
 
@@ -12,14 +8,6 @@ use persia_speedy::{Readable, Writable};
 pub enum OptimizerConfig {
     SGD(NaiveSGDConfig),
     Adagrad(AdagradConfig),
-}
-
-#[derive(Readable, Writable, Debug, Clone)]
-pub struct AdamConfig {
-    pub lr: f32,
-    pub beta1: f32,
-    pub beta2: f32,
-    pub eps: f32,
 }
 
 #[derive(Readable, Writable, Debug, Clone)]

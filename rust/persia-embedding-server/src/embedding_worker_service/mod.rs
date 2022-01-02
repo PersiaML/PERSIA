@@ -2,8 +2,6 @@ use crate::embedding_parameter_service::{
     EmbeddingParameterNatsServicePublisher, EmbeddingParameterServerError,
     EmbeddingParameterServiceClient,
 };
-
-use std::iter::FromIterator;
 use std::ops::MulAssign;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};

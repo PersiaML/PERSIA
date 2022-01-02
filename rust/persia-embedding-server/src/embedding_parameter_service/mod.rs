@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use persia_libs::{
-    async_lock, bytes, bytes::Bytes, hyper, lz4, once_cell, rand, rand::Rng, thiserror, tokio,
+    async_lock, bytes, hyper, lz4, once_cell, rand, rand::Rng, thiserror, tokio,
     tracing,
 };
 use snafu::ResultExt;
@@ -30,8 +30,6 @@ struct MetricsHolder {
     pub index_miss_count: IntCounter,
     pub index_miss_ratio: Gauge,
     pub set_embedding_time_cost_sec: Gauge,
-    pub decode_indices_time_cost_sec: Gauge,
-    pub encode_embedding_time_cost_sec: Gauge,
     pub lookup_hashmap_time_cost_sec: Gauge,
     pub gradient_id_miss_count: IntCounter,
 }
@@ -52,14 +50,6 @@ impl MetricsHolder {
                 set_embedding_time_cost_sec: m.create_gauge(
                     "set_embedding_time_cost_sec",
                     "set embedding time cost on embedding server",
-                )?,
-                decode_indices_time_cost_sec: m.create_gauge(
-                    "decode_indices_time_cost_sec",
-                    "decode time cost for a inference bytes request on embedding server",
-                )?,
-                encode_embedding_time_cost_sec: m.create_gauge(
-                    "encode_embedding_time_cost_sec",
-                    "encode time cost for a inference bytes response on embedding server",
                 )?,
                 lookup_hashmap_time_cost_sec: m.create_gauge(
                     "lookup_hashmap_time_cost_sec",

@@ -1,6 +1,6 @@
 #![allow(clippy::needless_return)]
 
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
 use persia_libs::{
     indexmap,
@@ -243,14 +243,6 @@ fn get_four() -> usize {
     4
 }
 
-fn get_eight() -> usize {
-    8
-}
-
-fn get_zero() -> u64 {
-    0
-}
-
 fn get_ten() -> usize {
     10
 }
@@ -308,10 +300,6 @@ pub fn get_default_hashstack_config() -> HashStackConfig {
         hash_stack_rounds: 0,
         embedding_size: 0,
     }
-}
-
-fn get_default_feature_groups() -> indexmap::IndexMap<String, Vec<String>> {
-    indexmap::IndexMap::new()
 }
 
 fn get_default_checkpointing_config() -> CheckpointingConfig {
