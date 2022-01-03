@@ -180,7 +180,7 @@ mod embedding_optimizer_tests {
         let grads = get_grads();
 
         grads.iter().for_each(|g| {
-            optimizer.update(&mut embedding_entry, g.as_slice(), embedding_dim, &None);
+            optimizer.update(&mut embedding_entry, g.as_slice(), embedding_dim);
         });
 
         embedding_entry
