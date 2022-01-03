@@ -376,9 +376,26 @@ impl PersiaDataFlowComponent {
             enable_weight_bound,
         };
 
-        self.embedding_worker_publish_service
-            .publish_configure_embedding_parameter_servers(&config, None)
-            .await??;
+        let mut backoff = backoff::ExponentialBackoff::default();
+        backoff.max_interval = std::time::Duration::from_millis(500);
+
+        backoff::future::retry(backoff, || async {
+            let resp: Result<(), PersiaError> = self
+                .embedding_worker_publish_service
+                .publish_configure_embedding_parameter_servers(&config, None)
+                .await
+                .map_err(|e| PersiaError::from(e))?
+                .map_err(|e| PersiaError::from(e));
+
+            if resp.is_err() {
+                tracing::warn!(
+                    "failed to send configure_embedding_parameter_servers due to {:?}, retrying...",
+                    resp
+                );
+            }
+            Ok(resp?)
+        })
+        .await?;
 
         Ok(())
     }
@@ -390,9 +407,26 @@ impl PersiaDataFlowComponent {
         }
         let optimizer = optimizer.unwrap();
 
-        self.embedding_worker_publish_service
-            .publish_register_optimizer(&optimizer, None)
-            .await??;
+        let mut backoff = backoff::ExponentialBackoff::default();
+        backoff.max_interval = std::time::Duration::from_millis(500);
+
+        backoff::future::retry(backoff, || async {
+            let resp: Result<(), PersiaError> = self
+                .embedding_worker_publish_service
+                .publish_register_optimizer(&optimizer, None)
+                .await
+                .map_err(|e| PersiaError::from(e))?
+                .map_err(|e| PersiaError::from(e));
+
+            if resp.is_err() {
+                tracing::warn!(
+                    "failed to send register_optimizer due to {:?}, retrying...",
+                    resp
+                );
+            }
+            Ok(resp?)
+        })
+        .await?;
 
         Ok(())
     }
