@@ -77,7 +77,6 @@ static INCREMENTAL_UPDATE_MANAGER: OnceCell<Arc<PerisaIncrementalUpdateManager>>
 const INCREMENTAL_UPDATE_CHANNEL_CAPACITY: usize = 1000;
 
 pub struct PerisaIncrementalUpdateManager {
-    embedding_map: EmbeddingShardedMap,
     executors: Arc<ThreadPool>,
     replica_index: usize,
     incremental_buffer_size: usize,
@@ -91,11 +90,9 @@ impl PerisaIncrementalUpdateManager {
         let singleton = INCREMENTAL_UPDATE_MANAGER.get_or_try_init(|| {
             let server_config = EmbeddingParameterServerConfig::get()?;
             let common_config = PersiaCommonConfig::get()?;
-            let embedding_map = EmbeddingShardedMap::get()?;
             let replica_info = PersiaReplicaInfo::get()?;
 
             let singleton = Self::new(
-                embedding_map,
                 common_config.job_type.clone(),
                 common_config.checkpointing_config.num_workers,
                 replica_info.replica_index,
@@ -112,7 +109,6 @@ impl PerisaIncrementalUpdateManager {
     }
 
     fn new(
-        embedding_map: EmbeddingShardedMap,
         cur_task: PerisaJobType,
         num_executors: usize,
         replica_index: usize,
@@ -136,7 +132,6 @@ impl PerisaIncrementalUpdateManager {
             .collect();
 
         let instance = Arc::new(Self {
-            embedding_map,
             executors,
             replica_index,
             incremental_buffer_size,
@@ -184,38 +179,40 @@ impl PerisaIncrementalUpdateManager {
         num_total_signs: usize,
     ) -> () {
         let mut entries = Vec::with_capacity(signs.len());
-        signs.iter().for_each(|sign| {
-            let shard = self.embedding_map.shard(sign).read();
-            if let Some(entry) = shard.get_dyn(sign) {
-                entries.push(entry);
-            }
-        });
-
-        let segment_len = entries.len();
-        let file_name = PathBuf::from(format!("{}_{}.inc", self.replica_index, file_index));
-
-        let content = PerisaIncrementalPacket {
-            content: entries,
-            timestamps: current_unix_time(),
-        };
-
-        let emb_path = PersiaPath::from_vec(vec![&dst_dir, &file_name]);
-        if let Err(e) = emb_path.write_all_speedy(&content) {
-            tracing::error!(
-                "failed to dump {:?} inc update packet to {:?}, because {:?}",
-                file_name,
-                dst_dir,
-                e
-            );
-        } else {
-            let dumped = num_dumped_signs.fetch_add(segment_len, Ordering::AcqRel);
-            let cur_dumped = dumped + segment_len;
-            if cur_dumped >= num_total_signs {
-                let inc_update_done_file = PathBuf::from("inc_update_done");
-                let inc_update_done_path =
-                    PersiaPath::from_vec(vec![&dst_dir, &inc_update_done_file]);
-                if let Err(e) = inc_update_done_path.create(false) {
-                    tracing::error!("failed to mark increment update done, {:?}", e);
+        if let Ok(embedding_map) = EmbeddingShardedMap::get() {
+            signs.iter().for_each(|sign| {
+                let shard = embedding_map.shard(sign).read();
+                if let Some(entry) = shard.get_dyn(sign) {
+                    entries.push(entry);
+                }
+            });
+    
+            let segment_len = entries.len();
+            let file_name = PathBuf::from(format!("{}_{}.inc", self.replica_index, file_index));
+    
+            let content = PerisaIncrementalPacket {
+                content: entries,
+                timestamps: current_unix_time(),
+            };
+    
+            let emb_path = PersiaPath::from_vec(vec![&dst_dir, &file_name]);
+            if let Err(e) = emb_path.write_all_speedy(&content) {
+                tracing::error!(
+                    "failed to dump {:?} inc update packet to {:?}, because {:?}",
+                    file_name,
+                    dst_dir,
+                    e
+                );
+            } else {
+                let dumped = num_dumped_signs.fetch_add(segment_len, Ordering::AcqRel);
+                let cur_dumped = dumped + segment_len;
+                if cur_dumped >= num_total_signs {
+                    let inc_update_done_file = PathBuf::from("inc_update_done");
+                    let inc_update_done_path =
+                        PersiaPath::from_vec(vec![&dst_dir, &inc_update_done_file]);
+                    if let Err(e) = inc_update_done_path.create(false) {
+                        tracing::error!("failed to mark increment update done, {:?}", e);
+                    }
                 }
             }
         }
@@ -229,11 +226,14 @@ impl PerisaIncrementalUpdateManager {
             m.inc_update_delay_sec.set(delay as f64);
         }
         tracing::debug!("loading inc packet, delay is {}s", delay);
-        packet.content.into_iter().for_each(|entry| {
-            let sign = entry.sign;
-            let mut shard = self.embedding_map.shard(&sign).write();
-            shard.insert_dyn(sign, entry);
-        });
+        if let Ok(embedding_map) = EmbeddingShardedMap::get() {
+            packet.content.into_iter().for_each(|entry| {
+                let sign = entry.sign;
+                let mut shard = embedding_map.shard(&sign).write();
+                shard.insert_dyn(sign, entry);
+            });
+        }
+
     }
 
     pub fn try_commit_incremental(
