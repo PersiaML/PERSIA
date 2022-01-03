@@ -104,6 +104,17 @@ pub struct EmbeddinHyperparameters {
     pub enable_weight_bound: bool,
 }
 
+impl Default for EmbeddinHyperparameters {
+    fn default() -> Self {
+        Self {
+            initialization_method: InitializationMethod::default(),
+            admit_probability: 1.0,
+            weight_bound: 10.0,
+            enable_weight_bound: false,
+        }
+    }
+}
+
 static PERSIA_EMBEDDING_SEVER_CONFIG: OnceCell<Arc<EmbeddingParameterServerConfig>> =
     OnceCell::new();
 

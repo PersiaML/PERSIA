@@ -10,6 +10,8 @@ use persia_libs::hashbrown::HashMap;
 use persia_speedy::{Readable, Writable};
 use std::sync::Arc;
 
+use persia_libs::tracing;
+
 #[derive(Clone, Readable, Writable, Debug)]
 pub struct NodeIndex {
     pub linkedlist_index: u32,
@@ -211,6 +213,8 @@ impl EvictionMap {
                 },
             );
 
+            self.evict(linkedlist_index);
+
             self.linkedlists[linkedlist_index].get(array_index).unwrap()
         } else {
             self.get(&key).unwrap()
@@ -236,6 +240,7 @@ impl EvictionMap {
                 .1
                 .capacity
         {
+            tracing::info!("evicting...");
             if let Some(evicted) = self.linkedlists[linkedlist_index].pop_front() {
                 self.hashmap.remove(&evicted);
             }
@@ -247,7 +252,10 @@ impl EvictionMap {
 mod eviction_map_tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use persia_embedding_config::{get_default_hashstack_config, SlotConfig};
+    use persia_common::optim::{NaiveSGDConfig, Optimizer, OptimizerConfig};
+    use persia_embedding_config::{
+        get_default_hashstack_config, EmbeddingParameterServerConfig, PersiaReplicaInfo, SlotConfig,
+    };
     use persia_libs::indexmap::indexmap;
 
     #[test]
@@ -272,8 +280,25 @@ mod eviction_map_tests {
                 },
             },
         };
-        let optimizer_space: usize = 0;
-        let mut map = EvictionMap::new(&embedding_config, optimizer_space);
+
+        let embedding_parameter_server_config = EmbeddingParameterServerConfig::default();
+        let replica_info = PersiaReplicaInfo {
+            replica_index: 0,
+            replica_size: 1,
+        };
+
+        let optimizer = Optimizer::new(OptimizerConfig::SGD(NaiveSGDConfig { lr: 0.01, wd: 0.01 }));
+        let optimizer = Arc::new(optimizer.to_optimizable());
+        let hyperparameters = EmbeddinHyperparameters::default();
+
+        let mut map = EvictionMap::new(
+            &embedding_config,
+            &embedding_parameter_server_config,
+            &replica_info,
+            optimizer,
+            hyperparameters,
+            0,
+        );
 
         for i in 0..4 {
             let entry = DynamicEmbeddingEntry {
@@ -282,7 +307,7 @@ mod eviction_map_tests {
                 sign: i,
                 slot_index: 0,
             };
-            map.insert_dyn(&i, entry);
+            map.insert_dyn(i, entry);
         }
 
         assert_eq!(map.len(), 4);
@@ -294,7 +319,7 @@ mod eviction_map_tests {
                 sign: i,
                 slot_index: 1,
             };
-            map.insert_dyn(&i, entry);
+            map.insert_dyn(i, entry);
         }
 
         assert_eq!(map.len(), 12);
@@ -306,7 +331,7 @@ mod eviction_map_tests {
                 sign: i,
                 slot_index: 0,
             };
-            map.insert_dyn(&i, entry);
+            map.insert_dyn(i, entry);
         }
 
         assert_eq!(map.len(), 12);
@@ -314,7 +339,7 @@ mod eviction_map_tests {
         assert_eq!(map.get_refresh(&4).is_some(), true);
 
         map.insert_dyn(
-            &8,
+            8,
             DynamicEmbeddingEntry {
                 inner: vec![0.0_f32; 8],
                 embedding_dim: 8,
