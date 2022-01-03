@@ -2,18 +2,26 @@ feature_index_prefix_bit: 12
 slots_config:
   workclass:
     dim: 8
+    capacity: 100000
   education:
     dim: 8
+    capacity: 100000
   marital_status:
     dim: 8
+    capacity: 100000
   occupation:
     dim: 8
+    capacity: 100000
   relationship:
     dim: 8
+    capacity: 100000
   race:
     dim: 8
+    capacity: 100000
   gender:
     dim: 8
+    capacity: 100000
   native_country:
     dim: 8
+    capacity: 100000
 feature_groups: {}
