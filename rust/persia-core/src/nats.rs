@@ -389,7 +389,7 @@ impl PersiaDataFlowComponent {
 
             if resp.is_err() {
                 tracing::warn!(
-                    "failed to send configure_embedding_parameter_servers due to {:?}, retrying...",
+                    "failed to configure_embedding_parameter_servers due to {:?}, retrying...",
                     resp
                 );
             }
@@ -420,7 +420,7 @@ impl PersiaDataFlowComponent {
 
             if resp.is_err() {
                 tracing::warn!(
-                    "failed to send register_optimizer due to {:?}, retrying...",
+                    "failed to register_optimizer due to {:?}, retrying...",
                     resp
                 );
             }
