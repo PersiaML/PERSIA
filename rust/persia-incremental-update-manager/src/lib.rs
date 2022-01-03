@@ -186,15 +186,15 @@ impl PerisaIncrementalUpdateManager {
                     entries.push(entry);
                 }
             });
-    
+
             let segment_len = entries.len();
             let file_name = PathBuf::from(format!("{}_{}.inc", self.replica_index, file_index));
-    
+
             let content = PerisaIncrementalPacket {
                 content: entries,
                 timestamps: current_unix_time(),
             };
-    
+
             let emb_path = PersiaPath::from_vec(vec![&dst_dir, &file_name]);
             if let Err(e) = emb_path.write_all_speedy(&content) {
                 tracing::error!(
@@ -233,7 +233,6 @@ impl PerisaIncrementalUpdateManager {
                 shard.insert_dyn(sign, entry);
             });
         }
-
     }
 
     pub fn try_commit_incremental(
