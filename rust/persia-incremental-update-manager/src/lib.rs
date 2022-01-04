@@ -81,8 +81,8 @@ pub struct PerisaIncrementalUpdateManager {
     replica_index: usize,
     incremental_buffer_size: usize,
     incremental_dir: std::path::PathBuf,
-    buffer_channel_input: ChannelPair<Vec<u64>>,
-    buffer_channel_output: ChannelPair<Vec<u64>>,
+    buffer_channel_input: ChannelPair<Vec<(u64, usize)>>,
+    buffer_channel_output: ChannelPair<Vec<(u64, usize)>>,
 }
 
 impl PerisaIncrementalUpdateManager {
@@ -121,10 +121,10 @@ impl PerisaIncrementalUpdateManager {
                 .build()
                 .unwrap(),
         );
-        let buffer_channel_input: ChannelPair<Vec<u64>> =
+        let buffer_channel_input: ChannelPair<Vec<(u64, usize)>> =
             ChannelPair::new(INCREMENTAL_UPDATE_CHANNEL_CAPACITY);
 
-        let buffer_channel_output: ChannelPair<Vec<u64>> =
+        let buffer_channel_output: ChannelPair<Vec<(u64, usize)>> =
             ChannelPair::new(INCREMENTAL_UPDATE_CHANNEL_CAPACITY);
 
         let incremental_dir = [incremental_dir, format!("s{}", replica_index)]
@@ -173,16 +173,16 @@ impl PerisaIncrementalUpdateManager {
     fn dump_embedding_segment(
         &self,
         dst_dir: PathBuf,
-        signs: Vec<u64>,
+        signs: Vec<(u64, usize)>,
         file_index: usize,
         num_dumped_signs: Arc<AtomicUsize>,
         num_total_signs: usize,
     ) -> () {
         let mut entries = Vec::with_capacity(signs.len());
         if let Ok(embedding_map) = EmbeddingShardedMap::get() {
-            signs.iter().for_each(|sign| {
+            signs.iter().for_each(|(sign, slot_index)| {
                 let shard = embedding_map.shard(sign).read();
-                if let Some(entry) = shard.get_dyn(sign) {
+                if let Some(entry) = shard.get_dyn(sign, slot_index) {
                     entries.push(entry);
                 }
             });
@@ -237,7 +237,7 @@ impl PerisaIncrementalUpdateManager {
 
     pub fn try_commit_incremental(
         &self,
-        incremental: Vec<u64>,
+        incremental: Vec<(u64, usize)>,
     ) -> Result<(), IncrementalUpdateError> {
         let res = self.buffer_channel_input.sender.try_send(incremental);
         if res.is_err() {
@@ -277,7 +277,7 @@ impl PerisaIncrementalUpdateManager {
                 let num_dumped_signs = Arc::new(AtomicUsize::new(0));
                 let sign_per_file = num_total_signs / self.executors.current_num_threads();
 
-                let chunk_signs: Vec<Vec<u64>> = signs
+                let chunk_signs: Vec<Vec<(u64, usize)>> = signs
                     .into_iter()
                     .chunks(sign_per_file)
                     .into_iter()

@@ -174,10 +174,10 @@ impl EmbeddingParameterServiceInner {
 
                     let mut shard = embedding_map.shard(sign).write();
 
-                    match shard.get_refresh(&sign) {
+                    match shard.get_refresh(sign, slot_index) {
                         None => {
                             if rand::thread_rng().gen_range(0f32..1f32) < conf.admit_probability {
-                                let emb = shard.insert_init(*sign, *slot_index, optimizer.clone());
+                                let emb = shard.insert_init(*sign, slot_index, optimizer.clone());
                                 embeddings.extend_from_slice(emb.emb());
 
                                 index_miss_count += 1;
@@ -194,14 +194,15 @@ impl EmbeddingParameterServiceInner {
                 Ok(())
             }
             false => {
-                req.iter().for_each(|(sign, dim)| {
+                req.iter().for_each(|(sign, slot_index)| {
                     let shard = embedding_map.shard(sign).read();
-                    match shard.get(sign) {
+                    match shard.get(sign, slot_index) {
                         Some(entry) => {
                             embeddings.extend_from_slice(entry.emb());
                         }
                         None => {
-                            embeddings.extend_from_slice(vec![0f32; *dim].as_slice());
+                            let dim = self.embedding_config.get_slot_by_index(*slot_index).dim;
+                            embeddings.extend_from_slice(vec![0f32; dim].as_slice());
                             index_miss_count += 1;
                         }
                     }
@@ -281,7 +282,7 @@ impl EmbeddingParameterServiceInner {
 
     pub async fn update_gradient_mixed(
         &self,
-        req: (Vec<u64>, Vec<f32>),
+        req: (Vec<(u64, usize)>, Vec<f32>),
     ) -> Result<(), EmbeddingParameterServerError> {
         let conf = self.get_configuration().await?;
         let (signs, remaining_gradients) = req;
@@ -298,9 +299,9 @@ impl EmbeddingParameterServiceInner {
         let embedding_map = EmbeddingShardedMap::get()?;
 
         tokio::task::block_in_place(|| {
-            for sign in signs.iter() {
+            for (sign, slot_index) in signs.iter() {
                 let mut shard = embedding_map.shard(sign).write();
-                if let Some(mut entry) = shard.get_mut(sign) {
+                if let Some(mut entry) = shard.get_mut(sign, slot_index) {
                     let entry_dim = entry.embedding_dim;
                     let (grad, r) = remaining_gradients.split_at(entry_dim);
                     remaining_gradients = r;
@@ -314,7 +315,7 @@ impl EmbeddingParameterServiceInner {
                         }
                     }
 
-                    indices_to_commit.push(*sign);
+                    indices_to_commit.push((*sign, *slot_index));
                 } else {
                     gradient_id_miss_count += 1;
                 }
@@ -456,7 +457,7 @@ impl EmbeddingParameterService {
 
     pub async fn update_gradient_mixed(
         &self,
-        req: (Vec<u64>, Vec<f32>),
+        req: (Vec<(u64, usize)>, Vec<f32>),
     ) -> Result<(), EmbeddingParameterServerError> {
         self.inner.update_gradient_mixed(req).await
     }

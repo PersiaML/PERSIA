@@ -5,23 +5,120 @@ use crate::emb_entry::{
 use persia_common::optim::Optimizable;
 use persia_embedding_config::{
     EmbeddinHyperparameters, EmbeddingConfig, EmbeddingParameterServerConfig, PersiaReplicaInfo,
+    SlotConfig,
 };
 use persia_libs::hashbrown::HashMap;
 use persia_speedy::{Readable, Writable};
 use std::sync::Arc;
 
-use persia_libs::tracing;
+#[derive(Readable, Writable)]
+pub struct LruCache {
+    pub hashmap: HashMap<u64, u32>,
+    pub linkedlist: PersiaArrayLinkedList,
+    pub slot_index: usize,
+    pub capacity: usize,
+}
 
-#[derive(Clone, Readable, Writable, Debug)]
-pub struct NodeIndex {
-    pub linkedlist_index: u32,
-    pub array_index: u32,
+impl LruCache {
+    pub fn get(&self, sign: &u64) -> Option<PersiaEmbeddingEntryRef> {
+        match self.hashmap.get(sign) {
+            Some(idx) => self.linkedlist.get(*idx),
+            None => None,
+        }
+    }
+
+    pub fn get_dyn(&self, sign: &u64) -> Option<DynamicEmbeddingEntry> {
+        match self.hashmap.get(sign) {
+            Some(idx) => {
+                let entry_ref: PersiaEmbeddingEntryRef = self.linkedlist.get(*idx).unwrap();
+                let entry_dyn = DynamicEmbeddingEntry {
+                    inner: entry_ref.inner.to_vec(),
+                    embedding_dim: entry_ref.embedding_dim,
+                    sign: entry_ref.sign,
+                    slot_index: self.slot_index,
+                };
+                Some(entry_dyn)
+            }
+            None => None,
+        }
+    }
+
+    pub fn get_mut(&mut self, sign: &u64) -> Option<PersiaEmbeddingEntryMut> {
+        match self.hashmap.get(sign) {
+            Some(idx) => self.linkedlist.get_mut(*idx),
+            None => None,
+        }
+    }
+
+    pub fn get_refresh(&mut self, sign: &u64) -> Option<PersiaEmbeddingEntryRef> {
+        match self.hashmap.get_mut(sign) {
+            Some(idx) => {
+                let new_idx = self.linkedlist.move_to_back(*idx);
+                *idx = new_idx;
+                self.linkedlist.back()
+            }
+            None => None,
+        }
+    }
+
+    pub fn insert_dyn(&mut self, sign: u64, value: DynamicEmbeddingEntry) {
+        if let Some(idx) = self.hashmap.get_mut(&sign) {
+            self.linkedlist.remove(*idx);
+            let new_idx = self.linkedlist.push_back(value);
+            *idx = new_idx;
+        } else {
+            let idx = self.linkedlist.push_back(value);
+            self.hashmap.insert(sign, idx);
+            self.evict();
+        }
+    }
+
+    pub fn insert_init(
+        &mut self,
+        sign: u64,
+        optimizer: Arc<Box<dyn Optimizable + Send + Sync>>,
+        slot_config: &SlotConfig,
+        hyperparameters: &EmbeddinHyperparameters,
+    ) -> PersiaEmbeddingEntryRef {
+        if self.hashmap.get(&sign).is_none() {
+            let idx = self.linkedlist.push_back_init(
+                &hyperparameters.initialization_method,
+                slot_config.dim,
+                optimizer,
+                sign,
+                sign,
+            );
+            self.hashmap.insert(sign, idx);
+
+            self.evict();
+
+            self.linkedlist.get(idx).unwrap()
+        } else {
+            self.get(&sign).unwrap()
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.hashmap.clear();
+        self.linkedlist.clear();
+    }
+
+    pub fn len(&self) -> usize {
+        self.hashmap.len()
+    }
+
+    fn evict(&mut self) {
+        if self.linkedlist.len() > self.capacity {
+            if let Some(evicted) = self.linkedlist.pop_front() {
+                self.hashmap.remove(&evicted);
+            }
+        }
+    }
 }
 
 #[derive(Readable, Writable)]
 pub struct EvictionMap {
-    pub hashmap: HashMap<u64, NodeIndex>,
-    pub linkedlists: Vec<PersiaArrayLinkedList>,
+    pub lru_caches: Vec<LruCache>,
     pub embedding_config: EmbeddingConfig,
     pub hyperparameters: EmbeddinHyperparameters,
     pub shard_idx: usize,
@@ -39,10 +136,11 @@ impl EvictionMap {
         let bucket_size = embedding_parameter_server_config.num_hashmap_internal_shards;
         let replica_size = replica_info.replica_size;
 
-        let linkedlists = embedding_config
+        let lru_caches = embedding_config
             .slots_config
             .iter()
-            .map(|(_, slot_config)| {
+            .enumerate()
+            .map(|(slot_index, (_, slot_config))| {
                 let capacity = slot_config.capacity / bucket_size / replica_size;
                 let optimizer_space = optimizer.require_space(slot_config.dim);
                 let linkedlist: PersiaArrayLinkedList = match slot_config.dim + optimizer_space {
@@ -112,139 +210,69 @@ impl EvictionMap {
                         capacity
                     )),
                 };
-                linkedlist
+                LruCache {
+                    linkedlist,
+                    hashmap: HashMap::with_capacity(capacity),
+                    slot_index,
+                    capacity,
+                }
             })
             .collect();
 
         Self {
-            hashmap: HashMap::new(),
-            linkedlists,
+            lru_caches,
             embedding_config: embedding_config.clone(),
             hyperparameters: hyperparameters.clone(),
             shard_idx,
         }
     }
 
-    pub fn get(&self, key: &u64) -> Option<PersiaEmbeddingEntryRef> {
-        match self.hashmap.get(key) {
-            Some(idx) => self.linkedlists[idx.linkedlist_index as usize].get(idx.array_index),
-            None => None,
-        }
+    pub fn get(&self, sign: &u64, slot_index: &usize) -> Option<PersiaEmbeddingEntryRef> {
+        self.lru_caches[*slot_index].get(sign)
     }
 
-    pub fn get_dyn(&self, key: &u64) -> Option<DynamicEmbeddingEntry> {
-        match self.hashmap.get(key) {
-            Some(idx) => {
-                let entry_ref = self.linkedlists[idx.linkedlist_index as usize]
-                    .get(idx.array_index)
-                    .unwrap();
-                let entry_dyn = DynamicEmbeddingEntry {
-                    inner: entry_ref.inner.to_vec(),
-                    embedding_dim: entry_ref.embedding_dim,
-                    sign: entry_ref.sign,
-                    slot_index: idx.linkedlist_index as usize,
-                };
-                Some(entry_dyn)
-            }
-            None => None,
-        }
+    pub fn get_dyn(&self, sign: &u64, slot_index: &usize) -> Option<DynamicEmbeddingEntry> {
+        self.lru_caches[*slot_index].get_dyn(sign)
     }
 
-    pub fn get_mut(&mut self, key: &u64) -> Option<PersiaEmbeddingEntryMut> {
-        match self.hashmap.get(key) {
-            Some(idx) => self.linkedlists[idx.linkedlist_index as usize].get_mut(idx.array_index),
-            None => None,
-        }
+    pub fn get_mut(&mut self, sign: &u64, slot_index: &usize) -> Option<PersiaEmbeddingEntryMut> {
+        self.lru_caches[*slot_index].get_mut(sign)
     }
 
-    pub fn get_refresh(&mut self, key: &u64) -> Option<PersiaEmbeddingEntryRef> {
-        match self.hashmap.get_mut(key) {
-            Some(idx) => {
-                let new_idx =
-                    self.linkedlists[idx.linkedlist_index as usize].move_to_back(idx.array_index);
-                idx.array_index = new_idx;
-                self.linkedlists[idx.linkedlist_index as usize].back()
-            }
-            None => None,
-        }
+    pub fn get_refresh(
+        &mut self,
+        sign: &u64,
+        slot_index: &usize,
+    ) -> Option<PersiaEmbeddingEntryRef> {
+        self.lru_caches[*slot_index].get_refresh(sign)
     }
 
-    pub fn insert_dyn(&mut self, key: u64, value: DynamicEmbeddingEntry) {
-        if let Some(idx) = self.hashmap.get_mut(&key) {
-            self.linkedlists[idx.linkedlist_index as usize].remove(idx.array_index);
-            let new_idx = self.linkedlists[idx.linkedlist_index as usize].push_back(value);
-            idx.array_index = new_idx;
-        } else {
-            let linkedlist_index = value.slot_index;
-            let array_index = self.linkedlists[linkedlist_index].push_back(value);
-            self.hashmap.insert(
-                key.clone(),
-                NodeIndex {
-                    linkedlist_index: linkedlist_index as u32,
-                    array_index,
-                },
-            );
-
-            self.evict(linkedlist_index);
-        }
+    pub fn insert_dyn(&mut self, sign: u64, value: DynamicEmbeddingEntry) {
+        let slot_index = value.slot_index;
+        self.lru_caches[slot_index].insert_dyn(sign, value)
     }
 
     pub fn insert_init(
         &mut self,
-        key: u64,
-        slot_index: usize,
+        sign: u64,
+        slot_index: &usize,
         optimizer: Arc<Box<dyn Optimizable + Send + Sync>>,
     ) -> PersiaEmbeddingEntryRef {
-        let slot_config = self.embedding_config.get_slot_by_index(slot_index);
-        if self.hashmap.get(&key).is_none() {
-            let linkedlist_index = slot_index;
-            let array_index = self.linkedlists[linkedlist_index].push_back_init(
-                &self.hyperparameters.initialization_method,
-                slot_config.dim,
-                optimizer,
-                key,
-                key,
-            );
-            self.hashmap.insert(
-                key,
-                NodeIndex {
-                    linkedlist_index: linkedlist_index as u32,
-                    array_index,
-                },
-            );
-
-            self.evict(linkedlist_index);
-
-            self.linkedlists[linkedlist_index].get(array_index).unwrap()
-        } else {
-            self.get(&key).unwrap()
-        }
+        let slot_config = self.embedding_config.get_slot_by_index(*slot_index);
+        self.lru_caches[*slot_index].insert_init(
+            sign,
+            optimizer,
+            slot_config,
+            &self.hyperparameters,
+        )
     }
 
     pub fn clear(&mut self) {
-        self.hashmap.clear();
-        self.linkedlists.iter_mut().for_each(|list| list.clear());
+        self.lru_caches.iter_mut().for_each(|lru| lru.clear());
     }
 
     pub fn len(&self) -> usize {
-        self.hashmap.len()
-    }
-
-    fn evict(&mut self, linkedlist_index: usize) {
-        if self.linkedlists[linkedlist_index].len()
-            > self
-                .embedding_config
-                .slots_config
-                .get_index(linkedlist_index)
-                .unwrap()
-                .1
-                .capacity
-        {
-            tracing::info!("evicting...");
-            if let Some(evicted) = self.linkedlists[linkedlist_index].pop_front() {
-                self.hashmap.remove(&evicted);
-            }
-        }
+        self.lru_caches.iter().map(|lru| lru.len()).sum::<usize>()
     }
 }
 
@@ -281,7 +309,9 @@ mod eviction_map_tests {
             },
         };
 
-        let embedding_parameter_server_config = EmbeddingParameterServerConfig::default();
+        let mut embedding_parameter_server_config = EmbeddingParameterServerConfig::default();
+        embedding_parameter_server_config.num_hashmap_internal_shards = 1;
+
         let replica_info = PersiaReplicaInfo {
             replica_index: 0,
             replica_size: 1,
@@ -335,8 +365,8 @@ mod eviction_map_tests {
         }
 
         assert_eq!(map.len(), 12);
-        assert_eq!(map.get_refresh(&3).is_none(), true);
-        assert_eq!(map.get_refresh(&4).is_some(), true);
+        assert_eq!(map.get_refresh(&3, &0).is_none(), true);
+        assert_eq!(map.get_refresh(&4, &0).is_some(), true);
 
         map.insert_dyn(
             8,
@@ -349,7 +379,7 @@ mod eviction_map_tests {
         );
 
         assert_eq!(map.len(), 12);
-        assert_eq!(map.get(&5).is_none(), true);
-        assert_eq!(map.get(&6).is_some(), true);
+        assert_eq!(map.get(&5, &0).is_none(), true);
+        assert_eq!(map.get(&6, &0).is_some(), true);
     }
 }

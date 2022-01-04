@@ -695,6 +695,9 @@ impl EmbeddingWorkerInner {
                     let slot_conf = self
                         .embedding_config
                         .get_slot_by_name(feature_batch.feature_name.as_str());
+                    let slot_index = self
+                        .embedding_config
+                        .get_index_by_name(feature_batch.feature_name.as_str());
                     let raw_gradients = std::mem::take(&mut feature_gradient.gradients);
 
                     if tokio::task::block_in_place(|| match &raw_gradients {
@@ -786,7 +789,8 @@ impl EmbeddingWorkerInner {
                             let replica_index = sign_to_shard_modulo(sign.sign, self.replica_size);
                             sharded_gradients[replica_index as usize]
                                 .extend_from_slice(grad.as_slice().unwrap());
-                            sharded_gradient_signs[replica_index as usize].push(sign.sign);
+                            sharded_gradient_signs[replica_index as usize]
+                                .push((sign.sign, slot_index));
                         }
                     });
                 }
@@ -1214,11 +1218,15 @@ impl EmbeddingWorkerInner {
                             embedding_model_manager.load_eviction_map(file_path)
                         })?;
 
-                        let entries = eviction_map
-                            .hashmap
-                            .iter()
-                            .map(|(sign, _)| eviction_map.get_dyn(&sign).unwrap())
-                            .collect();
+                        let mut entries: Vec<DynamicEmbeddingEntry> =
+                            Vec::with_capacity(eviction_map.len());
+                        eviction_map.lru_caches.into_iter().for_each(|lru| {
+                            lru.hashmap.keys().for_each(|sign| {
+                                if let Some(entry) = lru.get_dyn(sign) {
+                                    entries.push(entry);
+                                }
+                            })
+                        });
 
                         embedding_worker_inner.set_embedding(entries).await?;
                         let cur_loaded = loaded.fetch_add(1, Ordering::AcqRel) + 1;
