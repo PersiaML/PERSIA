@@ -81,10 +81,9 @@ impl LruCache {
         hyperparameters: &EmbeddinHyperparameters,
     ) -> PersiaEmbeddingEntryRef {
         let feature_prefix_bias = u64::BITS - 8_u32;
-        let index_prefix = num_traits::CheckedShl::checked_shl(
-            &(self.slot_index as u64 + 1),
-            feature_prefix_bias,
-        ).unwrap();
+        let index_prefix =
+            num_traits::CheckedShl::checked_shl(&(self.slot_index as u64 + 1), feature_prefix_bias)
+                .unwrap();
 
         let feature_spacing = (1u64 << (u64::BITS - 8_u32)) - 1;
         let seed = sign % feature_spacing + index_prefix;
