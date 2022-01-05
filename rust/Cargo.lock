@@ -1865,6 +1865,7 @@ dependencies = [
  "ahash 0.7.6",
  "array-linked-list",
  "linked-hash-map",
+ "num-traits",
  "persia-common",
  "persia-embedding-config",
  "persia-libs",
