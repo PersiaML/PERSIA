@@ -1,5 +1,4 @@
 import os
-from posixpath import abspath
 
 import torch
 import numpy as np
@@ -67,7 +66,7 @@ def test(model: torch.nn.Module, data_loader: Dataloder, cuda: bool):
                 pred = pred.cpu()
                 label = label.cpu()
             else:
-                label = label.clone()  # cpu mode need copy the target data..
+                label = label.clone()  # cpu mode need copy the target data
             all_pred.append(pred.detach().numpy())
             all_labels.append(label.detach().numpy())
             accuracy = (torch.round(pred) == label).sum() / label.shape[0]
@@ -76,7 +75,7 @@ def test(model: torch.nn.Module, data_loader: Dataloder, cuda: bool):
 
         all_pred, all_labels = np.concatenate(all_pred), np.concatenate(all_labels)
 
-        fpr, tpr, th = metrics.roc_curve(all_labels, all_pred)
+        fpr, tpr, _th = metrics.roc_curve(all_labels, all_pred)
         test_auc = metrics.auc(fpr, tpr)
 
         test_accuracies = torch.mean(torch.tensor(accuracies))
@@ -91,13 +90,21 @@ def test(model: torch.nn.Module, data_loader: Dataloder, cuda: bool):
 
 
 if __name__ == "__main__":
+
+    reproducible = bool(int(os.environ.get("REPRODUCIBLE", 0)))
+    embedding_staleness = int(os.environ.get("EMBEDDING_STALENESS", 10))
+
+    if reproducible:
+        setup_seed(3)
+
     model = DNN()
     logger.info("init Simple DNN model...")
     rank, device_id, world_size = get_rank(), get_local_rank(), get_world_size()
 
     mixed_precision = True
+    use_cuda = torch.cuda.is_available()
 
-    if torch.cuda.is_available():
+    if use_cuda:
         torch.cuda.set_device(device_id)
         model.cuda(device_id)
     else:
@@ -110,15 +117,12 @@ if __name__ == "__main__":
     embedding_optimizer = Adagrad(lr=1e-2)
     loss_fn = torch.nn.BCELoss(reduction="mean")
 
+    buffer_size = 10
     test_dir = os.path.join(
         os.path.dirname(os.path.realpath(__file__)), "data/test.npz"
     )
     test_dataset = TestDataset(test_dir, batch_size=128)
     test_interval = 254 // world_size - 1
-    reproducible = bool(int(os.environ.get("REPRODUCIBLE", 0)))
-    embedding_staleness = int(os.environ.get("EMBEDDING_STALENESS", 10))
-
-    buffer_size = 10
 
     with TrainCtx(
         model=model,
@@ -143,10 +147,10 @@ if __name__ == "__main__":
             accuracy = (torch.round(output) == label).sum() / label.shape[0]
 
             logger.info(
-                f"current idx: {batch_idx} loss: {float(loss)} scaled_loss: {float(scaled_loss)} accuracy: {float(accuracy)}"
+                f"current batch idx: {batch_idx} loss: {float(loss)} scaled_loss: {float(scaled_loss)} accuracy: {float(accuracy)}"
             )
             if batch_idx % test_interval == 0 and batch_idx != 0:
-                test_auc = test(model, test_loader, torch.cuda.is_available())
+                test_auc = test(model, test_loader, use_cuda)
 
                 checkpoint_dir = os.environ.get("PERSIA_CKPT_DIR", None)
                 if checkpoint_dir is not None and rank == 0:
@@ -156,13 +160,7 @@ if __name__ == "__main__":
                 if world_size == 1 and reproducible and embedding_staleness == 1:
                     np.testing.assert_equal(
                         np.array([test_auc]),
-                        np.array(
-                            [
-                                GPU_TEST_AUC
-                                if torch.cuda.is_available()
-                                else CPU_TEST_AUC
-                            ]
-                        ),
+                        np.array([GPU_TEST_AUC if use_cuda else CPU_TEST_AUC]),
                     )
 
                 break

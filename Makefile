@@ -13,7 +13,7 @@ format:
 pytest:
 	pytest
 
-all: lint flake8 format pytest
+all: lint flake8 format
 
 build_dev_pip:
 	USE_CUDA=1 pip3 install -e . --prefix=~/.local/
