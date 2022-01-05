@@ -124,6 +124,17 @@ pub struct EvictionMap {
     pub shard_idx: usize,
 }
 
+impl Default for EvictionMap {
+    fn default() -> Self {
+        Self {
+            lru_caches: Vec::new(),
+            embedding_config: EmbeddingConfig::default(),
+            hyperparameters: EmbeddinHyperparameters::default(),
+            shard_idx: 0,
+        }
+    }
+}
+
 impl EvictionMap {
     pub fn new(
         embedding_config: &EmbeddingConfig,

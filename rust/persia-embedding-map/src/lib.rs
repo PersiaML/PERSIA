@@ -35,6 +35,17 @@ pub struct EmbeddingShardedMap {
 }
 
 impl EmbeddingShardedMap {
+    pub fn empty(num_shards: usize) {
+        let shard_inner = (0..num_shards).map(|_| {
+            RwLock::new(EvictionMap::default())
+        }).collect();
+        let empty = Arc::new(Sharded {
+            inner: shard_inner,
+            phantom: std::marker::PhantomData::default(),
+        });
+        let _ = EMBEDDING_SHARDED_MAP.set(EmbeddingShardedMap {inner: empty});
+    }
+
     pub fn set(
         optimizer: Arc<Box<dyn Optimizable + Send + Sync>>,
         hyperparameters: EmbeddinHyperparameters,

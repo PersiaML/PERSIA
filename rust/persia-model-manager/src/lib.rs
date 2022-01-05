@@ -370,7 +370,7 @@ impl EmbeddingModelManager {
     pub fn load_embedding_from_dir(
         &self,
         dir: PathBuf,
-        embedding_map: EmbeddingShardedMap,
+        embedding_map: Option<EmbeddingShardedMap>,
     ) -> Result<(), EmbeddingModelManagerError> {
         tracing::info!("start to load embedding from dir {:?}", dir);
 
@@ -378,6 +378,11 @@ impl EmbeddingModelManager {
 
         let num_total_files = file_list.len();
         let num_loaded_files = Arc::new(AtomicUsize::new(0));
+
+        let embedding_map = embedding_map.unwrap_or_else(|| {
+            EmbeddingShardedMap::empty(num_total_files);
+            EmbeddingShardedMap::get().expect("EmbeddingShardedMap not set")
+        });
 
         for file_path in file_list.into_iter() {
             tracing::debug!("spawn to load embedding from {:?}", file_path);

@@ -550,6 +550,14 @@ pub struct EmbeddingConfig {
     pub slots_config: indexmap::IndexMap<String, SlotConfig>,
 }
 
+impl Default for EmbeddingConfig {
+    fn default() -> Self {
+        Self {
+            slots_config: indexmap::IndexMap::new(),
+        }
+    }
+}
+
 impl EmbeddingConfig {
     pub fn set(file_path: &PathBuf) -> Result<(), PersiaGlobalConfigError> {
         if !file_path.is_file() {

@@ -388,7 +388,7 @@ impl EmbeddingParameterServiceInner {
     }
 
     pub async fn load(&self, dir: String) -> Result<(), EmbeddingParameterServerError> {
-        let embedding_map = EmbeddingShardedMap::get()?;
+        let embedding_map = EmbeddingShardedMap::get().ok();
         let dst_dir = PathBuf::from(dir);
         let shard_dir = self.embedding_model_manager.get_shard_dir(&dst_dir);
         self.embedding_model_manager
