@@ -118,6 +118,7 @@ def test_data_ctx(use_cuda: bool):
     from persia.ctx import PreprocessMode, _prepare_feature
     from persia.data import Dataloder, StreamingDataset
     from persia.embedding import get_default_embedding_config
+    from persia.embedding.optim import SGD
     from persia.env import get_world_size
 
     device_id = 0 if use_cuda else None
@@ -131,6 +132,7 @@ def test_data_ctx(use_cuda: bool):
         nats_server_port=random_port(),
     ):
         embedding_config = get_default_embedding_config()
+        sparse_optimizer = SGD(lr=0.1)
 
         with BaseCtx(device_id=device_id) as ctx:
             ctx.common_context.init_nats_publisher(get_world_size())
@@ -141,6 +143,7 @@ def test_data_ctx(use_cuda: bool):
                 embedding_config.weight_bound > 0,
                 embedding_config.weight_bound,
             )
+            sparse_optimizer.apply()
             ctx.common_context.wait_servers_ready()
 
             data_loader = Dataloder(
