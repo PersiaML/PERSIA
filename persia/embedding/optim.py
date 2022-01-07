@@ -5,7 +5,7 @@ from persia.prelude import OptimizerBase
 
 
 class Optimizer(ABC):
-    r"""Base optimizer to configurate the sparse embedding update behavior."""
+    r"""Base optimizer to configurate the embedding update behavior."""
 
     def __init__(self):
         self.optimizer_base = OptimizerBase()
@@ -21,7 +21,7 @@ class SGD(Optimizer):
     def __init__(self, lr: float, momentum: float = 0.0, weight_decay: float = 0.0):
         """
         Arguments:
-            params(float): learning rate.
+            lr(float): learning rate.
             momentum(float, optional): momentum factor.
             weight_decay(float, optional): parameters L2 penalty factor.
         """
@@ -45,7 +45,7 @@ class Adam(Optimizer):
         """
         Arguments:
             lr(float): learning rate.
-            betas(tuple[float,float], optional): caculate the running averages of gradient and its square.
+            betas(tuple[float,float], optional): calculate the running averages of gradient and its square.
             weight_decay(float, optional): parameters L2 penalty factor.
             eps(float, optional): epsilon to avoid div zero.
         """

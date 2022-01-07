@@ -407,15 +407,15 @@ impl PersiaDataFlowComponent {
 }
 
 #[pyfunction]
-pub fn init_responder(world_size: usize, channel: &PersiaBatchDataSender) -> PyResult<()> {
+pub fn initialize_dataflow(world_size: usize, channel: &PersiaBatchDataSender) -> PyResult<()> {
     let common_context = PersiaCommonContextImpl::get();
     RESPONDER.get_or_init(|| {
-        let nats_service = persia_dataflow_service::DataflowService {
+        let dataflow_service = persia_dataflow_service::DataflowService {
             output_channel: channel.inner.clone(),
             world_size,
         };
         Arc::new(common_context.async_runtime.block_on(
-            persia_dataflow_service::DataflowServiceResponder::new(nats_service),
+            persia_dataflow_service::DataflowServiceResponder::new(dataflow_service),
         ))
     });
 
@@ -424,7 +424,7 @@ pub fn init_responder(world_size: usize, channel: &PersiaBatchDataSender) -> PyR
 
 pub fn init_module(super_module: &PyModule, py: Python) -> PyResult<()> {
     let module = PyModule::new(py, "nats")?;
-    module.add_function(wrap_pyfunction!(init_responder, module)?)?;
+    module.add_function(wrap_pyfunction!(initialize_dataflow, module)?)?;
     super_module.add_submodule(module)?;
     Ok(())
 }

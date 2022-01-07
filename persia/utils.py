@@ -4,7 +4,6 @@ import subprocess
 
 from typing import List, Optional
 
-from persia.error import FileNotFoundException
 from persia.logger import get_default_logger
 from persia.env import PERSIA_LAUNCHER_VERBOSE
 
@@ -15,7 +14,8 @@ def setup_seed(seed: int):
     """Set the random seed for dependencies to ensure that experiments are reproducible.
 
     Arguments:
-        seed (int): integer to use as seed for random numebr generator used by random, NumPy and pyTorch.
+        seed (int): integer to use as seed for random number generator used by random,
+            NumPy and pyTorch.
     """
     import numpy as np
     import torch
@@ -33,13 +33,13 @@ def setup_seed(seed: int):
 
 
 def load_yaml(filepath: str) -> dict:
-    """Load the yaml config by provided filepath
+    """Load the yaml config by provided filepath.
 
     Arguments:
-        filepath (str): yaml config path
+        filepath (str): yaml config path.
     """
     if not os.path.exists(filepath):
-        raise FileNotFoundException(f"filepath {filepath} not found!")
+        raise FileNotFoundError(f"filepath {filepath} not found!")
 
     with open(filepath, "r") as file:
         return yaml.load(file, Loader=yaml.FullLoader)

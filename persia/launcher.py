@@ -1,3 +1,100 @@
+r"""
+``persia.launcher`` is a module that provides the functionality to help user launch the PERSIA
+service. A command line interface ``persia-launcher`` is installed automatically
+when you install PERSIA. You can launch the PERSIA modules ``data-loader``, ``nn-worker``,
+``embedding-worker``, and ``embedding-parameter-server`` by invoking the subcommand from
+``persia-launcher``.
+
+.. code-block:: bash
+
+    persia-launcher --help
+
+Or
+
+.. code-block:: bash
+
+    python3 -m persia.launcher --help
+
+=================
+NN Worker And Data Loader
+=================
+
+If you want to launch the ``nn-worker`` and ``data-loader``, you can use:
+
+.. code-block:: bash
+
+    # Launch the nn-worker
+    persia-launcher nn-worker train.py --nproc-per-node 1 --node-rank 0 --nnodes 1
+
+    # Launch the data-loader
+    persia-launcher data-loader data_loader.py --replica-size 1 --replica-index 0
+
+
+=================
+Embedding Worker And Embedding Parameter Server
+=================
+
+To launch the ``embedding-worker`` and ``embedding-parameter-server``, you can use:
+
+.. code-block:: bash
+
+    # Launch the embedding-worker
+    persia-launcher embedding-worker \
+        --global-config global_config.yml \
+        --embedding-config embedding_config.yml \
+        --replica-index 0 --replica-size 1
+
+    # Launch the embedding-parameter-server
+    persia-launcher embedding-parameter-server\
+        --global-config global_config.yml \
+        --embedding-config embedding_config.yml \
+        --replica-index 0 --replica-size 1
+
+=================
+Arguments from Environment Variables
+=================
+
+Some arguments will fallback to the environment variable if the
+arguments are not provided when running the ``persia-launcher``.
+It is useful to control the environment when you deploy the PERSIA
+job in container management tool.
+
+For ``nn-worker``, you can export the environment variable
+``PERSIA_NN_WORKER_ENTRY`` to avoid passing the filepath argument when launching the
+`nn-worker`. And the environment variable ``PERSIA_DATALOADER_ENTRY`` is for
+``data-loader``.
+
+.. code-block::
+
+    export PERSIA_DATALOADER_ENTRY=data_loader.py
+
+    # Launch the data_load
+    persia-launcher data-loader --replica-index 0 --replica-size 1
+
+    export PERSIA_NN_WORKER_ENTRY=train.py
+
+    # Launch the nn-worker
+    persia-launcher nn-worker --nproc-per-node 1 --node-rank 0 --nnodes 1
+
+For ``embedding-worker`` and ``embedding-parameter-server``, you can export the environment
+variable ``PERSIA_EMBEDDING_CONFIG`` and ``PERSIA_GLOBAL_CONFIG`` to avoid passing the
+config filepath to cli command.
+
+.. code-block::
+
+    export PERSIA_EMBEDDING_CONFIG=embedding_config.yml
+    export PERSIA_GLOBAL_CONFIG=global_config.yml
+
+    # Launch the embedding-worker
+    persia-launcher embedding-worker \
+        --replica-index 0 --replica-size 1
+
+    # Launch the embedding-parameter-server
+    persia-launcher embedding-parameter-server \
+        --replica-index 0 --replica-size 1
+
+"""
+
 import os
 import click
 

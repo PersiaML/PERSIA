@@ -45,9 +45,7 @@ autoapi_type = "python"
 autoapi_dirs = ["../persia"]
 autoapi_root = "autoapi"
 autoapi_template_dir = "_autoapi_templates"
-autoapi_ignore = [
-    # "*/bagua/autotune/*",
-]
+autoapi_ignore = []
 autoapi_options = [
     "members",
     "undoc-members",
@@ -114,18 +112,20 @@ html_show_sphinx = False
 html_show_copyright = True
 
 
-_ignore_methods = [
-    # "bagua.torch_api.contrib.LoadBalancingDistributedSampler.shuffle_chunks",
-]
+_ignore_methods = []
 
-_ignore_functions = []
+_ignore_functions = [
+    "persia.launcher.cli",
+    "persia.launcher.nn_worker",
+    "persia.launcher.data_loader",
+    "persia.launcher.embedding_worker",
+    "persia.launcher.embedding_parameter_server",
+]
 
 _ignore_classes = []
 
 _ignore_module = [
     "persia.version",
-    "persia.launcher",
-    "persia.error",
     "persia.logger",
     "persia.prelude",
     "persia.k8s_utils",

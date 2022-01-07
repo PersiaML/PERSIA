@@ -8,8 +8,7 @@ from typing import List, Tuple, Optional, Union
 
 import torch
 
-import persia.env as env
-
+from persia import env
 from persia.logger import get_default_logger
 from persia.embedding.optim import Optimizer
 from persia.embedding import EmbeddingConfig, get_default_embedding_config
@@ -30,7 +29,7 @@ def _check_finite(tensors: List[torch.Tensor]) -> bool:
     """Check if all tensors in the input list contain only finite elements.
 
     Arguments:
-        tensors (List[torch.Tensor]): List of tensor to be checked.
+        tensors (List[torch.Tensor]): list of tensor to be checked.
 
     Returns:
         bool: ``True`` if all elements in ``tensors`` are finite or None.
@@ -44,8 +43,8 @@ def _cast_dlpack2torch_tensor(
     """Convert the DLPack PythonCapsule to torch tensor.
 
     Arguments:
-        Tensor (Tensor): Tensor wrapper that contains dlpack information.
-        requires_grad (bool, optional): Whether current tensor requires grad or not.
+        Tensor (Tensor): tensor wrapper that contains dlpack information.
+        requires_grad (bool, optional): whether current tensor requires grad or not.
     Returns: pytorch tensor
     """
 
@@ -59,12 +58,14 @@ def _cast_dlpack2torch_tensor(
 class PreprocessMode(Enum):
     r"""Mode of preprocessing.
 
-    Used by ``EmbeddingCtx.prepare_features`` to generate features of different datatypes.
+    Used by :meth:`.prepare_features` to generate features of different datatypes.
 
-    When set to ``TRAIN``, ``prepare_features`` will return a torch tensor with ``requires_grad`` attribute set to ``True``.
-    When set to ``EVAL``, ``prepare_features`` will return a torch tensor with ``requires_grad`` attribute set to ``False``.
-    ``INFERENCE`` behaves almost identical to ``PreprocessMode.EVAL``, except that ``INFERENCE`` allows ""EmbeddingCtx``
-    to process the ``PersiaTrainingBatch`` without a target tensor.
+    When set to :attr:`.TRAIN`, :meth:`.prepare_features` will return a torch tensor with
+    ``requires_grad`` attribute set to ``True``. When set to :attr:`.EVAL`,
+    :meth:`.prepare_features` will return a torch tensor with ``requires_grad`` attribute
+    set to ``False``. :attr:`.INFERENCE` behaves almost identical to :attr:`.EVAL`,
+    except that :attr:`.INFERENCE` allows :class:`EmbeddingCtx` to process the :class:`PersiaTrainingBatch`
+    without a target tensor.
     """
     TRAIN = 1
     EVAL = 2
@@ -72,36 +73,41 @@ class PreprocessMode(Enum):
 
 
 def _prepare_feature(
-    batch: PersiaTrainingBatch, preprocess_mode: PreprocessMode = PreprocessMode.TRAIN
+    persia_training_batch: PersiaTrainingBatch,
+    preprocess_mode: PreprocessMode = PreprocessMode.TRAIN,
 ) -> Tuple[List[torch.Tensor], List[torch.Tensor], Optional[List[torch.Tensor]]]:
     if preprocess_mode == PreprocessMode.INFERENCE:
-        batch.label_torch_tensors = None
+        persia_training_batch.label_torch_tensors = None
     else:
         # pytype: disable=attribute-error
-        batch.label_tensors = batch.consume_all_label_tensors()
+        persia_training_batch.label_tensors = (
+            persia_training_batch.consume_all_label_tensors()
+        )
         # pytype: enable=attribute-error
-        batch.label_torch_tensors = [
+        persia_training_batch.label_torch_tensors = [
             _cast_dlpack2torch_tensor(label_tensor)
-            for label_tensor in batch.label_tensors
+            for label_tensor in persia_training_batch.label_tensors
         ]
 
     is_training = preprocess_mode == PreprocessMode.TRAIN  # cache property
 
     # pytype: disable=attribute-error
-    batch.non_id_type_feature_tensors = batch.consume_all_non_id_type_feature_tensors()
+    persia_training_batch.non_id_type_feature_tensors = (
+        persia_training_batch.consume_all_non_id_type_feature_tensors()
+    )
     # pytype: enable=attribute-error
-    batch.non_id_type_feature_torch_tensors = [
+    persia_training_batch.non_id_type_feature_torch_tensors = [
         _cast_dlpack2torch_tensor(non_id_type_feature_tensor)
-        for non_id_type_feature_tensor in batch.non_id_type_feature_tensors
+        for non_id_type_feature_tensor in persia_training_batch.non_id_type_feature_tensors
     ]
 
     # pytype: disable=attribute-error
-    batch.id_type_feature_embedding_tensors = (
-        batch.consume_all_id_type_feature_embedding_tensors()
+    persia_training_batch.id_type_feature_embedding_tensors = (
+        persia_training_batch.consume_all_id_type_feature_embedding_tensors()
     )
     # pytype: enable=attribute-error
 
-    batch.emb_slots = []  # cache embedding to prevent tensor expired
+    persia_training_batch.emb_slots = []  # cache embedding to prevent tensor expired
     id_type_feature_embedding_cache_torch_tensors = (
         []
     )  # cache origin embedding for later backward procedure
@@ -109,7 +115,9 @@ def _prepare_feature(
         []
     )  # id type tensos for later forward procedure
 
-    for id_type_feature_embedding_tensor in batch.id_type_feature_embedding_tensors:
+    for (
+        id_type_feature_embedding_tensor
+    ) in persia_training_batch.id_type_feature_embedding_tensors:
         if id_type_feature_embedding_tensor.is_raw_embedding():
             # no duplicate id in raw_id_tensor
             (
@@ -119,7 +127,9 @@ def _prepare_feature(
                 sample_id_num,
             ) = id_type_feature_embedding_tensor.get_raw_embedding()
 
-            batch.emb_slots.append([raw_embedding, index, non_empty_index])
+            persia_training_batch.emb_slots.append(
+                [raw_embedding, index, non_empty_index]
+            )
             distinct_id_tensor = _cast_dlpack2torch_tensor(raw_embedding)
             index_tensor = _cast_dlpack2torch_tensor(
                 index
@@ -166,7 +176,7 @@ def _prepare_feature(
             )
         else:
             embedding = id_type_feature_embedding_tensor.get_sum_embedding()
-            batch.emb_slots.append([embedding])
+            persia_training_batch.emb_slots.append([embedding])
             attention_sum_tensor = _cast_dlpack2torch_tensor(
                 embedding, requires_grad=is_training
             )
@@ -175,23 +185,24 @@ def _prepare_feature(
                 (embedding.name, None, None, None, attention_sum_tensor)
             )
 
-    batch.id_type_feature_embedding_torch_tensors = (
+    persia_training_batch.id_type_feature_embedding_torch_tensors = (
         id_type_feature_embedding_torch_tensors
     )
-    batch.id_type_feature_embedding_cache_torch_tensors = (
+    persia_training_batch.id_type_feature_embedding_cache_torch_tensors = (
         id_type_feature_embedding_cache_torch_tensors
     )
 
     return (
-        batch.non_id_type_feature_torch_tensors,
-        batch.id_type_feature_embedding_torch_tensors,
-        batch.label_torch_tensors,
+        persia_training_batch.non_id_type_feature_torch_tensors,
+        persia_training_batch.id_type_feature_embedding_torch_tensors,
+        persia_training_batch.label_torch_tensors,
     )
 
 
 class BaseCtx:
-    r"""Initializes a common context for other persia context, e.g. `DataCtx`, `EmbeddingCtx` and `TrainCtx`.
-    This class should not be instantiated directly.
+    r"""Initializes a common context for other persia context, e.g. :class:`DataCtx`,
+    :class:`EmbeddingCtx` and :class:`TrainCtx`. This class should not be instantiated
+    directly.
     """
 
     def __init__(
@@ -199,8 +210,8 @@ class BaseCtx:
     ):
         """
         Arguments:
-            threadpool_worker_size (int): Rpc threadpool worker size.
-            device_id (int, optional): The CUDA device to use for this process.
+            threadpool_worker_size (int): rpc threadpool worker size.
+            device_id (int, optional): the CUDA device to use for this process.
         """
         self.origin_context = None
 
@@ -261,22 +272,49 @@ class BaseCtx:
 
 
 class DataCtx(BaseCtx):
-    r"""This data context provides communication functionality to data generator component.
-    Used for sending a PersiaBatch to the nn worker and embedding worker.
+    r"""Data context provides the communication functionality to data generator component.
+    Used for sending a :class:`PersiaBatch` to the `nn worker` and `embedding worker`.
 
-    Example:
-        >>> import numpy as np
-        >>> ...
-        >>> from persia.embedding.data import PersiaBatch, IDTypeFeature
-        >>> ...
-        >>> def make_simple_loader():
-        >>>     yield IDTypeFeature("empty_id_type_feature", [np.array([], np.uint64)])
-        >>> loader = make_simple_loader()
-        >>> def fn
-        >>> with DataCtx() as ctx:
-        >>>     for id_type_feature in loader:
-        >>>         batch_data = PersiaBatch([id_type_feature], requires_grad=False)
-        >>>         ctx.send_data(batch_data)
+    If you use the :class:`DataCtx` to send the :class:`PersiaBatch` on `data-loader`, you
+    should use the :class:`StreamingDataset` to receive the data on `nn-worker`.
+
+    On `data-loader`:
+
+    .. code-block:: python
+
+        from persia.ctx import DataCtx
+        from persia.embedding.data import PersiaBatch
+
+        loader = make_loader()
+        with DataCtx() as ctx:
+            for (non_id_type_features, id_type_features, labels) in loader:
+                batch_data = PersiaBatch(
+                    id_type_features=id_type_features,
+                    non_id_type_features,
+                    label,
+                    requires_grad=True
+                )
+                ctx.send_data(persia_batch)
+
+    On `nn-worker`:
+
+    .. code-block:: python
+
+        from persia.ctx import TrainCtx
+        from persia.data import StreamingDataset, DataLoader
+
+        buffer_size = 15
+
+        streaming_dataset = StreamingDataset(buffer_size)
+        data_loader = DataLoader(streaming_dataset)
+
+        with TrainCtx(...):
+            for persia_training_batch in data_loader:
+                ...
+
+    .. note::
+        The examples cannot be run directly, you should launch the `nn_worker`, `embedding-worker`,
+        `embedding-parameter-server`, and `nats-server` to ensure the example gets the correct result.
     """
 
     def __init__(
@@ -285,50 +323,66 @@ class DataCtx(BaseCtx):
         **kwargs,
     ):
         super(DataCtx, self).__init__(*args, **kwargs)
-        self.prepare()
+        self._prepare()
         _logger.info("Data ctx prepare done.")
 
-    def prepare(self):
+    def _prepare(self):
         """Do some preparation to init `DataCtx`."""
 
-        self.common_context.init_nats_publisher(None)
+        self.common_context.init_nats_publisher()
         self.common_context.wait_servers_ready()
 
     def send_data(self, persia_batch: PersiaBatch):
         """Send PersiaBatch from data loader to nn worker and embedding worker side.
 
         Arguments:
-            persia_batch (PersiaBatch): PersiaBatch that haven't been processed.
+            persia_batch (PersiaBatch): :class:`PersiaBatch` that haven't been processed.
         """
         self.common_context.send_id_type_features_to_embedding_worker(persia_batch.data)
         self.common_context.send_non_id_type_features_to_nn_worker(persia_batch.data)
 
 
 class EmbeddingCtx(BaseCtx):
-    r"""Provides the embedding-related functionality. EmbeddingCtx can run offline test or online inference
-    depending on different preprocess_mode. The simplest way to get this context is by using ``persia.ctx.eval_ctx()``
-    to get the ``EmbeddingCtx`` instance.
+    r"""Provides the embedding-related functionality. :class:`EmbeddingCtx` can run offline test
+    or online inference depending on different preprocess_mode. The simplest way to get
+    this context is by using :func:`eval_ctx` to get the
+    :class:`EmbeddingCtx` instance.
 
-    Example:
-        >>> import torch
-        >>> import numpy as np
-        >>> ...
-        >>> from persia.prelude import PersiaBatch
-        >>> ...
-        >>> model = torch.nn.Linear(128, 64)
-        >>> loader = make_dataloader()
-        >>> embedding_config = EmbeddingConfig()
-        >>> with EmbeddingCtx(
-        ...     model=model,
-        ...     PreprocessMode.EVAL,
-        ...     embedding_config
-        ... ) as ctx:
-        >>>     for (non_id_type_feature, id_type_features, label) in loader:
-        >>>         persia_batch = PersiaBatch(id_type_features)
-        >>>         persia_batch.add_non_id_type_feature(non_id_type_feature)
-        >>>         persia_batch.add_label(label)
-        >>>         persia_training_batch = ctx.get_embedding_from_data(persia_batch)
-        >>>         (output, label) = ctx.forward(persia_training_batch)
+    Example for :class:`EmbeddingCtx`:
+
+    .. code-block:: python
+
+        from persia.ctx import EmbeddingCtx, PreprocessMode
+        from persia.embedding.data import PersiaBatch
+
+        model = get_dnn_model()
+        loader = make_dataloader()
+        device_id = 0
+
+        with EmbeddingCtx(
+            PreprocessMode.EVAL,
+            model=model,
+            device_id=device_id
+        ) as ctx:
+            for (non_id_type_features, id_type_features, labels) in loader:
+                persia_batch = PersiaBatch(
+                    id_type_features
+                    non_id_type_features=non_id_type_features,
+                    labels=labels
+                    requires_grad=False
+                )
+                persia_training_batch = ctx.get_embedding_from_data(persia_batch)
+                (output, label) = ctx.forward(persia_training_batch)
+
+    .. note::
+        The examples cannot be run directly, you should launch the `nn_worker`,
+        `embedding-worker`, `embedding-parameter-server`, and `nats-server` to
+        ensure the example gets the correct result.
+
+    .. note::
+        If you set ``device_id=None``, the training data and the model will be placed
+        in host memory rather than in `CUDA` device memory by default.
+
     """
 
     def __init__(
@@ -341,9 +395,11 @@ class EmbeddingCtx(BaseCtx):
     ):
         """
         Arguments:
-            preprocess_mode (PreprocessMode): Different preprocess mode effect the behavior of ``prepare_features``.
-            model (torch.nn.Module): Torch model matched with embeddings in this context.
-            embedding_config (EmbeddingConfig, optional): The embedding configuration that will be sent to the embedding server.
+            preprocess_mode (PreprocessMode): different preprocess mode effect the
+                behavior of :meth:`.prepare_features`.
+            model (torch.nn.Module): denese neural network PyTorch model.
+            embedding_config (EmbeddingConfig, optional): the embedding configuration that
+                will be sent to the embedding server.
         """
         super(EmbeddingCtx, self).__init__(*args, **kwargs)
         self.preprocess_mode = preprocess_mode
@@ -360,9 +416,11 @@ class EmbeddingCtx(BaseCtx):
         self,
         embedding_config: EmbeddingConfig,
     ):
-        """Apply Embedding config to embedding servers.
+        """Apply :class:`EmbeddingConfig` to embedding servers.
+
         Arguments:
-            embedding_config (EmbeddingConfig): The embedding configuration that will be sent to the embedding server.
+            embedding_config (EmbeddingConfig): the embedding configuration that will
+                be sent to the embedding server.
         """
         self.common_context.configure_embedding_parameter_servers(
             embedding_config.emb_initialization[0],
@@ -375,10 +433,10 @@ class EmbeddingCtx(BaseCtx):
     def forward(
         self, batch: PersiaTrainingBatch
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        """Call `prepare_features` and then do a forward step of the model in context.
+        """Call :meth:`.prepare_features` and then do a forward step of the model in context.
 
         Arguments:
-            batch (PersiaTrainingBatch): Training data provided by PersiaML upstream including
+            batch (PersiaTrainingBatch): training data provided by PERSIA upstream including
                 non_id_type_features ,labels, id_type_feature_embeddings and meta info.
 
         Returns:
@@ -390,22 +448,25 @@ class EmbeddingCtx(BaseCtx):
         return (output, labels)
 
     def prepare_features(
-        self, batch: PersiaTrainingBatch
+        self, persia_training_batch: PersiaTrainingBatch
     ) -> Tuple[List[torch.Tensor], List[torch.Tensor], Optional[List[torch.Tensor]]]:
-        r"""This function convert the data in `PersiaTrainingBatch' to `torch.Tensor`.
+        r"""This function converts data from ``PersiaTrainingBatch`` to ``torch.Tensor``.
 
-        `PersiaTrainingBatch' contains non_id_type_features, id_type_feature_embeddings and labels.But they can't use directly in
-        training before convert the `persia.Tensor` to `torch.Tensor`.
+        :class:`PersiaTrainingBatch` contains non_id_type_features, id_type_feature_embeddings
+        and labels. But they can't use directly in training before convert the :class:`Tensor`
+        to ``torch.Tensor``.
 
         Arguments:
-            batch (PersiaTrainingBatch): Training data provided by PersiaML upstream including
-                non_id_type_features, labels, id_type_feature_embeddings and meta info.
+            persia_training_batch (PersiaTrainingBatch): training data provided by PERSIA
+                upstream including non_id_type_features, labels, id_type_feature_embeddings
+                and meta info.
 
         Returns:
-            the tuple of non_id_type_features, id_type_feature_embeddings and labels.
+            the tuple of non_id_type_feature_tensors, id_type_feature_embedding_tensors and
+            label_tensors.
         """
-        self.current_batch = batch
-        return _prepare_feature(batch, self.preprocess_mode)
+        self.current_batch = persia_training_batch
+        return _prepare_feature(persia_training_batch, self.preprocess_mode)
 
     def dump_checkpoint(
         self,
@@ -415,14 +476,15 @@ class EmbeddingCtx(BaseCtx):
         blocking: bool = True,
         with_jit_model: bool = False,
     ):
-        """Dump the dense and embedding checkpoint to destination directory.
+        """Save the model checkpoint (both dense and embedding) to the destination directory.
 
         Arguments:
-            dst_dir (str): Destination directory.
-            dense_filename (str, optional): Dense checkpoint filename.
-            jit_dense_filename (str, optional): Jit dense checkpoint filename.
-            blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
-            with_jit_model (bool, optional): Dump jit script dense checkpoint or not.
+            dst_dir (str): destination directory.
+            dense_filename (str, optional): dense checkpoint filename.
+            jit_dense_filename (str, optional): dense checkpoint filename after
+                PyTorch jit script.
+            blocking (bool, optional): dump embedding checkpoint in blocking mode or not.
+            with_jit_model (bool, optional): dump jit script dense checkpoint or not.
         """
         assert self.model is not None, "model not found, please init context with model"
 
@@ -439,13 +501,13 @@ class EmbeddingCtx(BaseCtx):
         dense_filename: str = "dense.pt",
         blocking: bool = True,
     ):
-        """Load the dense and embedding checkpoint from source directory.
+        """Load the dense and embedding checkpoint from the source directory.
 
         Arguments:
-            src_dir (str): Source directory.
-            map_location (str, optional): Load the dense checkpoint to specific device.
-            dense_filename (str, optional): Dense checkpoint filename.
-            blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
+            src_dir (str): source directory.
+            map_location (str, optional): load the dense checkpoint to specific device.
+            dense_filename (str, optional): dense checkpoint filename.
+            blocking (bool, optional): dump embedding checkpoint in blocking mode or not.
         """
         assert self.model is not None, "model not found, please init context with model"
 
@@ -458,24 +520,33 @@ class EmbeddingCtx(BaseCtx):
         self.load_embedding(src_dir, blocking=blocking)
 
     def dump_embedding(self, dst_dir: str, blocking: bool = True):
-        """Dump embeddings to ``dst_dir``. Use ``TrainCtx.wait_for_dump_embedding`` to wait until finished
-        if ``blocking=False``.
+        """Dump embeddings to the destination directory.
+        By default, this function is synchronous and will wait for the completion
+        of embedding loading before returning. This is done internally through
+        a call to :meth:`.wait_for_dump_embedding`.
+        Set ``blocking=False`` to allow asyncronous computation,
+        in which case the function will return immediately.
+        :meth:`.wait_for_dump_embedding` to wait until finished if ``blocking=False``.
 
         Arguments:
-            dst_dir (str): Destination directory.
-            blocking (bool, optional): Dump embedding in blocking mode or not.
+            dst_dir (str): destination directory.
+            blocking (bool, optional): dump embedding in blocking mode or not.
         """
         self.common_context.dump(dst_dir)
         if blocking:
             self.wait_for_dump_embedding()
 
     def load_embedding(self, src_dir: str, blocking: bool = True):
-        """Load embeddings from ``src_dir``. Use ``TrainCtx.wait_for_load_embedding`` to wait until finished
-        if ``blocking=False``.
+        """Load embeddings from ``src_dir``.
+        By default, this function is synchronous and will wait for the completion
+        of embedding loading before returning. This is done internally through
+        a call to :meth:`.wait_for_load_embedding`.
+        Set ``blocking=False`` to allow asyncronous computation,
+        in which case the function will return immediately.
 
         Arguments:
-            src_dir (str): Directory to load embeddings.
-            blocking (bool, optional): Dump embedding in blocking mode or not.
+            src_dir (str): directory to load embeddings.
+            blocking (bool, optional): dump embedding in blocking mode or not.
         """
         self.common_context.load(src_dir)
         if blocking:
@@ -488,12 +559,13 @@ class EmbeddingCtx(BaseCtx):
         file_name: str,
         is_jit: bool = False,
     ):
-        """Dump torch model or optimizer to ``dst_dir`` as ``file_name``.
+        """Dump a Pytorch model or optimizer's state dict to the destination directory.
 
         Arguments:
-            torch_instance (torch.nn.Module or torch.optim.Optimizer): dense model or optimizer to be dumped.
-            dst_dir (str): Destination directory.
-            file_name (str): Destination filename.
+            torch_instance (torch.nn.Module or torch.optim.Optimizer): dense model or
+                optimizer to be dumped.
+            dst_dir (str): destination directory.
+            file_name (str): destination filename.
             is_jit (bool, optional): whether to dump model as jit script.
         """
 
@@ -512,17 +584,18 @@ class EmbeddingCtx(BaseCtx):
     def load_torch_state_dict(
         self,
         torch_instance: Union[torch.nn.Module, torch.optim.Optimizer],
-        src_filepath: str,
+        src_dir: str,
         map_location: Optional[str] = None,
     ):
-        """Load the torch state dict from source file path.
+        """Load a Pytorch state dict from the source directory and apply to `torch_instance`.
 
         Arguments:
-            torch_instance (torch.nn.Module or torch.optim.Optimizer): dense model or optimizer to restore.
-            src_filepath (str): Source file path.
-            map_location (str, optional): Load the dense checkpoint to specific device.
+            torch_instance (torch.nn.Module or torch.optim.Optimizer): dense model or
+                optimizer to restore.
+            src_dir (str): directory to load torch state dict.
+            map_location (str, optional): load the dense checkpoint to specific device.
         """
-        dense_bytes = self.common_context.read_from_file(src_filepath)
+        dense_bytes = self.common_context.read_from_file(src_dir)
         buffer = io.BytesIO(dense_bytes)
         buffer.seek(0)
         state_dict = torch.load(buffer, map_location=map_location)
@@ -547,16 +620,19 @@ class EmbeddingCtx(BaseCtx):
     def get_embedding_from_data(
         self, persia_batch: PersiaBatch, device_id: Optional[int] = None
     ) -> PersiaTrainingBatch:
-        """Get `PersiaTrainingBatch` of the input batch data.
+        """Get embeddings of the serialized input batch data.
 
         Arguments:
-            persia_batch (PersiaBatch): Input data without embeddings.
-            device_id (int, optional): The CUDA device to use for this process.
+            persia_batch (PersiaBatch): input data without embeddings..
+            device_id (int, optional): the CUDA device to use for this process.
 
         Returns:
-            Input data with embeddings.
+            PersiaTrainingBatch that contains id_type_feature_embeddings.
         """
-        return self.common_context.get_embedding_from_data(persia_batch.data, device_id)
+
+        return self.common_context.get_embedding_from_data(
+            persia_batch.data, device_id or self.device_id
+        )
 
     def get_embedding_from_bytes(
         self, data: bytes, device_id: Optional[int] = None
@@ -564,38 +640,114 @@ class EmbeddingCtx(BaseCtx):
         """Get embeddings of the serialized input batch data.
 
         Arguments:
-            data (PersiaBatch): Serialized input data without embeddings.
-            device_id (int, optional): The CUDA device to use for this process.
+            data (PersiaBatch): serialized input data without embeddings.
+            device_id (int, optional): the CUDA device to use for this process.
 
         Returns:
-            Input data with embeddings.
+            PersiaTrainingBatch that contains id_type_feature_embeddings.
         """
-        return self.common_context.get_embedding_from_bytes(data, device_id)
+
+        return self.common_context.get_embedding_from_bytes(
+            data, device_id or self.device_id
+        )
 
 
 class TrainCtx(EmbeddingCtx):
-    r"""Subclass of ``EmbeddingCtx`` that provide the backward ability to update the embeddings.
+    r"""Subclass of :class:`EmbeddingCtx` that implements a `backward` function to update the
+    embeddings.
 
-    Example:
-        >>> import torch
-        >>> ...
-        >>> from persia.env import get_local_rank
-        >>> ...
-        >>> device_id = get_local_rank()
-        >>> model = get_dnn_model()
-        >>> model.cuda(device_id)
-        >>> embedding_optimizer = persia.embedding.optim.SGD(lr=1e-3)
-        >>> dense_optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
-        >>> loss_fn = torch.nn.BCELoss(reduction="mean")
-        >>> with TrainCtx(
-        ...     embedding_optimizer,
-        ...     dense_optimizer,
-        ...     device_id=device_id
-        >>> ) as ctx:
-        >>>     for persia_batch in datalaoder:
-        >>>         output, labels = ctx.forward(persia_batch)
-        >>>         loss = loss_fn(output, labels[0])
-        >>>         scaled_loss = ctx.backward(loss)
+    Example for :class:`TrainCtx`:
+
+    .. code-block:: python
+
+        import torch
+        import persia
+        from persia.data import DataLoder, StreamingDataset
+
+        device_id = 0
+        model = get_dnn_model()
+        model.cuda(device_id)
+
+        embedding_optimizer = persia.embedding.optim.SGD(lr=1e-3)
+        dense_optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+        loss_fn = torch.nn.BCELoss(reduction="mean")
+
+        prefetch_size = 15
+        stream_dataset = StreamingDataset(prefetch_size)
+
+        with TrainCtx(
+            embedding_optimizer,
+            dense_optimizer,
+            model=model,
+            device_id=device_id
+        ) as ctx:
+            dataloader = DataLoder(stream_dataset)
+            for persia_training_batch in datalaoder:
+                output, labels = ctx.forward(persia_training_batch)
+                loss = loss_fn(output, labels[0])
+                scaled_loss = ctx.backward(loss)
+
+    If you want to train the PERSIA task in a distributed environment, you can
+    set `distributed_option` to the corresponding option you want to use.
+    Currently support Pytorch DDP (distributed data-parallel) (:class:`DDPOption`)
+    and `Bagua <https://github.com/BaguaSys/bagua>`_ (:class:`BaguaDistributedOption`). The default is Pytorch DDP.
+    The default configuration is determined by :func:`.get_default_distributed_option`
+    when the environment ``WORLD_SIZE > 1``.
+
+    You can configure the :class:`DDPOption` to your specific requirements.
+
+    .. code-block::
+
+        import persia
+        from persia.distributed import DDPOption
+
+        backend = "nccl"
+        # backend = "gloo" # If you want to train the PERSIA on the CPU cluster.
+
+        ddp_option = DDPOption(
+            backend=backend,
+            init_method="tcp"
+        )
+
+        with TrainCtx(
+            embedding_optimizer,
+            dense_optimizer,
+            model=model,
+            distributed_option=ddp_option
+        ) as ctx:
+            ...
+
+    We also integrated Bagua to PERSIA as an alternative to PytorchDDP.
+    `Bagua <https://github.com/BaguaSys/bagua>`_ is an advanced data-parallel framework,
+    also developed by AI Platform @ Kuaishou.
+    Using :class:`BaguaDistributedOption` in place of
+    :class:`DDPOption` can significantly speed up the training (See
+    `Bagua Benchmark <https://tutorials.baguasys.com/benchmark/>`_).
+    For more details on the algorithms used by and available options of
+    :class:`BaguaDistributedOption`, please refer to
+    `Bagua tutorials <https://tutorials.baguasys.com/algorithms/>`_.
+
+    Example for :class:`BaguaDistributedOption`:
+
+    .. code-block::
+
+        from persia.distributed import BaguaDistributedOption
+
+        algorithm = "gradient_allreduce"
+        bagua_args = {}
+        bagua_option = BaguaDistributedOption(
+            algorithm,
+            **bagua_args
+        )
+
+        with TrainCtx(
+            embedding_optimizer,
+            dense_optimizer,
+            model=model,
+            distributed_option=bagua_option
+        ) as ctx:
+            ...
+
     """
 
     def __init__(
@@ -614,16 +766,20 @@ class TrainCtx(EmbeddingCtx):
     ):
         """
         Arguments:
-            embedding_optimizer (persia.embedding.optim.Optimizer): Optimizer for the embedding parameters.
-            dense_optimizer (torch.optim.Optimizer): Optimizer for dense parameters.
-            grad_scalar_update_factor (float, optional): Update factor of ``Gradscalar`` to ensure loss scale finitely if set ``mixed_precision=True``.
-            backward_buffer_size (int, optional): Max number of not updated gradients queued.
-            backward_workers_size (int, optional): Number of workers sending embedding gradients in parallel.
-            grad_update_buffer_size (int, optional): Number of reference cache , hold the gradient tensor reference to avoid
-                meet dangle data in gradient backward phase.
-            lookup_emb_directly (bool, optional): Lookup embedding directly without isolation data loader.
-            mixed_precision (bool): Enable mixed_precision or not.
-            distributed_option (DistributedBaseOption, optional): DistributedOption to converted model to dataparallel model.
+            embedding_optimizer (persia.embedding.optim.Optimizer): optimizer for the
+                embedding parameters.
+            dense_optimizer (torch.optim.Optimizer): optimizer for dense parameters.
+            grad_scalar_update_factor (float, optional): update factor of ``Gradscalar``
+                to ensure that loss scale is finite if set ``mixed_precision=True``.
+            backward_buffer_size (int, optional): maximum number of gradients
+                queued in the buffer between two backward steps.
+            backward_workers_size (int, optional): number of workers sending embedding gradients
+                in parallel.
+            grad_update_buffer_size (int, optional): the size of gradient buffers. The buffer will cache the
+                gradient tensor until the embedding update is finished.
+            lookup_emb_directly (bool, optional): lookup embedding directly without a separate data loader.
+            mixed_precision (bool): whether to enable mixed_precision.
+            distributed_option (DistributedBaseOption, optional): option for distributed training.
         """
         super(TrainCtx, self).__init__(PreprocessMode.TRAIN, *args, **kwargs)
 
@@ -713,7 +869,7 @@ class TrainCtx(EmbeddingCtx):
             self.common_context.init_master_discovery_service(master_addr)
             _logger.info(f"init addr is {master_addr}")
         else:
-            self.common_context.init_master_discovery_service(None)
+            self.common_context.init_master_discovery_service()
             master_addr = self.common_context.master_addr
             _logger.info(f"master addr is {master_addr}")
         return master_addr
@@ -729,7 +885,7 @@ class TrainCtx(EmbeddingCtx):
         return len(embedding_worker_addr_list)
 
     def wait_servers_ready(self):
-        """Wait until embedding servers ready to serve."""
+        """Wait until embedding servers are ready to serve."""
 
         self.common_context.init_nats_publisher(self.world_size)
         self.common_context.wait_servers_ready()
@@ -737,14 +893,12 @@ class TrainCtx(EmbeddingCtx):
     def backward(
         self, loss: torch.Tensor, embedding_gradient_check_frequency: int = 20
     ) -> torch.Tensor:
-        """Update the gradient of current dense and embedding tensors.
-
-        This method supports mixed precision training. Depending on whether the current embedding gradient is finite or not, ``GradScalar``
-        can update the scale automatically to restrict to parameters in finite range.
+        """Update the parameters of the current dense model and embedding model.
 
         Arguments:
-            loss (torch.Tensor): Loss of current batch.
-            embedding_gradient_check_frequency (int, optional): The frequency to check gradient finite or not for current embedding.
+            loss (torch.Tensor): loss of current batch.
+            embedding_gradient_check_frequency (int, optional): how many batch_size to check
+                gradient finite or not for current embedding.
         """
         if self.mixed_precision:
             loss = self.grad_scaler.scale(loss)
@@ -773,8 +927,10 @@ class TrainCtx(EmbeddingCtx):
         """Update the embeddings' gradients
 
         Arguments:
-            loss_scale (float): The loss that scaled by GradScalar, loss_scale always equal to 1 for cpu training scenes.
-            embedding_gradient_check_frequency (int): The frequency to check gradient finite or not for current embedding.
+            loss_scale (float): the loss that scaled by GradScalar, loss_scale always equal
+                to 1 for cpu training scenes.
+            embedding_gradient_check_frequency (int): the frequency to check gradient finite
+                or not for current embedding.
         """
         if self.grad_queue.full():
             self.grad_queue.get()
@@ -860,12 +1016,12 @@ class TrainCtx(EmbeddingCtx):
         """Dump the dense and embedding checkpoint to destination directory.
 
         Arguments:
-            dst_dir (str): Destination directory.
-            dense_model_filename (str, optional): Dense model checkpoint filename.
-            jit_dense_model_filename (str, optional): Jit dense checkpoint filename.
-            opt_filename (str, optional): Optimizer checkpoint filename.
-            blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
-            with_jit_model (bool, optional): Dump dense checkpoint as jit script or not.
+            dst_dir (str): destination directory.
+            dense_model_filename (str, optional): dense model checkpoint filename.
+            jit_dense_model_filename (str, optional): dense checkpoint filename after PyTorch jit.
+            opt_filename (str, optional): optimizer checkpoint filename.
+            blocking (bool, optional): dump embedding checkpoint in blocking mode or not.
+            with_jit_model (bool, optional): dump dense checkpoint as jit script or not.
         """
         super().dump_checkpoint(
             dst_dir,
@@ -888,11 +1044,11 @@ class TrainCtx(EmbeddingCtx):
         """Load the dense and embedding checkpoint from source directory.
 
         Arguments:
-            src_dir (str): Source directory.
-            map_location (str, optional): Load the dense checkpoint to specific device.
-            dense_model_filename (str, optional): Dense checkpoint filename.
-            opt_filename (str, optional): Optimizer checkpoint filename.
-            blocking (bool, optional): Dump embedding checkpoint in blocking mode or not.
+            src_dir (str): source directory.
+            map_location (str, optional): load the dense checkpoint to specific device.
+            dense_model_filename (str, optional): dense checkpoint filename.
+            opt_filename (str, optional): optimizer checkpoint filename.
+            blocking (bool, optional): dump embedding checkpoint in blocking mode or not.
         """
         super().load_checkpoint(
             src_dir,
@@ -909,28 +1065,56 @@ class TrainCtx(EmbeddingCtx):
 
 
 def cnt_ctx() -> Optional[BaseCtx]:
-    """Get the BaseCtx recently entered."""
+    """Get the :class:`BaseCtx` recently entered."""
     return _CURRENT_CXT
 
 
 def eval_ctx(*args, **kwargs) -> EmbeddingCtx:
-    """Get the ``EmbeddingCtx`` with the ``PreprocessMode.EVAL`` mode."""
+    """Get the :class:`EmbeddingCtx` with the :attr:`.EVAL` mode."""
     return EmbeddingCtx(PreprocessMode.EVAL, *args, **kwargs)
 
 
 class InferCtx(EmbeddingCtx):
-    r"""Subclass of ``EmbeddingCtx`` that provide the forward ability without nats servers.
+    r"""Subclass of :class:`EmbeddingCtx` that provides the inference functionality without `nats-servers`.
 
-    Example:
-        >>> from persia.ctx import InferCtx
-        >>> persia_context = InferCtx()
-        >>> batch = persia_context.get_embedding_from_bytes(batch, device_id)
-        >>> model_input = persia_context.prepare_features(batch)
+    Example for :class:`InferCtx`:
+
+    .. code-block:: python
+
+        import numpy as np
+        from persia.ctx import InferCtx
+        from persia.embedding.data import PersiaBatch, IDTypeFeatureWithSingleID
+
+        device_id = 0
+        id_type_feature = IDTypeFeatureWithSingleID(
+            "id_type_feature",
+            np.array([1, 2, 3], np.uint64)
+        )
+        persia_batch = PersiaBatch([id_type_feature], requires_grad=False)
+
+        embedding_worker_address_list = [
+            "localhost: 8888",
+            "localhost: 8889",
+            "localhost: 8890"
+        ]
+        with InferCtx(embedding_worker_address_list, device_id=device_id) as infer_ctx:
+            persia_training_batch = persia_context.get_embedding_from_bytes(
+                persia_batch.to_bytes(),
+            )
+            (
+                non_id_type_feature_tensors,
+                id_type_feature_embedding_tensors,
+                label_tensors
+            )= persia_context.prepare_features(batch)
+
+    .. note::
+        The example cannot be run directly, you should launch the `embedding-worker` and
+        `embedding-parameter-server` to ensure the example gets correct result.
     """
 
     def __init__(
         self,
-        embedding_worker_addrs: List[str],
+        embedding_worker_address_list: List[str],
         *args,
         **kwargs,
     ):
@@ -940,7 +1124,7 @@ class InferCtx(EmbeddingCtx):
         """
         super(InferCtx, self).__init__(PreprocessMode.INFERENCE, *args, **kwargs)
 
-        for addr in embedding_worker_addrs:
+        for addr in embedding_worker_address_list:
             self.common_context.init_rpc_client_with_addr(addr)
 
     r"""Wait for embedding worker and embedding server ready for serving."""
