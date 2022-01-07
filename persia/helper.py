@@ -126,9 +126,9 @@ class PersiaServiceCtx:
     """Launch the required processes to mock the distributed PERSIA environment.
 
     You can add the embedding config file path or a dict that contains the
-    embedding config information, the embedding configuration will both apply to
-    the `embedding_worker` and `embedding_parameter_server`.  It is the same
-    configuration for global config.
+    embedding config information, where the embedding configuration will both apply to
+    the `embedding_worker` and `embedding_parameter_server`.  Similarly you can also
+    set global config using either config file path or a dict.
 
     For example, training the model with the :class:`.TrainCtx` under the
     :class:`PersiaServiceCtx` context, :class:`PersiaServiceCtx` will launch
