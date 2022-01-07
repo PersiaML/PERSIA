@@ -95,7 +95,9 @@ class DDPOption(DistributedBaseOption):
         ddp_option = DDPOption(backend="nccl", master_port=23333, master_addr="localhost")
     """
 
-    def __init__(self, initialization_method: str = "tcp", backend: str = "nccl", **options):
+    def __init__(
+        self, initialization_method: str = "tcp", backend: str = "nccl", **options
+    ):
         """
         Arguments:
             initialization_method (str): the PyTorch distributed initialization_method method,
@@ -149,7 +151,9 @@ class DDPOption(DistributedBaseOption):
             master port!"
 
             master_addr = self.master_addr or master_addr
-            init_method = f"{self.initialization_method}://{master_addr}:{self.master_port}"
+            init_method = (
+                f"{self.initialization_method}://{master_addr}:{self.master_port}"
+            )
         elif self.initialization_method == "file":
             sync_file = self.options.pop("sync_file", None)
             assert (

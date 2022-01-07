@@ -35,7 +35,7 @@ class IterableDatasetBase(ABC, Iterable[PersiaBatch]):
     illustrated in the example below.
 
     This class cannot be used directly unless it implements
-    the ``__iter__`` and ``consume_dataset`` functions to be compatible with the
+    ``__iter__`` and ``consume_dataset`` functions to be compatible with the
     :class:`DataLoader`. ``__iter__`` function
     generates the :class:`.PersiaBatch`, and :meth:`.consume_dataset` sends
     the :class:`.PersiaBatch` by :class:`PersiaBatchDataSender`.
@@ -215,8 +215,8 @@ class DataLoader:
             and sender channel.
         forward_buffer_size (int, optional): ``PersiaTrainingBatch`` buffer size, this
             args effect the gpu memory cost.
-        timeout_ms (int, optional): timeout for Forward to fetch data, millisecond unit.
-        num_workers (int, optional): number of spawned thread workers for Forward to lookup
+        timeout_ms (int, optional): timeout of data fetching, millisecond unit.
+        num_workers (int, optional): number of spawned thread workers to lookup
             embedding and :class:`PersiaBatch` prefetch.
         reproducible (bool, optional): iterate the data in fixed order, make the dataflow
             deterministic.

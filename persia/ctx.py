@@ -897,7 +897,7 @@ class TrainCtx(EmbeddingCtx):
 
         Arguments:
             loss (torch.Tensor): loss of current batch.
-            embedding_gradient_check_frequency (int, optional): the frequency to check
+            embedding_gradient_check_frequency (int, optional): how many batch_size to check
                 gradient finite or not for current embedding.
         """
         if self.mixed_precision:
