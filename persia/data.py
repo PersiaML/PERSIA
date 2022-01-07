@@ -1,8 +1,9 @@
 r"""
 
 In PERSIA, we provide the :class:`DataLoader` class to load the data. The :class:`DataLoader` will preprocess
-the :class:`.PersiaBatch` and lookup the embedding for **id_type_features**. DataLoader need a iterable dataset.
-You can use the :class:`StreamingDataset` to fetch the :class:`.PersiaBatch` from the dataflow. Or use the
+the :class:`.PersiaBatch` and lookup the embedding for **id_type_features**. In order to initalize a DataLoader,
+the dataset must be an ``iterable dataset" (an instance of :class`.IterableDatasetBase` subclass).
+To generate an iterable dataset, you can use the :class:`StreamingDataset` to fetch the :class:`.PersiaBatch` from the dataflow, or use the
 :class:`IterableDataset` to generate the :class:`PersiaBatch` locally.
 
 """
@@ -95,10 +96,10 @@ class IterableDatasetBase(ABC, Iterable[PersiaBatch]):
 
 class StreamingDataset(IterableDatasetBase):
     r"""Streaming dataset receives the :class:`PersiaBatch` from the upstream data
-    flow that sent by :class:`DataCtx`.
+    flow sent by :class:`DataCtx`.
 
     In the implemented :meth:`.StreamingDataset.consume_dataset`, the
-    :class:`PersiaBatchDataSender` instance is bind into the RPC service that
+    :class:`PersiaBatchDataSender` instance binds to the RPC service that
     receives the data automatically. So it is not necessary to implements the
 
     .. warning::
@@ -207,20 +208,20 @@ class DataLoader:
 
     .. warning::
         The :class:`DataLoader` cannot stop the iteration unless raise the ``TimeoutError``
-        if you use the :class:`StreamingDataset`.
+        if you use the :class:`StreamingDataset` (see StreamingDataset for more details).
 
     Arguments:
         dataset (IterableDatasetBase): dataset for DataLoader to retrive replica info
             and sender channel.
-        forward_buffer_size: (int, optional): ``PersiaTrainingBatch`` buffer size, this
+        forward_buffer_size (int, optional): ``PersiaTrainingBatch`` buffer size, this
             args effect the gpu memory cost.
         timeout_ms (int, optional): timeout for Forward to fetch data, millisecond unit.
-        num_workers (int, optional): spawn thread worker number for Forward to lookup
+        num_workers (int, optional): number of spawned thread workers for Forward to lookup
             embedding and :class:`PersiaBatch` prefetch.
         reproducible (bool, optional): iterate the data in fixed order, make the dataflow
             deterministic.
-        embedding_staleness (int, optional): max number of batched staleness embedding each
-            rank. A staleness embedding means it prefetched from embedding server before
+        embedding_staleness (int, optional): max number of batched staleness embeddings each
+            rank. A staleness embedding means it is prefetched from embedding server before
             gradient updated.
     """
 
