@@ -690,7 +690,7 @@ class TrainCtx(EmbeddingCtx):
     If you want to train the PERSIA task in a distributed environment, you can
     set `distributed_option` to the corresponding option you want to use.
     Currently support Pytorch DDP (distributed data-parallel) (:class:`DDPOption`)
-    and Bagua (:class:`BaguaDistributedOption`). The default is Pytorch DDP.
+    and `Bagua <https://github.com/BaguaSys/bagua>`_ (:class:`BaguaDistributedOption`). The default is Pytorch DDP.
     The default configuration is determined by :func:`.get_default_distributed_option`
     when the environment ``WORLD_SIZE > 1``.
 

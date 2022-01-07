@@ -411,7 +411,7 @@ def get_default_distributed_option(device_id: Optional[int] = None) -> DDPOption
 
     Arguments:
         device_id (int, optional): CUDA device_id. Apply ``backend="nccl"`` to the ``DDPOption``
-            if the `device_id` not None, otherwise use the ``backend="gloo"`` for CPU scene.
+            if the `device_id` not None, otherwise use the ``backend="gloo"`` for CPU only mode.
 
     Returns:
         Default distributed option.

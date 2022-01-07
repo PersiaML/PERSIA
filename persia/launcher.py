@@ -26,7 +26,7 @@ If you want to launch the ``nn-worker`` and ``data-loader``, you can use:
     # Launch the nn-worker
     persia-launcher nn-worker train.py --nproc-per-node 1 --node-rank 0 --nnodes 1
 
-    # Launch the data_load
+    # Launch the data-loader
     persia-launcher data-loader data_loader.py --replica-size 1 --replica-index 0
 
 
@@ -60,7 +60,7 @@ It is useful to control the environment when you deploy the PERSIA
 job in container management tool.
 
 For ``nn-worker``, you can export the environment variable
-``PERSIA_NN_WORKER_ENTRY`` to avoid pass the filepath argument when launch the
+``PERSIA_NN_WORKER_ENTRY`` to avoid passing the filepath argument when launching the
 `nn-worker`. And the environment variable ``PERSIA_DATALOADER_ENTRY`` is for
 ``data-loader``.
 
@@ -77,7 +77,7 @@ For ``nn-worker``, you can export the environment variable
     persia-launcher nn-worker --nproc-per-node 1 --node-rank 0 --nnodes 1
 
 For ``embedding-worker`` and ``embedding-parameter-server``, you can export the environment
-variable ``PERSIA_EMBEDDING_CONFIG`` and ``PERSIA_GLOBAL_CONFIG`` to avoid pass the
+variable ``PERSIA_EMBEDDING_CONFIG`` and ``PERSIA_GLOBAL_CONFIG`` to avoid passing the
 config filepath to cli command.
 
 .. code-block::
