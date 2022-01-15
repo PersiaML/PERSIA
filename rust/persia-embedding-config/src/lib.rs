@@ -559,7 +559,7 @@ impl Default for EmbeddingConfig {
 }
 
 impl EmbeddingConfig {
-    pub fn set(file_path: &PathBuf) -> Result<(), PersiaGlobalConfigError> {
+    pub fn load_from_file(file_path: &PathBuf) -> Result<(), PersiaGlobalConfigError> {
         if !file_path.is_file() {
             tracing::error!("embedding config yaml file NOT found");
             std::thread::sleep(std::time::Duration::from_secs(120));
@@ -571,6 +571,10 @@ impl EmbeddingConfig {
         )
         .expect("cannot parse config file");
 
+        Self::set(embedding_config)
+    }
+
+    pub fn set(embedding_config: EmbeddingConfig) -> Result<(), PersiaGlobalConfigError> {
         if let Some(cur_config) = PERSIA_EMBEDDING_CONFIG.get() {
             if cur_config.as_ref().eq(&embedding_config) {
                 return Ok(());

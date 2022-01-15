@@ -1218,6 +1218,9 @@ impl EmbeddingWorkerInner {
                             embedding_model_manager.load_eviction_map(file_path)
                         })?;
 
+                        let embedding_config = eviction_map.embedding_config.clone();
+                        EmbeddingConfig::set(embedding_config)?;
+
                         let mut entries: Vec<DynamicEmbeddingEntry> =
                             Vec::with_capacity(eviction_map.len());
                         eviction_map.lru_caches.into_iter().for_each(|lru| {

@@ -15,7 +15,7 @@ use persia_libs::{
     serde_yaml, thiserror, tracing,
 };
 
-use persia_embedding_config::{PersiaCommonConfig, PersiaGlobalConfigError, PersiaReplicaInfo};
+use persia_embedding_config::{PersiaCommonConfig, PersiaGlobalConfigError, PersiaReplicaInfo, EmbeddingConfig};
 use persia_embedding_map::{
     eviction_map::EvictionMap, EmbeddingShardedMap, EmbeddingShardedMapError,
 };
@@ -263,6 +263,10 @@ impl EmbeddingModelManager {
         let shard_idx = decoded.shard_idx;
 
         let mut shard = embedding_map.get_shard_by_index(shard_idx).write();
+
+        let embedding_config = shard.embedding_config.clone();
+        EmbeddingConfig::set(embedding_config)?;
+
         *shard = decoded;
 
         Ok(())

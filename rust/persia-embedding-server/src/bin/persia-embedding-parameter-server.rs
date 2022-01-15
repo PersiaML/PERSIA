@@ -63,7 +63,7 @@ async fn main() -> Result<()> {
         args.replica_size,
     )?;
 
-    EmbeddingConfig::set(&args.embedding_config)?;
+    EmbeddingConfig::load_from_file(&args.embedding_config)?;
 
     let embedding_config = EmbeddingConfig::get()?;
     let common_config = PersiaCommonConfig::get()?;
