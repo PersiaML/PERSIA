@@ -579,7 +579,7 @@ impl EmbeddingConfig {
             if cur_config.as_ref().eq(&embedding_config) {
                 return Ok(());
             } else {
-                tracing::error!("loading a different embedding config");
+                tracing::error!("loading a different embedding config, \ncurrnet config is {:?}, \nloading config {:?}", cur_config.as_ref(), embedding_config);
                 return Err(PersiaGlobalConfigError::SetError);
             }
         }
