@@ -579,6 +579,7 @@ impl EmbeddingConfig {
             if cur_config.as_ref().eq(&embedding_config) {
                 return Ok(());
             } else {
+                tracing::error!("loading a different embedding config");
                 return Err(PersiaGlobalConfigError::SetError);
             }
         }
