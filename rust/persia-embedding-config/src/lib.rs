@@ -521,14 +521,14 @@ impl PersiaGlobalConfig {
     }
 }
 
-#[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone, PartialEq)]
 #[serde(crate = "self::serde")]
 pub struct HashStackConfig {
     pub hash_stack_rounds: usize,
     pub embedding_size: usize,
 }
 
-#[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone)]
+#[derive(Deserialize, Serialize, Readable, Writable, Debug, Clone, PartialEq)]
 #[serde(crate = "self::serde")]
 pub struct SlotConfig {
     pub dim: usize,
@@ -544,7 +544,7 @@ pub struct SlotConfig {
     pub hash_stack_config: HashStackConfig,
 }
 
-#[derive(Debug, Serialize, Deserialize, Readable, Writable, Clone)]
+#[derive(Debug, Serialize, Deserialize, Readable, Writable, Clone, PartialEq)]
 #[serde(crate = "self::serde")]
 pub struct EmbeddingConfig {
     pub slots_config: indexmap::IndexMap<String, SlotConfig>,
@@ -571,7 +571,13 @@ impl EmbeddingConfig {
         )
         .expect("cannot parse config file");
 
-        // let embedding_config = parse_embedding_config(embedding_config);
+        if let Some(cur_config) = PERSIA_EMBEDDING_CONFIG.get() {
+            if cur_config.as_ref().eq(&embedding_config) {
+                return Ok(());
+            } else {
+                return Err(PersiaGlobalConfigError::SetError);
+            }
+        }
 
         tracing::info!("setting embedding_config {:?}", embedding_config,);
         PERSIA_EMBEDDING_CONFIG
