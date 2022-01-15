@@ -265,10 +265,6 @@ impl EmbeddingModelManager {
         let shard_idx = decoded.shard_idx;
 
         let mut shard = embedding_map.get_shard_by_index(shard_idx).write();
-
-        let embedding_config = shard.embedding_config.clone();
-        EmbeddingConfig::set(embedding_config)?;
-
         *shard = decoded;
 
         Ok(())
@@ -281,6 +277,8 @@ impl EmbeddingModelManager {
         tracing::debug!("loading embedding linked list from {:?}", file_path);
         let emb_path = PersiaPath::from_pathbuf(file_path);
         let decoded: EvictionMap = emb_path.read_to_end_speedy()?;
+        let embedding_config = decoded.embedding_config.clone();
+        EmbeddingConfig::set(embedding_config)?;
         Ok(decoded)
     }
 
