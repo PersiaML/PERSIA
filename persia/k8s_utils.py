@@ -1,6 +1,6 @@
-import os
 import click
-import subprocess
+
+from persia.utils import resolve_binary_execute_path, run_command
 
 
 @click.group()
@@ -18,20 +18,19 @@ def cli():
 def gencrd(
     output: str,
 ):
-    executable_path = os.path.realpath(os.path.join(__file__, "../", "gencrd"))
+    executable_path = resolve_binary_execute_path("gencrd")
     cmd = [
         executable_path,
         "--output",
         output,
     ]
-    cmd = list(map(str, cmd))
-    subprocess.check_call(cmd)
+    run_command(cmd)
 
 
 @cli.command()
 def operator():
-    executable_path = os.path.realpath(os.path.join(__file__, "../", "operator"))
-    subprocess.check_call(executable_path)
+    executable_path = resolve_binary_execute_path("operator")
+    run_command([executable_path])
 
 
 @cli.command()
@@ -41,14 +40,13 @@ def operator():
 def server(
     port: int,
 ):
-    executable_path = os.path.realpath(os.path.join(__file__, "../", "server"))
+    executable_path = resolve_binary_execute_path("server")
     cmd = [
         executable_path,
         "--port",
         port,
     ]
-    cmd = list(map(str, cmd))
-    subprocess.check_call(cmd)
+    run_command(cmd)
 
 
 if __name__ == "__main__":

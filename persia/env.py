@@ -41,7 +41,8 @@ class _Env:
                 replica_size = os.environ.get("REPLICA_SIZE", None)
                 assert (
                     replica_size is not None
-                ), "REPLICA_SIZE not found, setting environment variable REPLICA_SIZE before starting the PERSIA training task."
+                ), "REPLICA_SIZE not found, setting environment variable REPLICA_SIZE before \
+                    starting the PERSIA training task."
                 self.replica_size = int(replica_size)
                 assert (
                     self.replica_size >= 1
@@ -71,23 +72,23 @@ class _Env:
         self.is_init = True
 
 
-env = _Env()
+_env = _Env()
 
 
 def reload_env():
     """Reload the environment."""
-    env.init(force=True)
+    _env.init(force=True)
 
 
 def set_env(**kwargs):
     """Set environment without any sanity check."""
-    env.set(**kwargs)
+    _env.set(**kwargs)
 
 
 def _ensure_parse_env(get_func):
     def func():
-        if not env.is_init:
-            env.init()
+        if not _env.is_init:
+            _env.init()
         return get_func()
 
     return func
@@ -96,13 +97,13 @@ def _ensure_parse_env(get_func):
 @_ensure_parse_env
 def get_world_size() -> int:
     """Get the total number of processes."""
-    return env.world_size
+    return _env.world_size
 
 
 @_ensure_parse_env
 def get_rank() -> int:
     """Get the rank of current process."""
-    return env.rank
+    return _env.rank
 
 
 @_ensure_parse_env
@@ -110,7 +111,7 @@ def get_local_rank() -> int:
     """Get the local rank of current process.
 
     Local rank is the rank of the process on the local machine."""
-    return env.local_rank
+    return _env.local_rank
 
 
 @_ensure_parse_env
@@ -118,13 +119,14 @@ def get_replica_size() -> int:
     """Get the replica size of the current service.
 
     Replica size is the number of services launched by docker service or k8s"""
-    return env.replica_size
+    return _env.replica_size
 
 
 @_ensure_parse_env
 def get_replica_index() -> int:
     """Get the replica index of current service.
 
-    The replica index is a unique identifier assigned to each replica. They are assigned following the order of launching.
+    The replica index is a unique identifier assigned to each replica. They are assigned following
+    the order of launching.
     """
-    return env.replica_index
+    return _env.replica_index

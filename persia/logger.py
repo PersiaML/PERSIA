@@ -6,7 +6,7 @@ from colorlog import ColoredFormatter
 
 
 class levelFilter(logging.Filter):
-    r"""log level filter.
+    r"""Log level filter.
 
     Arguments:
         level (int): filter log level. Only logs with level higher than ``level`` will be kept.
@@ -16,10 +16,10 @@ class levelFilter(logging.Filter):
         self.level = level
 
     def filter(self, record: logging.LogRecord) -> bool:
-        """Filter the log record whose level is greater than the preset log level
+        """Filter the log record whose level is greater than the preset log level.
 
         Arguments:
-            record (logging.LogRecord): callback function input record items
+            record (logging.LogRecord): callback function input record items.
         """
         return record.levelno > self.level
 
@@ -61,8 +61,9 @@ def setLogger(
     enable_err_redirect: bool = False,
     err_redirect_level: int = logging.INFO,
 ) -> logging.Logger:
-    r"""Helper function to simplify the logger setup process with provided log_level and log_filename.
-    Also makes it possible to redirect logs above a certain level to a different file.
+    r"""Helper function to simplify the logger setup process with provided
+    log_level and log_filename. Also makes it possible to redirect logs
+    above a certain level to a different file.
 
     Arguments:
         name (str): logger name
@@ -93,19 +94,19 @@ def setLogger(
 
 
 def get_logger(name: str) -> logging.Logger:
-    r"""Get logger by name
+    r"""Get logger by name.
 
     Arguments:
-        name (str): logger name
+        name (str): logger name.
     """
     return logging.getLogger(name)
 
 
 def _set_default_logger(name: str, **kwargs) -> logging.Logger:
-    r"""Set the default logger
+    r"""Set the default logger.
 
     Arguments:
-        name (str): default logger name
+        name (str): default logger name.
 
     logging.Logger
     """
@@ -116,10 +117,11 @@ def _set_default_logger(name: str, **kwargs) -> logging.Logger:
 
 
 def get_default_logger(name: Optional[str] = None, **kwargs) -> logging.Logger:
-    r"""Get the default logger. If default logger is not set, init the default by the given name.
+    r"""Get the default logger. If default logger is not set, init the default by
+    the given name.
 
     Arguments:
-        name (str, optional): logger name
+        name (str, optional): logger name.
     """
     if _default_logger is None:
         _set_default_logger(name or DEFAULT_LOGGER_NAME, **kwargs)
