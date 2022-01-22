@@ -1,4 +1,3 @@
-use fastapprox::faster::pow;
 use persia_embedding_config::EmbeddingConfig;
 use persia_libs::{hashbrown::HashSet, ndarray};
 use persia_simd::{
