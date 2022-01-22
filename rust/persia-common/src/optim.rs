@@ -8,7 +8,6 @@ use std::sync::atomic::{
     AtomicUsize,
     Ordering::{AcqRel, Acquire},
 };
-use std::sync::Arc;
 
 #[derive(Readable, Writable, Debug, Clone)]
 pub enum OptimizerConfig {
@@ -121,8 +120,8 @@ impl Optimizable for Adam {
     #[inline]
     fn update(&self, emb_entry: &mut [f32], grad: &[f32], dim: usize, slot_index: usize) {
         let timestep = self.timestep[slot_index].load(Acquire);
-        let beta1_power = self.config.beta1.powi(slot_index as i32);
-        let beta2_power = self.config.beta1.powi(slot_index as i32);
+        let beta1_power = self.config.beta1.powi(timestep as i32);
+        let beta2_power = self.config.beta1.powi(timestep as i32);
         let (emb, opt) = emb_entry.split_at_mut(dim);
         let (adam_m, adam_v) = opt.split_at_mut(dim);
 

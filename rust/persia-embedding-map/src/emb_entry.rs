@@ -7,6 +7,7 @@ use persia_libs::{
     rand::prelude::SmallRng,
     rand::SeedableRng,
     serde::{self, Deserialize, Serialize},
+    // half::{f16, slice::HalfFloatSliceExt},
 };
 use persia_speedy::{Context, Readable, Writable};
 use smallvec::SmallVec;
@@ -20,6 +21,20 @@ pub struct DynamicEmbeddingEntry {
     pub sign: u64,
     pub slot_index: usize,
 }
+
+// pub struct F16Mut<'a> {
+//     pub inner: &'a mut [f16],
+//     pub f32: Vec<f32>,
+// }
+
+// impl<'a> F16Mut<'a> {
+//     pub fn new(inner: &'a mut [f16]) -> Self {
+//         Self {
+//             inner,
+//             f32: inner.to_f32_vec(),
+//         }
+//     }
+// }
 
 pub struct PersiaEmbeddingEntryRef<'a> {
     pub inner: &'a [f32],
