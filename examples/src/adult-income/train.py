@@ -105,7 +105,7 @@ if __name__ == "__main__":
     logger.info(f"device_id is {device_id}")
 
     dense_optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-    embedding_optimizer = Adam(lr=1e-2)
+    embedding_optimizer = Adam(lr=1e-3)
     loss_fn = torch.nn.BCELoss(reduction="mean")
 
     buffer_size = 10
