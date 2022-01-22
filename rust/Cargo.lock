@@ -779,12 +779,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f35ce9c8fb9891c75ceadbc330752951a4e369b50af10775955aeb9af3eee34b"
 
 [[package]]
-name = "fastapprox"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0031c93f37b5d18272de2d932ebff6a7eb32d4bc3bab6751a9af42da7d1a424"
-
-[[package]]
 name = "fastrand"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1810,7 +1804,6 @@ checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
 name = "persia-common"
 version = "0.1.0"
 dependencies = [
- "fastapprox",
  "persia-embedding-config",
  "persia-libs",
  "persia-simd",
