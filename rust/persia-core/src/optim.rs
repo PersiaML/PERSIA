@@ -3,7 +3,7 @@ use crate::PersiaCommonContextImpl;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
-use persia_common::optim::{AdagradConfig, NaiveSGDConfig, OptimizerConfig};
+use persia_common::optim::{AdagradConfig, AdamConfig, NaiveSGDConfig, OptimizerConfig};
 
 #[pyclass]
 pub struct OptimizerBase {
@@ -46,6 +46,16 @@ impl OptimizerBase {
     pub fn init_sgd(&mut self, lr: f32, wd: f32) -> () {
         let config = NaiveSGDConfig { lr, wd };
         self.inner = Some(OptimizerConfig::SGD(config));
+    }
+
+    pub fn init_adam(&mut self, lr: f32, betas: (f32, f32), eps: f32) -> () {
+        let config = AdamConfig {
+            lr,
+            beta1: betas.0,
+            beta2: betas.1,
+            eps,
+        };
+        self.inner = Some(OptimizerConfig::Adam(config));
     }
 
     pub fn apply(&self) -> PyResult<()> {

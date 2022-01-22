@@ -1,11 +1,29 @@
-use persia_libs::ndarray;
-use persia_simd::{decayed_adagrad_avx2, decayed_adagrad_vectorwise_shared_avx2, decayed_sgd_avx2};
+use fastapprox::faster::pow;
+use persia_embedding_config::EmbeddingConfig;
+use persia_libs::{hashbrown::HashSet, ndarray};
+use persia_simd::{
+    adam_avx2, decayed_adagrad_avx2, decayed_adagrad_vectorwise_shared_avx2, decayed_sgd_avx2,
+};
 use persia_speedy::{Readable, Writable};
+use std::sync::atomic::{
+    AtomicUsize,
+    Ordering::{AcqRel, Acquire},
+};
+use std::sync::Arc;
 
 #[derive(Readable, Writable, Debug, Clone)]
 pub enum OptimizerConfig {
+    Adam(AdamConfig),
     SGD(NaiveSGDConfig),
     Adagrad(AdagradConfig),
+}
+
+#[derive(Readable, Writable, Debug, Clone)]
+pub struct AdamConfig {
+    pub lr: f32,
+    pub beta1: f32,
+    pub beta2: f32,
+    pub eps: f32,
 }
 
 #[derive(Readable, Writable, Debug, Clone)]
@@ -27,6 +45,7 @@ pub struct AdagradConfig {
 pub enum Optimizer {
     SGD(NaiveSGD),
     Adagrad(Adagrad),
+    Adam(Adam),
 }
 
 impl Optimizer {
@@ -34,6 +53,7 @@ impl Optimizer {
         match config {
             OptimizerConfig::SGD(config) => Self::SGD(NaiveSGD { config }),
             OptimizerConfig::Adagrad(config) => Self::Adagrad(Adagrad { config }),
+            OptimizerConfig::Adam(config) => Self::Adam(Adam::new(config)),
         }
     }
 
@@ -41,31 +61,95 @@ impl Optimizer {
         match self {
             Optimizer::Adagrad(val) => Box::new(val) as Box<dyn Optimizable + Send + Sync>,
             Optimizer::SGD(val) => Box::new(val) as Box<dyn Optimizable + Send + Sync>,
+            Optimizer::Adam(val) => Box::new(val) as Box<dyn Optimizable + Send + Sync>,
         }
     }
 }
 
 pub trait Optimizable {
-    fn update(&self, emb_entry: &mut [f32], grad: &[f32], dim: usize);
+    fn update(&self, emb_entry: &mut [f32], grad: &[f32], dim: usize, slot_index: usize);
+
+    fn update_step_status(&self, _signs: &Vec<(u64, usize)>) {}
 
     #[inline]
     fn require_space(&self, _dim: usize) -> usize {
         0
     }
 
-    // fn update_step(&mut self, feature_space: &str) {}
     fn update_lr(&mut self, _lr: f32) {}
 
     fn state_initialization(&self, _state: &mut [f32], _dim: usize) {}
 }
 
+pub struct Adam {
+    config: AdamConfig,
+    timestep: Vec<AtomicUsize>,
+    num_slots: usize,
+}
+
+impl Adam {
+    pub fn new(config: AdamConfig) -> Self {
+        let embedding_config = EmbeddingConfig::get().expect("embedding config not found");
+        let num_slots = embedding_config.slots_config.len();
+
+        let timestep = (0..num_slots).map(|_| AtomicUsize::new(0)).collect();
+
+        Self {
+            config,
+            timestep,
+            num_slots,
+        }
+    }
+}
+
+impl Optimizable for Adam {
+    #[inline]
+    fn require_space(&self, dim: usize) -> usize {
+        dim * 2
+    }
+
+    fn update_step_status(&self, signs: &Vec<(u64, usize)>) {
+        let mut slot_indices: HashSet<usize> = HashSet::with_capacity(self.num_slots);
+        signs.iter().for_each(|(_, slot_index)| {
+            slot_indices.insert(*slot_index);
+        });
+
+        slot_indices.iter().for_each(|slot_index| {
+            self.timestep[*slot_index].fetch_add(1, AcqRel);
+        });
+    }
+
+    #[inline]
+    fn update(&self, emb_entry: &mut [f32], grad: &[f32], dim: usize, slot_index: usize) {
+        let timestep = self.timestep[slot_index].load(Acquire);
+        let beta1_power = pow(self.config.beta1, timestep as f32);
+        let beta2_power = pow(self.config.beta2, timestep as f32);
+        let (emb, opt) = emb_entry.split_at_mut(dim);
+        let (adam_m, adam_v) = opt.split_at_mut(dim);
+
+        unsafe {
+            adam_avx2(
+                adam_m,
+                adam_v,
+                beta1_power,
+                beta2_power,
+                emb,
+                grad,
+                self.config.lr,
+                self.config.beta1,
+                self.config.beta2,
+                self.config.eps,
+            )
+        }
+    }
+}
 pub struct NaiveSGD {
     config: NaiveSGDConfig,
 }
 
 impl Optimizable for NaiveSGD {
     #[inline]
-    fn update(&self, emb_entry: &mut [f32], grad: &[f32], _dim: usize) {
+    fn update(&self, emb_entry: &mut [f32], grad: &[f32], _dim: usize, _slot_index: usize) {
         unsafe {
             decayed_sgd_avx2(emb_entry, grad, self.config.wd, self.config.lr);
         }
@@ -90,7 +174,7 @@ impl Optimizable for Adagrad {
     }
 
     #[inline]
-    fn update(&self, emb_entry: &mut [f32], grad: &[f32], dim: usize) {
+    fn update(&self, emb_entry: &mut [f32], grad: &[f32], dim: usize, _slot_index: usize) {
         let (emb, adagrad_state) = emb_entry.split_at_mut(dim);
         if self.config.vectorwise_shared {
             let adagrad_state = adagrad_state.first_mut().expect("adagrad state is empty");

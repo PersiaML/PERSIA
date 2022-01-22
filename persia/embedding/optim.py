@@ -32,6 +32,31 @@ class SGD(Optimizer):
         self.optimizer_base.init_sgd(self.lr, self.weight_decay)
 
 
+class Adam(Optimizer):
+    r"""A wrapper to config the embedding-server Adam optimizer."""
+
+    def __init__(
+        self,
+        lr: float = 1e-3,
+        betas: Tuple[float, float] = (0.9, 0.999),
+        weight_decay: float = 0,
+        eps: float = 1e-8,
+    ):
+        """
+        Arguments:
+            lr(float): learning rate.
+            betas(tuple[float,float], optional): calculate the running averages of gradient and its square.
+            weight_decay(float, optional): parameters L2 penalty factor.
+            eps(float, optional): epsilon to avoid div zero.
+        """
+        super(Adam, self).__init__()
+        self.lr = lr
+        self.betas = betas
+        self.weight_decay = weight_decay
+        self.eps = eps
+        self.optimizer_base.init_adam(self.lr, self.betas, self.eps)
+
+
 class Adagrad(Optimizer):
     r"""A wrapper to config the embedding-server Adagrad optimizer."""
 

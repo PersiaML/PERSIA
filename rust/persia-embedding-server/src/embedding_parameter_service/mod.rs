@@ -296,6 +296,8 @@ impl EmbeddingParameterServiceInner {
         }
 
         let optimizer = optimizer.as_ref().unwrap();
+        optimizer.update_step_status(&signs);
+
         let embedding_map = EmbeddingShardedMap::get()?;
 
         tokio::task::block_in_place(|| {
@@ -307,7 +309,7 @@ impl EmbeddingParameterServiceInner {
                     remaining_gradients = r;
 
                     {
-                        optimizer.update(entry.inner, grad, entry_dim);
+                        optimizer.update(entry.inner, grad, entry_dim, *slot_index);
                         if conf.enable_weight_bound {
                             unsafe {
                                 persia_simd::weight_bound(entry.emb(), conf.weight_bound);
