@@ -349,7 +349,7 @@ class BaguaDistributedOption(DistributedBaseOption):
         current_env["MASTER_ADDR"] = self.master_addr or master_addr
         current_env["MASTER_PORT"] = str(self.master_port)
         current_env["BAGUA_DEFAULT_BUCKET_SIZE"] = str(
-            self.options.pop("default_bucket_size", 10 * 1024 ** 2)
+            self.options.pop("default_bucket_size", 10 * 1024**2)
         )
 
         # autotune option
