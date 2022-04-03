@@ -17,6 +17,9 @@
 <a href="https://github.com/PersiaML/Persia/stargazers"><img src="https://reporoster.com/stars/PersiaML/Persia" /><a/>
 </div>
 
+
+*WARNING: THIS PROJECT IS CURRENTLY IN MAINTENANCE MODE, DUE TO COMPANY REORGANIZATION.*
+  
 **PERSIA** (**P**arallel r**E**commendation t**R**aining **S**ystem with hybr**I**d **A**cceleration)  is developed by [AI platform@Kuaishou Technology](https://www.kuaishou.com/en), collaborating with ETH. It is a PyTorch-based (the first public one to our best knowledge) system for training large scale deep learning recommendation models on commodity hardwares. It is capable of training recommendation models with up to 100 trillion parameters. To the best of our knowledge, this is the largest model size in recommendation systems so far. Empirical study on public datasets indicate PERSIA's significant advantage over several other existing training systems in recommendation [1]. Its efficiency and robustness have also been validated by multiple applications with 100 million level DAU at Kuaishou. 
 
 *Disclaimer: The program is usable and has served several important businesses. However, the official English documentation and tutorials are still under heavy construction and they are a bit raw now. We encourage adventurers to try out PERSIA and contribute!*
