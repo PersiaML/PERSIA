@@ -26,6 +26,7 @@
 
 ## News
 
+* [突破百万亿参数规模，追求极致的效率和性价比：华人团队开源首个异构并行推荐系统训练框架 PERSIA](https://archive.ph/Mixk0) (In Chinese. Title: Breaking through the trillion parameter scale in pursuit of ultimate efficiency and cost effectiveness: Chinese team open source PERSIA, the first heterogeneous parallel recommendation system)
 * [参数量卷到一百万亿！华人团队开源史上最大的推荐训练系统 PERSIA](https://archive.md/FbocB) (In Chinese. Title: PERSIA, the Largest Recommended Training System in the History of Open Source by Far)
 * AI Engines in the "Short-video" Era: Eating 100 Trillion Parameters, Invited talk, Facebook, 2021.
 * 单机训练速度提升 640 倍！独家解读快手商业广告模型 GPU 训练平台 PERSIA (In Chinese. Title: 640x Faster GPU Based Learning System for Ad Recommendation)
