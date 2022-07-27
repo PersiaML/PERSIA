@@ -9,6 +9,6 @@ version = "0.1.0"
 [dependencies]
 get_if_addrs = "0.5.3"
 local_ipaddress = "0.1.3"
-num-traits = "0.2.6"
+num-traits = "0.2.15"
 persia-libs = {path = "../persia-libs"}
 persia-speedy = {path = "../persia-speedy"}
