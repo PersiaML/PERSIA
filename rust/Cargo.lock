@@ -1096,6 +1096,12 @@ name = "hashbrown"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
+
+[[package]]
+name = "hashbrown"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 dependencies = [
  "ahash 0.7.6",
  "serde",
@@ -1928,7 +1934,7 @@ dependencies = [
  "flume",
  "futures",
  "half",
- "hashbrown 0.11.2",
+ "hashbrown 0.12.3",
  "hyper",
  "hyperloglogplus",
  "indexmap",
@@ -2021,7 +2027,7 @@ dependencies = [
  "bytes",
  "chrono",
  "half",
- "hashbrown 0.11.2",
+ "hashbrown 0.12.3",
  "indexmap",
  "ndarray",
  "persia-speedy-derive",
