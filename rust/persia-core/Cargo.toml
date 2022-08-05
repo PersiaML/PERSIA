@@ -38,7 +38,7 @@ cuda = ["cuda-runtime-sys", "arr_macro"]
 [dependencies.pyo3]
 default-features = false
 features = ["macros", "multiple-pymethods"]
-version = "0.15.1"
+version = "0.15.2"
 
 [build-dependencies]
 shadow-rs = "0.8.1"
