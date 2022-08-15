@@ -14,7 +14,7 @@ criterion-macro = "0.3"
 persia-speedy = { path = "../../persia-speedy" }
 serde = {version = "1", features = ["derive"]}
 smallvec = "1"
-tinystr = "0.4"
+tinystr = "0.6"
 
 [[bench]]
 name = "memcpy"
