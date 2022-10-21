@@ -522,9 +522,9 @@ dependencies = [
 
 [[package]]
 name = "criterion-macro"
-version = "0.3.4"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8421c08c2e60050bb24ebfb7232bdd2fcf44fa74c5777b00a71daa7d332a8164"
+checksum = "288a8f36b28a19d7dbd572c76006c0a0eba1f3bf912a254dda211c6f665e7ffc"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -10,7 +10,7 @@ version = "0.1.0"
 [dev-dependencies]
 bincode = "1"
 criterion = "0.3"
-criterion-macro = "0.3"
+criterion-macro = "0.4"
 persia-speedy = { path = "../../persia-speedy" }
 serde = {version = "1", features = ["derive"]}
 smallvec = "1"
