@@ -7,7 +7,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-ahash = "0.7"
+ahash = "0.8"
 array-linked-list = "0.1"
 persia-common = {path = "../persia-common"}
 persia-embedding-config = {path = "../persia-embedding-config"}
