@@ -408,7 +408,7 @@ dependencies = [
  "libc",
  "num-integer",
  "num-traits",
- "time",
+ "time 0.1.43",
  "winapi 0.3.9",
 ]
 
@@ -616,7 +616,7 @@ checksum = "22813a6dc45b335f9bade10bf7271dc477e81113e89eb251a0bc2a8a81c536e1"
 dependencies = [
  "bstr",
  "csv-core",
- "itoa",
+ "itoa 0.4.8",
  "ryu",
  "serde",
 ]
@@ -1127,7 +1127,7 @@ checksum = "1323096b05d41827dadeaee54c9981958c0f94e670bc94ed80037d1a7b8b186b"
 dependencies = [
  "bytes",
  "fnv",
- "itoa",
+ "itoa 0.4.8",
 ]
 
 [[package]]
@@ -1168,7 +1168,7 @@ dependencies = [
  "http-body",
  "httparse",
  "httpdate",
- "itoa",
+ "itoa 0.4.8",
  "pin-project-lite",
  "socket2",
  "tokio",
@@ -1307,6 +1307,12 @@ name = "itoa"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b71991ff56294aa922b450139ee08b3bfc70982c6b2c7562771375cf73542dd4"
+
+[[package]]
+name = "itoa"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4217ad341ebadf8d8e724e264f13e593e0648f5b3e94b3896a5df283be015ecc"
 
 [[package]]
 name = "jobserver"
@@ -1538,7 +1544,7 @@ dependencies = [
  "base64-url",
  "crossbeam-channel",
  "fastrand",
- "itoa",
+ "itoa 0.4.8",
  "json",
  "libc",
  "log",
@@ -2207,9 +2213,9 @@ dependencies = [
 
 [[package]]
 name = "prometheus_exporter"
-version = "0.8.3"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "674814aa0557c64298bae4b50d42bb87c4c40abe47b37fec822761ae4226126c"
+checksum = "caf17cbebe0bfdf4f279ef84eeefe0d50468b0b7116f078acf41d456e48fe81a"
 dependencies = [
  "ascii",
  "lazy_static",
@@ -2674,7 +2680,7 @@ version = "1.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f690853975602e1bfe1ccbf50504d67174e3bcf340f23b5ea9992e0587a52d8"
 dependencies = [
- "itoa",
+ "itoa 0.4.8",
  "ryu",
  "serde",
 ]
@@ -2686,7 +2692,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edfa57a7f8d9c1d260a549e7224100f6c43d43f9103e06dd8b4095a9b2b43ce9"
 dependencies = [
  "form_urlencoded",
- "itoa",
+ "itoa 0.4.8",
  "ryu",
  "serde",
 ]
@@ -2991,15 +2997,42 @@ dependencies = [
 ]
 
 [[package]]
-name = "tiny_http"
-version = "0.9.0"
+name = "time"
+version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96155b5f7149ba7a99ea5d516c538250b26eab60b4485c0f5344432573e7a450"
+checksum = "a561bf4617eebd33bca6434b988f39ed798e527f51a1e797d0ee4f61c0a38376"
+dependencies = [
+ "itoa 1.0.4",
+ "serde",
+ "time-core",
+ "time-macros",
+]
+
+[[package]]
+name = "time-core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e153e1f1acaef8acc537e68b44906d2db6436e2b35ac2c6b42640fff91f00fd"
+
+[[package]]
+name = "time-macros"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d967f99f534ca7e495c575c62638eebc2898a8c84c119b89e250477bc4ba16b2"
+dependencies = [
+ "time-core",
+]
+
+[[package]]
+name = "tiny_http"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5f8734c6d6943ad6df6b588d228a87b4af184998bcffa268ceddf05c2055a8c"
 dependencies = [
  "ascii",
- "chrono",
  "chunked_transfer",
  "log",
+ "time 0.3.17",
  "url",
 ]
 
