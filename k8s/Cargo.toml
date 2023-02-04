@@ -7,7 +7,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-tokio = { version = "~1.0", features = ["full"] }
+tokio = { version = "~1.16", features = ["full"] }
 kube = { version = "~0.60", default-features = true, features = ["derive", "rustls-tls"] }
 kube-derive = "~0.60"
 kube-runtime = "~0.60"
