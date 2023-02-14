@@ -24,7 +24,7 @@ itertools = "0.10"
 lz4 = "1.23"
 ndarray = {version = "0.15.3", features = ["serde"]}
 ndarray-rand = "0.14"
-once_cell = "1.3"
+once_cell = "1.17"
 parking_lot = {version = "0.11", features = ["deadlock_detection"]}
 rand = {version = "0.8", features = ["small_rng"]}
 rayon = "1.5.1"
