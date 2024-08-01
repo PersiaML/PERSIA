@@ -41,10 +41,6 @@
 * [Tutorials](https://persiaml-tutorials.pages.dev/)
 * [API documentation](https://persiaml.pages.dev/) (Under Construction)
 
-## Discussion
-
-Feel free to join our [Telegram Group](https://t.me/joinchat/fLlD66VX8PQxMmJh) for discussion!  
-
 ## References
 
 1. Xiangru Lian, Binhang Yuan, Xuefeng Zhu, Yulong Wang, Yongjun He, Honghuan Wu, Lei Sun, Haodong Lyu, Chengjun Liu, Xing Dong, Yiqiao Liao, Mingnan Luo, Congfei Zhang, Jingru Xie, Haonan Li, Lei Chen, Renjie Huang, Jianying Lin, Chengchun Shu, Xuezhong Qiu, Zhishan Liu, Dongying Kong, Lei Yuan, Hai Yu, Sen Yang, Ce Zhang, & Ji Liu. (2021). [Persia: A Hybrid System Scaling Deep Learning Based Recommenders up to 100 Trillion Parameters.](https://arxiv.org/abs/2111.05897)
