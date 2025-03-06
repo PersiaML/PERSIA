@@ -8,7 +8,7 @@ version = "0.1.0"
 #bench = false
 
 [dev-dependencies]
-bincode = "1"
+bincode = "2"
 criterion = "0.3"
 criterion-macro = "0.3"
 persia-speedy = { path = "../../persia-speedy" }
