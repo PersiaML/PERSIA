@@ -16,6 +16,6 @@ persia-speedy = {path = "../persia-speedy"}
 
 [dev-dependencies]
 linked-hash-map = "0.5"
-rand = "0.8"
+rand = "0.9"
 rand_distr = "0.4"
 tracing = "0.1"
